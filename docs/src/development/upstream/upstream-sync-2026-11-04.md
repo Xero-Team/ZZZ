@@ -11,14 +11,17 @@ description: Selective Zed upstream sync through the v1.29.0 release.
 - Target branch: `sync/upstream-2026-11-04`
 - Upstream: `https://github.com/zed-industries/zed.git` `refs/heads/main`
 - Previous reviewed baseline: `00b86477f8b81c8d20328b096200f91452a572df`
-- Live upstream head queried: `e21ff1b368b074586e4dae0d9bbf15d5dd8a1476`
+- Live upstream head queried: `c7bea343838f42b4c14151393e41f0bbe033c95e`
 - Query time: `2026-11-04`
-- Reviewed range: `00b86477f8b8..e21ff1b368b`, 28 commits, oldest first
-- Remaining after this batch: zero; the range ends at the queried head
+- Reviewed range: `00b86477f8b8..c7bea343838f`, 29 commits, oldest first
+- Remaining after this batch: zero; the range ends at the live head at
+  query time
 
-The previous baseline is an ancestor of the queried head. The range
+The previous baseline is an ancestor of the live head. The range
 includes the v1.29.0 release bump and the revert of one commit in the
-same window. The next sync starts after `e21ff1b368b`.
+same window. A second query later in the day found one more GPUI commit
+(`c7bea34383`) after `e21ff1b368b`; it is recorded in the addendum
+below. The next sync starts after `c7bea343838f`.
 
 ## Decisions
 
@@ -53,8 +56,9 @@ same window. The next sync starts after `e21ff1b368b`.
 | 1a6de64cf3 | A     | 779097924c   | Clean cherry-pick. Vim `:s` substitute patterns now recognize `\+` and `\{n\}` repetition operators.                                                                                                                                                                                     |
 | e21ff1b368 | B     | 2d77a40633   | Moves `parse_path_with_position` into `util` so a running Windows instance parses `path:line:column` arguments. Ported with ZZZ's `zzz://` URL prefix; Windows-target compilation NOT RUN because the Linux host lacks `windows.h`.                                                      |
 
-Totals: two `A` (both clean cherry-picks), ten `B`, sixteen `C` across
-28 commits.
+Totals: two `A` (both clean cherry-picks), eleven `B`, sixteen `C` across
+29 commits. The decisions table above covers the first 28; the addendum
+covers `c7bea34383`.
 
 ## Applied Work
 
@@ -70,6 +74,7 @@ Totals: two `A` (both clean cherry-picks), ten `B`, sixteen `C` across
 - `0be3235160` is a `B` port of `d71ff73440`.
 - `779097924c` is a clean `A` cherry-pick of `1a6de64cf3`.
 - `2d77a40633` is a `B` port of `e21ff1b368`.
+- `3c3e15e417` is a `B` port of `c7bea34383` (addendum).
 
 Every clean `A` used `git cherry-pick -x -s` and keeps the upstream
 patch and message intact. Every `B` was committed with `git commit -s`
@@ -344,8 +349,45 @@ RUN: the `stacker` build script fails on this Linux host because
 | `cargo check --locked -p zzz --target x86_64-pc-windows-msvc`                             | BLOCKED | `stacker` build script needs `windows.h`; Linux host |
 | Windows and macOS runtime checks                                                          | NOT RUN | host is Linux; those backends are platform-only      |
 | `cargo test --workspace`                                                                  | NOT RUN | narrowest per-crate checks were used                 |
-| Remaining commits through the queried head                                                | NONE    | `e21ff1b368b` is the live head                       |
+| Remaining commits through the first queried head                                          | NONE    | `e21ff1b368b` was the live head at first query       |
+
+## Addendum: c7bea34383
+
+A second `git ls-remote` later on `2026-11-04` returned
+`c7bea343838f42b4c14151393e41f0bbe033c95e`, one commit past
+`e21ff1b368b`. The reviewed baseline advances to this new live head.
+
+| Upstream   | Class | Local commit | Disposition                                                                                                                                                                                                           |
+| ---------- | ----- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| c7bea34383 | B     | 3c3e15e417   | Fixes the cursor briefly reverting when a drag starts, before the next paint. Ported onto ZZZ's `interaction.rs` hit-test and `InteractionOwner::dispatch_mouse_listeners` shapes; upstream regression test retained. |
+
+#### c7bea34383 — drag cursor before the next paint (B)
+
+`reset_cursor_style` used to read only the rendered frame's cursor
+style, so a drag started by a mouse listener in the current event
+briefly showed whatever was under the pointer until the next paint
+recorded the drag's cursor. The fix prefers
+`cx.active_drag_cursor_style()` and moves the cursor resolution to
+after `dispatch_mouse_listeners`, so a drag started in the same event
+takes effect immediately. The inspector-picking path also refreshes the
+cursor before returning.
+
+ZZZ keeps the mouse hit-test update in `interaction.rs` and the
+listener dispatch in `InteractionOwner::dispatch_mouse_listeners`, so a
+clean cherry-pick conflicted. The port keeps those shapes: it removes
+the early `reset_cursor_style` call gated on `update_mouse_hit_test`,
+calls `update_mouse_hit_test` unconditionally, and adds a single
+`reset_cursor_style` after the listeners. `TestPlatform::cursor_style()`
+and `TestAppContext::test_platform()` are added under `#[cfg(test)]`
+because ZZZ had no accessor for the former and the upstream test uses
+both.
+
+| Check                                                                    | Result | Notes     |
+| ------------------------------------------------------------------------ | ------ | --------- |
+| `cargo test --locked -p gpui test_drag_cursor_applies_before_next_paint` | PASS   | 1 test    |
+| `cargo test --locked -p gpui --lib`                                      | PASS   | 291 tests |
+| `cargo fmt --all -- --check`                                             | PASS   | clean     |
 
 The reviewed baseline advances to
-`e21ff1b368b074586e4dae0d9bbf15d5dd8a1476`, which is the live upstream
-head at query time.
+`c7bea343838f42b4c14151393e41f0bbe033c95e`, which is the live upstream
+head at the second query time.
