@@ -4984,6 +4984,27 @@ impl LspStore {
         }
     }
 
+    /// Whether the upstream host knows `buffer`, so that LSP requests for it can
+    /// be forwarded to the host.
+    ///
+    /// A remote project's buffer store holds the buffers the host shared with
+    /// it, plus buffers created on the client such as archive members or the
+    /// agent panel's diff buffers. It also keeps buffers that outlived the
+    /// project that opened them, for example when the workspace switches to
+    /// another remote folder while an editor for the previous project is still
+    /// open. Only the host-shared replicas are meaningful to the host; the rest
+    /// carry ids it answers with "unknown buffer id".
+    ///
+    /// Only meaningful on a remote store, which is where LSP requests can be
+    /// forwarded upstream.
+    fn upstream_has_buffer(&self, buffer: &Entity<Buffer>, cx: &App) -> bool {
+        let buffer_id = buffer.read(cx).remote_id();
+        self.buffer_store
+            .read(cx)
+            .get(buffer_id)
+            .is_some_and(|stored| stored == *buffer && buffer.read(cx).replica_id().is_remote())
+    }
+
     fn send_lsp_proto_request<R: LspCommand>(
         &self,
         buffer: Entity<Buffer>,
@@ -4993,20 +5014,6 @@ impl LspStore {
         cx: &mut Context<LspStore>,
     ) -> Task<anyhow::Result<<R as LspCommand>::Response>> {
         if !self.is_capable_for_proto_request(&buffer, &request, cx) {
-            return Task::ready(Ok(R::Response::default()));
-        }
-
-        // A buffer can outlive the project that created it (for example when
-        // the workspace switches to another remote folder while an editor for
-        // the previous project is still open). Sending such a buffer's
-        // `remote_id` upstream makes the host fail with "unknown buffer id",
-        // so only forward requests for buffers this project actually stores.
-        let buffer_id = buffer.read(cx).remote_id();
-        if self.buffer_store.read(cx).get(buffer_id).is_none() {
-            log::debug!(
-                "skipping LSP request {:?} for buffer {buffer_id} that is not part of this project",
-                request.display_name()
-            );
             return Task::ready(Ok(R::Response::default()));
         }
 
@@ -5773,6 +5780,15 @@ impl LspStore {
     where
         R: LspCommand,
     {
+        if !self.upstream_has_buffer(buffer, cx) {
+            log::debug!(
+                "skipping LSP request {:?} for buffer {} that the host does not know",
+                request.display_name(),
+                buffer.read(cx).remote_id()
+            );
+            return false;
+        }
+
         self.check_if_capable_for_proto_request(
             buffer,
             |capabilities| {

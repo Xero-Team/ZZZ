@@ -1172,6 +1172,108 @@ async fn test_remote_lsp(cx: &mut TestAppContext, server_cx: &mut TestAppContext
 }
 
 #[gpui::test]
+async fn test_remote_lsp_skips_buffers_the_host_does_not_know(
+    cx: &mut TestAppContext,
+    server_cx: &mut TestAppContext,
+) {
+    let fs = FakeFs::new(server_cx.executor());
+    fs.insert_tree(
+        path!("/code"),
+        json!({
+            "project1": {
+                ".git": {},
+                "src": {
+                    "lib.rs": "fn one() -> usize { 1 }"
+                }
+            },
+        }),
+    )
+    .await;
+
+    let (project, headless) = init_test(&fs, cx, server_cx).await;
+
+    fs.insert_tree(
+        path!("/code/project1/.ZZZ"),
+        json!({
+            "settings.json": r#"
+          {
+            "languages": {"Rust":{"language_servers":["rust-analyzer"]}}
+          }"#
+        }),
+    )
+    .await;
+
+    let capabilities = lsp::ServerCapabilities {
+        code_action_provider: Some(lsp::CodeActionProviderCapability::Simple(true)),
+        ..lsp::ServerCapabilities::default()
+    };
+
+    let language = cx.update_entity(&project, |project, _| {
+        let language = rust_lang();
+        project.languages().add(language.clone());
+        project.languages().register_fake_lsp_adapter(
+            "Rust",
+            FakeLspAdapter {
+                name: "rust-analyzer",
+                capabilities: capabilities.clone(),
+                ..FakeLspAdapter::default()
+            },
+        );
+        language
+    });
+
+    let _fake_lsp = server_cx.update(|cx| {
+        headless.read(cx).languages.register_fake_lsp_adapter(
+            "Rust",
+            FakeLspAdapter {
+                name: "rust-analyzer",
+                capabilities: capabilities.clone(),
+                ..FakeLspAdapter::default()
+            },
+        );
+        headless.read(cx).languages.register_fake_lsp_server(
+            LanguageServerName("rust-analyzer".into()),
+            capabilities,
+            None,
+        )
+    });
+
+    cx.run_until_parked();
+
+    let worktree_id = project
+        .update(cx, |project, cx| {
+            project.find_or_create_worktree(path!("/code/project1"), true, cx)
+        })
+        .await
+        .unwrap()
+        .0
+        .read_with(cx, |worktree, _| worktree.id());
+
+    // Opening a remote buffer makes the host start a language server, so the
+    // client learns its capabilities and can route LSP requests upstream.
+    project
+        .update(cx, |project, cx| {
+            project.open_buffer_with_lsp((worktree_id, rel_path("src/lib.rs")), cx)
+        })
+        .await
+        .unwrap();
+    cx.run_until_parked();
+
+    // A buffer the host never shared, such as the agent panel's diff buffers.
+    let local_buffer =
+        cx.update(|cx| cx.new(|cx| Buffer::local("fn main() {}", cx).with_language(language, cx)));
+
+    let actions = project
+        .update(cx, |project, cx| {
+            project.code_actions(&local_buffer, 0..0, None, cx)
+        })
+        .await
+        .expect("LSP queries for buffers the host does not know should be skipped");
+
+    assert!(actions.is_none());
+}
+
+#[gpui::test]
 async fn test_remote_lsp_workspace_file_operation_runs_on_server(
     cx: &mut TestAppContext,
     server_cx: &mut TestAppContext,
