@@ -2759,7 +2759,7 @@
     "git_ui.worktree_picker.hold_alt_to_force_delete": "Hold alt to force delete",
     "git_ui.worktree_picker.open": "Open",
     "git_ui.worktree_picker.open_in_new_window": "Open in New Window",
-    "git_ui.worktree_picker.placeholder": "Select a worktree...",
+    "git_ui.worktree_picker.placeholder": "Find a worktree or branch, or type to create…",
     "git_ui.worktree_picker.remove_from_window": "Remove Worktree from Window",
     "git_ui.worktree_picker.requires_git_repository": "Requires a Git repository in the project",
     "git_ui.worktree_picker.this_window": "This Window",

@@ -397,6 +397,11 @@ impl TestAppContext {
         self.test_platform.set_screen_capture_sources(sources);
     }
 
+    #[cfg(test)]
+    pub(crate) fn test_platform(&self) -> &TestPlatform {
+        &self.test_platform
+    }
+
     /// Returns all windows open in the test.
     pub fn windows(&self) -> Vec<AnyWindowHandle> {
         self.app.borrow().windows()

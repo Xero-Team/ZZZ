@@ -16857,11 +16857,14 @@ dependencies = [
  "i18n",
  "itertools 0.15.0",
  "language",
+ "languages",
  "menu",
+ "node_runtime",
  "picker",
  "project",
  "serde",
  "serde_json",
+ "settings",
  "task",
  "tree-sitter-rust",
  "tree-sitter-typescript",
@@ -22199,7 +22202,7 @@ dependencies = [
 
 [[package]]
 name = "zzz"
-version = "1.28.0"
+version = "1.29.0"
 dependencies = [
  "acp_thread",
  "acp_tools",

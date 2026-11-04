@@ -1059,7 +1059,17 @@ impl Language {
     ) -> Vec<(Range<usize>, HighlightId)> {
         let mut result = Vec::new();
         if let Some(grammar) = &self.grammar {
-            let tree = parse_text(grammar, text, None);
+            let tree = match parse_text(grammar, text, None) {
+                Ok(tree) => tree,
+                Err(error) => {
+                    log::warn!(
+                        "highlighting {} text of {} bytes: {error:#}",
+                        self.name(),
+                        text.len()
+                    );
+                    return Vec::new();
+                }
+            };
             let captures =
                 SyntaxSnapshot::single_tree_captures(range.clone(), text, &tree, self, |grammar| {
                     grammar
@@ -1313,11 +1323,9 @@ impl Debug for Language {
     }
 }
 
-pub(crate) fn parse_text(grammar: &Grammar, text: &Rope, old_tree: Option<Tree>) -> Tree {
+pub(crate) fn parse_text(grammar: &Grammar, text: &Rope, old_tree: Option<Tree>) -> Result<Tree> {
     with_parser(|parser| {
-        parser
-            .set_language(&grammar.ts_language)
-            .expect("incompatible grammar");
+        parser.set_language(&grammar.ts_language)?;
         let mut chunks = text.chunks_in_range(0..text.len());
         parser
             .parse_with_options(
@@ -1328,7 +1336,7 @@ pub(crate) fn parse_text(grammar: &Grammar, text: &Rope, old_tree: Option<Tree>)
                 old_tree.as_ref(),
                 None,
             )
-            .expect("value should be present")
+            .context("tree-sitter returned no tree")
     })
 }
 

@@ -2759,7 +2759,7 @@
     "git_ui.worktree_picker.hold_alt_to_force_delete": "按住 Alt 可强制删除",
     "git_ui.worktree_picker.open": "打开",
     "git_ui.worktree_picker.open_in_new_window": "在新窗口中打开",
-    "git_ui.worktree_picker.placeholder": "选择一个工作树...",
+    "git_ui.worktree_picker.placeholder": "查找工作树或分支，或输入以创建…",
     "git_ui.worktree_picker.remove_from_window": "从窗口中移除工作树",
     "git_ui.worktree_picker.requires_git_repository": "项目中需要有 Git 仓库",
     "git_ui.worktree_picker.this_window": "此窗口",
