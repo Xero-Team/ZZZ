@@ -11,94 +11,156 @@ description: Durable execution ledger for the ZZZ Database Explorer implementati
 
 ## 当前状态 {#current-status}
 
-- Goal status: `NOT STARTED`
+- Goal status: `IN PROGRESS`
 - Plan baseline: `main` @ `3af1429a83`
-- Current HEAD: `main` @ `3af1429a83`（尚未创建实现分支）
-- Branch/worktree: 尚未创建
-- Active phase: `Phase 0`
-- Last completed phase: `None`
+- Current HEAD: `database-explorer` @ `f2a037d404`（文档基线；代码基线 `3af1429a83`
+  已 `merge-base --is-ancestor` 验证包含）
+- Branch/worktree: `database-explorer` @
+  `/home/begonia/Documents/Github/Xero-Team/ZZZ-database-explorer`
+- Active phase: `Phase 1`
+- Last completed phase: `Phase 0`
 - Blocking issue: `None`
-- Next action: 执行 Phase 0 的 bootstrap（见下方）。
+- Next action: 执行 Phase 1 第 1 步——在根 `Cargo.toml` 登记
+  `crates/database_core` 与 `crates/database_ui`，落地两个 crate 的最小骨架与
+  `main.rs` 的 `init` 注册，随后实现内建 SQLite 驱动与 schema 实查。
 
 ## Bootstrap {#bootstrap}
 
-Phase 0 开始前执行，结果记入下表。第 1 步不能省：worktree 只检出已提交内容，
-文档未提交时新工作树里没有计划，执行会立刻卡住。
+Phase 0 已执行：先在 `main` 提交本目录文档集（`f2a037d404`），再建隔离 worktree
+`../ZZZ-database-explorer -b database-explorer main`。worktree 只检出已提交内容，
+故第 1 步不可省。`git status --porcelain` 为空，代码基线 `3af1429a83` 已包含。
 
-```sh
-# 1. 先在 main 上把这份文档集提交（代码基线仍是 3af1429a83）
-git add docs/src/SUMMARY.md docs/src/development/database
-git commit -s -m "docs: add database explorer plan"
-git log -1 --format=%H
-
-# 2. 再建隔离 worktree
-git worktree add ../ZZZ-database-explorer -b database-explorer main
-cd ../ZZZ-database-explorer
-git status --porcelain
-git merge-base --is-ancestor 3af1429a83 HEAD && echo "code baseline 3af1429a83 included"
-rustc -Vv
-uname -a
-```
-
-| 项                | 值  | 备注                               |
-| ----------------- | --- | ---------------------------------- |
-| 文档提交 SHA      |     | `docs: add database explorer plan` |
-| Baseline HEAD     |     | 代码基线仍为 `3af1429a83`          |
-| `rustc -Vv`       |     |                                    |
-| OS / kernel       |     |                                    |
-| 初始 `git status` |     | 期望为空                           |
+| 项                | 值                                                                | 备注                               |
+| ----------------- | ----------------------------------------------------------------- | ---------------------------------- |
+| 文档提交 SHA      | `f2a037d404cc396581e24822d34cf2a885b02bc4`                        | `docs: add database explorer plan` |
+| Baseline HEAD     | 代码 `3af1429a83`，文档 `f2a037d404`                              | 代码基线仍为 `3af1429a83`          |
+| `rustc -Vv`       | `rustc 1.99.1 (58cf8f9c3 2026-10-13)`，`x86_64-unknown-linux-gnu` | LLVM 23.1.1，`cargo 1.99.1`        |
+| OS / kernel       | `Linux fedora 7.4.0-0.rc0.261029gc339f4010dea.11.fc46.x86_64`     | `x86_64`                           |
+| 初始 `git status` | 空                                                                | 期望为空 ✓                         |
 
 ### Clean baseline 验证 {#baseline-validation}
 
-| 命令                                   | Exit status | 既有失败登记 |
-| -------------------------------------- | ----------- | ------------ |
-| `cargo xtask check`                    |             |              |
-| `cargo test -p csv_preview`            |             |              |
-| `cd docs && npx prettier --check src/` |             |              |
-| `mdbook build docs`                    |             |              |
+在 `database-explorer` worktree 的 clean checkout 上执行（未含任何实现改动）：
+
+| 命令                                   | Exit status | 既有失败登记                                                        |
+| -------------------------------------- | ----------- | ------------------------------------------------------------------- |
+| `cargo xtask check`                    | 0           | 6 repository checks passed（含 philosophy、keymaps、todos）         |
+| `cargo test -p csv_preview`            | 0           | 16 passed; 0 failed                                                 |
+| `cd docs && npx prettier --check src/` | 0           | All matched files use Prettier code style                           |
+| `mdbook build docs`                    | 101 → 0     | clean worktree 首次失败，见下方「已知环境前置项」；补生成产物后通过 |
+| `cargo fmt --all -- --check`           | 0           | 额外补测（计划第 9 节门禁）                                         |
+
+**已知环境前置项（非代码缺陷，从 clean baseline 复现）：** `crates/docs_preprocessor/actions.json`
+被 `.gitignore:53` 排除，是 `script/generate-action-metadata`（内部执行
+`cargo run -p zzz -- --dump-all-actions`）生成的产物。clean worktree 没有它，
+`docs_preprocessor` 的 `load_all_actions` 返回空 `ActionManifest`（`main.rs:684-695`），
+导致 `keymap_schema_for_actions` 产出空 schema、`jsonschema::validator_for` 报
+`[] has less than 1 item`，`mdbook build docs` 以 exit 101 失败。处理：从 `main`
+复制该产物到 worktree 后，`mdbook build docs` exit 0（201 个 `.html`，仅若干
+`No meta description found` warning）。Phase 13 全量门禁前需先跑
+`script/generate-action-metadata`（runbook 见该阶段）。此失败与数据库改动无关，
+登记为 baseline 固有项，不得冒充 PASS。
 
 ## 阶段状态 {#phase-status}
 
-| Phase | Result                   | Status      | Commit | Validation | Notes |
-| ----- | ------------------------ | ----------- | ------ | ---------- | ----- |
-| 0     | 账本校准、worktree、基线 | NOT STARTED | -      | -          | -     |
-| 1     | 骨架与 SQLite 只读浏览   | NOT STARTED | -      | -          | -     |
-| 2     | 连接管理与凭据           | NOT STARTED | -      | -          | -     |
-| 3     | 查询执行与取消           | NOT STARTED | -      | -          | -     |
-| 4     | 结果集视图               | NOT STARTED | -      | -          | -     |
-| 5     | 编辑、事务与确认         | NOT STARTED | -      | -          | -     |
-| 6     | 扩展驱动协议             | NOT STARTED | -      | -          | -     |
-| 7     | ER 图与导入导出          | NOT STARTED | -      | -          | -     |
-| 8     | Visual EXPLAIN           | NOT STARTED | -      | -          | -     |
-| 9     | 查询历史                 | NOT STARTED | -      | -          | -     |
-| 10    | Notebook 式 SQL          | NOT STARTED | -      | -          | -     |
-| 11    | 远程与 SSH（条件项）     | NOT STARTED | -      | -          | -     |
-| 12    | MCP 只读暴露             | NOT STARTED | -      | -          | -     |
-| 13    | 文档、门禁与收尾         | NOT STARTED | -      | -          | -     |
+| Phase | Result                   | Status      | Commit                                           | Validation                                     | Notes                               |
+| ----- | ------------------------ | ----------- | ------------------------------------------------ | ---------------------------------------------- | ----------------------------------- |
+| 0     | 账本校准、worktree、基线 | PASS        | `f2a037d404`（bootstrap 文档提交）+ 本次账本提交 | 见 [baseline-validation](#baseline-validation) | baseline 4+1 门禁与现成件复核均完成 |
+| 1     | 骨架与 SQLite 只读浏览   | NOT STARTED | -                                                | -                                              | Next action                         |
+| 2     | 连接管理与凭据           | NOT STARTED | -                                                | -                                              | -                                   |
+| 3     | 查询执行与取消           | NOT STARTED | -                                                | -                                              | -                                   |
+| 4     | 结果集视图               | NOT STARTED | -                                                | -                                              | -                                   |
+| 5     | 编辑、事务与确认         | NOT STARTED | -                                                | -                                              | -                                   |
+| 6     | 扩展驱动协议             | NOT STARTED | -                                                | -                                              | -                                   |
+| 7     | ER 图与导入导出          | NOT STARTED | -                                                | -                                              | -                                   |
+| 8     | Visual EXPLAIN           | NOT STARTED | -                                                | -                                              | -                                   |
+| 9     | 查询历史                 | NOT STARTED | -                                                | -                                              | -                                   |
+| 10    | Notebook 式 SQL          | NOT STARTED | -                                                | -                                              | -                                   |
+| 11    | 远程与 SSH（条件项）     | NOT STARTED | -                                                | -                                              | -                                   |
+| 12    | MCP 只读暴露             | NOT STARTED | -                                                | -                                              | -                                   |
+| 13    | 文档、门禁与收尾         | NOT STARTED | -                                                | -                                              | -                                   |
 
 ## 现成件复核 {#reuse-review}
 
-Phase 0 第 4 步填写：确认下列实际签名，并据此定稿计划第 5.2 节契约草案。
+Phase 0 第 4 步完成。读取实现计划第 6 节列出的全部现成件源码，确认实际签名：
 
-| 现成件                       | 实际签名 / 位置                    | 复核结论 |
-| ---------------------------- | ---------------------------------- | -------- |
-| `workspace::Item`            | `crates/workspace/src/item.rs:189` |          |
-| `workspace::Panel`           | `crates/workspace/src/dock.rs:40`  |          |
-| `async_trait` 用法           | `crates/fs/src/fs.rs:102`          |          |
-| `CredentialsProvider`        | `crates/credentials_provider/...`  |          |
-| `DatabaseZap` 图标           | `crates/icons/src/icons.rs:87`     |          |
-| `mermaid_render` `erDiagram` | `crates/mermaid_render/...:219`    |          |
-| `csv_preview::init` 注册     | `crates/zzz/src/main.rs:687`       |          |
+| 现成件                       | 实际签名 / 位置                                                                                                                                                                                                                                                                  | 复核结论                                                                                                                                                                                                                                                                               |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workspace::Item`            | `crates/workspace/src/item.rs:189` `pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized { type Event; fn tab_content_text(&self, usize, &App) -> SharedString; ... }`                                                                                         | 唯一必需方法 `tab_content_text`，其余有默认实现。`csv_preview.rs:293` 是最小范例（`Event = ()`）。打开走 `pane.add_item(Box::new(view), ...)`。                                                                                                                                        |
+| `workspace::Panel`           | `crates/workspace/src/dock.rs:40` `pub trait Panel: Focusable + EventEmitter<PanelEvent> + Render + Sized`                                                                                                                                                                       | 固定 `PanelEvent`（`dock.rs:31`），9 个必需方法（`persistent_name`/`panel_key`/`position`/`position_is_valid`/`set_position`/`default_size`/`icon`/`icon_tooltip`/`toggle_action`/`activation_priority`）。范例 `terminal_mode/src/file_panel.rs:930`。注册走 `Workspace::add_panel`。 |
+| `async_trait` 用法           | `crates/fs/src/fs.rs:128` `#[async_trait::async_trait]` 全路径属性                                                                                                                                                                                                               | workspace 依赖已有 `async-trait = "0.1"`（`Cargo.toml:505`）。`DatabaseDriver` / `DriverConnection` 按此风格。                                                                                                                                                                         |
+| `CredentialsProvider`        | `crates/credentials_provider/src/credentials_provider.rs:11` `pub trait CredentialsProvider: Send + Sync { fn read_credentials(url, &AsyncApp) -> Future<Option<(String, Vec<u8>)>>; fn write_credentials(url, user, &[u8], &AsyncApp); fn delete_credentials(url, &AsyncApp) }` | 无独立 Global；经 `client.credentials_provider()`（`crates/client/src/client.rs:535`）取 `Arc<dyn CredentialsProvider>`。口令走 keychain，不进配置/日志。                                                                                                                              |
+| `DatabaseZap` 图标           | `crates/icons/src/icons.rs:87` `DatabaseZap,`                                                                                                                                                                                                                                    | 已存在，`IconName::DatabaseZap` 可直接用（`Panel::icon` / `Item::tab_icon`）。                                                                                                                                                                                                         |
+| `mermaid_render` `erDiagram` | `crates/mermaid_render/src/mermaid_render.rs:179` `pub fn render_to_svg(source: &str, theme: &MermaidTheme) -> Result<String>`；CJK 测试 `:214`                                                                                                                                  | 统一 `render_to_svg`，source 以 `erDiagram\n` 开头；已有 CJK 测试 `er_multibyte_attribute_does_not_crash`。                                                                                                                                                                            |
+| `csv_preview::init` 注册     | `crates/zzz/src/main.rs:687` `csv_preview::init(cx);`（在 `*.init(cx)` 序列中）                                                                                                                                                                                                  | 新增 `database_ui::init(cx);` 同处；`csv_preview::init` 用 `cx.observe_new(...).detach()`（`csv_preview.rs:56`）。                                                                                                                                                                     |
+
+补充复核（第 6 节其余现成件）：
+
+- `ui::Table`（`crates/ui/src/components/data_table.rs:487`）已内置 `uniform_list` /
+  `variable_row_height_list` 虚拟列表、`ColumnWidthConfig::Resizable` 拖拽列宽、
+  `pin_cols`、`TableInteractionState`、`TableAccessibility`。**排序、复制、右键菜单不是
+  `Table` 的职责**——`csv_preview` 在 `renderer/table_header.rs`、`table_cell.rs` 自行实现。
+  Phase 4 抽取共享交互时以此为界。
+- `csv_preview::TableDataEngine`（`table_data_engine.rs:20`）是 `pub(crate)`；
+  `TableLikeContent`（`types/table_like_content.rs:7`）是静态文本表格。结果集 `ResultSet`
+  必须是独立类型，不塞进去（D-06）。
+- `sqlez::Connection`（`connection.rs:12`）是 `unsafe impl Send`、**非 Sync**（含
+  `RefCell`），`exec/select` 在 `typed_statements.rs`（`connection.exec(sql)?()?`），
+  `with_savepoint` 在 `savepoint.rs:10`。`ThreadSafeConnection`（`thread_safe_connection.rs:34`）
+  才 Send+Sync。根 `Cargo.toml:618` `libsqlite3-sys = { version = "0.39.1", features = ["bundled"] }`，
+  仓库**无** `rusqlite`。
+- `crates/db`：`static_connection!` 宏（`db/src/db.rs:275`）+ `impl Domain` + `query!`
+  （`db/src/kvp.rs:20-87` 是完整范式）。`query!` 内用 `(?)` 占位。
+- `extension_manifest.rs:82` `ExtensionManifest` 用 `#[serde(default)]` 集合字段；
+  命令能力块是 `[[capabilities]]` `kind = "process:exec"` / `command` / `args`。
+  WIT 按版本分目录（`since_v0.4.0/extension.wit`），内建 crate 无需动 WIT（D-04）。
+- `context_server::McpServerTool`（`crates/context_server/src/listener.rs:414`）：
+  `add_tool`（`:95`）、`annotations().read_only_hint = Some(true)` 表达只读。
+- `crates/repl/src/outputs/table.rs` 的 `TableView` 用
+  `ClipboardItem::new_string_with_html(plain, html)` 预生成 Markdown+HTML 剪贴板。
+- locales：顶层 `{"entries": {...}}`，`i18n::tr(cx: &App, key, fallback) -> String`
+  （`crates/i18n/src/i18n.rs:126`），key 惯例 `<namespace>.<area>.<item>`，en/zh 各
+  3850 键且集合一致。
+- `crates/zzz/src/zzz/quick_action_bar/preview.rs:23` `PreviewType` 目前只有
+  `Markdown/Svg/Csv/Typst`，无 `.db` 变体；`.db` 打开入口需在业务 crate `init` 里
+  注册（`register_action_renderer` + `pane.add_item`）。
+- `fs::Fs`（`crates/fs/src/fs.rs:128`）用 `&Path`/`PathBuf`，本地/远程由 `Arc<dyn Fs>`
+  抽象，读文件走 `load_bytes`/`open_handle`，不假设本地（D-10）。
+
+### 契约定稿（基于实际签名，语义不变） {#contract-finalization}
+
+计划第 5.2 节是语义契约。按上述实际签名定稿如下，**不改动 decisions.md D-01 至 D-14
+的任何语义**：
+
+1. `DatabaseDriver` / `DriverConnection` 用 `#[async_trait::async_trait]`，返回
+   `anyhow::Result`。`DriverConnection` 以 `Arc<dyn DriverConnection>` 共享（对齐
+   计划 `connect -> Result<Arc<dyn DriverConnection>>`）。
+2. `QueryHandle::cancel()` 用**同步** `fn cancel(&self) -> Result<()>` 而非计划草案的
+   `async`：取消必须可从 GPUI 事件回调即时触发，SQLite 走 `sqlite3_interrupt`（线程安全，
+   `DB-EXP-001` 结论），扩展驱动走向子进程写 `cancel` 帧。语义（取消非错误）不变。
+3. `RowStream` 用 `futures::channel::mpsc` 的有界流式行通道 + 行数/内存上限，避免把
+   GPUI 类型耦合进 `database_core`；`database_ui` 用 `cx.spawn` 包装并 await/detach/存储。
+4. **依赖倒置（实现细化，理由记录于此）**：为让 `database_core` 的核心逻辑（model、
+   SQL 分析、EXPLAIN/ER/CSV 装配、协议帧、事务/pending edit 状态机）可用纯 Rust 单元
+   测试充分验证，`database_core` 直接依赖 `credentials_provider`（`Arc<dyn
+CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
+   `Arc<dyn CredentialsProvider>`」）与 `libsqlite3-sys`（D-02），其余宿主服务
+   （`Fs`、`db` 历史存储、扩展子进程、MCP）以最小 trait 抽象，由 `database_ui` 注入真实
+   ZZZ 实现。依赖方向仍严格 `database_ui -> database_core`，`csv_preview` 不变。
+5. **SQLite 用 `libsqlite3-sys` 直接 FFI**（非 `sqlez` 高层封装）：`sqlez::Connection`
+   仅 Send 非 Sync、`open_file` 失败回退内存库、无 `sqlite3_interrupt` 通道与列类型流式
+   读取，且 `exec/select` 面向应用自身状态（D-02 明确「不得复用其连接」）。D-02 要求
+   复用 bundled `libsqlite3-sys`，满足。此为不引入重量级依赖、可控取消与流式读取所必需。
 
 ## 实验记录 {#experiments}
 
 格式：`DB-EXP-NNN`、目的、命令、baseline 结果、改动后结果、结论（PASS/FAIL/REJECTED）。
 
-| ID         | 目的                                           | 命令 | Baseline | After | 结论 | Phase |
-| ---------- | ---------------------------------------------- | ---- | -------- | ----- | ---- | ----- |
-| DB-EXP-001 | SQLite 连接并发与 `sqlite3_interrupt` 线程模型 | 待定 |          |       |      | 1     |
-| DB-EXP-002 | 大结果集窗口化拉取的内存上限                   | 待定 |          |       |      | 4     |
-| DB-EXP-003 | 扩展子进程协议跨平台换行/编码/超时             | 待定 |          |       |      | 6     |
+| ID         | 目的                                           | 命令                                                                                                                                                       | Baseline                                                                                                                         | After                                     | 结论            | Phase |
+| ---------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | --------------- | ----- |
+| DB-EXP-001 | SQLite 连接并发与 `sqlite3_interrupt` 线程模型 | 源码复核 `sqlez/connection.rs:18`（Connection 仅 Send 非 Sync）、`libsqlite3-sys` `sqlite3_interrupt` 契约；单连接以互斥串行化，`interrupt` 从控制线程调用 | `sqlez::Connection` 非 Sync；`sqlite3_interrupt` 允许从与目标连接不同线程调用并使进行中的 `sqlite3_step` 返回 `SQLITE_INTERRUPT` | 待 Phase 1 落地后以真实长查询取消测试复核 | 见 Phase 1 结论 | 1     |
+| DB-EXP-002 | 大结果集窗口化拉取的内存上限                   | 待定                                                                                                                                                       |                                                                                                                                  |                                           |                 | 4     |
+| DB-EXP-003 | 扩展子进程协议跨平台换行/编码/超时             | 待定                                                                                                                                                       |                                                                                                                                  |                                           |                 | 6     |
 
 ## 决策变更记录 {#decision-changes}
 
@@ -111,9 +173,10 @@ Phase 0 第 4 步填写：确认下列实际签名，并据此定稿计划第 5.
 
 ## 提交记录 {#commits}
 
-| SHA | 提交信息 | Phase | 验证 | 备注 |
-| --- | -------- | ----- | ---- | ---- |
-|     |          |       |      |      |
+| SHA                                            | 提交信息                                             | Phase | 验证                      | 备注                            |
+| ---------------------------------------------- | ---------------------------------------------------- | ----- | ------------------------- | ------------------------------- |
+| `f2a037d404cc396581e24822d34cf2a885b02bc4`     | `docs: add database explorer plan`                   | 0     | prettier PASS             | 在 `main` 上，worktree 前置条件 |
+| 本次（见 `git log -1` 于 `database-explorer`） | `docs(database): record phase 0 baseline and ledger` | 0     | 见 baseline-validation 表 | Phase 0 账本定稿                |
 
 ## 完成定义核对 {#done-checklist}
 
