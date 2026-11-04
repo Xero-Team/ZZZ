@@ -340,6 +340,45 @@ mod tests {
         );
     }
 
+    /// Every bundled query is compiled by the app at runtime, so an invalid
+    /// node type only surfaces as a failed language load. Compile them here to
+    /// catch that before shipping.
+    #[cfg(feature = "load-grammars")]
+    #[test]
+    fn bundled_queries_compile_with_their_grammar() {
+        let grammars: std::collections::HashMap<&str, tree_sitter::Language> =
+            native_grammars().into_iter().collect();
+        let mut failures = Vec::new();
+        let mut checked = 0;
+
+        for path in GrammarDir::iter() {
+            let path = path.as_ref();
+            let Some((name, "config.toml")) = path.split_once('/') else {
+                continue;
+            };
+            let config = load_config(name);
+            let Some(grammar_name) = config.grammar.as_deref() else {
+                continue;
+            };
+            let Some(language) = grammars.get(grammar_name) else {
+                continue;
+            };
+            let mut queries = load_queries_for_config(name, &config);
+            for (prefix, accessor) in QUERY_FILENAME_PREFIXES {
+                let Some(query) = accessor(&mut queries) else {
+                    continue;
+                };
+                checked += 1;
+                if let Err(error) = tree_sitter::Query::new(language, query) {
+                    failures.push(format!("{name}/{prefix}: {error}"));
+                }
+            }
+        }
+
+        assert!(checked > 0, "no bundled queries were checked");
+        assert!(failures.is_empty(), "{failures:#?}");
+    }
+
     #[test]
     fn deeply_nested_markdown_blocks_do_not_overflow_scanner_serialization() {
         let source = nested_markdown_blocks(300);

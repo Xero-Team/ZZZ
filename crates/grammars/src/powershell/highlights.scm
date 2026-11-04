@@ -3,7 +3,6 @@
   "begin"
   "break"
   "catch"
-  "clean"
   "continue"
   "data"
   "do"
@@ -30,7 +29,6 @@
   "trap"
   "try"
   "until"
-  "using"
   "while"
   "workflow"
 ] @keyword
@@ -126,11 +124,7 @@
 
 (block_name) @keyword
 
-(class_keyword) @keyword
-
 (class_attribute) @keyword
-
-(enum_keyword) @keyword
 
 (foreach_parameter) @keyword
 
@@ -145,9 +139,6 @@
 (type_spec) @type
 
 (format_operator) @operator
-
-(stop_arguments
-  "--" @operator)
 
 (stop_parsing) @string.special
 
