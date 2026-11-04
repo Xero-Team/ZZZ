@@ -13,16 +13,16 @@ description: Durable execution ledger for the ZZZ Database Explorer implementati
 
 - Goal status: `IN PROGRESS`
 - Plan baseline: `main` @ `3af1429a83`
-- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 3 为
-  `0e321d7522`，Phase 2 为 `9322d438571e`）。代码基线 `3af1429a83` 已
+- Current HEAD: `database-explorer` @ 本次提交（见 `git log -1`；Phase 4 为
+  `57ff2dab1d`，Phase 3 为 `0e321d7522`）。代码基线 `3af1429a83` 已
   `merge-base --is-ancestor` 验证包含。
 - Branch/worktree: `database-explorer` @
   `/home/begonia/Documents/Github/Xero-Team/ZZZ-database-explorer`
-- Active phase: `Phase 5`
-- Last completed phase: `Phase 4`
+- Active phase: `Phase 6`
+- Last completed phase: `Phase 5`
 - Blocking issue: `None`
-- Next action: 进入 Phase 5——pending edit 模型、参数化 DML、显式 Commit/Rollback、
-  无 WHERE 的 UPDATE/DELETE 与 DDL 二次确认、事务未提交关闭提示。
+- Next action: 进入 Phase 6——扩展清单解析 `database_drivers`、子进程驱动协议、
+  mock 驱动端到端测试与能力声明驱动的 UI 可用性。
 
 ## Bootstrap {#bootstrap}
 
@@ -70,6 +70,7 @@ Phase 0 已执行：先在 `main` 提交本目录文档集（`f2a037d404`），�
 | 2     | 连接管理与凭据           | PASS        | `9322d438571e`                                   | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 2 日志](#phase-2-log)     |
 | 3     | 查询执行与取消           | PASS        | `0e321d7522`                                     | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 3 日志](#phase-3-log)     |
 | 4     | 结果集视图               | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 4 日志](#phase-4-log)     |
+| 5     | 编辑、事务与确认         | PASS        | 本次提交（见 `git log -1`）                      | check/test/clippy/xtask check/fmt PASS         | 见 [Phase 5 日志](#phase-5-log)     |
 | 5     | 编辑、事务与确认         | NOT STARTED | -                                                | -                                              | -                                   |
 | 6     | 扩展驱动协议             | NOT STARTED | -                                                | -                                              | -                                   |
 | 7     | ER 图与导入导出          | NOT STARTED | -                                                | -                                              | -                                   |
@@ -184,6 +185,7 @@ CredentialsProvider>`，满足 D-09 与计划 5.2「ConnectionManager 持有
 | `9322d438571e5deaef8a6bb229e7bcfc07c14b3b`     | `feat(database_ui): save connections in settings with keychain secrets` | 2     | check/test/clippy/xtask/fmt PASS | Phase 2 完成                    |
 | `0e321d7522a48873306290b68a0d138fde560da2`     | `feat(database_ui): run sql from the database editor`                   | 3     | check/test/clippy/xtask/fmt PASS | Phase 3 完成                    |
 | 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): virtualize the result grid`                         | 4     | check/test/clippy/xtask/fmt PASS | Phase 4 完成                    |
+| 本次（见 `git log -1` 于 `database-explorer`） | `feat(database_ui): edit rows inside explicit transactions`             | 5     | check/test/clippy/xtask/fmt PASS | Phase 5 完成                    |
 
 ## Phase 1 工作项日志 {#phase-1-log}
 
@@ -585,6 +587,91 @@ port?, user?, database? }`，派生 `JsonSchema`/`MergeFrom`；字段有文档�
   （`feat(database_ui): virtualize the result grid`）。
 - **下一步**：Phase 5 —— pending edit 模型、参数化 DML、显式 `Commit`/`Rollback`、
   无 `WHERE` 的 `UPDATE`/`DELETE` 与 DDL 二次确认、事务未提交关闭提示。
+
+## Phase 5 日志 {#phase-5-log}
+
+### 编辑、事务与确认
+
+- **Baseline**：`database-explorer` @ `57ff2dab1d`（Phase 4 提交后）。
+- **改动**：
+  - `crates/database_core/src/model.rs`：新增 `parse_edited_value(
+column_type, text)` 与 `EditValueError`。按列类型解析整数/实数/布尔/日期/
+    NUMERIC/JSON；BLOB 不可编辑。`NULL`（任意大小写）显式表示 SQL NULL；空文本对
+    数值与日期类型表示 NULL，对文本类表示空字符串。
+  - `crates/database_core/src/sql.rs`：新增 `editable_target(sql)`，只接受
+    `SELECT ... FROM <table>` 的单表形状；拒绝 JOIN、逗号表列表、UNION/INTERSECT/
+    EXCEPT、GROUP/HAVING、DISTINCT、子查询与 CTE。`SqlToken` 记录字节范围以解析
+    限定表名（schema/catalog）与别名。
+  - `crates/database_core/src/session.rs`：
+    - `QuerySession` 新增 `applied_edits`、`applied_statements`、`applied_rows`。
+      `pending_edits` 仍是用户可见改动的唯一来源；Apply 只把「尚未写入事务的增量」
+      生成参数化 UPDATE，成功后记录到 `applied_edits`，因此再次 Apply 只发送增量。
+    - `apply_pending_edits` 在 `SAVEPOINT zzz_edit_batch` 内批量执行；任一条失败则
+      `ROLLBACK TO SAVEPOINT` + `RELEASE`，只撤销本批次并保留外层事务供修正后重试。
+      未开启事务时先 `begin()`，事务与查询句柄都有明确 owner。
+    - `commit` 只在所有 pending 编辑确实已应用时把值折入缓存行；`rollback` 清除
+      已应用记录但不改缓存，界面立即回到原值。`commit_edits` = Apply + Commit；
+      `rollback_edits` = 丢弃 pending + Rollback。
+    - `discard_pending_edits` 在已有 Apply 时拒绝清除，避免界面值与事务内容矛盾。
+    - `bind_table_after_query`：只有 `editable_target` 命中、驱动报告主键、且结果列
+      包含全部主键时才授予编辑能力；否则结果集保持只读。
+    - `execute_simple` 排空 DML 行流并在成功/失败两条路径都 `finish_query`，防止
+      查询句柄泄漏。
+  - `crates/database_core/src/sqlite.rs`：`describe_table` 对带 schema 的
+    `TableRef` 使用 `PRAGMA "schema".table_info(...)` 等限定形式，避免把 attached
+    schema 的同名表误当 `main` 表（否则编辑会定位到错误行）。
+  - `crates/database_ui/src/result_set_view.rs`：
+    - 单元格左键选中并在编辑栏显示行/列与单行 `Editor`（`DatabaseValueEditor >
+Editor` 上下文：`enter` = Stage，`escape` = Cancel）；选中单元格高亮。
+    - `Stage` 解析文本并 `stage_edit`；`Discard Staged`、`Apply`、`Commit`、
+      `Rollback` 按钮与 `{} staged · {} statements applied · {} rows affected`
+      计数。只读结果集显示不可编辑原因（无主键/驱动不支持）。
+    - 运行无 `WHERE` 的 `UPDATE`/`DELETE` 与 DDL 前用平台
+      `window.prompt` 二次确认；取消则不执行。
+    - 有 pending/applied 编辑时拒绝运行新查询，要求先 Commit/Rollback，避免新结果集
+      替换编辑归属。
+    - `Item::is_dirty` = 存在未提交工作（pending、已 Apply、手开事务）；
+      `can_save` 同步；`save` 执行 `commit_edits`（关闭提示的 Save 即提交）；
+      `deactivated` 用 `background_spawn` 回滚，任务不随视图销毁而取消。
+  - `crates/database_ui/src/database_ui.rs`：新增 `StageCellEdit`、`CancelCellEdit`
+    action；三个平台键位文件增加 `DatabaseValueEditor > Editor`（Enter/Escape）。
+  - i18n：新增 29 个 `database.edit.*` / `database.query.confirm_*` 键；en/zh 各
+    3954 条且 key 集合一致，代码 fallback 与 `en.json` 完全一致。
+- **验证命令与 exit status**：
+  - `cargo check -p database_ui` → `EXIT=0`
+  - `cargo test -p database_core -p database_ui` → `TEST_EXIT=0`（core 65、ui 18）
+  - `cargo test -p database_core -p database_ui -p csv_preview -p i18n` →
+    `TEST_EXIT=0`（csv 16、i18n 3）
+  - `cargo clippy -p database_core -p database_ui -p csv_preview -p ui --all-targets
+-- -D warnings` → `CLIPPY=0`
+  - `cargo xtask check` → `XCHECK=0`（6 checks）
+  - `cargo check -p zzz` → `ZCHECK=0`
+  - `cargo fmt --all -- --check` → `FMT_EXIT=0`
+  - `cd docs && npx prettier --check src/` → `PRETTIER_EXIT=0`
+- **新增测试**：
+  - 文件数据库双连接：Apply 未 Commit 时第二连接仍读到旧值；Commit 后读到新值。
+  - Rollback 后数据不变、缓存值恢复、pending 清空。
+  - 批次中第二条 UPDATE 触发 UNIQUE 约束：整个批次回滚，`applied_*` 保持 0，
+    外层事务仍打开，pending 保留。
+  - Apply 增量语义：重复 Apply 返回 0；Discard 在 Apply 后拒绝。
+  - `editable_target` 接受简单/限定/别名 SELECT，拒绝 JOIN、逗号、GROUP、DISTINCT、
+    UNION、子查询、CTE、非 SELECT；忽略字符串与注释中的关键字。
+  - `bind_table_after_query` 对缺失主键列、JOIN、无主键表保持只读。
+  - `parse_edited_value` 的类型解析、NULL/空值规则与错误分支。
+  - 参数化 UPDATE 不含用户值（沿用 Phase 1 测试）。
+- **实现决策（记录）**：
+  - 二次确认使用平台 `window.prompt`（与 `Pane` 的未保存提示同一交互），不新增自定义
+    modal；确认文案区分「无 WHERE 影响全表」与「DDL 结构变更」。
+  - Commit 按钮走 `commit_edits`（Apply 剩余增量后提交），因此不会出现「已 Apply
+    但 Commit 只提交旧批次」。
+  - 编辑栏一次只编辑一个单元格；BLOB 不提供文本编辑，与 D-07 不内联二进制一致。
+  - 只读结果集也显示一行原因说明，避免用户点击后才发现不可编辑。
+- **结论**：PASS。不提交不落库、回滚数据不变、批次失败隔离、参数化 DML 与二次确认
+  均有测试；关闭未提交事务会提示，Save = Commit，Don't Save = Rollback。
+- **提交 SHA**：见 `git log -1` 于 `database-explorer`
+  （`feat(database_ui): edit rows inside explicit transactions`）。
+- **下一步**：Phase 6 —— 扩展清单 `database_drivers`、子进程协议、mock 驱动端到端、
+  能力声明驱动 UI 可用性。
 
 ## 完成定义核对 {#done-checklist}
 

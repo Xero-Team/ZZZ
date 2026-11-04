@@ -3855,6 +3855,7 @@ dependencies = [
  "i18n",
  "log",
  "menu",
+ "project",
  "settings",
  "ui",
  "workspace",

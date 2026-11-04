@@ -1710,4 +1710,11 @@
       "cmd-shift-c": "database::CancelQuery",
     },
   },
+  {
+    "context": "DatabaseValueEditor > Editor",
+    "bindings": {
+      "enter": "database::StageCellEdit",
+      "escape": "database::CancelCellEdit",
+    },
+  },
 ]

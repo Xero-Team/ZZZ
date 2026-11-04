@@ -4,12 +4,14 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use database_core::{
-    Capabilities, Catalog, ConnectionConfig, ConnectionId, ConnectionManager, ExportFormat,
-    QuerySession, ResultSet, TableRef, TableSchema, export_result_set, statement_at,
+    Capabilities, Catalog, ColumnType, ConnectionConfig, ConnectionId, ConnectionManager,
+    EditValueError, ExportFormat, QuerySession, ResultSet, StatementKind, TableRef, TableSchema,
+    classify, export_result_set, parse_edited_value, statement_at,
 };
 use editor::{Editor, EditorElement, EditorStyle, MultiBufferOffset};
 use gpui::*;
 use i18n::tr;
+use project::Project;
 use ui::prelude::*;
 use ui::{
     Button, ButtonSize, ButtonStyle, ColumnWidthConfig, CopyableTableCell, IconButton, Table,
@@ -17,11 +19,12 @@ use ui::{
     with_copy_on_right_click,
 };
 use workspace::Item;
+use workspace::item::SaveOptions;
 
 use crate::connection_dialog::describe_error;
 use crate::credentials::KeychainCredentials;
 use crate::result_grid::{CellClass, CellPresentation, ResultGridState, SortDirection};
-use crate::{CancelQuery, RunSelection, RunStatement};
+use crate::{CancelCellEdit, CancelQuery, RunSelection, RunStatement, StageCellEdit};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RunMode {
@@ -75,6 +78,30 @@ enum QueryMessage {
     Error(String),
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum EditOperation {
+    Apply,
+    Commit,
+    Rollback,
+}
+
+fn edit_value_error_message(cx: &App, error: EditValueError) -> String {
+    match error {
+        EditValueError::BinaryNotEditable => tr(
+            cx,
+            "database.edit.binary_read_only",
+            "Binary values cannot be edited here.",
+        ),
+        EditValueError::InvalidInteger => {
+            tr(cx, "database.edit.invalid_integer", "Enter a whole number.")
+        }
+        EditValueError::InvalidReal => tr(cx, "database.edit.invalid_number", "Enter a number."),
+        EditValueError::InvalidBool => {
+            tr(cx, "database.edit.invalid_boolean", "Enter true or false.")
+        }
+    }
+}
+
 /// A browser tab for one database connection.
 pub struct ResultSetView {
     focus_handle: FocusHandle,
@@ -92,6 +119,11 @@ pub struct ResultSetView {
     tabs: Vec<QueryTab>,
     active_tab: usize,
     editor: Entity<Editor>,
+    /// Single-line editor for the selected cell. Kept alive so its focus handle
+    /// and text survive re-renders.
+    value_editor: Entity<Editor>,
+    selected_cell: Option<(usize, usize)>,
+    edit_running: bool,
     grid: ResultGridState,
     _load_task: Option<Task<()>>,
     _query_task: Option<Task<()>>,
@@ -121,21 +153,31 @@ impl ResultSetView {
             editor
         });
 
+        let value_editor = cx.new(|cx| {
+            let mut editor = Editor::single_line(window, cx);
+            editor.set_placeholder_text(
+                &tr(cx, "database.edit.value_placeholder", "NULL"),
+                window,
+                cx,
+            );
+            editor
+        });
+
         let view_handle = cx.entity().downgrade();
         editor.update(cx, |editor, _cx| {
             let run_handle = view_handle.clone();
             editor
-                .register_action(move |_: &RunStatement, _, cx| {
+                .register_action(move |_: &RunStatement, window, cx| {
                     run_handle
-                        .update(cx, |view, cx| view.run(RunMode::Statement, cx))
+                        .update(cx, |view, cx| view.run(RunMode::Statement, window, cx))
                         .ok();
                 })
                 .detach();
             let selection_handle = view_handle.clone();
             editor
-                .register_action(move |_: &RunSelection, _, cx| {
+                .register_action(move |_: &RunSelection, window, cx| {
                     selection_handle
-                        .update(cx, |view, cx| view.run(RunMode::Selection, cx))
+                        .update(cx, |view, cx| view.run(RunMode::Selection, window, cx))
                         .ok();
                 })
                 .detach();
@@ -144,6 +186,24 @@ impl ResultSetView {
                 .register_action(move |_: &CancelQuery, _, cx| {
                     cancel_handle
                         .update(cx, |view, cx| view.cancel_query(cx))
+                        .ok();
+                })
+                .detach();
+        });
+        value_editor.update(cx, |editor, _cx| {
+            let stage_handle = view_handle.clone();
+            editor
+                .register_action(move |_: &StageCellEdit, window, cx| {
+                    stage_handle
+                        .update(cx, |view, cx| view.stage_selected_cell(window, cx))
+                        .ok();
+                })
+                .detach();
+            let cancel_handle = view_handle.clone();
+            editor
+                .register_action(move |_: &CancelCellEdit, window, cx| {
+                    cancel_handle
+                        .update(cx, |view, cx| view.cancel_cell_edit(window, cx))
                         .ok();
                 })
                 .detach();
@@ -169,6 +229,9 @@ impl ResultSetView {
             }],
             active_tab: 0,
             editor,
+            value_editor,
+            selected_cell: None,
+            edit_running: false,
             grid: ResultGridState::new(cx),
             _load_task: None,
             _query_task: None,
@@ -288,8 +351,8 @@ impl ResultSetView {
         (parts.join("\n"), cursor)
     }
 
-    fn run(&mut self, mode: RunMode, cx: &mut Context<Self>) {
-        if self.query_running {
+    fn run(&mut self, mode: RunMode, window: &mut Window, cx: &mut Context<Self>) {
+        if self.query_running || self.edit_running {
             return;
         }
         let (selection, cursor) = self.selected_sql(cx);
@@ -315,6 +378,48 @@ impl ResultSetView {
                 return;
             }
         };
+
+        // A statement that touches every row or changes the schema is confirmed
+        // first (D-05). The run is deferred so the prompt can be cancelled.
+        let kind = classify(&sql);
+        if kind.requires_confirmation() {
+            let message = match kind {
+                StatementKind::Ddl => tr(
+                    cx,
+                    "database.query.confirm_ddl",
+                    "This schema change cannot be undone outside a transaction. Run it?",
+                ),
+                _ => tr(
+                    cx,
+                    "database.query.confirm_without_where",
+                    "This statement has no WHERE clause and affects every row. Run it?",
+                ),
+            };
+            let run_label = tr(cx, "database.query.run", "Run");
+            let cancel_label = tr(cx, "database.query.cancel_prompt", "Cancel");
+            let answer = window.prompt(
+                PromptLevel::Warning,
+                &message,
+                None,
+                &[run_label.as_str(), cancel_label.as_str()],
+                cx,
+            );
+            cx.spawn(async move |view, cx| {
+                if matches!(answer.await, Ok(0)) {
+                    view.update(cx, |view, cx| view.start_query(sql, cx)).ok();
+                }
+            })
+            .detach();
+            return;
+        }
+
+        self.start_query(sql, cx);
+    }
+
+    fn start_query(&mut self, sql: String, cx: &mut Context<Self>) {
+        if self.query_running || self.edit_running {
+            return;
+        }
         let Some(mut session) = self.session.take() else {
             self.set_message(
                 QueryMessage::Error(tr(
@@ -326,11 +431,27 @@ impl ResultSetView {
             );
             return;
         };
+        // Running a new query replaces the result set that owns the staged and
+        // applied edits, so those edits would become invisible. Make the user
+        // settle them first rather than silently dropping or orphaning them.
+        if session.has_pending_edits() || session.applied_edit_count() > 0 {
+            self.session = Some(session);
+            self.set_message(
+                QueryMessage::Info(tr(
+                    cx,
+                    "database.edit.settle_before_query",
+                    "Commit or roll back the pending edits before running another query.",
+                )),
+                cx,
+            );
+            return;
+        }
 
         let tab_index = self.active_tab;
         self.query_running = true;
+        self.selected_cell = None;
         if let Some(tab) = self.tabs.get_mut(tab_index) {
-            tab.sql = text;
+            tab.sql = sql.clone();
             tab.message = Some(QueryMessage::Info(tr(
                 cx,
                 "database.query.running",
@@ -341,6 +462,13 @@ impl ResultSetView {
         let task = cx.spawn(async move |view, cx| {
             let result = session.execute(&sql, &[]).await;
             let cancelled = session.is_cancelled();
+            if result.is_ok() && matches!(classify(&sql), StatementKind::Select) {
+                // Editability depends on the real primary key, so ask the driver
+                // instead of guessing from the column names.
+                if let Err(error) = session.bind_table_after_query(&sql).await {
+                    log::warn!("failed to resolve the editable table for a query: {error}");
+                }
+            }
             let result_set = session.result_set().cloned().map(Arc::new);
             view.update(cx, |view, cx| {
                 view.session = Some(session);
@@ -406,6 +534,411 @@ impl ResultSetView {
         cx.notify();
     }
 
+    fn active_result(&self) -> Option<Arc<ResultSet>> {
+        self.tabs
+            .get(self.active_tab)
+            .and_then(|tab| tab.result.clone())
+    }
+
+    /// Copy the session's live result set into the active tab. The session is
+    /// the owner of edits; the tab only holds the snapshot the grid renders.
+    fn refresh_active_result(&mut self, cx: &mut Context<Self>) {
+        let result = self
+            .session
+            .as_ref()
+            .and_then(|session| session.result_set().cloned())
+            .map(Arc::new);
+        self.grid.sync(result.as_deref(), &mut *cx);
+        if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+            tab.result = result;
+        }
+        cx.notify();
+    }
+
+    fn select_cell(
+        &mut self,
+        row_index: usize,
+        column_index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(result) = self.active_result() else {
+            return;
+        };
+        let Some(column) = result.columns.get(column_index) else {
+            return;
+        };
+        if !result.editable {
+            let message = if self.capabilities.row_editing {
+                tr(
+                    cx,
+                    "database.edit.needs_primary_key",
+                    "Only a single-table SELECT that returns the primary key can be edited.",
+                )
+            } else {
+                tr(
+                    cx,
+                    "database.edit.driver_read_only",
+                    "This connection does not support row editing.",
+                )
+            };
+            self.set_message(QueryMessage::Info(message), cx);
+            return;
+        }
+        if matches!(column.declared_type, ColumnType::Blob) {
+            self.set_message(
+                QueryMessage::Info(tr(
+                    cx,
+                    "database.edit.binary_read_only",
+                    "Binary values cannot be edited here.",
+                )),
+                cx,
+            );
+            return;
+        }
+
+        self.selected_cell = Some((row_index, column_index));
+        let text = match result.value_at(row_index, column_index) {
+            Some(value) if !value.is_null() => value.to_export_text(),
+            _ => String::new(),
+        };
+        self.value_editor
+            .update(cx, |editor, cx| editor.set_text(text, window, cx));
+        self.value_editor
+            .update(cx, |editor, cx| editor.focus_handle(cx))
+            .focus(window, cx);
+        cx.notify();
+    }
+
+    fn cancel_cell_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.selected_cell = None;
+        self.editor
+            .update(cx, |editor, cx| editor.focus_handle(cx))
+            .focus(window, cx);
+        cx.notify();
+    }
+
+    fn stage_selected_cell(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some((row_index, column_index)) = self.selected_cell else {
+            return;
+        };
+        let Some(result) = self.active_result() else {
+            return;
+        };
+        let Some(column) = result.columns.get(column_index) else {
+            return;
+        };
+        let text = self.value_editor.read(cx).text(cx);
+        let value = match parse_edited_value(&column.declared_type, &text) {
+            Ok(value) => value,
+            Err(error) => {
+                self.set_message(QueryMessage::Error(edit_value_error_message(cx, error)), cx);
+                return;
+            }
+        };
+        let Some(session) = self.session.as_mut() else {
+            return;
+        };
+        if !session.stage_edit(row_index, column_index, value) {
+            self.set_message(
+                QueryMessage::Error(tr(
+                    cx,
+                    "database.edit.not_editable",
+                    "This cell cannot be edited.",
+                )),
+                cx,
+            );
+            return;
+        }
+        self.refresh_active_result(cx);
+        self.set_message(
+            QueryMessage::Info(tr(
+                cx,
+                "database.edit.staged",
+                "Edit staged. Apply it to the transaction when you are ready.",
+            )),
+            cx,
+        );
+        self.value_editor
+            .update(cx, |editor, cx| editor.focus_handle(cx))
+            .focus(window, cx);
+    }
+
+    fn discard_pending_edits(&mut self, cx: &mut Context<Self>) {
+        let Some(session) = self.session.as_mut() else {
+            return;
+        };
+        if !session.discard_pending_edits() {
+            self.set_message(
+                QueryMessage::Info(tr(
+                    cx,
+                    "database.edit.discard_requires_rollback",
+                    "Some edits are already applied. Roll back the transaction to discard them.",
+                )),
+                cx,
+            );
+            return;
+        }
+        self.refresh_active_result(cx);
+        self.set_message(
+            QueryMessage::Info(tr(cx, "database.edit.discarded", "Staged edits discarded.")),
+            cx,
+        );
+    }
+
+    fn apply_edits(&mut self, cx: &mut Context<Self>) {
+        self.run_edit_operation(EditOperation::Apply, cx);
+    }
+
+    fn commit_edits(&mut self, cx: &mut Context<Self>) {
+        self.run_edit_operation(EditOperation::Commit, cx);
+    }
+
+    fn rollback_edits(&mut self, cx: &mut Context<Self>) {
+        self.run_edit_operation(EditOperation::Rollback, cx);
+    }
+
+    fn run_edit_operation(&mut self, operation: EditOperation, cx: &mut Context<Self>) {
+        if self.edit_running || self.query_running {
+            return;
+        }
+        let Some(mut session) = self.session.take() else {
+            self.set_message(
+                QueryMessage::Error(tr(
+                    cx,
+                    "database.query.not_connected",
+                    "Not connected to the database.",
+                )),
+                cx,
+            );
+            return;
+        };
+        self.edit_running = true;
+        cx.notify();
+        let task = cx.spawn(async move |view, cx| {
+            let outcome = match operation {
+                EditOperation::Apply => session.apply_pending_edits().await,
+                EditOperation::Commit => session.commit_edits().await,
+                EditOperation::Rollback => session.rollback_edits().await.map(|()| 0usize),
+            };
+            view.update(cx, |view, cx| {
+                view.session = Some(session);
+                view.edit_running = false;
+                view.refresh_active_result(cx);
+                match outcome {
+                    Ok(applied) => {
+                        let message = match operation {
+                            EditOperation::Apply => tr(
+                                cx,
+                                "database.edit.applied",
+                                "Applied {} edits inside the transaction.",
+                            )
+                            .replacen("{}", &applied.to_string(), 1),
+                            EditOperation::Commit => tr(
+                                cx,
+                                "database.edit.committed",
+                                "Committed {} edits.",
+                            )
+                            .replacen("{}", &applied.to_string(), 1),
+                            EditOperation::Rollback => tr(
+                                cx,
+                                "database.edit.rolled_back",
+                                "Rolled back. The database is unchanged.",
+                            ),
+                        };
+                        view.set_message(QueryMessage::Info(message), cx);
+                    }
+                    Err(error) => {
+                        let message =
+                            tr(cx, "database.edit.failed", "The edit operation failed: {}")
+                                .replacen("{}", &describe_error(cx, &error), 1);
+                        view.set_message(QueryMessage::Error(message), cx);
+                    }
+                }
+            })
+            .ok();
+        });
+        self._query_task = Some(task);
+    }
+
+    fn render_edit_bar(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let result = self.active_result()?;
+        let session = self.session.as_ref()?;
+        let pending = session
+            .result_set()
+            .map_or(0, |set| set.pending_edit_count());
+        let applied = session.applied_edit_count();
+        let applied_statements = session.applied_statement_count();
+        let affected_rows = session.applied_row_count();
+        let open = session.has_open_transaction();
+        let editable = result.editable;
+        if result.columns.is_empty() {
+            // A DML result has no cells to edit; only a transaction bar would
+            // make sense, and that is handled below.
+            if pending == 0 && applied == 0 && !open {
+                return None;
+            }
+        }
+
+        let muted = cx.theme().colors().text_muted;
+        let busy = self.edit_running || self.query_running;
+        let mut bar = h_flex()
+            .w_full()
+            .flex_wrap()
+            .gap_2()
+            .items_center()
+            .px_2()
+            .py_1()
+            .text_sm()
+            .border_b_1()
+            .border_color(cx.theme().colors().border_variant);
+
+        if !editable && pending == 0 && applied == 0 && !open {
+            // Say why instead of silently offering nothing to click.
+            let reason = if self.capabilities.row_editing {
+                tr(
+                    cx,
+                    "database.edit.needs_primary_key",
+                    "Only a single-table SELECT that returns the primary key can be edited.",
+                )
+            } else {
+                tr(
+                    cx,
+                    "database.edit.driver_read_only",
+                    "This connection does not support row editing.",
+                )
+            };
+            bar = bar.child(div().text_color(muted).child(reason));
+        }
+
+        if editable {
+            match self.selected_cell {
+                Some((row_index, column_index)) => {
+                    let column_name = result
+                        .columns
+                        .get(column_index)
+                        .map_or_else(String::new, |column| column.name.clone());
+                    bar = bar
+                        .child(
+                            div().text_color(muted).child(
+                                tr(cx, "database.edit.cell", "Row {}, column {}")
+                                    .replacen("{}", &(row_index + 1).to_string(), 1)
+                                    .replacen("{}", &column_name, 1),
+                            ),
+                        )
+                        .child(
+                            div()
+                                .key_context("DatabaseValueEditor")
+                                .w(px(280.))
+                                .px_2()
+                                .py_1()
+                                .border_1()
+                                .rounded_md()
+                                .border_color(cx.theme().colors().border)
+                                .child(EditorElement::new(
+                                    &self.value_editor,
+                                    EditorStyle::default(),
+                                )),
+                        )
+                        .child(
+                            Button::new(
+                                "database-stage-edit",
+                                tr(cx, "database.edit.stage", "Stage"),
+                            )
+                            .size(ButtonSize::Compact)
+                            .style(ButtonStyle::Filled)
+                            .disabled(busy)
+                            .on_click(cx.listener(
+                                |view, _, window, cx| {
+                                    view.stage_selected_cell(window, cx);
+                                },
+                            )),
+                        )
+                        .child(
+                            Button::new(
+                                "database-cancel-edit",
+                                tr(cx, "database.edit.cancel", "Cancel"),
+                            )
+                            .size(ButtonSize::Compact)
+                            .disabled(busy)
+                            .on_click(cx.listener(
+                                |view, _, window, cx| {
+                                    view.cancel_cell_edit(window, cx);
+                                },
+                            )),
+                        );
+                }
+                None => {
+                    bar = bar.child(div().text_color(muted).child(tr(
+                        cx,
+                        "database.edit.select_cell",
+                        "Select a cell to edit it.",
+                    )));
+                }
+            }
+        }
+
+        bar = bar.child(
+            div().text_color(muted).child(
+                tr(
+                    cx,
+                    "database.edit.counts",
+                    "{} staged · {} statements applied · {} rows affected",
+                )
+                .replacen("{}", &pending.to_string(), 1)
+                .replacen("{}", &applied_statements.to_string(), 1)
+                .replacen("{}", &affected_rows.to_string(), 1),
+            ),
+        );
+
+        if pending > 0 && applied == 0 {
+            bar = bar.child(
+                Button::new(
+                    "database-discard-edits",
+                    tr(cx, "database.edit.discard", "Discard Staged"),
+                )
+                .size(ButtonSize::Compact)
+                .disabled(busy)
+                .on_click(cx.listener(|view, _, _, cx| view.discard_pending_edits(cx))),
+            );
+        }
+        if pending > 0 && editable {
+            bar = bar.child(
+                Button::new(
+                    "database-apply-edits",
+                    tr(cx, "database.edit.apply", "Apply"),
+                )
+                .size(ButtonSize::Compact)
+                .disabled(busy)
+                .on_click(cx.listener(|view, _, _, cx| view.apply_edits(cx))),
+            );
+        }
+        if pending > 0 || applied > 0 || open {
+            bar = bar
+                .child(
+                    Button::new(
+                        "database-commit-edits",
+                        tr(cx, "database.edit.commit", "Commit"),
+                    )
+                    .size(ButtonSize::Compact)
+                    .style(ButtonStyle::Filled)
+                    .disabled(busy)
+                    .on_click(cx.listener(|view, _, _, cx| view.commit_edits(cx))),
+                )
+                .child(
+                    Button::new(
+                        "database-rollback-edits",
+                        tr(cx, "database.edit.rollback", "Rollback"),
+                    )
+                    .size(ButtonSize::Compact)
+                    .disabled(busy)
+                    .on_click(cx.listener(|view, _, _, cx| view.rollback_edits(cx))),
+                );
+        }
+
+        Some(bar.into_any_element())
+    }
+
     fn switch_tab(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
         if index == self.active_tab || index >= self.tabs.len() {
             return;
@@ -415,6 +948,7 @@ impl ResultSetView {
             tab.sql = current_text;
         }
         self.active_tab = index;
+        self.selected_cell = None;
         let text = self.tabs[index].sql.clone();
         let result = self.tabs[index].result.clone();
         self.editor.update(cx, |editor, cx| {
@@ -435,6 +969,7 @@ impl ResultSetView {
             message: None,
         });
         self.active_tab = self.tabs.len() - 1;
+        self.selected_cell = None;
         self.editor.update(cx, |editor, cx| {
             editor.set_text(String::new(), window, cx);
         });
@@ -483,8 +1018,8 @@ impl ResultSetView {
                         )
                         .style(ButtonStyle::Filled)
                         .disabled(self.query_running)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.run(RunMode::Statement, cx);
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.run(RunMode::Statement, window, cx);
                         })),
                     )
                     .child(
@@ -493,8 +1028,8 @@ impl ResultSetView {
                             tr(cx, "database.query.run_selection", "Run Selection"),
                         )
                         .disabled(self.query_running)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.run(RunMode::Selection, cx);
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.run(RunMode::Selection, window, cx);
                         })),
                     )
                     .child(
@@ -635,15 +1170,23 @@ impl ResultSetView {
 
         let cells_result = result.clone();
         let cells_order = order.clone();
+        let cells_editable = result.editable;
         let table = table.uniform_list(
             "database-result-rows",
             row_count,
-            cx.processor(move |_view, range: Range<usize>, _window, cx| {
+            cx.processor(move |view, range: Range<usize>, _window, cx| {
                 range
                     .filter_map(|display_index| {
                         let row_index = *cells_order.get(display_index)?;
                         let row = cells_result.rows.get(row_index)?;
-                        Some(Self::render_result_row(row, display_index, cols, cx))
+                        Some(view.render_result_row(
+                            row,
+                            row_index,
+                            display_index,
+                            cols,
+                            cells_editable,
+                            cx,
+                        ))
                     })
                     .collect()
             }),
@@ -813,11 +1356,15 @@ impl ResultSetView {
     }
 
     fn render_result_row(
+        &self,
         row: &database_core::Row,
+        row_index: usize,
         display_index: usize,
         columns: usize,
-        cx: &App,
+        editable: bool,
+        cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
+        let selected_cell = self.selected_cell;
         (0..columns)
             .map(|column| {
                 let presentation = CellPresentation::for_value(row.get(column));
@@ -828,7 +1375,7 @@ impl ResultSetView {
                     }
                     CellClass::Text => (Color::Default, TableCellTextAlignment::Left),
                 };
-                CopyableTableCell::new(
+                let cell = CopyableTableCell::new(
                     ElementId::Name(format!("database-cell-{display_index}-{column}").into()),
                     SharedString::from(presentation.text),
                 )
@@ -836,8 +1383,21 @@ impl ResultSetView {
                 .text_alignment(alignment)
                 .text_color(color)
                 .copy_hint("database.grid.copy_cell_hint", "Right click to copy cell")
-                .render(cx)
-                .into_any_element()
+                .render(cx);
+                let cell = cell.when(selected_cell == Some((row_index, column)), |cell| {
+                    cell.bg(cx.theme().colors().element_selected)
+                });
+                let cell = if editable {
+                    cell.on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |view, _, window, cx| {
+                            view.select_cell(row_index, column, window, cx);
+                        }),
+                    )
+                } else {
+                    cell
+                };
+                cell.into_any_element()
             })
             .collect()
     }
@@ -863,6 +1423,74 @@ impl Item for ResultSetView {
             .replacen("{}", &self.config.display_name, 1)
             .into()
     }
+
+    /// Uncommitted DB work is what "dirty" means here: staged edits, edits
+    /// already written to a transaction, or a transaction the user opened.
+    fn is_dirty(&self, _cx: &App) -> bool {
+        self.session
+            .as_ref()
+            .is_some_and(|session| session.has_uncommitted_changes())
+    }
+
+    fn can_save(&self, cx: &App) -> bool {
+        self.is_dirty(cx)
+    }
+
+    /// The platform "Save" action for this view commits the open transaction.
+    fn save(
+        &mut self,
+        _options: SaveOptions,
+        _project: Entity<Project>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Task<Result<()>> {
+        let Some(mut session) = self.session.take() else {
+            return Task::ready(Ok(()));
+        };
+        self.edit_running = true;
+        cx.notify();
+        cx.spawn(async move |view, cx| {
+            let outcome = session.commit_edits().await;
+            view.update(cx, |view, cx| {
+                view.session = Some(session);
+                view.edit_running = false;
+                view.refresh_active_result(cx);
+                let message = match &outcome {
+                    Ok(applied) => QueryMessage::Info(
+                        tr(
+                            cx,
+                            "database.edit.committed_on_close",
+                            "Committed {} edits.",
+                        )
+                        .replacen("{}", &applied.to_string(), 1),
+                    ),
+                    Err(error) => QueryMessage::Error(describe_error(cx, error)),
+                };
+                view.set_message(message, cx);
+            })
+            .ok();
+            outcome
+                .map(|_| ())
+                .map_err(|error| anyhow::anyhow!(error.to_string()))
+        })
+    }
+
+    /// Closing without saving must not leave the connection inside a
+    /// transaction. The session is rolled back independently of this entity so
+    /// the task survives the view being dropped.
+    fn deactivated(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        let Some(mut session) = self.session.take() else {
+            return;
+        };
+        // Run on the background executor so dropping the view does not cancel
+        // the rollback. A connection must never outlive its transaction owner.
+        cx.background_spawn(async move {
+            if let Err(error) = session.rollback_edits().await {
+                log::warn!("failed to roll back database edits while closing: {error}");
+            }
+        })
+        .detach();
+    }
 }
 
 impl Render for ResultSetView {
@@ -873,6 +1501,7 @@ impl Render for ResultSetView {
         let table_details = self.render_table_details(cx);
         let toolbar = self.render_toolbar(cx);
         let message = self.render_message(cx);
+        let edit_bar = self.render_edit_bar(cx);
         let result = self.render_result(cx);
 
         v_flex()
@@ -937,6 +1566,7 @@ impl Render for ResultSetView {
                                     )),
                             )
                             .children(message)
+                            .children(edit_bar)
                             .child(div().flex_1().child(result)),
                     ),
             )

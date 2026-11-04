@@ -1,8 +1,11 @@
-//! SQL text analysis: statement splitting and classification.
+//! SQL text analysis: statement splitting, classification, and the editable
+//! result shape.
 //!
 //! Kept driver-agnostic and pure so the "run current statement", "run
-//! selection", and destructive-statement confirmation paths are independently
-//! testable. This is a lexer over SQL text, not a full SQL parser.
+//! selection", destructive-statement confirmation, and edit targeting paths are
+//! independently testable. This is a lexer over SQL text, not a full SQL parser.
+
+use crate::model::TableRef;
 
 /// The category of a SQL statement, used to decide whether a confirmation is
 /// required before execution (D-05) and whether a result set is expected.
@@ -223,10 +226,131 @@ pub fn classify(sql: &str) -> StatementKind {
     }
 }
 
+/// The single table an `SELECT ... FROM <table>` reads from, when the shape is
+/// simple enough that each result row maps to exactly one table row.
+///
+/// Conservative on purpose: joins, comma-separated table lists, unions, grouping,
+/// distinct, and subqueries all return `None`. A wrong answer here would let the
+/// UI offer editing for rows it cannot target safely. The caller still has to
+/// check that the primary key is present in the result columns.
+pub fn editable_target(sql: &str) -> Option<TableRef> {
+    let tokens = significant_tokens(sql);
+    if !tokens
+        .first()
+        .is_some_and(|token| token.text.eq_ignore_ascii_case("SELECT"))
+    {
+        return None;
+    }
+    const UNSAFE_KEYWORDS: [&str; 8] = [
+        "JOIN",
+        "UNION",
+        "INTERSECT",
+        "EXCEPT",
+        "GROUP",
+        "HAVING",
+        "DISTINCT",
+        "WINDOW",
+    ];
+    if tokens.iter().any(|token| {
+        token.depth == 0
+            && UNSAFE_KEYWORDS
+                .iter()
+                .any(|kw| token.text.eq_ignore_ascii_case(kw))
+    }) {
+        return None;
+    }
+    let from_indices: Vec<usize> = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| token.depth == 0 && token.text.eq_ignore_ascii_case("FROM"))
+        .map(|(index, _)| index)
+        .collect();
+    // More than one top-level FROM means a subquery or another clause we do not
+    // model; zero means there is no target table at all.
+    if from_indices.len() != 1 {
+        return None;
+    }
+    let from_index = from_indices[0];
+    let from_token = &tokens[from_index];
+    let table_token = tokens.get(from_index + 1)?;
+    // A subquery starts with `(`, so the token after FROM is nested and the gap
+    // is not plain whitespace.
+    if table_token.depth != 0 || !sql[from_token.end..table_token.start].trim().is_empty() {
+        return None;
+    }
+
+    let mut parts = vec![table_token.text.clone()];
+    let mut cursor = table_token.end;
+    let mut index = from_index + 2;
+    while let Some(next) = tokens.get(index) {
+        let gap = &sql[cursor..next.start];
+        if gap.trim() == "." {
+            if next.depth != 0 {
+                return None;
+            }
+            parts.push(next.text.clone());
+            cursor = next.end;
+            index += 1;
+        } else {
+            break;
+        }
+    }
+    if parts.len() > 3 {
+        return None;
+    }
+
+    if let Some(next) = tokens.get(index) {
+        let gap = &sql[cursor..next.start];
+        // A comma here is a table list (`FROM a, b`), not a single target.
+        if next.depth != 0 || gap.contains(',') {
+            return None;
+        }
+        if next.text.eq_ignore_ascii_case("AS") {
+            let alias = tokens.get(index + 1)?;
+            if alias.depth != 0 {
+                return None;
+            }
+            index += 2;
+        } else if !is_clause_keyword(&next.text) {
+            // A bare alias (`FROM users u`).
+            index += 1;
+        }
+        if let Some(trailing) = tokens.get(index)
+            && !is_clause_keyword(&trailing.text)
+        {
+            return None;
+        }
+    }
+
+    let name = parts.pop()?;
+    let schema = parts.pop();
+    let catalog = parts.pop();
+    let mut table = TableRef::new(name);
+    table.schema = schema;
+    table.catalog = catalog;
+    Some(table)
+}
+
+fn is_clause_keyword(word: &str) -> bool {
+    [
+        "WHERE",
+        "ORDER",
+        "LIMIT",
+        "OFFSET",
+        "RETURNING",
+        "FETCH",
+        "FOR",
+    ]
+    .iter()
+    .any(|keyword| word.eq_ignore_ascii_case(keyword))
+}
+
 /// A word token with its parenthesis nesting depth at the point it appears.
 struct SqlToken {
     text: String,
     depth: i32,
+    start: usize,
+    end: usize,
 }
 
 /// Extract word tokens while skipping comments and quoted literals, so keyword
@@ -268,6 +392,8 @@ fn significant_tokens(sql: &str) -> Vec<SqlToken> {
                 tokens.push(SqlToken {
                     text: sql[start..index].to_owned(),
                     depth,
+                    start,
+                    end: index,
                 });
             }
             _ => index += 1,
@@ -393,5 +519,69 @@ mod tests {
     fn empty_input() {
         assert!(split_statements("   \n -- only a comment\n").is_empty());
         assert_eq!(classify("   "), StatementKind::Empty);
+    }
+
+    #[test]
+    fn editable_target_accepts_a_simple_select() {
+        assert_eq!(
+            editable_target("SELECT id, name FROM users"),
+            Some(TableRef::new("users"))
+        );
+        assert_eq!(
+            editable_target("select * from main.users where id = 1 order by name"),
+            Some(TableRef {
+                catalog: None,
+                schema: Some("main".to_owned()),
+                name: "users".to_owned(),
+            })
+        );
+        assert_eq!(
+            editable_target("SELECT u.id FROM users AS u"),
+            Some(TableRef::new("users"))
+        );
+        assert_eq!(
+            editable_target("SELECT u.id FROM users u LIMIT 10 OFFSET 5"),
+            Some(TableRef::new("users"))
+        );
+        assert_eq!(
+            editable_target("SELECT id FROM main.users"),
+            Some(TableRef {
+                catalog: None,
+                schema: Some("main".to_owned()),
+                name: "users".to_owned(),
+            })
+        );
+    }
+
+    #[test]
+    fn editable_target_rejects_shapes_that_do_not_map_one_row_to_one_table_row() {
+        for sql in [
+            "SELECT a.id, b.id FROM a JOIN b ON a.id = b.id",
+            "SELECT id FROM a, b",
+            "SELECT id FROM a NATURAL JOIN b",
+            "SELECT id FROM a UNION SELECT id FROM b",
+            "SELECT id FROM a INTERSECT SELECT id FROM b",
+            "SELECT id FROM a GROUP BY id",
+            "SELECT DISTINCT id FROM a",
+            "SELECT id FROM (SELECT id FROM a) AS nested",
+            "WITH source AS (SELECT id FROM a) SELECT id FROM source",
+            "UPDATE a SET id = 1",
+            "SELECT 1",
+            "SELECT id FROM a, b WHERE a.id = b.id",
+        ] {
+            assert_eq!(editable_target(sql), None, "{sql}");
+        }
+    }
+
+    #[test]
+    fn editable_target_ignores_keywords_in_literals_and_comments() {
+        assert_eq!(
+            editable_target("SELECT id FROM users WHERE name = 'join group by'"),
+            Some(TableRef::new("users"))
+        );
+        assert_eq!(
+            editable_target("SELECT id -- from other\nFROM users"),
+            Some(TableRef::new("users"))
+        );
     }
 }

@@ -553,7 +553,18 @@ impl SqliteConnection {
         // Identifiers are quoted by doubling embedded quotes; user SQL is never
         // concatenated into a value slot, so this is injection-safe.
         let quoted = quote_identifier(name);
-        let column_rows = self.collect_rows(&format!("PRAGMA table_info({quoted})"), &[], 6)?;
+        // `PRAGMA schema.table_info(...)` is the only way to describe a table in
+        // an attached database; using the bare pragma would silently describe a
+        // same-named table in `main` and edits would target the wrong rows.
+        let pragma_prefix = match &table.schema {
+            Some(schema) => format!("{}.", quote_identifier(schema)),
+            None => String::new(),
+        };
+        let column_rows = self.collect_rows(
+            &format!("PRAGMA {pragma_prefix}table_info({quoted})"),
+            &[],
+            6,
+        )?;
         let mut columns = Vec::with_capacity(column_rows.len());
         let mut primary_key_columns = Vec::new();
         for row in &column_rows {
@@ -582,8 +593,11 @@ impl SqliteConnection {
             })
         };
 
-        let foreign_key_rows =
-            self.collect_rows(&format!("PRAGMA foreign_key_list({quoted})"), &[], 8)?;
+        let foreign_key_rows = self.collect_rows(
+            &format!("PRAGMA {pragma_prefix}foreign_key_list({quoted})"),
+            &[],
+            8,
+        )?;
         let mut foreign_keys = Vec::new();
         // Group rows by (id, referenced table) so composite keys stay together.
         let mut grouped: std::collections::BTreeMap<(i64, String), Vec<&Row>> =
@@ -621,7 +635,11 @@ impl SqliteConnection {
             });
         }
 
-        let index_list_rows = self.collect_rows(&format!("PRAGMA index_list({quoted})"), &[], 5)?;
+        let index_list_rows = self.collect_rows(
+            &format!("PRAGMA {pragma_prefix}index_list({quoted})"),
+            &[],
+            5,
+        )?;
         let mut indexes = Vec::new();
         for row in &index_list_rows {
             let index_name = row.get(1).map(Value::display).unwrap_or_default();
@@ -809,6 +827,25 @@ mod tests {
             );
             assert_eq!(schema.indexes.len(), 1);
             assert_eq!(schema.indexes[0].columns, vec!["name".to_owned()]);
+
+            // A schema-qualified reference must describe that schema, not a
+            // same-named table in `main`.
+            let qualified = connection
+                .describe_table(&TableRef {
+                    catalog: None,
+                    schema: Some("main".to_owned()),
+                    name: "customers".to_owned(),
+                })
+                .await
+                .expect("describe qualified");
+            assert_eq!(qualified.columns.len(), 3);
+            assert_eq!(
+                qualified
+                    .primary_key
+                    .as_ref()
+                    .map(|key| key.columns.clone()),
+                Some(vec!["id".to_owned()])
+            );
         });
     }
 

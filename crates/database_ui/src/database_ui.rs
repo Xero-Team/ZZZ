@@ -26,7 +26,9 @@ actions!(
         ToggleDatabasePanel,
         RunStatement,
         RunSelection,
-        CancelQuery
+        CancelQuery,
+        StageCellEdit,
+        CancelCellEdit
     ]
 );
 

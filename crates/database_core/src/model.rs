@@ -247,6 +247,89 @@ pub struct Truncation {
     pub row_limit: usize,
 }
 
+/// Why text typed into a cell editor cannot become a typed value. The UI maps
+/// these to localized messages; the model never embeds user-facing prose.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditValueError {
+    /// Binary data has no textual editing form in the grid (D-07).
+    BinaryNotEditable,
+    InvalidInteger,
+    InvalidReal,
+    InvalidBool,
+}
+
+/// Convert the text of the cell editor into a typed value for `column_type`.
+///
+/// The literal `NULL` (any case) always means SQL NULL. Empty text means NULL
+/// for non-text types and the empty string for text-like types, matching what a
+/// user expects in each case. Binary columns cannot be edited here.
+pub fn parse_edited_value(column_type: &ColumnType, text: &str) -> Result<Value, EditValueError> {
+    let trimmed = text.trim();
+    if trimmed.eq_ignore_ascii_case("NULL") {
+        return Ok(Value::Null);
+    }
+    match column_type {
+        ColumnType::Blob => Err(EditValueError::BinaryNotEditable),
+        ColumnType::Integer => {
+            if trimmed.is_empty() {
+                return Ok(Value::Null);
+            }
+            trimmed
+                .parse::<i64>()
+                .map(Value::Integer)
+                .map_err(|_| EditValueError::InvalidInteger)
+        }
+        ColumnType::Real => {
+            if trimmed.is_empty() {
+                return Ok(Value::Null);
+            }
+            trimmed
+                .parse::<f64>()
+                .map(Value::Real)
+                .map_err(|_| EditValueError::InvalidReal)
+        }
+        ColumnType::Numeric { .. } => {
+            if trimmed.is_empty() {
+                return Ok(Value::Null);
+            }
+            // Keep the literal text: precision beyond f64 must survive the
+            // round trip to the driver.
+            if trimmed.parse::<f64>().is_err() {
+                return Err(EditValueError::InvalidReal);
+            }
+            Ok(Value::Numeric(trimmed.to_owned()))
+        }
+        ColumnType::Bool => {
+            if trimmed.is_empty() {
+                return Ok(Value::Null);
+            }
+            match trimmed.to_ascii_lowercase().as_str() {
+                "true" | "1" | "yes" => Ok(Value::Bool(true)),
+                "false" | "0" | "no" => Ok(Value::Bool(false)),
+                _ => Err(EditValueError::InvalidBool),
+            }
+        }
+        ColumnType::Date => Ok(if trimmed.is_empty() {
+            Value::Null
+        } else {
+            Value::Date(trimmed.to_owned())
+        }),
+        ColumnType::DateTime => Ok(if trimmed.is_empty() {
+            Value::Null
+        } else {
+            Value::DateTime(trimmed.to_owned())
+        }),
+        ColumnType::Time => Ok(if trimmed.is_empty() {
+            Value::Null
+        } else {
+            Value::Time(trimmed.to_owned())
+        }),
+        ColumnType::Text | ColumnType::Json | ColumnType::Other { .. } => {
+            Ok(Value::Text(text.to_owned()))
+        }
+    }
+}
+
 /// An independent, stateful result set (D-06). Rows are cached by window; the
 /// bounded stream fills that cache without materializing the whole query result.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -603,6 +686,89 @@ mod tests {
         assert!(!set.push_row(Row(vec![Value::Integer(2)]), 1));
         assert_eq!(set.truncation, Some(Truncation { row_limit: 1 }));
         assert_eq!(set.rows.len(), 1);
+    }
+
+    #[test]
+    fn edited_text_is_parsed_by_column_type() {
+        assert_eq!(
+            parse_edited_value(&ColumnType::Integer, "42"),
+            Ok(Value::Integer(42))
+        );
+        assert_eq!(
+            parse_edited_value(&ColumnType::Integer, "  -7 "),
+            Ok(Value::Integer(-7))
+        );
+        assert_eq!(
+            parse_edited_value(&ColumnType::Real, "1.5"),
+            Ok(Value::Real(1.5))
+        );
+        assert_eq!(
+            parse_edited_value(&ColumnType::Bool, "YES"),
+            Ok(Value::Bool(true))
+        );
+        assert_eq!(
+            parse_edited_value(&ColumnType::Bool, "0"),
+            Ok(Value::Bool(false))
+        );
+        assert_eq!(
+            parse_edited_value(&ColumnType::Text, " a b "),
+            Ok(Value::Text(" a b ".into()))
+        );
+        assert_eq!(
+            parse_edited_value(&ColumnType::Json, "{\"a\": 1}"),
+            Ok(Value::Text("{\"a\": 1}".into()))
+        );
+        assert_eq!(
+            parse_edited_value(&ColumnType::Date, "2026-01-02"),
+            Ok(Value::Date("2026-01-02".into()))
+        );
+        assert_eq!(
+            parse_edited_value(
+                &ColumnType::Numeric {
+                    precision: None,
+                    scale: None
+                },
+                "12345678901234567890.123456789"
+            ),
+            Ok(Value::Numeric("12345678901234567890.123456789".into()))
+        );
+    }
+
+    #[test]
+    fn edited_null_and_empty_values_are_explicit() {
+        assert_eq!(
+            parse_edited_value(&ColumnType::Integer, "null"),
+            Ok(Value::Null)
+        );
+        assert_eq!(
+            parse_edited_value(&ColumnType::Integer, ""),
+            Ok(Value::Null)
+        );
+        assert_eq!(
+            parse_edited_value(&ColumnType::Text, ""),
+            Ok(Value::Text(String::new()))
+        );
+        assert_eq!(parse_edited_value(&ColumnType::Date, ""), Ok(Value::Null));
+    }
+
+    #[test]
+    fn edited_values_reject_unparseable_input_and_binary_columns() {
+        assert_eq!(
+            parse_edited_value(&ColumnType::Integer, "12x"),
+            Err(EditValueError::InvalidInteger)
+        );
+        assert_eq!(
+            parse_edited_value(&ColumnType::Real, "infinity!"),
+            Err(EditValueError::InvalidReal)
+        );
+        assert_eq!(
+            parse_edited_value(&ColumnType::Bool, "maybe"),
+            Err(EditValueError::InvalidBool)
+        );
+        assert_eq!(
+            parse_edited_value(&ColumnType::Blob, "00ff"),
+            Err(EditValueError::BinaryNotEditable)
+        );
     }
 
     #[test]
