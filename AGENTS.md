@@ -17,7 +17,9 @@
 - `check all` enforces these gates in Rust (`tooling/xtask/src/tasks/check.rs`): todos, keymaps, scroll handlers, crate licenses, locale catalog keys, DCO sign-off, philosophy, upstream rejection ledger, and workflow files. The policy engines `script/check-philosophy` and `script/check-upstream-ledger` stay as scripts; `cargo xtask check` invokes them.
 - `check shellcheck`, `check links` (needs `lychee`), and `check vendor` are local-optional and are not part of `check all`; run them individually. `check keys`, `check locale-keys`, `check dco`, `check todos`, `check licenses`, `check philosophy`, `check upstream-ledger`, `check workflows`, and `check scroll-handlers` are also available on their own.
 - Release artifacts: `cargo xtask build` (containerized by default) and `cargo xtask dist --all`; check a host with `cargo xtask doctor`
-- Linux install/build quirk: `REMOTE_SERVER_TARGET=x86_64-unknown-linux-gnu script/install-linux`
+- Linux install/build quirk: `cargo xtask install local` builds and installs a
+  local tarball; `REMOTE_SERVER_TARGET=x86_64-unknown-linux-gnu` still selects
+  the embedded remote-server target when needed.
 - Docs preprocessor: `cargo run -p docs_preprocessor --` and `cargo run -p docs_preprocessor -- postprocess`
 - Docs formatting: `cd docs && npx prettier --write src/`; verify with `cd docs && npx prettier --check src/`. For a single touched file, pass `src/<path>.md` instead of `src/`.
 

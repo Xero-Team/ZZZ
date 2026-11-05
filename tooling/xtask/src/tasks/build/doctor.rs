@@ -19,6 +19,7 @@ use clap::Args;
 use serde::Serialize;
 
 use crate::tasks::build::container::{TOOLCHAIN_DOCKERFILE, image_tag, with_msvc};
+use crate::tasks::build::model::Platform;
 
 #[derive(Args)]
 pub struct DoctorArgs {
@@ -149,6 +150,7 @@ pub fn run_doctor(args: DoctorArgs) -> Result<()> {
     check_dmg_toolchain(&mut checks);
     check_cargo_bundle(&mut checks);
     check_macos_sdk(&mut checks);
+    check_freebsd_toolchain(&mut checks);
 
     check_tool(
         &mut checks,
@@ -628,6 +630,91 @@ fn macos_sdk_candidates() -> Vec<std::path::PathBuf> {
 fn is_macos_sdk(path: &Path) -> bool {
     path.join("System/Library/Frameworks/CoreServices.framework/Headers/CoreServices.h")
         .is_file()
+}
+
+/// FreeBSD cross builds bring their own sysroot, linker, and rust-std. Native
+/// FreeBSD hosts need only the installed standard library, so the cross
+/// requirements are reported as optional here: a Linux host that has not set
+/// them up can still build every other target.
+fn check_freebsd_toolchain(checks: &mut Vec<Check>) {
+    if Platform::host() == Platform::FreeBSD {
+        checks.push(Check {
+            name: "freebsd-rust-std".to_owned(),
+            category: "cross",
+            required: false,
+            status: Status::Ok,
+            detail: "native FreeBSD build; no cross toolchain needed".to_owned(),
+            remedy: None,
+        });
+        return;
+    }
+
+    let sysroot = std::env::var_os(crate::tasks::build::freebsd::SYSROOT_VARIABLE)
+        .map(std::path::PathBuf::from)
+        .filter(|path| path.is_dir());
+    checks.push(match sysroot {
+        Some(path) => Check {
+            name: "freebsd-sysroot".to_owned(),
+            category: "cross",
+            required: false,
+            status: Status::Ok,
+            detail: path.display().to_string(),
+            remedy: None,
+        },
+        None => Check {
+            name: "freebsd-sysroot".to_owned(),
+            category: "cross",
+            required: false,
+            status: Status::Missing,
+            detail: format!(
+                "{} is not set",
+                crate::tasks::build::freebsd::SYSROOT_VARIABLE
+            ),
+            remedy: Some(
+                "set ZZZ_FREEBSD_SYSROOT to a FreeBSD sysroot to cross-build FreeBSD targets"
+                    .to_owned(),
+            ),
+        },
+    });
+
+    for target in [
+        crate::tasks::build::model::Target::FreeBSDX86_64,
+        crate::tasks::build::model::Target::FreeBSDAarch64,
+    ] {
+        let linker = std::env::var_os(format!(
+            "CARGO_TARGET_{}_LINKER",
+            target.triple().to_ascii_uppercase().replace('-', "_")
+        ))
+        .or_else(|| {
+            std::env::var_os(format!(
+                "ZZZ_FREEBSD_LINKER_{}",
+                target.triple().to_ascii_uppercase().replace('-', "_")
+            ))
+        });
+        checks.push(match linker {
+            Some(value) => Check {
+                name: format!("freebsd-linker-{}", target.arch().as_str()),
+                category: "cross",
+                required: false,
+                status: Status::Ok,
+                detail: value.to_string_lossy().into_owned(),
+                remedy: None,
+            },
+            None => Check {
+                name: format!("freebsd-linker-{}", target.arch().as_str()),
+                category: "cross",
+                required: false,
+                status: Status::Missing,
+                detail: format!("no linker configured for {}", target.triple()),
+                remedy: Some(format!(
+                    "set CARGO_TARGET_{}_LINKER (or ZZZ_FREEBSD_LINKER_{0}) to a clang/lld \
+                     driver with --target={}",
+                    target.triple().to_ascii_uppercase().replace('-', "_"),
+                    target.triple()
+                )),
+            },
+        });
+    }
 }
 
 fn probe(program: &str, arguments: &[&str]) -> Option<String> {

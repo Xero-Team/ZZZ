@@ -15,6 +15,8 @@ struct Args {
 enum CliCommand {
     /// Builds artifacts with a single option grammar.
     Build(tasks::build::BuildArgs),
+    /// Smoke-tests a distribution build in a container.
+    BuildDocker(tasks::local::BuildDockerArgs),
     /// Packages a target with one option grammar for every platform.
     Bundle(tasks::bundle::BundleArgs),
     /// Runs the repository gates that do not need a compiler.
@@ -29,6 +31,8 @@ enum CliCommand {
     /// Fetches the pinned FFmpeg development package.
     Ffmpeg(tasks::ffmpeg::FfmpegArgs),
     Grammars(tasks::grammars::GrammarArgs),
+    /// Builds and installs a local Linux tarball into `~/.local`.
+    Install(tasks::local::InstallArgs),
     Licenses(tasks::licenses::LicensesArgs),
     /// Checks that packages conform to a set of standards.
     PackageConformity(tasks::package_conformity::PackageConformityArgs),
@@ -51,6 +55,7 @@ fn main() -> Result<()> {
 
     match args.command {
         CliCommand::Build(args) => tasks::build::run_build(args),
+        CliCommand::BuildDocker(args) => tasks::local::run_build_docker(args),
         CliCommand::Bundle(args) => tasks::bundle::run_bundle(args),
         CliCommand::Check(args) => tasks::check::run_check(args),
         CliCommand::Clippy(args) => tasks::clippy::run_clippy(args),
@@ -59,6 +64,7 @@ fn main() -> Result<()> {
         CliCommand::Doctor(args) => tasks::build::doctor::run_doctor(args),
         CliCommand::Ffmpeg(args) => tasks::ffmpeg::run_ffmpeg(args),
         CliCommand::Grammars(args) => tasks::grammars::run_grammars(args),
+        CliCommand::Install(args) => tasks::local::run_install(args),
         CliCommand::Licenses(args) => tasks::licenses::run_licenses(args),
         CliCommand::PackageConformity(args) => {
             tasks::package_conformity::run_package_conformity(args)

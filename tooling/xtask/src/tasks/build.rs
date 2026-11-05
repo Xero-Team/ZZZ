@@ -7,6 +7,7 @@
 
 pub mod container;
 pub mod doctor;
+pub mod freebsd;
 pub mod manifest;
 pub mod model;
 pub mod msvc;
@@ -53,8 +54,10 @@ pub struct BuildArgs {
     /// Total CPU budget for the whole plan, split across targets.
     #[arg(long)]
     jobs: Option<u32>,
-    /// Release channel baked into the bundle name. Defaults to the repository's.
-    #[arg(long, value_enum)]
+    /// Release channel baked into the binary and the bundle name. Defaults to
+    /// the shipping channel, so packaging produces release artifacts while
+    /// `cargo run` and `cargo build` stay on `dev`.
+    #[arg(long, value_enum, default_value = "stable")]
     channel: Option<Channel>,
     /// Fetch dependencies first and build without network access.
     #[arg(long)]
@@ -90,8 +93,10 @@ pub struct DistArgs {
     /// Artifact formats (repeatable, comma-separated). Defaults per target.
     #[arg(long, value_enum, value_delimiter = ',')]
     formats: Vec<Format>,
-    /// Release channel baked into the bundle name. Defaults to the repository's.
-    #[arg(long, value_enum)]
+    /// Release channel baked into the binary and the bundle name. Defaults to
+    /// the shipping channel, so packaging produces release artifacts while
+    /// `cargo run` and `cargo build` stay on `dev`.
+    #[arg(long, value_enum, default_value = "stable")]
     channel: Option<Channel>,
     /// `auto` containerizes release builds, `always` and `never` override that.
     #[arg(long, value_enum, default_value = "auto")]
@@ -133,7 +138,9 @@ pub struct DistArgs {
 
 pub fn run_build(args: BuildArgs) -> Result<()> {
     let workspace = std::env::current_dir()?;
-    let channel = args.channel.unwrap_or_else(|| Channel::detect(&workspace));
+    let channel = args
+        .channel
+        .unwrap_or_else(|| Channel::detect_shipping(&workspace));
     let pgo = resolve_pgo(args.pgo, args.no_pgo);
     let request = BuildRequest {
         targets: default_targets(args.targets),
@@ -170,7 +177,9 @@ pub fn run_build(args: BuildArgs) -> Result<()> {
 
 pub fn run_dist(args: DistArgs) -> Result<()> {
     let workspace = std::env::current_dir()?;
-    let channel = args.channel.unwrap_or_else(|| Channel::detect(&workspace));
+    let channel = args
+        .channel
+        .unwrap_or_else(|| Channel::detect_shipping(&workspace));
     let pgo = resolve_pgo(args.pgo, args.no_pgo);
     let targets = if args.all {
         distributable_targets()?
@@ -243,13 +252,12 @@ fn resolve_pgo(pgo: PgoMode, no_pgo: bool) -> PgoMode {
     if no_pgo { PgoMode::Off } else { pgo }
 }
 
-/// PGO is mandatory for anything that ships. `--no-pgo` is the explicit escape
+/// PGO is mandatory when the caller asks to consume a profile. A shipping
+/// channel alone does not require one: `--no-pgo` is the documented escape
 /// hatch and is recorded in the manifest as an absent profile.
 fn require_pgo(explicit: bool, pgo: PgoMode, channel: Channel) -> bool {
-    if pgo == PgoMode::Off {
-        return false;
-    }
-    explicit || channel != Channel::Dev
+    let _ = channel;
+    pgo == PgoMode::Use && explicit
 }
 
 fn default_targets(targets: Vec<Target>) -> Vec<Target> {
@@ -272,7 +280,10 @@ fn distributable_targets() -> Result<Vec<Target>> {
     let targets = Target::DISTRIBUTABLE
         .iter()
         .copied()
-        .filter(|target| target.platform() == host || host == Platform::Linux)
+        .filter(|target| {
+            target.platform() == host
+                || (host == Platform::Linux && target.platform() != Platform::FreeBSD)
+        })
         .collect::<Vec<_>>();
     if targets.is_empty() {
         bail!("this host cannot produce any distributable targets");
@@ -297,12 +308,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pgo_is_required_for_release_channels() {
-        assert!(require_pgo(false, PgoMode::Auto, Channel::Preview));
-        assert!(require_pgo(false, PgoMode::Auto, Channel::Nightly));
-        assert!(!require_pgo(false, PgoMode::Auto, Channel::Dev));
-        assert!(!require_pgo(false, PgoMode::Off, Channel::Preview));
-        assert!(require_pgo(true, PgoMode::Use, Channel::Dev));
+    fn pgo_is_only_required_when_explicitly_requested() {
+        assert!(!require_pgo(false, PgoMode::Auto, Channel::Stable));
+        assert!(!require_pgo(false, PgoMode::Use, Channel::Preview));
+        assert!(!require_pgo(false, PgoMode::Off, Channel::Stable));
+        assert!(require_pgo(true, PgoMode::Use, Channel::Stable));
+        assert!(!require_pgo(true, PgoMode::Off, Channel::Stable));
     }
 
     #[test]

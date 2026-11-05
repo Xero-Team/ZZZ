@@ -89,7 +89,9 @@ processors that meet the following requirements:
 
 ### FreeBSD
 
-Build [from source](./development/freebsd.md).
+Build from source or produce a tarball with `cargo xtask bundle --target
+x86_64-unknown-freebsd`. See [Building ZZZ for
+FreeBSD](./development/freebsd.md).
 
 ### Web
 

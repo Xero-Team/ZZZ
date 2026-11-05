@@ -191,6 +191,10 @@ fn build_host_binaries(
         .env("RUSTFLAGS", rustflags.trim())
         .env("LIBZ_SYS_STATIC", "1")
         .env("ZZZ_BUNDLE", "true")
+        // release-family builds read the channel at compile time, not from the
+        // runtime environment; without this the binary would always report dev.
+        .env("ZZZ_RELEASE_CHANNEL", context.channel.as_str())
+        .env("RELEASE_CHANNEL", context.channel.as_str())
         .env("FFMPEG_DIR", ffmpeg_dir)
         .env("RELEASE_VERSION", &context.release_version)
         .env("CARGO_BUILD_JOBS", context.jobs.to_string())
@@ -716,9 +720,11 @@ fn stage_desktop_assets(
 // ---------------------------------------------------------------------------
 
 fn archive_path(context: &Context) -> PathBuf {
-    context
-        .bundle_dir()
-        .join(format!("zzz-linux-{}.tar.gz", context.arch()))
+    context.bundle_dir().join(format!(
+        "zzz-{}-{}.tar.gz",
+        context.target.platform().as_str(),
+        context.arch()
+    ))
 }
 
 fn write_archive(context: &Context, staged: &StagedBundle) -> Result<PathBuf> {
@@ -741,7 +747,11 @@ fn write_archive(context: &Context, staged: &StagedBundle) -> Result<PathBuf> {
 
 fn remove_old_archives(context: &Context) -> Result<()> {
     let directory = context.bundle_dir();
-    let suffix = format!("-linux-{}.tar.gz", context.arch());
+    let suffix = format!(
+        "-{}-{}.tar.gz",
+        context.target.platform().as_str(),
+        context.arch()
+    );
     let Ok(entries) = fs::read_dir(&directory) else {
         return Ok(());
     };
@@ -881,12 +891,20 @@ fn package_existing(context: &Context) -> Result<()> {
 /// Locates the tarball that AppImage, Flatpak, and Snap wrap.
 pub(crate) fn find_archive(context: &Context) -> Result<PathBuf> {
     let directory = context.bundle_dir();
-    let exact = directory.join(format!("zzz-linux-{}.tar.gz", context.arch()));
+    let exact = directory.join(format!(
+        "zzz-{}-{}.tar.gz",
+        context.target.platform().as_str(),
+        context.arch()
+    ));
     if exact.is_file() {
         return Ok(exact);
     }
 
-    let suffix = format!("-linux-{}.tar.gz", context.arch());
+    let suffix = format!(
+        "-{}-{}.tar.gz",
+        context.target.platform().as_str(),
+        context.arch()
+    );
     let mut candidates = Vec::new();
     if let Ok(entries) = fs::read_dir(&directory) {
         for entry in entries.flatten() {

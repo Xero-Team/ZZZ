@@ -294,11 +294,12 @@ craneLib.buildPackage (
 
     dontUseCmakeConfigure = true;
 
-    # without the env var generate-licenses fails due to crane's fetchCargoVendor, see:
-    # https://github.com/zed-industries/zed/issues/19971#issuecomment-2688455390
-    # TODO: put this in a separate derivation that depends on src to avoid running it on every build
+    # `assets/licenses.md` is compiled into the binary through include_str!,
+    # so it has to exist before the Rust build starts. The xtask generator owns
+    # the format; crane's vendored sources mean a missing dependency license is
+    # expected, which ALLOW_MISSING_LICENSES records.
     preBuild = ''
-      ALLOW_MISSING_LICENSES=yes bash script/generate-licenses
+      ALLOW_MISSING_LICENSES=yes cargo xtask licenses generate --offline
       echo nightly > crates/zzz/RELEASE_CHANNEL
     '';
 

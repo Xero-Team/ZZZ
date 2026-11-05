@@ -173,6 +173,17 @@ check_install_script_no_hosted_binaries() {
     ! rg -n 'cloud\.zed\.dev|zed\.dev/releases' "$root/script/install.sh"
 }
 
+check_no_upstream_signing_assets() {
+    # The macOS bundle must not ship Zed Industries' provisioning profiles, and
+    # the Windows version resource must not carry Zed's copyright. Both are
+    # signing identities this project does not own.
+    [ ! -d "$root/crates/zzz/contents" ] \
+        && ! rg -q 'Zed Industries|dev\.zed\.Zed|MQ55VZLNZQ' \
+            "$root/crates/windows_resources" \
+        && ! rg -q 'embedded\.provisionprofile' \
+            "$root/tooling/xtask/src/tasks/bundle/macos.rs"
+}
+
 check_privacy_policy_no_zed_industries() {
     ! rg -n 'privacy@zed\.dev|Zed Industries|opt out of Software telemetry' \
         "$root/legal/privacy-policy.md"
@@ -444,6 +455,7 @@ check "docs do not say auto-update is on by default" check_docs_auto_update_off
 check "docs do not default edit prediction provider to zed" check_docs_no_zed_edit_prediction_default
 check "docs do not call Zeta the default provider" check_docs_zeta_not_default_provider
 check "install script does not download hosted binaries" check_install_script_no_hosted_binaries
+check "upstream signing assets are absent" check_no_upstream_signing_assets
 check "privacy policy has no Zed Industries telemetry opt-out" check_privacy_policy_no_zed_industries
 check "default settings have no hosted AI collection" check_default_settings_no_hosted_ai
 check "MCP OAuth CIMD is not a hosted zed.dev URL" check_oauth_cimd_not_hosted

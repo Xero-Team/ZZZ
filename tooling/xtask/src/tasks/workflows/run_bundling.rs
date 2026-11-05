@@ -105,14 +105,25 @@ fn bundle_job(dependencies: &[&NamedJob]) -> Job {
         .timeout_minutes(60u32)
 }
 
+/// The bundler takes the channel directly now. Release builds bake it into the
+/// binary at compile time, so rewriting `crates/zzz/RELEASE_CHANNEL` in CI is
+/// no longer needed (and would leave the file describing development builds).
+fn channel_flag(release_channel: ReleaseChannel) -> String {
+    match release_channel {
+        ReleaseChannel::Nightly => " --channel nightly".to_owned(),
+        ReleaseChannel::Preview => " --channel preview".to_owned(),
+    }
+}
+
 pub(crate) fn bundle_mac(
     arch: Arch,
     release_channel: Option<ReleaseChannel>,
     deps: &[&NamedJob],
 ) -> NamedJob {
-    pub fn bundle_mac(arch: Arch) -> Step<Run> {
+    pub fn bundle_mac(arch: Arch, release_channel: Option<ReleaseChannel>) -> Step<Run> {
         named::bash(&format!(
-            "cargo xtask bundle --target {arch}-apple-darwin --formats app,dmg"
+            "cargo xtask bundle --target {arch}-apple-darwin --formats app,dmg{}",
+            release_channel.map(channel_flag).unwrap_or_default()
         ))
     }
     let platform = Platform::Mac;
@@ -130,12 +141,9 @@ pub(crate) fn bundle_mac(
             .runs_on(runners::MAC_DEFAULT)
             .env(bundle_envs(platform))
             .add_step(steps::checkout_repo())
-            .when_some(release_channel, |job, release_channel| {
-                job.add_step(set_release_channel(platform, release_channel))
-            })
             .add_step(steps::setup_node())
             .add_step(steps::clear_target_dir_if_large(runners::Platform::Mac))
-            .add_step(bundle_mac(arch))
+            .add_step(bundle_mac(arch, release_channel))
             .add_step(upload_artifact(&format!(
                 "target/{arch}-apple-darwin/release/{artifact_name}"
             )))
@@ -185,12 +193,10 @@ pub(crate) fn bundle_linux(
             .add_env(Env::new("CC", "clang-18"))
             .add_env(Env::new("CXX", "clang++-18"))
             .add_step(steps::checkout_repo())
-            .when_some(release_channel, |job, release_channel| {
-                job.add_step(set_release_channel(platform, release_channel))
-            })
             .map(steps::install_linux_dependencies)
             .add_step(named::bash(&format!(
-                "cargo xtask bundle --target {arch}-unknown-linux-gnu --formats tar.gz"
+                "cargo xtask bundle --target {arch}-unknown-linux-gnu --formats tar.gz{}",
+                release_channel.map(channel_flag).unwrap_or_default()
             )))
             .add_step(upload_artifact(&format!("target/release/{artifact_name}")))
             .add_step(upload_artifact(&format!(
@@ -205,9 +211,10 @@ pub(crate) fn bundle_windows(
     deps: &[&NamedJob],
 ) -> NamedJob {
     let platform = Platform::Windows;
-    pub fn bundle_windows(arch: Arch) -> Step<Run> {
+    pub fn bundle_windows(arch: Arch, release_channel: Option<ReleaseChannel>) -> Step<Run> {
         named::pwsh(&format!(
-            "cargo xtask bundle --target {arch}-pc-windows-msvc --formats exe,inno"
+            "cargo xtask bundle --target {arch}-pc-windows-msvc --formats exe,inno{}",
+            release_channel.map(channel_flag).unwrap_or_default()
         ))
     }
     let artifact_name = match arch {
@@ -224,53 +231,11 @@ pub(crate) fn bundle_windows(
             .runs_on(runners::WINDOWS_DEFAULT)
             .env(bundle_envs(platform))
             .add_step(steps::checkout_repo())
-            .when_some(release_channel, |job, release_channel| {
-                job.add_step(set_release_channel(platform, release_channel))
-            })
             .add_step(steps::script("./script/setup-dev-driver.ps1"))
-            .add_step(bundle_windows(arch))
+            .add_step(bundle_windows(arch, release_channel))
             .add_step(upload_artifact(&format!("target/{artifact_name}")))
             .add_step(upload_artifact(&format!(
                 "target/remote-server/*/{remote_server_artifact_name}"
             ))),
-    }
-}
-
-fn set_release_channel(platform: Platform, release_channel: ReleaseChannel) -> Step<Run> {
-    match release_channel {
-        ReleaseChannel::Nightly => set_release_channel_to_nightly(platform),
-        ReleaseChannel::Preview => set_release_channel_to_preview(platform),
-    }
-}
-
-fn set_release_channel_to_nightly(platform: Platform) -> Step<Run> {
-    match platform {
-        Platform::Linux | Platform::Mac => named::bash(indoc::indoc! {r#"
-            set -eu
-            version=$(git rev-parse --short HEAD)
-            echo "Publishing version: ${version} on release channel nightly"
-            echo "nightly" > crates/zzz/RELEASE_CHANNEL
-        "#}),
-        Platform::Windows => named::pwsh(indoc::indoc! {r#"
-            $ErrorActionPreference = "Stop"
-            $version = git rev-parse --short HEAD
-            Write-Host "Publishing version: $version on release channel nightly"
-            "nightly" | Set-Content -Path "crates/zzz/RELEASE_CHANNEL"
-        "#}),
-    }
-}
-
-fn set_release_channel_to_preview(platform: Platform) -> Step<Run> {
-    match platform {
-        Platform::Linux | Platform::Mac => named::bash(indoc::indoc! {r#"
-            set -eu
-            echo "Publishing preview release"
-            echo "preview" > crates/zzz/RELEASE_CHANNEL
-        "#}),
-        Platform::Windows => named::pwsh(indoc::indoc! {r#"
-            $ErrorActionPreference = "Stop"
-            Write-Host "Publishing preview release"
-            "preview" | Set-Content -Path "crates/zzz/RELEASE_CHANNEL"
-        "#}),
     }
 }

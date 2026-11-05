@@ -7,8 +7,20 @@ use std::{env, str::FromStr, sync::LazyLock};
 use gpui::{App, Global};
 use semver::Version;
 
-/// The raw release channel name from the environment or embedded build metadata.
+/// The raw release channel name from the build environment or embedded build
+/// metadata.
+///
+/// A shipping build is driven by `cargo xtask bundle --channel <name>`, which
+/// sets `ZZZ_RELEASE_CHANNEL` at compile time. The file stays the fallback for
+/// `cargo run` and `cargo build`, where no packaging step sets the variable, so
+/// a development build remains `dev` without any extra flags.
 static RAW_RELEASE_CHANNEL_NAME: LazyLock<String> = LazyLock::new(|| {
+    if let Some(channel) = option_env!("ZZZ_RELEASE_CHANNEL")
+        .map(str::trim)
+        .filter(|channel| !channel.is_empty())
+    {
+        return channel.to_owned();
+    }
     if cfg!(debug_assertions) {
         env::var("ZZZ_RELEASE_CHANNEL")
             .unwrap_or_else(|_| include_str!("../../zzz/RELEASE_CHANNEL").trim().to_owned())
@@ -329,6 +341,11 @@ mod tests {
             Ok(ReleaseChannel::Stable)
         );
         assert_eq!(ReleaseChannel::from_str("beta"), Err(InvalidReleaseChannel));
+
+        // The compile-time override is how `cargo xtask bundle --channel` bakes
+        // the shipping channel into a release binary. It must win over the file.
+        assert!(!RAW_RELEASE_CHANNEL_NAME.is_empty());
+        assert!(ReleaseChannel::from_str(&RAW_RELEASE_CHANNEL_NAME).is_ok());
 
         assert_eq!(ReleaseChannel::Dev.display_name(), "ZZZ Dev");
         assert_eq!(ReleaseChannel::Stable.display_name(), "ZZZ");

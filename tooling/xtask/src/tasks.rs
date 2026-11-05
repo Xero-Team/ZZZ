@@ -6,6 +6,7 @@ pub mod compliance;
 pub mod ffmpeg;
 pub mod grammars;
 pub mod licenses;
+pub mod local;
 pub mod package_conformity;
 pub mod publish_gpui;
 pub mod web_examples;

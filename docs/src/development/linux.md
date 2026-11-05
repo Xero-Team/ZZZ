@@ -48,7 +48,7 @@ cargo run -p cli
 You can install a local build on your machine with:
 
 ```sh
-./script/install-linux
+cargo xtask install local
 ```
 
 This builds `~/.local/bin/zzz` and the `cli` in release mode, installs the binary at `~/.local/bin/zzz`, and installs `.desktop` files to `~/.local/share`.
@@ -56,7 +56,7 @@ This builds `~/.local/bin/zzz` and the `cli` in release mode, installs the binar
 To reinstall an existing bundle without rebuilding it, pass `--skip-build`:
 
 ```sh
-./script/install-linux --skip-build
+cargo xtask install local --skip-build
 ```
 
 To create distribution packages from the same build, install the packaging
@@ -136,7 +136,10 @@ ZZZ has two main binaries:
 - You will need to ensure that the necessary libraries are installed. Inspecting the built binary is the authoritative list; the Linux bundler in `tooling/xtask/src/tasks/bundle/linux.rs` is the reference for which libraries ship. Everything the editor needs ships inside the bundle, because a missing or incompatible copy aborts startup before the window opens. The exceptions are glibc, the compiler runtime, the GLib family, and libxkbcommon. GLib cannot be bundled, because libraries it loads are built against the system copy. libxkbcommon parses the keymap the compositor generates at runtime, so a copy from an older build image cannot read keymaps from newer compositors; declare it as a package dependency (`libxkbcommon0` on Debian-based systems, `libxkbcommon` on Fedora and Arch). Every bundle runs the same runtime-dependency check, and `cargo xtask bundle --robustness` also checks that the editor still starts when the host copies of the bundled libraries are unusable.
 - For a complete implementation, see `tooling/xtask/src/tasks/bundle/linux.rs`.
 - You can disable ZZZ's auto updates and provide instructions for users who try to update ZZZ manually by building (or running) ZZZ with the environment variable `ZZZ_UPDATE_EXPLANATION`. For example: ZZZ_UPDATE_EXPLANATION.
-- Make sure to update the contents of the `crates/zzz/RELEASE_CHANNEL` file to `stable` or `dev`, with no newline. Packaged builds that should use the system credentials manager should use `stable`.
+- Packaged builds should pass `--channel stable` to `cargo xtask bundle` (or
+  `--no-pgo` for a one-off build without a PGO profile). The file
+  `crates/zzz/RELEASE_CHANNEL` describes development builds and stays `dev`;
+  rewriting it no longer changes a shipping build.
 
 ### Other things to note
 

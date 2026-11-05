@@ -326,7 +326,15 @@ fn finish(
 }
 
 pub fn container_spec(workspace: &Path, request: &BuildRequest) -> Result<Option<ContainerSpec>> {
-    if !request.container.resolve(request.profile) {
+    if !request.container.resolve(request.profile)
+        || request
+            .targets
+            .iter()
+            .any(|target| target.platform() == Platform::FreeBSD)
+    {
+        // The FreeBSD toolchain is host-provided (sysroot, linker, rust-std),
+        // so a Linux container would hide it. Plans with a FreeBSD target build
+        // on the host even when `--container auto` asked for the image.
         return Ok(None);
     }
     let jobs = request.jobs.unwrap_or_else(default_jobs).max(1);
@@ -710,7 +718,8 @@ impl Planner<'_> {
 
     /// Linux splits its formats: `tar.gz`, `deb`, and `rpm` run inside the
     /// toolchain image, while AppImage, Flatpak, and Snap need host tools and
-    /// network access. Every other platform is one task.
+    /// network access. FreeBSD has only `tar.gz` and uses its own toolchain, so
+    /// it never enters the container. Every other platform is one task.
     fn split_formats(&self, target: Target, formats: &[Format]) -> (Vec<Format>, Vec<Format>) {
         if target.platform() != Platform::Linux {
             return (formats.to_vec(), Vec::new());
@@ -758,8 +767,8 @@ impl Planner<'_> {
 
         if target.platform() != Platform::Linux {
             // Profiles do not transfer across ABIs, and there is no training
-            // harness for macOS or Windows yet. Say so instead of silently
-            // shipping an unoptimized build.
+            // harness for macOS, Windows, or FreeBSD yet. Say so instead of
+            // silently shipping an unoptimized build.
             if mode == PgoMode::Use {
                 bail!(
                     "{} has no PGO training harness; use --pgo off for this target",
@@ -815,6 +824,7 @@ impl Planner<'_> {
         match target.platform() {
             Platform::Linux => true,
             Platform::Mac | Platform::Windows => Platform::host() == Platform::Linux,
+            Platform::FreeBSD => false,
         }
     }
 
@@ -840,6 +850,14 @@ impl Planner<'_> {
         environment.insert("CARGO_BUILD_JOBS".to_owned(), jobs.to_string());
         environment.insert("CARGO_INCREMENTAL".to_owned(), "0".to_owned());
         environment.insert("RELEASE_VERSION".to_owned(), self.version.clone());
+        // A release-family build ignores the runtime environment, so the
+        // channel has to be present at compile time for `release_channel` to
+        // bake it into the binary. `--channel` already reaches the bundler as
+        // an argument; this is the value its child `cargo build` consumes.
+        environment.insert(
+            "ZZZ_RELEASE_CHANNEL".to_owned(),
+            self.channel.as_str().to_owned(),
+        );
         // The matrix is built once, ahead of every target. Pointing the embed
         // build script at the cache means it copies archives instead of
         // compiling them again inside each bundle.
@@ -957,7 +975,7 @@ fn expected_artifacts(
         root = root.join("container");
     }
     let artifact_directory = match target.platform() {
-        Platform::Linux => root.join(profile.artifact_directory()),
+        Platform::Linux | Platform::FreeBSD => root.join(profile.artifact_directory()),
         Platform::Mac | Platform::Windows => root
             .join(target.triple())
             .join(profile.artifact_directory()),
@@ -974,7 +992,10 @@ fn expected_artifacts(
     for format in formats {
         match format {
             Format::TarGz => {
-                artifacts.push(artifact_directory.join(format!("zzz-linux-{arch}.tar.gz")));
+                artifacts.push(
+                    artifact_directory
+                        .join(format!("zzz-{}-{arch}.tar.gz", target.platform().as_str())),
+                );
             }
             Format::Deb => {
                 artifacts.push(artifact_directory.join(format!("zzz-{variant}-linux-{arch}.deb")));

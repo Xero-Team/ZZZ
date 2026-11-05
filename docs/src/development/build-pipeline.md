@@ -81,6 +81,48 @@ profiles; a `dev` or `dbg` build is `cargo build` or `cargo run`. That is also
 why `--container auto` can treat every `build` invocation as a release: there is
 no development profile to exempt.
 
+### Release channels {#channels}
+
+`--profile` decides optimization, `--channel` decides identity. A shipping
+build defaults to `--channel stable`: `cargo xtask build`, `dist`, and `bundle`
+bake `ZZZ_RELEASE_CHANNEL` into the binary at compile time, so the app reports
+`ZZZ`, uses the `dev.zzz.ZZZ` id, checks for updates, and enables crash
+reporting. `cargo run` and `cargo build` do not set that variable and stay on
+the `dev` channel described by `crates/zzz/RELEASE_CHANNEL`.
+
+`--channel preview` and `--channel nightly` produce the corresponding bundle
+names and icons. The generated release workflows pass `--channel preview`
+rather than rewriting `crates/zzz/RELEASE_CHANNEL`, so the file always
+describes development builds. `ZZZ_RELEASE_CHANNEL` in the environment
+overrides the default when you need a one-off channel.
+
+### FreeBSD {#freebsd}
+
+The `x86_64-unknown-freebsd` and `aarch64-unknown-freebsd` targets produce
+`tar.gz` bundles through the same planner. A native FreeBSD host needs only
+the target's `rust-std`; a Linux cross build uses a host-provided sysroot and
+linker, configured with the environment variables documented in
+[Building ZZZ for FreeBSD](./freebsd.md). FreeBSD plans skip the Linux
+toolchain container automatically. `cargo xtask doctor` reports which parts of
+the cross toolchain are missing.
+
+The FreeBSD tarball carries the editor, the CLI, the license document, icons,
+and the desktop entry; shared libraries come from the system. The
+remote-server matrix includes both FreeBSD architectures.
+
+### Local installs and license documents {#local-tasks}
+
+`cargo xtask install local` replaces `script/install-linux`: it runs
+`cargo xtask bundle` and unpacks the tarball through the local
+`script/install.sh`. `--native` selects the `linux-native` profile and
+`--skip-build` installs an existing tarball. `cargo xtask build-docker
+<base-image>` replaces `script/build-docker`.
+
+`cargo xtask licenses generate` replaces `script/generate-licenses` and
+`script/generate-licenses-csv`; pass `--csv` for the CSV inventory.
+`cargo xtask licenses check` (the default) still verifies that every crate
+has a `LICENSE-AGPL` symlink.
+
 `--print-plan` emits the graph the scheduler executes, so CI can inspect or
 replay a build without running it. Every task carries its own command,
 environment, working directory, and container image.
@@ -321,7 +363,8 @@ get glibc malloc back when you compare allocation behaviour.
 
 - `opt-level = 3`, fat LTO, one CGU per crate, `panic = "abort"`.
 - `cargo xtask bundle --profile linux-native` adds `-C target-cpu=native` for
-  local builds; `script/install-linux --native` is the same thing plus install.
+  local builds; `cargo xtask install local --native` is the same thing plus
+  install.
 - Tracy spans, `profiling` counters, `frame-diagnostics`, and `stacker` are off
   unless you ask for them, so the default binary carries no instrumentation.
 - The release profile enables no debug assertions and no overflow checks.
@@ -397,13 +440,13 @@ target, and compiler, so the two stages agree on everything that reaches the
 compiler; `--formats` only decides what `pgo build` packages, because training
 always builds the tarball it extracts.
 
-PGO is **required** for non-`dev` channels on Linux targets. `cargo xtask build`
-fails when the channel is `stable`, `preview`, or `nightly` and no profile for
-that exact target and profile exists. `--no-pgo` is the explicit escape hatch
-for a one-off build; the artifact manifest records the absence, so a release
-built without a profile is visible as such. macOS and Windows have no training
-harness yet: `--pgo auto` builds without a profile there, and `--pgo use` says
-so instead of shipping a build that silently ignores the profile.
+PGO is required when a build explicitly consumes a profile (`--pgo use`). The
+shipping `stable` channel does not require one on its own: `--no-pgo` is the
+explicit escape hatch for a one-off build, and the artifact manifest records
+the absence so a release built without a profile is visible as such. macOS,
+Windows, and FreeBSD have no training harness yet: `--pgo auto` builds without
+a profile there, and `--pgo use` says so instead of shipping a build that
+silently ignores the profile.
 
 `train` builds the instrumented bundle under Xvfb itself, so no wrapper is
 needed:

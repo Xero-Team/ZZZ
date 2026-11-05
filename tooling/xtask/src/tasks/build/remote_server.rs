@@ -36,13 +36,15 @@ const DEFAULT_KEEP: usize = 3;
 
 /// Every triple the editor embeds. The order is stable so plans and logs are
 /// readable and the same build always writes the same manifest.
-pub const MATRIX: [Target; 6] = [
+pub const MATRIX: [Target; 8] = [
     Target::LinuxX86_64Musl,
     Target::LinuxAarch64Musl,
     Target::MacX86_64,
     Target::MacAarch64,
     Target::WindowsX86_64,
     Target::WindowsAarch64,
+    Target::FreeBSDX86_64,
+    Target::FreeBSDAarch64,
 ];
 
 #[derive(Subcommand)]
@@ -563,6 +565,18 @@ fn capability(target: Target, sdk: Option<&Path>) -> std::result::Result<(), Str
             }
             Ok(())
         }
+        Platform::FreeBSD => {
+            let environment = crate::tasks::build::freebsd::FreeBSDEnvironment::detect(
+                target,
+                std::env::var_os(crate::tasks::build::freebsd::SYSROOT_VARIABLE)
+                    .map(std::path::PathBuf::from)
+                    .as_deref(),
+            )
+            .map_err(|error| error.to_string())?;
+            environment
+                .require_cross(target)
+                .map_err(|error| error.to_string())
+        }
     }
 }
 
@@ -636,6 +650,15 @@ fn build_one(
         let environment =
             crate::tasks::build::msvc::MsvcEnvironment::detect(target.arch().as_str())?;
         environment.apply(&mut command);
+    }
+    if target.platform() == Platform::FreeBSD {
+        let environment = crate::tasks::build::freebsd::FreeBSDEnvironment::detect(
+            target,
+            std::env::var_os(crate::tasks::build::freebsd::SYSROOT_VARIABLE)
+                .map(std::path::PathBuf::from)
+                .as_deref(),
+        )?;
+        environment.apply(target, &mut command, &rustflags)?;
     }
 
     eprintln!("remote-server: compiling {triple}");
@@ -751,7 +774,8 @@ fn linux_gnu_fallback(
 }
 
 fn uses_zig(target: Target) -> bool {
-    if !zig_available() || target.platform() == Platform::Windows {
+    if !zig_available() || matches!(target.platform(), Platform::Windows | Platform::FreeBSD) {
+        // FreeBSD uses its own clang/lld driver and sysroot, not Zig's.
         return false;
     }
     if target.is_cross() {
@@ -879,6 +903,7 @@ fn embed_os(platform: Platform) -> &'static str {
         Platform::Linux => "linux",
         Platform::Mac => "macos",
         Platform::Windows => "windows",
+        Platform::FreeBSD => "freebsd",
     }
 }
 
@@ -1247,7 +1272,7 @@ mod tests {
 
     #[test]
     fn the_matrix_is_exactly_the_embedded_targets() {
-        assert_eq!(MATRIX.len(), 6);
+        assert_eq!(MATRIX.len(), 8);
         for target in MATRIX {
             if target.platform() == Platform::Linux {
                 assert!(target.is_musl());

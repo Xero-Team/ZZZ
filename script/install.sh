@@ -2,7 +2,7 @@
 set -eu
 
 # ZZZ does not ship hosted binaries. This script unpacks a local tarball
-# when ZZZ_BUNDLE_PATH is set (used by script/install-linux). It must not
+# when ZZZ_BUNDLE_PATH is set (used by `cargo xtask install local`). It must not
 # download a remote release.
 
 print_no_hosted_binaries() {
@@ -11,7 +11,7 @@ ZZZ has no hosted binaries.
 
 Build from this repository:
 
-    ./script/install-linux
+    cargo xtask install local
 
 Or run a local debug build:
 
@@ -34,7 +34,7 @@ main() {
 
     if [ ! -f "$ZZZ_BUNDLE_PATH" ]; then
         echo "Local bundle not found: $ZZZ_BUNDLE_PATH" >&2
-        echo "Build one with ./script/install-linux" >&2
+        echo "Build one with cargo xtask install local" >&2
         exit 1
     fi
 

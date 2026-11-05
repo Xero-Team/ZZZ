@@ -38,27 +38,42 @@ pub fn generate(workspace: &Path, output: Option<&Path>, offline: bool) -> Resul
     document.push_str(&read(workspace, "assets/icons/LICENSES")?);
     document.push_str("\n\n# ###### CODE LICENSES ######\n");
 
-    ensure_cargo_about(workspace, offline)?;
-
-    let mut command = Command::new("cargo");
-    command
-        .current_dir(workspace)
-        .args(["about", "generate", "-c", CONFIGURATION, TEMPLATE]);
-    // A missing license makes `cargo about` print a warning. Treat any stderr
-    // output as a failure unless the caller deliberately allows it, because the
-    // bundle ships this document as the dependency inventory.
+    // A vendored build (Nix/crane) has no Cargo registry to enumerate and no
+    // cargo-about on PATH. ALLOW_MISSING_LICENSES records that explicitly in
+    // the shipped document instead of failing the whole build.
     let allow_missing = std::env::var_os("ALLOW_MISSING_LICENSES").is_some();
-    if !allow_missing {
-        command.arg("--fail");
+    match ensure_cargo_about(workspace, offline) {
+        Ok(()) => {
+            let mut command = Command::new("cargo");
+            command.current_dir(workspace).args([
+                "about",
+                "generate",
+                "-c",
+                CONFIGURATION,
+                TEMPLATE,
+            ]);
+            // A missing license makes `cargo about` print a warning. Treat any
+            // stderr output as a failure unless the caller deliberately allows
+            // it, because the bundle ships this document as the dependency
+            // inventory.
+            if !allow_missing {
+                command.arg("--fail");
+            }
+            let result = util::output(&mut command, "cargo about generate")?;
+            if !allow_missing && !result.stderr.is_empty() {
+                bail!(
+                    "cargo about reported a problem:\n{}",
+                    String::from_utf8_lossy(&result.stderr).trim()
+                );
+            }
+            document.push_str(&unescape(&String::from_utf8_lossy(&result.stdout)));
+        }
+        Err(error) if allow_missing => {
+            eprintln!("warning: skipping the dependency inventory: {error:#}");
+            document.push_str("\nThe Rust dependency inventory is unavailable in this build.\n");
+        }
+        Err(error) => return Err(error),
     }
-    let result = util::output(&mut command, "cargo about generate")?;
-    if !allow_missing && !result.stderr.is_empty() {
-        bail!(
-            "cargo about reported a problem:\n{}",
-            String::from_utf8_lossy(&result.stderr).trim()
-        );
-    }
-    document.push_str(&unescape(&String::from_utf8_lossy(&result.stdout)));
 
     document.push_str("\n\n# ###### NATIVE LIBRARY LICENSES ######\n\n");
     document.push_str("#### GNU Lesser General Public License version 3\n\n");

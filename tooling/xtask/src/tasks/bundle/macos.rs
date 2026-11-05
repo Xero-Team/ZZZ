@@ -97,6 +97,7 @@ fn build_binaries(context: &Context, native: bool) -> Result<()> {
         .args(["--package", "zzz", "--package", "cli"])
         .env("ZZZ_BUNDLE", "true")
         .env("ZZZ_RELEASE_CHANNEL", context.channel.as_str())
+        .env("RELEASE_CHANNEL", context.channel.as_str())
         .env("RELEASE_VERSION", &context.release_version)
         .env("CARGO_BUILD_JOBS", context.jobs.to_string())
         // macOS has no libstdc++ headers, so C++ dependencies have to use
@@ -181,18 +182,12 @@ fn assemble_app(context: &Context) -> Result<PathBuf> {
 
     download_git(context, &destination)?;
 
-    // The embedded provision profile lets the signed app keep universal links.
-    let profile = context
-        .workspace
-        .join("crates/zzz/contents")
-        .join(context.channel.as_str())
-        .join("embedded.provisionprofile");
-    if profile.is_file() {
-        util::copy(
-            &profile,
-            &destination.join("Contents/embedded.provisionprofile"),
-        )?;
-    }
+    // No provisioning profile is shipped. The repository has no Apple
+    // Developer account of its own, and the profiles inherited from upstream
+    // named Zed Industries' team and bundle ids, which cannot sign a ZZZ
+    // bundle. Without one, `sign_and_notarize` strips the associated-domains
+    // entitlement and signs ad-hoc (or with MACOS_SIGNING_KEY). Universal
+    // links are unavailable in that mode; see docs/src/development/macos.md.
 
     Ok(destination)
 }
@@ -238,6 +233,7 @@ fn cargo_bundle(context: &Context) -> Result<PathBuf> {
         .env("CARGO_BUNDLE_SKIP_BUILD", "true")
         .env("CARGO_TARGET_DIR", &context.target_dir)
         .env("ZZZ_RELEASE_CHANNEL", context.channel.as_str())
+        .env("RELEASE_CHANNEL", context.channel.as_str())
         .env("ZZZ_BUNDLE", "true");
     if context.offline {
         command.env("CARGO_NET_OFFLINE", "true");

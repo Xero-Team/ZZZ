@@ -11,14 +11,14 @@ ZZZ does not ship hosted binaries. Build and install from this
 repository:
 
 ```sh
-./script/install-linux
+cargo xtask install local
 ```
 
-That script builds a release tarball and unpacks it into `~/.local`,
+That command builds a release tarball and unpacks it into `~/.local`,
 making `~/.local/bin/zzz` available. For a CPU-native build:
 
 ```sh
-./script/install-linux --native
+cargo xtask install local --native
 ```
 
 See [Building ZZZ for Linux](./development/linux.md) for dependencies.
@@ -52,7 +52,8 @@ There are several third-party ZZZ packages for various Linux distributions and p
 - Parabola: [`zed`](https://www.parabola.nu/packages/extra/x86_64/zed/)
 - ALT Linux (Sisyphus): [`zed`](https://packages.altlinux.org/en/sisyphus/srpms/zed/)
 - AOSC OS: [`zed`](https://packages.aosc.io/packages/zed)
-- Flathub: [`dev.zed.Zed`](https://flathub.org/apps/dev.zed.Zed)
+- Flathub: ZZZ is not published there yet; build the Flatpak locally with
+  `cargo xtask bundle --formats flatpak`
 
 See [Repology](https://repology.org/project/zed-editor/versions) for a list of ZZZ packages in various repositories.
 
@@ -74,7 +75,7 @@ Build, packaging and instructions for each version are available in the README o
 ### Installing a local archive
 
 If you already have a local `.tar.gz` from `cargo xtask bundle` or
-`./script/install-linux`, you can unpack it yourself:
+`cargo xtask install local`, you can unpack it yourself:
 
 ```sh
 mkdir -p ~/.local

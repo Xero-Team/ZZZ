@@ -23,6 +23,7 @@
 pub mod appimage;
 pub mod ffmpeg;
 pub mod flatpak;
+pub mod freebsd;
 pub mod github_release;
 pub mod licenses;
 pub mod linux;
@@ -50,7 +51,10 @@ pub struct BundleArgs {
     /// Cargo profile to build, or to package from with `--skip-build`.
     #[arg(long, value_enum, default_value = "release")]
     profile: Profile,
-    #[arg(long, value_enum)]
+    /// Release channel baked into the binary and the bundle name. Defaults to
+    /// the shipping channel, so `cargo xtask bundle` produces a release build;
+    /// `cargo run` and `cargo build` stay on `dev`.
+    #[arg(long, value_enum, default_value = "stable")]
     channel: Option<Channel>,
     /// Comma-separated artifact formats (repeatable). Defaults to the target's
     /// shipped default.
@@ -106,7 +110,9 @@ pub struct Context {
 
 pub fn run_bundle(args: BundleArgs) -> Result<()> {
     let workspace = std::env::current_dir()?;
-    let channel = args.channel.unwrap_or_else(|| Channel::detect(&workspace));
+    let channel = args
+        .channel
+        .unwrap_or_else(|| Channel::detect_shipping(&workspace));
     let targets = if args.targets.is_empty() {
         vec![Target::host_default()]
     } else {
@@ -178,6 +184,7 @@ fn bundle(context: &Context) -> Result<()> {
         Platform::Linux => linux::bundle(context),
         Platform::Mac => macos::bundle(context),
         Platform::Windows => windows::bundle(context),
+        Platform::FreeBSD => freebsd::bundle(context),
     }
 }
 
@@ -226,10 +233,12 @@ impl Context {
             .join(self.profile.artifact_directory())
     }
 
-    /// Directory the Linux archive and packages are written to.
+    /// Directory the archive and packages are written to.
     pub fn bundle_dir(&self) -> PathBuf {
         match self.target.platform() {
-            Platform::Linux => self.target_dir.join(self.profile.artifact_directory()),
+            Platform::Linux | Platform::FreeBSD => {
+                self.target_dir.join(self.profile.artifact_directory())
+            }
             Platform::Mac | Platform::Windows => self.artifact_dir(),
         }
     }

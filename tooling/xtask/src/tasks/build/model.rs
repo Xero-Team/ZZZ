@@ -81,6 +81,7 @@ pub enum Platform {
     Linux,
     Mac,
     Windows,
+    FreeBSD,
 }
 
 impl Platform {
@@ -89,6 +90,7 @@ impl Platform {
             Platform::Linux => "linux",
             Platform::Mac => "mac",
             Platform::Windows => "windows",
+            Platform::FreeBSD => "freebsd",
         }
     }
 
@@ -96,6 +98,7 @@ impl Platform {
         match std::env::consts::OS {
             "macos" => Platform::Mac,
             "windows" => Platform::Windows,
+            "freebsd" => Platform::FreeBSD,
             _ => Platform::Linux,
         }
     }
@@ -131,10 +134,16 @@ pub enum Target {
     #[serde(rename = "aarch64-pc-windows-msvc")]
     #[value(name = "aarch64-pc-windows-msvc")]
     WindowsAarch64,
+    #[serde(rename = "x86_64-unknown-freebsd")]
+    #[value(name = "x86_64-unknown-freebsd")]
+    FreeBSDX86_64,
+    #[serde(rename = "aarch64-unknown-freebsd")]
+    #[value(name = "aarch64-unknown-freebsd")]
+    FreeBSDAarch64,
 }
 
 impl Target {
-    pub const ALL: [Target; 8] = [
+    pub const ALL: [Target; 10] = [
         Target::LinuxX86_64,
         Target::LinuxAarch64,
         Target::LinuxX86_64Musl,
@@ -143,16 +152,20 @@ impl Target {
         Target::MacAarch64,
         Target::WindowsX86_64,
         Target::WindowsAarch64,
+        Target::FreeBSDX86_64,
+        Target::FreeBSDAarch64,
     ];
 
     /// Targets whose bundles are produced for a release. The musl targets only
     /// exist so the editor can embed a static remote server; they are not
     /// distributed on their own.
-    pub const DISTRIBUTABLE: [Target; 4] = [
+    pub const DISTRIBUTABLE: [Target; 6] = [
         Target::LinuxX86_64,
         Target::MacAarch64,
         Target::MacX86_64,
         Target::WindowsX86_64,
+        Target::FreeBSDX86_64,
+        Target::FreeBSDAarch64,
     ];
 
     pub fn triple(self) -> &'static str {
@@ -165,6 +178,8 @@ impl Target {
             Target::MacAarch64 => "aarch64-apple-darwin",
             Target::WindowsX86_64 => "x86_64-pc-windows-msvc",
             Target::WindowsAarch64 => "aarch64-pc-windows-msvc",
+            Target::FreeBSDX86_64 => "x86_64-unknown-freebsd",
+            Target::FreeBSDAarch64 => "aarch64-unknown-freebsd",
         }
     }
 
@@ -173,11 +188,13 @@ impl Target {
             Target::LinuxX86_64
             | Target::LinuxX86_64Musl
             | Target::MacX86_64
-            | Target::WindowsX86_64 => Arch::X86_64,
+            | Target::WindowsX86_64
+            | Target::FreeBSDX86_64 => Arch::X86_64,
             Target::LinuxAarch64
             | Target::LinuxAarch64Musl
             | Target::MacAarch64
-            | Target::WindowsAarch64 => Arch::Aarch64,
+            | Target::WindowsAarch64
+            | Target::FreeBSDAarch64 => Arch::Aarch64,
         }
     }
 
@@ -187,6 +204,7 @@ impl Target {
             Target::LinuxX86_64Musl | Target::LinuxAarch64Musl => Platform::Linux,
             Target::MacX86_64 | Target::MacAarch64 => Platform::Mac,
             Target::WindowsX86_64 | Target::WindowsAarch64 => Platform::Windows,
+            Target::FreeBSDX86_64 | Target::FreeBSDAarch64 => Platform::FreeBSD,
         }
     }
 
@@ -208,6 +226,10 @@ impl Target {
                 Arch::Aarch64 => Target::LinuxAarch64,
                 Arch::X86_64 => Target::LinuxX86_64,
             },
+            Platform::FreeBSD => match host_arch() {
+                Arch::Aarch64 => Target::FreeBSDAarch64,
+                Arch::X86_64 => Target::FreeBSDX86_64,
+            },
         }
     }
 
@@ -223,7 +245,7 @@ impl Target {
 
     pub fn default_formats(self) -> Vec<Format> {
         match self.platform() {
-            Platform::Linux => vec![Format::TarGz],
+            Platform::Linux | Platform::FreeBSD => vec![Format::TarGz],
             Platform::Mac => vec![Format::App, Format::Dmg],
             Platform::Windows => vec![Format::Exe],
         }
@@ -231,12 +253,12 @@ impl Target {
 
     pub fn supports(self, format: Format) -> bool {
         match format {
-            Format::TarGz
-            | Format::Deb
-            | Format::Rpm
-            | Format::AppImage
-            | Format::Flatpak
-            | Format::Snap => self.platform() == Platform::Linux && !self.is_musl(),
+            Format::TarGz => {
+                matches!(self.platform(), Platform::Linux | Platform::FreeBSD) && !self.is_musl()
+            }
+            Format::Deb | Format::Rpm | Format::AppImage | Format::Flatpak | Format::Snap => {
+                self.platform() == Platform::Linux && !self.is_musl()
+            }
             Format::App | Format::Dmg => self.platform() == Platform::Mac,
             Format::Exe | Format::Msi | Format::Inno => self.platform() == Platform::Windows,
         }
@@ -344,6 +366,10 @@ pub enum Channel {
 }
 
 impl Channel {
+    /// The channel a shipping artifact uses when the caller does not name one.
+    /// `cargo run` and `cargo build` are development builds and stay on `dev`.
+    pub const SHIPPING: Channel = Channel::Stable;
+
     pub fn as_str(self) -> &'static str {
         match self {
             Channel::Dev => "dev",
@@ -354,8 +380,8 @@ impl Channel {
     }
 
     /// Reads `crates/zzz/RELEASE_CHANNEL`, defaulting to `dev` when the file is
-    /// missing or holds an unknown value. Packaging scripts make the same
-    /// decision, so an unknown value must not stop a build.
+    /// missing or holds an unknown value. Development builds (`cargo run`,
+    /// `cargo build`) use this; packaging uses [`Channel::detect_shipping`].
     pub fn detect(workspace: &std::path::Path) -> Self {
         let path = workspace.join("crates/zzz/RELEASE_CHANNEL");
         let Ok(contents) = std::fs::read_to_string(&path) else {
@@ -368,6 +394,23 @@ impl Channel {
             "nightly" => Channel::Nightly,
             _ => Channel::Dev,
         }
+    }
+
+    /// The channel a shipping artifact uses. `crates/zzz/RELEASE_CHANNEL`
+    /// describes development builds, so packaging defaults to `stable` unless
+    /// the caller names a channel or explicitly exports `ZZZ_RELEASE_CHANNEL`.
+    pub fn detect_shipping(workspace: &std::path::Path) -> Self {
+        if let Ok(value) = std::env::var("ZZZ_RELEASE_CHANNEL") {
+            match value.trim() {
+                "stable" => return Channel::Stable,
+                "preview" => return Channel::Preview,
+                "nightly" => return Channel::Nightly,
+                "dev" => return Channel::Dev,
+                _ => {}
+            }
+        }
+        let _ = workspace;
+        Channel::SHIPPING
     }
 }
 

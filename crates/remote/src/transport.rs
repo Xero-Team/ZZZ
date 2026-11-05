@@ -171,6 +171,7 @@ fn parse_platform(output: &str) -> Result<RemotePlatform> {
     let os = match os {
         "Darwin" => RemoteOs::MacOs,
         "Linux" => RemoteOs::Linux,
+        "FreeBSD" => RemoteOs::FreeBSD,
         _ => anyhow::bail!("unsupported remote OS {os:?}"),
     };
 
@@ -457,6 +458,7 @@ async fn build_remote_server_from_source(
                 },
             RemoteOs::MacOs => "apple-darwin",
             RemoteOs::Windows => "pc-windows-msvc",
+            RemoteOs::FreeBSD => "unknown-freebsd",
         }
     );
     let mut rust_flags = match std::env::var("RUSTFLAGS") {

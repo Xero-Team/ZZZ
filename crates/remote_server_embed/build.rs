@@ -57,6 +57,20 @@ const TARGETS: &[RemoteTarget] = &[
         windows: true,
         musl: false,
     },
+    RemoteTarget {
+        triple: "x86_64-unknown-freebsd",
+        os: "freebsd",
+        arch: "x86_64",
+        windows: false,
+        musl: false,
+    },
+    RemoteTarget {
+        triple: "aarch64-unknown-freebsd",
+        os: "freebsd",
+        arch: "aarch64",
+        windows: false,
+        musl: false,
+    },
 ];
 
 fn main() {

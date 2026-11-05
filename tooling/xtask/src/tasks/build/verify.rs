@@ -102,7 +102,7 @@ fn verify_artifacts(
     // plausible location keeps the check working whether the caller ran the
     // plan or the platform script by hand.
     let candidates: Vec<(&str, PathBuf)> = match target.platform() {
-        Platform::Linux => {
+        Platform::Linux | Platform::FreeBSD => {
             let mut candidates = Vec::new();
             for name in ["zzz", "cli"] {
                 candidates.push((name, target_directory.join(name)));
