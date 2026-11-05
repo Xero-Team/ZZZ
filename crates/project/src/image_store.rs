@@ -6,12 +6,14 @@ use anyhow::{Context as _, Result};
 use collections::{HashMap, HashSet, hash_map};
 use futures::{StreamExt, channel::oneshot};
 use gpui::{
-    App, AsyncApp, Context, Entity, EventEmitter, Img, Subscription, Task, WeakEntity, prelude::*,
+    App, Asset, AssetLogger, AsyncApp, Context, Entity, EventEmitter, ImageCacheError, ImageSource,
+    Img, RenderImage, Subscription, Task, WeakEntity, prelude::*,
 };
 pub use image::ImageFormat as RasterImageFormat;
 use image::{ExtendedColorType, GenericImageView, ImageReader};
 use language::{DiskState, File};
 use rpc::ErrorExt as _;
+use std::future::Future;
 use std::num::NonZeroU64;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -112,6 +114,54 @@ pub struct ImageItem {
     pub image: Arc<gpui::Image>,
     reload_task: Option<Task<()>>,
     pub image_metadata: Option<ImageMetadata>,
+}
+
+/// A key for a project image that is loaded through the project's local or
+/// remote VFS. Remote worktrees have no client-side filesystem path, so the
+/// image must be fetched through `Project::open_image` rather than read from
+/// disk.
+#[derive(Clone, Eq, Hash, PartialEq)]
+struct ProjectImageSource {
+    project: WeakEntity<Project>,
+    path: ProjectPath,
+}
+
+enum ProjectImageAsset {}
+
+impl Asset for ProjectImageAsset {
+    type Source = ProjectImageSource;
+    type Output = Result<Arc<RenderImage>, ImageCacheError>;
+
+    fn load(
+        source: Self::Source,
+        cx: &mut App,
+    ) -> impl Future<Output = Self::Output> + Send + 'static {
+        let svg_renderer = cx.svg_renderer();
+        let load_image = cx.spawn(async move |cx| {
+            let open_image = source
+                .project
+                .update(cx, |project, cx| project.open_image(source.path, cx))?;
+            let image = open_image.await?;
+            Ok::<_, anyhow::Error>(image.read_with(cx, |image, _cx| image.image.clone()))
+        });
+
+        async move {
+            let image = load_image.await?;
+            image.to_image_data(svg_renderer).map_err(Into::into)
+        }
+    }
+}
+
+/// Returns an `ImageSource` that loads a project image through the project's
+/// image store, so it works in remote workspaces as well as local ones.
+///
+/// Loading is deduplicated and cached by `(project, path)` through GPUI's asset
+/// system; the view is redrawn automatically once the bytes arrive.
+pub fn project_image_source(project: WeakEntity<Project>, path: ProjectPath) -> ImageSource {
+    let source = ProjectImageSource { project, path };
+    ImageSource::from(move |window: &mut gpui::Window, cx: &mut App| {
+        window.use_asset::<AssetLogger<ProjectImageAsset>>(&source, cx)
+    })
 }
 
 impl ImageItem {
@@ -638,4 +688,99 @@ pub(crate) fn create_gpui_image(content: Vec<u8>) -> anyhow::Result<Arc<gpui::Im
         },
         content,
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gpui::{TestAppContext, img, px, size};
+    use image::ImageEncoder as _;
+    use util::{path, rel_path::rel_path};
+
+    fn one_pixel_png() -> Vec<u8> {
+        let mut png = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut png)
+            .write_image(&[0, 0, 255, 255], 1, 1, image::ExtendedColorType::Rgba8)
+            .expect("encoding a one pixel PNG should succeed");
+        png
+    }
+
+    struct ProjectImageView {
+        source: ImageSource,
+    }
+
+    impl gpui::Render for ProjectImageView {
+        fn render(
+            &mut self,
+            _window: &mut gpui::Window,
+            _cx: &mut gpui::Context<Self>,
+        ) -> impl gpui::IntoElement {
+            img(self.source.clone())
+        }
+    }
+
+    #[gpui::test]
+    async fn project_image_source_loads_bytes_through_the_asset_system(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let settings_store = settings::SettingsStore::test(cx);
+            cx.set_global(settings_store);
+            release_channel::init(semver::Version::new(0, 0, 0), cx);
+        });
+        let fs = fs::FakeFs::new(cx.executor());
+        fs.insert_tree(path!("/project"), serde_json::json!({}))
+            .await;
+        fs.insert_file(path!("/project/image.png"), one_pixel_png())
+            .await;
+
+        let project = crate::Project::test(fs, [path!("/project").as_ref()], cx).await;
+        let worktree_id = project.read_with(cx, |project, cx| {
+            project
+                .worktrees(cx)
+                .next()
+                .expect("test project should have a worktree")
+                .read(cx)
+                .id()
+        });
+        let source = project_image_source(
+            project.downgrade(),
+            ProjectPath {
+                worktree_id,
+                path: rel_path("image.png").into(),
+            },
+        );
+
+        // Wrap the custom source so we can observe the decoded frame once the
+        // asset finishes loading through `use_asset`.
+        let ImageSource::Custom(load_image) = source else {
+            panic!("project_image_source must return a custom ImageSource");
+        };
+        let decoded: Arc<std::sync::Mutex<Option<Vec<u8>>>> = Arc::new(std::sync::Mutex::new(None));
+        let observed = ImageSource::from({
+            let decoded = decoded.clone();
+            move |window: &mut gpui::Window, cx: &mut App| {
+                let result = load_image(window, cx);
+                if let Some(Ok(image)) = &result {
+                    *decoded.lock().expect("decoded mutex poisoned") =
+                        image.as_bytes(0).map(ToOwned::to_owned);
+                }
+                result
+            }
+        });
+
+        let (view, cx) = cx.add_window_view(|_, _| ProjectImageView { source: observed });
+        cx.draw(Default::default(), size(px(10.), px(10.)), |_, _| {
+            view.clone().into_any_element()
+        });
+        cx.run_until_parked();
+        cx.draw(Default::default(), size(px(10.), px(10.)), |_, _| {
+            view.into_any_element()
+        });
+
+        let frame = decoded.lock().expect("decoded mutex poisoned");
+        assert_eq!(
+            frame.as_deref(),
+            Some(&[255, 0, 0, 255][..]),
+            "the project image should decode into a BGRA frame"
+        );
+    }
 }

@@ -40,9 +40,10 @@ zzz_actions.workspace = true
 buffer_diff.workspace = true
 db = { workspace = true, features = ["test-support"] }
 editor = { workspace = true, features = ["test-support"] }
-fs.workspace = true
+fs = { workspace = true, features = ["test-support"] }
 gpui = { workspace = true, features = ["test-support"] }
 i18n.workspace = true
+project = { workspace = true, features = ["test-support"] }
 serde_json.workspace = true
 tempfile.workspace = true
 workspace = { workspace = true, features = ["test-support"] }

@@ -46,7 +46,7 @@ use gpui::{
 };
 use i18n as app_i18n;
 use language::LanguageRegistry;
-use project::{AgentId, DisableAiSettings};
+use project::{AgentId, DisableAiSettings, Project, image_store};
 use rope::Point;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -92,21 +92,68 @@ pub(crate) fn tr(cx: &App, key: &'static str, fallback: &'static str) -> SharedS
 
 pub(crate) fn resolve_agent_image(
     dest_url: &str,
+    project: Option<&Entity<Project>>,
     worktree_roots: &[PathBuf],
+    cx: &App,
 ) -> Option<ImageSource> {
+    if dest_url.starts_with("data:") {
+        return None;
+    }
+
     if dest_url.starts_with("http://") || dest_url.starts_with("https://") {
         return Some(ImageSource::Resource(Resource::Uri(SharedUri::from(
             dest_url.to_owned(),
         ))));
     }
 
-    let path = Path::new(dest_url);
+    let decoded = urlencoding::decode(dest_url)
+        .map_or_else(|_| dest_url.to_owned(), |decoded| decoded.into_owned());
+
+    if let Some(project) = project {
+        // Try the destination as written, then as relative to every worktree
+        // root. `find_project_path` works in remote workspaces too, since it
+        // matches against the worktree's own (remote) absolute path.
+        let mut candidate_paths = vec![decoded.clone()];
+        candidate_paths.extend(
+            worktree_roots
+                .iter()
+                .map(|root| root.join(&decoded).to_string_lossy().into_owned()),
+        );
+
+        for candidate in &candidate_paths {
+            let project_path = project.read(cx).find_project_path(candidate, cx);
+            let Some(project_path) = project_path else {
+                continue;
+            };
+            let is_remote = project
+                .read(cx)
+                .worktree_for_id(project_path.worktree_id, cx)
+                .is_some_and(|worktree| !worktree.read(cx).is_local());
+            if is_remote {
+                return Some(image_store::project_image_source(
+                    project.downgrade(),
+                    project_path,
+                ));
+            }
+            if let Some(path) = project.read(cx).absolute_path(&project_path, cx)
+                && path.exists()
+            {
+                return Some(ImageSource::Resource(Resource::Path(Arc::from(
+                    path.as_path(),
+                ))));
+            }
+        }
+    }
+
+    // Local fallback when there is no project context or the destination is
+    // not part of any worktree.
+    let path = Path::new(&decoded);
     if path.is_absolute() && path.exists() {
         return Some(ImageSource::Resource(Resource::Path(Arc::from(path))));
     }
 
     for root in worktree_roots {
-        let absolute_path = root.join(dest_url);
+        let absolute_path = root.join(&decoded);
         if absolute_path.exists() {
             return Some(ImageSource::Resource(Resource::Path(Arc::from(
                 absolute_path.as_path(),
@@ -957,5 +1004,42 @@ mod tests {
                 id: "my-agent".into(),
             },
         );
+    }
+
+    #[gpui::test]
+    async fn resolve_agent_image_loads_remote_images_through_project(cx: &mut TestAppContext) {
+        use project::Project;
+
+        let fs = fs::FakeFs::new(cx.executor());
+        cx.update(|cx| {
+            let settings_store = settings::SettingsStore::test(cx);
+            cx.set_global(settings_store);
+            <dyn Fs>::set_global(fs.clone(), cx);
+        });
+        let project = Project::test(fs, [], cx).await;
+        project.update(cx, |project, cx| {
+            project.add_test_remote_worktree("/remote/project", cx);
+        });
+        let worktree_roots = vec![PathBuf::from("/remote/project")];
+
+        cx.update(|cx| {
+            // A worktree-root-relative image resolves through the project image
+            // store instead of the client filesystem, which has no such path.
+            assert!(matches!(
+                resolve_agent_image("assets/pic.png", Some(&project), &worktree_roots, cx),
+                Some(ImageSource::Custom(_))
+            ));
+
+            // Web URLs remain plain URIs.
+            assert!(matches!(
+                resolve_agent_image(
+                    "https://example.com/pic.png",
+                    Some(&project),
+                    &worktree_roots,
+                    cx,
+                ),
+                Some(ImageSource::Resource(Resource::Uri(_)))
+            ));
+        });
     }
 }

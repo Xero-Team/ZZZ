@@ -521,6 +521,7 @@ dependencies = [
  "ui_input",
  "unindent",
  "url",
+ "urlencoding",
  "util",
  "uuid 1.29.0",
  "vim",

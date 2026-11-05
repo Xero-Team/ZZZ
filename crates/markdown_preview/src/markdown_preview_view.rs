@@ -26,13 +26,16 @@ use markdown::{
     MarkdownOptions, MarkdownStyle,
 };
 use project::search::SearchQuery;
-use project::{Project, ProjectPath};
+use project::{Project, ProjectPath, image_store};
 use settings::{SeedQuerySetting, Settings};
 use theme::{SystemAppearance, Theme, ThemeRegistry};
 use theme_settings::ThemeSettings;
 use ui::{ContextMenu, ScrollAxes, Scrollbars, WithScrollbar, prelude::*, right_click_menu};
 use util::{
-    ResultExt, markdown::split_local_url_fragment, normalize_path, paths::PathWithPosition,
+    ResultExt,
+    markdown::split_local_url_fragment,
+    paths::{PathStyle, PathWithPosition},
+    rel_path::RelPath,
 };
 use workspace::item::{
     Item, ItemBufferKind, ItemHandle, SaveOptions, SerializableItem, TabContentParams,
@@ -702,6 +705,14 @@ impl MarkdownPreviewView {
         }
     }
 
+    /// The project path of the Markdown source being previewed. Unlike a local
+    /// absolute directory, this also resolves in remote workspaces, where the
+    /// file lives on the remote host.
+    fn project_path_for_active_editor(editor: &Editor, cx: &App) -> Option<ProjectPath> {
+        let file = editor.file_at(MultiBufferOffset(0), cx)?;
+        Some(ProjectPath::from_file(file.as_ref(), cx))
+    }
+
     fn line_scroll_amount(&self, cx: &App) -> Pixels {
         let settings = ThemeSettings::get_global(cx);
         settings.buffer_font_size(cx) * settings.buffer_line_height.value()
@@ -883,6 +894,26 @@ impl MarkdownPreviewView {
             .active_editor
             .as_ref()
             .map(|state| state.editor.clone());
+        let source_project_path = active_editor
+            .as_ref()
+            .and_then(|editor| Self::project_path_for_active_editor(editor.read(cx), cx));
+        let project = self
+            .workspace
+            .upgrade()
+            .map(|workspace| workspace.read(cx).project().clone());
+        // A workspace-relative base directory for link resolution. In remote
+        // workspaces the Markdown source has no local directory, so derive the
+        // directory from its project path (a remote absolute path) instead.
+        let link_cwd = self.base_directory.clone().or_else(|| {
+            let project = project.as_ref()?;
+            let source_project_path = source_project_path.as_ref()?;
+            let parent = source_project_path.path.parent()?;
+            let directory = ProjectPath {
+                worktree_id: source_project_path.worktree_id,
+                path: parent.into_arc(),
+            };
+            project.read(cx).absolute_path(&directory, cx)
+        });
 
         let markdown_style = if let Some(theme) = preview_theme {
             MarkdownStyle::themed_with_overrides(
@@ -907,27 +938,23 @@ impl MarkdownPreviewView {
             .image_resolver({
                 let base_directory = self.base_directory.clone();
                 let workspace_directory = self.workspace_directory.clone();
-                move |dest_url| {
+                move |dest_url, cx| {
                     resolve_preview_image(
                         dest_url,
                         base_directory.as_deref(),
                         workspace_directory.as_deref(),
+                        project.as_ref(),
+                        source_project_path.as_ref(),
+                        PathStyle::local(),
+                        cx,
                     )
                 }
             })
             .on_url_click({
                 let view_handle = cx.entity().downgrade();
                 let workspace = self.workspace.clone();
-                let base_directory = self.base_directory.clone();
                 move |url, window, cx| {
-                    handle_url_click(
-                        url,
-                        &view_handle,
-                        base_directory.clone(),
-                        &workspace,
-                        window,
-                        cx,
-                    );
+                    handle_url_click(url, &view_handle, link_cwd.clone(), &workspace, window, cx);
                 }
             });
 
@@ -1009,7 +1036,7 @@ impl MarkdownPreviewView {
 fn handle_url_click(
     url: SharedString,
     view: &WeakEntity<MarkdownPreviewView>,
-    base_directory: Option<PathBuf>,
+    cwd: Option<PathBuf>,
     workspace: &WeakEntity<Workspace>,
     window: &mut Window,
     cx: &mut App,
@@ -1047,52 +1074,33 @@ fn handle_url_click(
             });
         }
     } else {
-        open_preview_url(url, base_directory, workspace, window, cx);
+        open_preview_url(url, cwd, workspace, window, cx);
     }
 }
 
 fn open_preview_url(
     url: SharedString,
-    base_directory: Option<PathBuf>,
+    cwd: Option<PathBuf>,
     workspace: &WeakEntity<Workspace>,
     window: &mut Window,
     cx: &mut App,
 ) {
     let decoded_url = urlencoding::decode(url.as_ref()).unwrap_or_else(|_| url.as_ref().into());
     let (path_text, fragment) = split_preview_url(&decoded_url);
+    let path_with_position =
+        preview_path_with_position(path_text, fragment).unwrap_or_else(|| path_text.to_owned());
 
-    if let Some(path_with_position) = preview_path_with_position(path_text, fragment) {
-        open_preview_path_with_position(
-            path_with_position,
-            decoded_url.into_owned(),
-            base_directory,
-            workspace,
-            window,
-            cx,
-        );
-        return;
-    }
-
-    if let Some(path) = resolve_preview_path(path_text, base_directory.as_deref())
-        && let Some(workspace) = workspace.upgrade()
-    {
-        workspace.update(cx, |workspace, cx| {
-            workspace
-                .open_abs_path(
-                    normalize_path(path.as_path()),
-                    OpenOptions {
-                        visible: Some(OpenVisible::None),
-                        ..Default::default()
-                    },
-                    window,
-                    cx,
-                )
-                .detach();
-        });
-        return;
-    }
-
-    cx.open_url(url.as_ref());
+    // Resolve every local link through the project's worktrees. This is remote
+    // aware: worktree paths are matched against the worktree's own (possibly
+    // remote) root instead of the client's filesystem.
+    open_preview_path_with_position(
+        path_with_position,
+        decoded_url.into_owned(),
+        cwd,
+        workspace,
+        window,
+        cx,
+    );
 }
 
 fn split_preview_url(url: &str) -> (&str, Option<&str>) {
@@ -1140,7 +1148,7 @@ fn preview_path_with_position(path: &str, fragment: Option<&str>) -> Option<Stri
 fn open_preview_path_with_position(
     path_with_position: String,
     fallback_url: String,
-    base_directory: Option<PathBuf>,
+    cwd: Option<PathBuf>,
     workspace: &WeakEntity<Workspace>,
     window: &mut Window,
     cx: &mut App,
@@ -1149,7 +1157,7 @@ fn open_preview_path_with_position(
         workspace,
         PathMatching::Exact,
         &path_with_position,
-        base_directory.as_deref(),
+        cwd.as_deref(),
         cx,
     );
     let workspace = workspace.clone();
@@ -1204,33 +1212,38 @@ fn open_preview_path_with_position(
         .detach_and_log_err(cx);
 }
 
-fn resolve_preview_path(url: &str, base_directory: Option<&Path>) -> Option<PathBuf> {
-    if url.starts_with("http://") || url.starts_with("https://") {
-        return None;
-    }
-
-    let (path_text, _) = split_preview_url(url);
-    let decoded_url = urlencoding::decode(path_text)
-        .map_or_else(|_| path_text.to_owned(), |decoded| decoded.into_owned());
-    let candidate = PathBuf::from(&decoded_url);
-
-    if candidate.is_absolute() && candidate.exists() {
-        return Some(candidate);
-    }
-
-    let base_directory = base_directory?;
-    let resolved = base_directory.join(decoded_url);
-    if resolved.exists() {
-        Some(resolved)
+/// Resolves a Markdown image destination to a client-side filesystem path.
+/// This is the local-workspace fallback used when no project context is
+/// available, and by the clipboard resolver, which can only embed bytes from
+/// the local filesystem.
+fn resolve_local_preview_image_path(
+    decoded: &str,
+    workspace_relative_path: Option<&str>,
+    base_directory: Option<&Path>,
+    workspace_directory: Option<&Path>,
+    client_path_style: PathStyle,
+) -> Option<PathBuf> {
+    let path = if let (Some(stripped), Some(root)) = (workspace_relative_path, workspace_directory)
+    {
+        client_path_style.join(root, Path::new(stripped))?
+    } else if client_path_style.is_absolute(decoded) {
+        decoded.to_owned()
     } else {
-        None
-    }
+        client_path_style.join(base_directory?, Path::new(decoded))?
+    };
+
+    let path = PathBuf::from(path);
+    path.exists().then_some(path)
 }
 
 fn resolve_preview_image(
     dest_url: &str,
     base_directory: Option<&Path>,
     workspace_directory: Option<&Path>,
+    project: Option<&Entity<Project>>,
+    source_project_path: Option<&ProjectPath>,
+    client_path_style: PathStyle,
+    cx: &App,
 ) -> Option<ImageSource> {
     if dest_url.starts_with("data:") {
         return None;
@@ -1244,33 +1257,95 @@ fn resolve_preview_image(
 
     let decoded = urlencoding::decode(dest_url)
         .map_or_else(|_| dest_url.to_owned(), |decoded| decoded.into_owned());
-
-    if let Some(stripped) = ['/', '\\']
+    let workspace_relative_path = ['/', '\\']
         .iter()
-        .find_map(|prefix| decoded.strip_prefix(*prefix))
-    {
-        if let Some(root) = workspace_directory {
-            let absolute_path = root.join(stripped);
-            if absolute_path.exists() {
-                return Some(ImageSource::Resource(Resource::Path(Arc::from(
-                    absolute_path.as_path(),
-                ))));
+        .find_map(|prefix| decoded.strip_prefix(*prefix));
+
+    if let (Some(project), Some(source_project_path)) = (project, source_project_path) {
+        let project_path = resolve_project_path_for_preview_image(
+            &decoded,
+            workspace_relative_path,
+            source_project_path,
+            project,
+            cx,
+        );
+        if let Some(project_path) = project_path {
+            let is_remote = project
+                .read(cx)
+                .worktree_for_id(project_path.worktree_id, cx)
+                .is_some_and(|worktree| !worktree.read(cx).is_local());
+            if is_remote {
+                return Some(image_store::project_image_source(
+                    project.downgrade(),
+                    project_path,
+                ));
             }
 
+            let path = project.read(cx).absolute_path(&project_path, cx)?;
+            return path
+                .exists()
+                .then(|| ImageSource::Resource(Resource::Path(Arc::from(path.as_path()))));
+        } else if project.read(cx).is_remote() {
             return None;
         }
     }
 
-    let path = if Path::new(&decoded).is_absolute() {
-        PathBuf::from(decoded)
-    } else {
-        base_directory?.join(decoded)
-    };
+    let path = resolve_local_preview_image_path(
+        &decoded,
+        workspace_relative_path,
+        base_directory,
+        workspace_directory,
+        client_path_style,
+    )?;
 
-    path.exists()
-        .then(|| ImageSource::Resource(Resource::Path(Arc::from(path.as_path()))))
+    Some(ImageSource::Resource(Resource::Path(Arc::from(
+        path.as_path(),
+    ))))
 }
 
+/// Resolves a Markdown image destination to a `ProjectPath` relative to the
+/// worktree that contains the Markdown source. Remote worktrees have no
+/// client-side absolute path, so the path must be expressed in project terms.
+fn resolve_project_path_for_preview_image(
+    decoded_path: &str,
+    workspace_relative_path: Option<&str>,
+    source_project_path: &ProjectPath,
+    project: &Entity<Project>,
+    cx: &App,
+) -> Option<ProjectPath> {
+    let worktree = project
+        .read(cx)
+        .worktree_for_id(source_project_path.worktree_id, cx)?;
+    let path_style = worktree.read(cx).path_style();
+
+    if workspace_relative_path.is_none() && path_style.is_absolute(decoded_path) {
+        return project
+            .read(cx)
+            .project_path_for_absolute_path(Path::new(decoded_path), cx);
+    }
+
+    let source_directory = source_project_path.path.parent()?;
+    let path: Arc<RelPath> = if let Some(workspace_relative_path) = workspace_relative_path {
+        RelPath::new(Path::new(workspace_relative_path), path_style)
+            .ok()?
+            .into_arc()
+    } else {
+        let joined_path = path_style.join(source_directory.as_std_path(), decoded_path)?;
+        RelPath::new(Path::new(&joined_path), path_style)
+            .ok()?
+            .into_arc()
+    };
+
+    Some(ProjectPath {
+        worktree_id: source_project_path.worktree_id,
+        path,
+    })
+}
+
+/// The clipboard resolver must return a `String` synchronously, so it can
+/// only embed bytes that are readable from the client filesystem. Remote
+/// images are rendered through `image_store::project_image_source` instead;
+/// when copying preview content to the clipboard their original `src` is kept.
 fn resolve_preview_clipboard_image_src(
     dest_url: &str,
     base_directory: Option<&Path>,
@@ -1284,15 +1359,20 @@ fn resolve_preview_clipboard_image_src(
         return None;
     }
 
-    let resolved = resolve_preview_image(dest_url, base_directory, workspace_directory)?;
-    let ImageSource::Resource(resource) = resolved else {
-        return None;
-    };
-    let Resource::Path(path) = resource else {
-        return None;
-    };
+    let decoded = urlencoding::decode(dest_url)
+        .map_or_else(|_| dest_url.to_owned(), |decoded| decoded.into_owned());
+    let workspace_relative_path = ['/', '\\']
+        .iter()
+        .find_map(|prefix| decoded.strip_prefix(*prefix));
+    let path = resolve_local_preview_image_path(
+        &decoded,
+        workspace_relative_path,
+        base_directory,
+        workspace_directory,
+        PathStyle::local(),
+    )?;
 
-    embed_local_image_for_clipboard(path.as_ref(), cx).or_else(|| file_url_for_path(path.as_ref()))
+    embed_local_image_for_clipboard(&path, cx).or_else(|| file_url_for_path(&path))
 }
 
 fn embed_local_image_for_clipboard(path: &Path, cx: &App) -> Option<String> {
@@ -2159,7 +2239,6 @@ mod tests {
     use super::{
         ImageSource, MarkdownPreviewView, Resource, filter_non_rendered_matches,
         preview_path_with_position, resolve_preview_clipboard_image_src, resolve_preview_image,
-        resolve_preview_path,
     };
 
     #[test]
@@ -2181,52 +2260,6 @@ mod tests {
             filter_non_rendered_matches(vec![58..65, 1..9, 30..37], &non_rendered_ranges),
             vec![58..65, 1..9]
         );
-    }
-
-    #[test]
-    fn resolves_relative_preview_path_and_missing_cases() {
-        let tree = markdown_fixture_tree(json!({
-            "notes.md": "# Notes"
-        }));
-        let base_directory = markdown_fixture_directory(&tree);
-        let file = base_directory.join("notes.md");
-
-        assert_eq!(
-            resolve_preview_path("notes.md", Some(base_directory.as_path())),
-            Some(file)
-        );
-        assert_eq!(
-            resolve_preview_path("nonexistent.md", Some(base_directory.as_path())),
-            None
-        );
-        assert_eq!(resolve_preview_path("notes.md", None), None);
-    }
-
-    #[test]
-    fn resolves_urlencoded_preview_path_and_ignores_fragment_component() {
-        let tree = markdown_fixture_tree(json!({
-            "release notes.md": "# Release Notes",
-            "notes.md": "# Notes"
-        }));
-        let base_directory = markdown_fixture_directory(&tree);
-
-        assert_eq!(
-            resolve_preview_path(
-                "release%20notes.md#overview",
-                Some(base_directory.as_path())
-            ),
-            Some(base_directory.join("release notes.md"))
-        );
-        assert_eq!(
-            resolve_preview_path("notes.md#L10", Some(base_directory.as_path())),
-            Some(base_directory.join("notes.md"))
-        );
-    }
-
-    #[test]
-    fn does_not_treat_web_links_as_preview_files() {
-        assert_eq!(resolve_preview_path("https://zed.dev", None), None);
-        assert_eq!(resolve_preview_path("http://example.com", None), None);
     }
 
     #[test]
@@ -2278,31 +2311,117 @@ mod tests {
         });
     }
 
-    #[test]
-    fn resolves_workspace_absolute_preview_image_path_and_rejects_missing() {
+    #[gpui::test]
+    async fn resolves_workspace_absolute_preview_image_path_and_rejects_missing(
+        cx: &mut TestAppContext,
+    ) {
         let tree = TempTree::new(json!({
             "docs": {},
             "test_image.png": "mock data"
         }));
-        let workspace_directory = tree.path();
+        let workspace_directory = tree.path().to_path_buf();
         let base_directory = markdown_fixture_directory(&tree);
         let image_file = workspace_directory.join("test_image.png");
 
-        for workspace_root_relative_path in ["/test_image.png", "\\test_image.png"] {
-            let resolved = resolve_preview_image(
-                workspace_root_relative_path,
-                Some(&base_directory),
-                Some(workspace_directory),
-            );
-            assert_resolved_preview_image_path(resolved, image_file.as_path());
-        }
+        cx.update(|cx| {
+            for workspace_root_relative_path in ["/test_image.png", "\\test_image.png"] {
+                let resolved = resolve_preview_image(
+                    workspace_root_relative_path,
+                    Some(&base_directory),
+                    Some(&workspace_directory),
+                    None,
+                    None,
+                    util::paths::PathStyle::local(),
+                    cx,
+                );
+                assert_resolved_preview_image_path(resolved, image_file.as_path());
+            }
 
-        let missing = resolve_preview_image(
-            "/missing_image.png",
-            Some(&base_directory),
-            Some(workspace_directory),
-        );
-        assert!(missing.is_none());
+            let missing = resolve_preview_image(
+                "/missing_image.png",
+                Some(&base_directory),
+                Some(&workspace_directory),
+                None,
+                None,
+                util::paths::PathStyle::local(),
+                cx,
+            );
+            assert!(missing.is_none());
+        });
+    }
+
+    #[gpui::test]
+    async fn resolves_remote_preview_image_through_project(cx: &mut TestAppContext) {
+        use project::{Project, ProjectPath};
+
+        init_test(cx);
+        let fs = fs::FakeFs::new(cx.executor());
+        let project = Project::test(fs, [], cx).await;
+        let worktree_id = project.update(cx, |project, cx| {
+            project
+                .add_test_remote_worktree("/remote/project", cx)
+                .read(cx)
+                .id()
+        });
+        let source_project_path = ProjectPath {
+            worktree_id,
+            path: rel_path("docs/note.md").into(),
+        };
+
+        cx.update(|cx| {
+            // Relative to the Markdown source's directory.
+            let resolved = resolve_preview_image(
+                "./pic.png",
+                None,
+                None,
+                Some(&project),
+                Some(&source_project_path),
+                util::paths::PathStyle::local(),
+                cx,
+            );
+            assert!(
+                matches!(resolved, Some(ImageSource::Custom(_))),
+                "a relative image in a remote worktree must load through the project image store"
+            );
+
+            // Workspace-root relative.
+            let resolved = resolve_preview_image(
+                "/assets/pic.png",
+                None,
+                None,
+                Some(&project),
+                Some(&source_project_path),
+                util::paths::PathStyle::local(),
+                cx,
+            );
+            assert!(matches!(resolved, Some(ImageSource::Custom(_))));
+
+            // Web URLs stay URLs; data URLs are handled by the parser itself.
+            assert!(matches!(
+                resolve_preview_image(
+                    "https://example.com/pic.png",
+                    None,
+                    None,
+                    Some(&project),
+                    Some(&source_project_path),
+                    util::paths::PathStyle::local(),
+                    cx,
+                ),
+                Some(ImageSource::Resource(Resource::Uri(_)))
+            ));
+            assert!(
+                resolve_preview_image(
+                    "data:image/png;base64,AAAA",
+                    None,
+                    None,
+                    Some(&project),
+                    Some(&source_project_path),
+                    util::paths::PathStyle::local(),
+                    cx,
+                )
+                .is_none()
+            );
+        });
     }
 
     #[gpui::test]
@@ -3453,12 +3572,6 @@ mod tests {
             crate::init(cx);
             state
         })
-    }
-
-    fn markdown_fixture_tree(docs_tree: serde_json::Value) -> TempTree {
-        TempTree::new(json!({
-            "docs": docs_tree
-        }))
     }
 
     async fn wait_for_preview_serialization(cx: &mut TestAppContext) {

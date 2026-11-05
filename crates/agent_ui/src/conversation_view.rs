@@ -3489,6 +3489,7 @@ fn render_agent_markdown(
 ) -> MarkdownElement {
     let workspace = workspace.clone();
     let worktree_roots = code_span_resolver.worktree_roots(cx);
+    let project = code_span_resolver.inner.project.upgrade();
     let resolver = code_span_resolver.clone();
     MarkdownElement::new(markdown, style)
         .code_block_renderer(markdown::CodeBlockRenderer::Default {
@@ -3496,7 +3497,9 @@ fn render_agent_markdown(
             wrap_button_visibility: markdown::WrapButtonVisibility::VisibleOnHover,
             border: false,
         })
-        .image_resolver(move |dest_url| resolve_agent_image(dest_url, &worktree_roots))
+        .image_resolver(move |dest_url, cx| {
+            resolve_agent_image(dest_url, project.as_ref(), &worktree_roots, cx)
+        })
         .on_url_click(move |text, window, cx| {
             thread_view::open_link(text, &workspace, window, cx);
         })
