@@ -581,7 +581,8 @@ Web target 需 `RUSTC_BOOTSTRAP=1`（`wasm_thread` 依赖的
 
 1. 已新建 [maintainability-progress.md](./maintainability-progress.md)
    账本，逐阶段记录 baseline、命令、结果、证据路径、`PASS`/`FAIL`/
-   `NOT RUN` 与 next action；提交 SHA 为空（按纪律未 commit）。
+   `NOT RUN` 与 next action。阶段 0–7 的改动已拆为 6 个 `git commit -s`
+   提交落在 `main`，提交 SHA 清单与落地复核见账本[提交记录](./maintainability-progress.md#commits)。
 2. 已在计划顶部补最终状态与 revision（阶段 0–6 完成、阶段 7 完成，
    阶段 6 含 2 项 `DEFERRED`）。
 3. 已在 [SUMMARY.md](../../SUMMARY.md) 登记 progress ledger 链接。
@@ -590,10 +591,15 @@ Web target 需 `RUSTC_BOOTSTRAP=1`（`wasm_thread` 依赖的
 
 ## 12. 提交与工作区纪律 {#discipline}
 
-- 在隔离分支 `refactor/gpui-maintainability` 或 worktree 中工作；不 push、
-  不开 PR、不合并到 `main`，除非用户明确要求。
+- 执行期纪律：在隔离分支 `refactor/gpui-maintainability` 或 worktree 中
+  工作；不 push、不开 PR、不合并到 `main`，除非用户明确要求。阶段 0–7
+  完成后已按用户要求拆为 6 个 `git commit -s` 提交落在 `main`，见
+  [progress ledger](./maintainability-progress.md#commits)。
 - 每个提交只含一个可独立回退的行为或结构变化，`git commit -s`。
-- 阶段 2 每个分区一个提交；阶段 3/5 每个类型/后端一个提交。
+- 落地时按主题合并为 6 个提交：`Result` 化、`#[non_exhaustive]` 与
+  `window.rs` 分区共享 `platform.rs` 及各后端 `window.rs`，物理上交错，合并
+  为一个提交以保证每个提交可独立编译；其余各主题各自一个提交。清单见
+  [progress ledger](./maintainability-progress.md#commits)。
 - 原始日志、API 快照 diff、benchmark 输出放
   `.tmp/gpui-maintainability/`，只把摘要与可复现命令写入 tracked 文档。
 - 参考仓库保持只读；不增加 `upstream` remote，不用 `script/cherry-pick`。
@@ -667,7 +673,9 @@ Web target 需 `RUSTC_BOOTSTRAP=1`（`wasm_thread` 依赖的
 `phase3-gpui-tests.log`、`phase3-clippy-final.log` 等。
 
 工作区中同时存在用户已有的 `crates/telegram_ui/src/telegram_panel.rs`
-改动（去掉 `Box::leak`），本计划**未触碰、未 stage、未回退**该文件。
+改动（去掉 `Box::leak`）。本计划执行期未触碰、未 stage、未回退该文件；
+落地时它随阶段 5 的 `Result` 化只改了 `cx.activate(true).log_err()` 这一
+调用点（见 `dcd5c864a7`），用户原有的 `Box::leak` 改动保持不变。
 
 阶段 2 是后续工作的硬前提：8198 行 `window.rs` 的分区必须在
 `check gpui-api` 快照保护下逐提交进行，每分区后立即比对，出现非 bless

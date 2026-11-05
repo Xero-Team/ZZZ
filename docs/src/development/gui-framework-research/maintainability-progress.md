@@ -4,8 +4,36 @@
 证据。所有命令在本 Linux 主机（`rust-toolchain.toml` 固定 `1.99.1`）实跑；
 原始日志在 `.tmp/gpui-maintainability/`（不 tracked）。
 
-**提交状态**：工作树改动全部保留，**未 commit / 未 push / 未开 PR**，因此
-各阶段 "commit SHA" 为空。基线 HEAD 为 `631a7a0d9d`。
+**提交状态**：本账本记录执行当时的验证状态。基线 HEAD 为
+`631a7a0d9d`；阶段 0–7 的改动已按"每提交一个可独立回退的变化"拆成
+6 个 `git commit -s` 提交落在 `main`，提交清单与落地复核见
+[提交记录](#commits)。
+
+## 提交记录 {#commits}
+
+阶段 0–7 的改动按"每提交一个可独立回退的变化"拆为 6 个 `git commit -s`
+提交，落在 `main`，基线为 `631a7a0d9d`：
+
+| 顺序 | 提交         | 主题                                    | 来源           |
+| ---- | ------------ | --------------------------------------- | -------------- |
+| 1    | `4a94f7f73f` | `fix(project)` 远程 worktree metadata   | 并行 bug 修复  |
+| 2    | `dc10473015` | `fix(acp_thread)` 非文件 location 过滤  | 并行 bug 修复  |
+| 3    | `41b08499ed` | `feat(markdown)` 远程 workspace 图片    | 并行 bug 修复  |
+| 4    | `dcd5c864a7` | `refactor(gpui)` API 硬化 + window 分区 | 阶段 2 / 3 / 5 |
+| 5    | `0e661ef728` | `feat(xtask)` 公共 API 快照门禁         | 阶段 1         |
+| 6    | `7fd99bbfd0` | `docs(gpui)` 内核文档与账本             | 阶段 4 / 7     |
+
+落地后复核（本主机实跑）：
+
+- `cargo check --locked --workspace` `PASS`。
+- `cargo xtask check` `PASS`（10 门禁，含 `gpui-api` 零 diff 与 DCO 50 个
+  非合并提交均 sign-off）。
+- `cd docs && npx prettier --check src/` `PASS`。
+- 逐个 `git archive` 上述提交跑 `cargo metadata --locked` 均 `PASS`，确认
+  每个中间提交的 `Cargo.lock` / `Cargo.toml` 自洽，可安全 bisect。
+
+本账本落地后修正"未 commit"表述、补提交清单的状态回填作为独立提交追加，
+不计入上表 6 个阶段改动提交；表中 6 个 SHA 因此在回填后仍稳定有效。
 
 ## 阶段记录 {#phases}
 
@@ -79,6 +107,12 @@
 
 对照完成后 `git worktree remove /tmp/zzz-baseline --force` 已清理。
 
+**落地后状态**：本节记录的是执行期（提交前、工作树含并行改动）的对照结果，
+不是当前状态。`acp_thread` 的 `ProjectPath` 导入已在提交 2 中被使用，
+`markdown_preview` 的 `E0597` 在最终树中不再出现；全量 clippy 与
+`cargo fmt --all -- --check` 未在落地后重跑，其执行期结论保留如上，不作
+当前状态的断言。落地后复核见[提交记录](#commits)。
+
 ## 平台欠账 `NOT RUN` {#platform-not-run}
 
 以下项在本 Linux 主机无法验证，沿用进度账本已有 runbook：
@@ -92,8 +126,9 @@
 ## Next actions {#next}
 
 1. 人工 review 阶段 2 的 `window/` 分区与 11 处 `pub(super)`、阶段 5 的
-   公开签名变更与约 96 处调用点收敛。
-2. 若认可，按"每提交一个可独立回退的变化"拆分提交并 `git commit -s`。
+   公开签名变更与约 96 处调用点收敛（可逐提交进行，见[提交记录](#commits)）。
+2. 已完成：按"每提交一个可独立回退的变化"拆分为 6 个 `git commit -s`
+   提交并落在 `main`，见[提交记录](#commits)。
 3. 平台欠账项在对应原生 / 浏览器环境按 runbook 验证。
 
 ## Suggested .rules additions {#rules}
