@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+
+# Keep the locale catalogs in sync: every key in en.json must appear in
+# zh-CN.json and vice versa, including keys nested under any object. The two
+# catalog paths default to the workspace files and can be overridden for tests.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+en_catalog="${1:-$root/assets/locales/en.json}"
+zh_catalog="${2:-$root/assets/locales/zh-CN.json}"
+
+for catalog in "$en_catalog" "$zh_catalog"; do
+    if [[ ! -f "$catalog" ]]; then
+        echo "FAIL: missing locale catalog: $catalog" >&2
+        exit 1
+    fi
+done
+
+python3 - "$en_catalog" "$zh_catalog" <<'PY'
+import json
+import sys
+
+en_path, zh_path = sys.argv[1], sys.argv[2]
+
+
+def key_paths(node, prefix=()):
+    paths = set()
+    if isinstance(node, dict):
+        for key, value in node.items():
+            key_path = prefix + (key,)
+            paths.add(key_path)
+            paths |= key_paths(value, key_path)
+    elif isinstance(node, list):
+        for value in node:
+            paths |= key_paths(value, prefix)
+    return paths
+
+
+def load(path):
+    with open(path, encoding="utf-8") as catalog_file:
+        return json.load(catalog_file)
+
+
+en_keys = key_paths(load(en_path))
+zh_keys = key_paths(load(zh_path))
+
+missing_in_zh = sorted(en_keys - zh_keys)
+missing_in_en = sorted(zh_keys - en_keys)
+
+if not missing_in_zh and not missing_in_en:
+    print("locale catalog keys match: {} keys".format(len(en_keys)))
+    sys.exit(0)
+
+if missing_in_zh:
+    print("FAIL: keys in en.json missing from zh-CN.json:", file=sys.stderr)
+    for key in missing_in_zh:
+        print("  " + ".".join(key), file=sys.stderr)
+if missing_in_en:
+    print("FAIL: keys in zh-CN.json missing from en.json:", file=sys.stderr)
+    for key in missing_in_en:
+        print("  " + ".".join(key), file=sys.stderr)
+sys.exit(1)
+PY

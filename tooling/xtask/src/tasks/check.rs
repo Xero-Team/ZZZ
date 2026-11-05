@@ -35,7 +35,7 @@ pub struct CheckArgs {
 #[derive(Subcommand)]
 enum CheckCommand {
     /// Every gate CI runs: markers, keymaps, scroll handlers, licenses,
-    /// philosophy, ledger, workflows.
+    /// locale catalog keys, DCO, philosophy, ledger, workflows.
     All,
     /// Reject leftover markers for unfinished work.
     Todos,
@@ -45,6 +45,10 @@ enum CheckCommand {
     ScrollHandlers,
     /// Require a `LICENSE-AGPL` symlink in every crate directory.
     Licenses,
+    /// Require the locale catalogs to have identical key sets.
+    LocaleKeys,
+    /// Require DCO sign-off on recent non-merge commits.
+    Dco,
     /// Run ShellCheck over the scripts in the repository root's `script/`.
     Shellcheck {
         /// Minimum severity that fails the check.
@@ -93,6 +97,8 @@ pub fn run_check(args: CheckArgs) -> Result<()> {
         CheckCommand::Keys => keymaps::check(),
         CheckCommand::ScrollHandlers => scroll_handlers::check(),
         CheckCommand::Licenses => check_licenses(),
+        CheckCommand::LocaleKeys => check_locale_keys(),
+        CheckCommand::Dco => check_dco(),
         CheckCommand::Shellcheck { severity } => check_shellcheck(severity),
         CheckCommand::Vendor => run_script(&["script/vendor-sync", "check"], "vendor check"),
         CheckCommand::Philosophy => check_philosophy(),
@@ -111,6 +117,8 @@ fn run_all() -> Result<()> {
         ("keymaps", keymaps::check),
         ("scroll handlers", scroll_handlers::check),
         ("crate licenses", check_licenses),
+        ("locale catalog keys", check_locale_keys),
+        ("DCO sign-off", check_dco),
         ("philosophy boundary", check_philosophy),
         ("upstream rejection ledger", check_upstream_ledger),
         ("GitHub workflow files", check_workflows),
@@ -283,6 +291,14 @@ fn has_shell_shebang(path: &Path) -> bool {
 
 fn check_philosophy() -> Result<()> {
     run_script(&["script/check-philosophy"], "philosophy check")
+}
+
+fn check_locale_keys() -> Result<()> {
+    run_script(&["script/check-locale-keys"], "locale catalog key check")
+}
+
+fn check_dco() -> Result<()> {
+    run_script(&["script/check-dco"], "DCO sign-off check")
 }
 
 fn check_upstream_ledger() -> Result<()> {

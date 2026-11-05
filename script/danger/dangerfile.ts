@@ -1,4 +1,4 @@
-import { danger, message, warn, fail } from "danger";
+import { danger, message, warn } from "danger";
 const { prHygiene } = require("danger-plugin-pr-hygiene");
 
 prHygiene({
@@ -49,7 +49,7 @@ const includesIssueUrl = ISSUE_LINK_PATTERN.test(bodyWithoutReleaseNotes);
 if (includesIssueUrl) {
   const matches = bodyWithoutReleaseNotes.match(ISSUE_LINK_PATTERN) ?? [];
   const issues = matches
-    .map((match) => match.replace(/^#/, "").replace(/https:\/\/github\.com\/zed-industries\/zzz\/issues\//, ""))
+    .map((match) => match.replace(/^#/, "").replace(/https:\/\/github\.com\/Xero-Team\/ZZZ\/issues\//, ""))
     .filter((issue, index, self) => self.indexOf(issue) === index);
 
   const issuesToReport = issues.map((issue) => `#${issue}`).join(", ");
@@ -61,39 +61,5 @@ if (includesIssueUrl) {
   );
 }
 
-const MIGRATION_SCHEMA_FILES: string[] = [];
-
-const modifiedSchemaFiles = danger.git.modified_files.filter((file) =>
-  MIGRATION_SCHEMA_FILES.some((schemaFilePath) => file.endsWith(schemaFilePath)),
-);
-
-if (modifiedSchemaFiles.length > 0) {
-  warn(
-    [
-      "This PR modifies database schema files.",
-      "",
-      "If you are making database changes, a migration needs to be added in the Cloud repository.",
-    ].join("\n"),
-  );
-}
-
-const FIXTURE_CHANGE_ATTESTATION = "Changes to test fixtures are intentional and necessary.";
-
-const FIXTURES_PATHS = ["crates/assistant_tools/src/edit_agent/evals/fixtures"];
-
-const modifiedFixtures = danger.git.modified_files.filter((file) =>
-  FIXTURES_PATHS.some((fixturePath) => file.includes(fixturePath)),
-);
-
-if (modifiedFixtures.length > 0) {
-  if (!body.includes(FIXTURE_CHANGE_ATTESTATION)) {
-    const modifiedFixturesStr = modifiedFixtures.map((path) => "`" + path + "`").join(", ");
-    fail(
-      [
-        `This PR modifies eval or test fixtures (${modifiedFixturesStr}), which are typically expected to remain unchanged.`,
-        "If these changes are intentional and required, please add the following attestation to your PR description: ",
-        `"${FIXTURE_CHANGE_ATTESTATION}"`,
-      ].join("\n\n"),
-    );
-  }
-}
+// The upstream Zed schema-migration and eval-fixture rules were removed: their
+// allowlists are empty and their target paths do not exist in this fork.

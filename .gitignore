@@ -77,6 +77,13 @@ crates/telegram/credentials.toml
 /crates/grammars/vendor/**/*.o
 /vendor/stacker/psm/a.o
 
+# `cargo xtask workflows` regenerates these from Rust sources. They are not
+# checked in: the repository's active workflow is ci.yaml, and generated files
+# are rebuilt on demand rather than tracked.
+/.github/workflows/compliance_check.yml
+/.github/workflows/extension_tests.yml
+/.github/workflows/prerelease.yml
+
 # Local documentation audit files
 /december-2025-releases.md
 /docs/december-2025-documentation-gaps.md

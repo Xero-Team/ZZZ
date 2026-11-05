@@ -252,6 +252,7 @@ exclude = [
 [workspace.package]
 publish = false
 edition = "2024"
+rust-version = "1.99.1"
 
 [workspace.dependencies]
 

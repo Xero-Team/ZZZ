@@ -43,6 +43,12 @@ If you're looking for concrete ideas:
 
 If you're thinking about proposing or building a larger feature, read the [ZZZ Feature Process](./docs/src/development/feature-process.md) for how we think about feature design — what context to provide, what integration points to consider, and how to put together a strong proposal.
 
+## Rust toolchain
+
+ZZZ pins Rust 1.99.1 in `rust-toolchain.toml`; that is the minimum supported
+Rust version (MSRV) recorded in `Cargo.toml` and `clippy.toml`. Run
+`rustc --version` to confirm the active toolchain matches the pin.
+
 ## Sending changes
 
 The ZZZ culture values working code and synchronous conversations over long

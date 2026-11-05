@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anyhow::{Context, Result};
 use clap::Parser;
 use gh_workflow::Workflow;
@@ -9,27 +7,68 @@ use strum::IntoEnumIterator;
 
 use crate::tasks::workflow_checks::{self};
 
-mod autofix_pr;
-mod bump_patch_version;
+// These modules are reusable workflow-building helpers. Only a subset of their
+// items is consumed by the three workflows registered in `run_workflows`, so
+// their remaining items are intentionally kept available for future generators.
+#[allow(
+    dead_code,
+    reason = "workflow-building helpers kept for future generators"
+)]
 mod change_detection;
-mod cherry_pick;
-mod compare_perf;
+#[allow(
+    dead_code,
+    reason = "workflow-building helpers kept for future generators"
+)]
 mod compliance_check;
-mod danger;
-mod deploy_docs;
-mod extension_auto_bump;
+#[allow(
+    dead_code,
+    reason = "workflow-building helpers kept for future generators"
+)]
 mod extension_bump;
+#[allow(
+    dead_code,
+    reason = "workflow-building helpers kept for future generators"
+)]
 mod extension_tests;
-mod extensions;
+#[allow(
+    dead_code,
+    reason = "workflow-building helpers kept for future generators"
+)]
 mod job_summary;
+#[allow(
+    dead_code,
+    reason = "workflow-building helpers kept for future generators"
+)]
 mod nix_build;
-mod platform_checks;
-mod run_bundling;
-
+#[allow(
+    dead_code,
+    reason = "workflow-building helpers kept for future generators"
+)]
 mod release;
+#[allow(
+    dead_code,
+    reason = "workflow-building helpers kept for future generators"
+)]
+mod run_bundling;
+#[allow(
+    dead_code,
+    reason = "workflow-building helpers kept for future generators"
+)]
 mod runners;
+#[allow(
+    dead_code,
+    reason = "workflow-building helpers kept for future generators"
+)]
 mod steps;
+#[allow(
+    dead_code,
+    reason = "workflow-building helpers kept for future generators"
+)]
 mod ts_query;
+#[allow(
+    dead_code,
+    reason = "workflow-building helpers kept for future generators"
+)]
 mod vars;
 
 #[derive(Clone)]
@@ -90,6 +129,10 @@ pub(crate) struct GenerateWorkflowArgs {
 
 enum WorkflowSource {
     Contextless(fn() -> Workflow),
+    #[allow(
+        dead_code,
+        reason = "reserved for generators that need the commit SHA context"
+    )]
     WithContext(fn(&GenerateWorkflowArgs) -> Workflow),
 }
 

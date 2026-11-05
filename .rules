@@ -3,13 +3,14 @@
 * Prioritize code correctness and clarity. Speed and efficiency are secondary priorities unless otherwise specified.
 * Do not write organizational or comments that summarize the code. Comments should only be written in order to explain "why" the code is written in some way in the case there is a reason that is tricky / non-obvious.
 * Prefer implementing functionality in existing files unless it is a new logical component. Avoid creating many small files.
-* Avoid using functions that panic like `unwrap()`, instead use mechanisms like `?` to propagate errors.
+* Do not introduce panicking `unwrap()` or `expect()` on production paths; use `?`, `.log_err()`, `match`, or `if let Err(...)` to propagate or handle the error. Exceptions: test code (`#[cfg(test)]` modules, `tests/`, `*_tests.rs`, `test_*.rs`), values guarded by a preceding `debug_assert!`/`assert!` or a comment proving the invariant, and `const`/`static` construction contexts. Existing call sites are not rewritten in bulk; review is responsible for rejecting new ones.
 * Be careful with operations like indexing which may panic if the indexes are out of bounds.
 * Never silently discard errors with `let _ =` on fallible operations. Always handle errors appropriately:
   - Propagate errors with `?` when the calling function should handle them
   - Use `.log_err()` or similar when you need to ignore errors but want visibility
   - Use explicit error handling with `match` or `if let Err(...)` when you need custom logic
   - Example: avoid `let _ = client.request(...).await?;` - use `client.request(...).await?;` instead
+  - `let _ =` is acceptable when the discarded value is intentionally unused: `write!` into a local buffer, `let _ = guard;` to bind a lifetime, channel sends whose failure is unreachable, or test setup. A fallible operation whose error must not be lost is not acceptable.
 * When implementing async operations that may fail, ensure errors propagate to the UI layer so users get meaningful feedback.
 * Never create files with `mod.rs` paths - prefer `src/some_module.rs` instead of `src/some_module/mod.rs`.
 * When creating new crates, prefer specifying the library root path in `Cargo.toml` using `[lib] path = "...rs"` instead of the default `lib.rs`, to maintain consistent and descriptive naming (e.g., `gpui.rs` or `main.rs`).
@@ -145,7 +146,7 @@ When an agent opens or updates a pull request, it must:
 - Avoid conventional commit prefixes in PR titles (`fix:`, `feat:`, `docs:`, etc.).
 - Avoid trailing punctuation in PR titles.
 - Optionally prefix the title with a crate name when one crate is the clear scope (for example, `git_ui: Add history view`).
-- Include a `Release Notes:` section as the final section in the PR body.
+- Include a `Release Notes:` section as the final substantive section in the PR body (the PR template follows it with a non-substantive checklist).
 - Use one bullet under `Release Notes:`:
   - `- Added ...`, `- Fixed ...`, or `- Improved ...` for user-facing changes, or
   - `- N/A` for docs-only and other non-user-facing changes.

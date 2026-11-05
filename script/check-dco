@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+
+# Verify the DCO sign-off on recent non-merge commits. README.md and
+# CONTRIBUTING.md require `git commit -s`; without this gate the PR template's
+# checkbox is the only reminder. Merge commits are excluded because the
+# upstream-sync workflow creates them without a per-commit sign-off.
+#
+# Usage: script/check-dco [COMMIT_COUNT] [GIT_DIR]
+# COMMIT_COUNT defaults to 50; GIT_DIR defaults to the current repository.
+set -euo pipefail
+
+commit_count="${1:-50}"
+git_dir="${2:-.}"
+
+if ! [[ "$commit_count" =~ ^[1-9][0-9]*$ ]]; then
+    echo "FAIL: COMMIT_COUNT must be a positive integer, got: $commit_count" >&2
+    exit 2
+fi
+
+if ! git -C "$git_dir" rev-parse --git-dir >/dev/null 2>&1; then
+    echo "FAIL: not a git repository: $git_dir" >&2
+    exit 2
+fi
+
+shas="$(git -C "$git_dir" rev-list --no-merges -n "$commit_count" HEAD 2>/dev/null)" || {
+    echo "FAIL: could not read git history from $git_dir" >&2
+    exit 2
+}
+
+if [[ -z "$shas" ]]; then
+    echo "DCO check passed: no non-merge commits to check"
+    exit 0
+fi
+
+checked=0
+missing=0
+while IFS= read -r sha; do
+    [[ -z "$sha" ]] && continue
+    checked=$((checked + 1))
+    body="$(git -C "$git_dir" log -1 --format='%B' "$sha")"
+    if [[ "${body,,}" != *"signed-off-by:"* ]]; then
+        if [[ "$missing" -eq 0 ]]; then
+            echo "FAIL: commits missing a DCO Signed-off-by line:" >&2
+        fi
+        subject="$(git -C "$git_dir" log -1 --format='%s' "$sha")"
+        printf '  %s  %s\n' "${sha:0:12}" "$subject" >&2
+        missing=$((missing + 1))
+    fi
+done <<< "$shas"
+
+if [[ "$missing" -gt 0 ]]; then
+    printf '%d of %d non-merge commits are unsigned; re-sign with `git commit -s` or amend.\n' \
+        "$missing" "$checked" >&2
+    exit 1
+fi
+
+echo "DCO check passed: $checked non-merge commits are signed off"

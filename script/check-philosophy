@@ -139,7 +139,7 @@ check_orphan_billing_docs_absent() {
 check_cloudflare_workers_absent() {
     ! test -d "$root/.cloudflare" \
         && ! rg -n 'cloudflare/wrangler-action|deploy \.cloudflare/' \
-            "$root/tooling/xtask/src/tasks/workflows/deploy_docs.rs"
+            "$root/crates" "$root/tooling" --glob '*.rs'
 }
 
 check_keymaps_no_hosted_docs() {
@@ -272,7 +272,7 @@ check_no_telemetry_event_text() {
 }
 
 check_no_danger_proxy() {
-    ! rg -n 'danger-proxy\.zed\.dev' "$root/tooling/xtask/src/tasks/workflows/danger.rs"
+    ! rg -n 'danger-proxy\.zed\.dev' "$root/crates" "$root/tooling" --glob '*.rs'
 }
 
 check_no_collab_lychee() {
