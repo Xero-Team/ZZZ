@@ -16922,6 +16922,8 @@ dependencies = [
  "settings",
  "telegram",
  "text",
+ "theme",
+ "theme_settings",
  "time",
  "time_format",
  "ui",

@@ -2464,7 +2464,11 @@ impl TelegramPanel {
                 .and_then(|index| rows.get(index))
                 .and_then(|row| row.messages.last())
                 .map(|message| message.id);
-            let mut column = v_flex();
+            // `w_full().min_w_0()` passes the list's definite width down the
+            // whole bubble chain. Without it the auto-width column makes every
+            // percentage width below resolve against max-content, so long
+            // single-line messages grow past the panel instead of wrapping.
+            let mut column = v_flex().w_full().min_w_0();
             if unread_divider
                 .is_some_and(|after| first.id > after && previous_id.is_none_or(|id| id <= after))
             {
@@ -3441,6 +3445,7 @@ impl TelegramPanel {
                     .child(
                         v_flex()
                             .min_w_0()
+                            .max_w_full()
                             .gap_0p5()
                             .child(
                                 Label::new(hit.chat_title.clone())
@@ -3565,6 +3570,40 @@ struct MessageBubbleColors {
     incoming: Hsla,
 }
 
+/// Lays a message bubble out on its side of the row while keeping it inside the
+/// panel width.
+///
+/// `right_click_menu` wraps its trigger in a `Style::default()` block element,
+/// whose auto width severs the definite width coming from the list item. Any
+/// percentage width *inside* that wrapper therefore resolves against
+/// max-content and cannot cap a long message. Putting the constraint one level
+/// *outside* the wrapper restores a definite basis, so the bubble's own
+/// `max_w_full()` and the wrapping of its text/markdown/media children work.
+/// `justify_end`/`justify_start` replace the outer column's `items_end`/
+/// `items_start`, which no longer align a full-width item.
+fn align_message_bubble(
+    bubble: AnyElement,
+    outgoing: bool,
+    selection_icon: Option<AnyElement>,
+) -> AnyElement {
+    let constrained = div()
+        .max_w_full()
+        .min_w_0()
+        .child(bubble)
+        .into_any_element();
+
+    let mut item = h_flex().w_full().min_w_0().gap_1().items_end();
+    item = if outgoing {
+        item.justify_end()
+    } else {
+        item.justify_start()
+    };
+    if let Some(icon) = selection_icon {
+        item = item.child(icon);
+    }
+    item.child(constrained).into_any_element()
+}
+
 fn render_message(
     message: &MessageSnapshot,
     layout: &MessageLayout,
@@ -3609,6 +3648,7 @@ fn render_message(
 
     let mut bubble = v_flex()
         .min_w_0()
+        .max_w_full()
         .gap_1()
         .px_2()
         .py_1()
@@ -3667,28 +3707,25 @@ fn render_message(
     ));
 
     let bubble = wrap_in_context_menu(message, bubble.into_any_element(), panel);
-    let mut item = h_flex().min_w_0().gap_1().items_end();
-    if selection_mode {
-        item = item.child(
-            Icon::new(if selected {
-                IconName::Check
-            } else {
-                IconName::Circle
-            })
-            .size(IconSize::XSmall)
-            .color(if selected {
-                Color::Accent
-            } else {
-                Color::Muted
-            }),
-        );
-    }
-    let item = item.child(bubble).into_any_element();
-    if message.outgoing {
-        column = column.items_end().child(item);
-    } else {
-        column = column.items_start().child(item);
-    }
+    let selection_icon = selection_mode.then(|| {
+        Icon::new(if selected {
+            IconName::Check
+        } else {
+            IconName::Circle
+        })
+        .size(IconSize::XSmall)
+        .color(if selected {
+            Color::Accent
+        } else {
+            Color::Muted
+        })
+        .into_any_element()
+    });
+    column = column.child(align_message_bubble(
+        bubble,
+        message.outgoing,
+        selection_icon,
+    ));
 
     column.into_any_element()
 }
@@ -3806,6 +3843,7 @@ fn render_album_row(
     };
     let mut bubble = v_flex()
         .min_w_0()
+        .max_w_full()
         .gap_1()
         .px_2()
         .py_1()
@@ -3856,12 +3894,7 @@ fn render_album_row(
         cx,
     ));
     let bubble = wrap_in_context_menu(first, bubble.into_any_element(), panel);
-    let item = h_flex().min_w_0().gap_1().items_end().child(bubble);
-    if first.outgoing {
-        column = column.items_end().child(item);
-    } else {
-        column = column.items_start().child(item);
-    }
+    column = column.child(align_message_bubble(bubble, first.outgoing, None));
     column.into_any_element()
 }
 
@@ -6688,16 +6721,20 @@ fn with_panel(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_history_layout, build_history_rows, chat_subtitle, duration_label, error_text,
-        media_display_size, media_kind_label, next_search_filter, search_filter_label,
-        service_message_text, voice_waveform_samples,
+        align_message_bubble, build_history_layout, build_history_rows, chat_subtitle,
+        duration_label, error_text, media_display_size, media_kind_label, next_search_filter,
+        search_filter_label, service_message_text, voice_waveform_samples,
     };
-    use gpui::{TestAppContext, px};
+    use gpui::{
+        AppContext, AvailableSpace, InteractiveElement, IntoElement, ParentElement, Styled,
+        TestAppContext, div, point, px, size,
+    };
     use settings::SettingsStore;
     use telegram::{
         ChatSnapshot, EngineError, MediaKind, MediaSnapshot, MessageAction, MessageSnapshot,
         Presence, SendState, TypingSnapshot,
     };
+    use ui::{h_flex, v_flex};
 
     fn message(id: i32, sender: &str, timestamp_unix: i64) -> MessageSnapshot {
         MessageSnapshot {
@@ -7115,5 +7152,186 @@ mod tests {
         );
         assert_eq!(extension_language(Path::new("/tmp/README")), None);
         assert_eq!(extension_language(Path::new("/tmp/.gitignore")), None);
+    }
+
+    /// Builds the transcript row the way `render_conversation` does, with a
+    /// `right_click_menu`-style `Style::default()` block wrapper standing in for
+    /// the real context menu, and measures the bubble under a definite width.
+    fn measure_bubble(
+        cx: &mut gpui::VisualTestContext,
+        selector: &'static str,
+        panel_width: f32,
+        content_width: f32,
+        outgoing: bool,
+        selection_icon: bool,
+    ) -> gpui::Bounds<gpui::Pixels> {
+        cx.draw(
+            point(px(0.), px(0.)),
+            size(
+                AvailableSpace::Definite(px(panel_width)),
+                AvailableSpace::MinContent,
+            ),
+            |_, _| {
+                // A wide child stands in for a long single-line label, a media
+                // preview, a poll, etc. All of them used to overflow the panel.
+                let bubble = v_flex()
+                    .min_w_0()
+                    .max_w_full()
+                    .px_2()
+                    .py_1()
+                    .debug_selector(move || selector.into())
+                    .child(div().w(px(content_width)).h(px(20.)))
+                    .into_any_element();
+                // right_click_menu wraps the trigger in a Style::default() block.
+                let wrapped = div().child(bubble).into_any_element();
+                let icon = selection_icon.then(|| div().w(px(16.)).h(px(16.)).into_any_element());
+                let item = align_message_bubble(wrapped, outgoing, icon);
+
+                // render_conversation's list item: w_full column -> centered
+                // layer (max_w_full) -> render_message's w_full column.
+                v_flex()
+                    .w_full()
+                    .min_w_0()
+                    .child(
+                        h_flex().w_full().justify_center().child(
+                            div()
+                                .max_w_full()
+                                .w_full()
+                                .min_w_0()
+                                .child(v_flex().w_full().min_w_0().px_3().py_1().child(item)),
+                        ),
+                    )
+                    .into_any_element()
+            },
+        );
+        cx.debug_bounds(selector)
+            .expect("bubble should be rendered")
+    }
+
+    #[gpui::test]
+    fn long_message_bubbles_stay_within_panel_width(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+
+        // A bubble whose content is far wider than the panel must be clamped and
+        // wrap regardless of message side or selection mode. This covers the
+        // long-text, media, poll, contact, geo, webpage and album/caption paths,
+        // which all go through align_message_bubble.
+        for (panel_width, content_width) in [(300., 500.), (360., 900.), (600., 1200.)] {
+            for (outgoing, selection_icon) in [(true, false), (false, false), (true, true)] {
+                let selector: &'static str = Box::leak(
+                    format!("bubble-{panel_width}-{outgoing}-{selection_icon}").into_boxed_str(),
+                );
+                let bounds = measure_bubble(
+                    cx,
+                    selector,
+                    panel_width,
+                    content_width,
+                    outgoing,
+                    selection_icon,
+                );
+                assert!(
+                    bounds.size.width <= px(panel_width),
+                    "bubble {bounds:?} overflows panel width {panel_width}"
+                );
+                assert!(
+                    bounds.origin.x >= px(0.) && bounds.origin.x < px(panel_width),
+                    "bubble {bounds:?} is outside the panel horizontally"
+                );
+            }
+        }
+    }
+
+    #[gpui::test]
+    fn short_message_bubbles_still_hug_content_and_align(cx: &mut TestAppContext) {
+        let cx = cx.add_empty_window();
+
+        let short_out = measure_bubble(cx, "short-out", 300., 40., true, false);
+        let short_in = measure_bubble(cx, "short-in", 300., 40., false, false);
+
+        // A short bubble must not be stretched to the full panel width.
+        assert!(
+            short_out.size.width < px(100.),
+            "short outgoing bubble was stretched: {short_out:?}"
+        );
+        // Outgoing bubbles sit on the right, incoming on the left.
+        assert!(
+            short_out.origin.x > short_in.origin.x,
+            "outgoing bubble {short_out:?} is not right of incoming {short_in:?}"
+        );
+    }
+
+    /// A Markdown-formatted message goes through `MarkdownElement`, which adds
+    /// another `Style::default()` block wrapper. Verify the bubble constraint
+    /// still bounds it (the same class of bug as plain-text messages).
+    #[gpui::test]
+    fn markdown_message_bubble_stays_within_panel_width(cx: &mut TestAppContext) {
+        cx.update(|cx| {
+            let settings_store = SettingsStore::test(cx);
+            cx.set_global(settings_store);
+            theme_settings::init(theme::LoadThemes::JustBase, cx);
+        });
+
+        let source = "**bold** and a very long unbroken token ".to_owned()
+            + &"超长中文内容".repeat(40)
+            + " and more text that keeps going without any line breaks";
+        let entity = cx.new(|cx| markdown::Markdown::new(source.into(), None, None, cx));
+        cx.run_until_parked();
+
+        let cx = cx.add_empty_window();
+        let panel_width = 300.;
+
+        cx.draw(
+            point(px(0.), px(0.)),
+            size(
+                AvailableSpace::Definite(px(panel_width)),
+                AvailableSpace::MinContent,
+            ),
+            |_, _| {
+                let body = markdown::MarkdownElement::new(
+                    entity.clone(),
+                    markdown::MarkdownStyle::default(),
+                )
+                .into_any_element();
+
+                let bubble = v_flex()
+                    .min_w_0()
+                    .max_w_full()
+                    .px_2()
+                    .py_1()
+                    .debug_selector(|| "markdown-bubble".into())
+                    .child(body)
+                    .into_any_element();
+                let wrapped = div().child(bubble).into_any_element();
+                let item = align_message_bubble(wrapped, true, None);
+
+                v_flex()
+                    .w_full()
+                    .min_w_0()
+                    .child(
+                        h_flex().w_full().justify_center().child(
+                            div()
+                                .max_w_full()
+                                .w_full()
+                                .min_w_0()
+                                .child(v_flex().w_full().min_w_0().px_3().py_1().child(item)),
+                        ),
+                    )
+                    .into_any_element()
+            },
+        );
+
+        let bounds = cx
+            .debug_bounds("markdown-bubble")
+            .expect("markdown bubble should be rendered");
+        assert!(
+            bounds.size.width <= px(panel_width),
+            "markdown bubble {bounds:?} overflows panel width {panel_width}"
+        );
+        // The long source must actually have been laid out (not an empty,
+        // not-yet-parsed element), otherwise this test proves nothing.
+        assert!(
+            bounds.size.height > px(20.),
+            "markdown bubble {bounds:?} did not render its text"
+        );
     }
 }
