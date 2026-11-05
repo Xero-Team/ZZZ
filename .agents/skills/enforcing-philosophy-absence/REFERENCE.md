@@ -3,6 +3,10 @@
 Normative inventory and conventions for the
 `enforcing-philosophy-absence` skill.
 
+The absence pass is complete. This reference records the resulting
+invariants and the regression net that protects them. It is not a to-do
+list; a future change must not reintroduce a removed surface.
+
 ## Philosophy
 
 From the root `README.md`:
@@ -14,8 +18,12 @@ From the root `README.md`:
 
 ZZZ is local-first, no-account, ACP-only. AI stays when it points at
 infrastructure the user owns. Commercial APIs are silent and manual.
-No pre-built binaries yet. `script/check-philosophy` currently passes
-and does not cover this remaining inventory.
+There are no pre-built hosted binaries.
+
+`script/check-philosophy` is the regression net: 67+ assertions in bash +
+`rg`, invoked by `cargo xtask check` (`check all`) and by the
+`cargo xtask clippy` preflight. It passes on a clean `main`. Keep new
+checks in the same style and never weaken an existing assertion.
 
 ## Out Of Scope
 
@@ -23,32 +31,40 @@ Leave these alone unless the user names them:
 
 - Absorbing Zed upstream (`/absorbing-upstream`)
 - Shipping binaries, Homebrew, or winget
-- Deleting the `collab`, `copilot`, `cloud_api_*`, or
-  `language_models_cloud` crates
 - `Cargo.toml` git dependencies on `github.com/zed-industries/*`
 - `docs/src/development/upstream/upstream-sync-*.md` historical audits
 - `assets/licenses.md` third-party copyright notices
 - Theme `$schema` URLs at `https://zed.dev/schema/...` (upstream schema)
-- Extension Gallery traffic to `https://api.zed.dev`
+- User-initiated Extension Gallery traffic to `https://api.zed.dev`
 
-## Keep
+The crates `collab`, `call`, `channel`, `collab_ui`, `livekit_client`,
+`livekit_api`, `copilot`, `copilot_ui`, `copilot_chat`,
+`cloud_api_client`, `language_models_cloud`, `ai_onboarding`, and
+`edit_prediction_ui` are already deleted. `crates/cloud_api_types`
+remains as a plain type crate. Recreating any deleted crate or its
+plan/sign-in/collection UX is a regression, not a design choice.
+
+## Keep (verified present)
 
 - Local Ollama (`localhost:11434`) and llama.cpp (`localhost:8080`)
 - Agent `default_model.provider: "ollama"` with empty model name
 - `EditPredictionProvider::None` as the enum default
 - `auto_update: false` and loopback `server_url`
-- `telemetry::event!` as a no-op macro until the dead trait is removed
-- `CloudLanguageModelProvider` unregistered unless the user sets a
-  remote `server_url`
 - Help menu without Twitter / join-the-team / hosted docs
 - `crates/feedback` URLs on GitHub
 - Embedded `remote_server`
 - Language-server, DAP, Prettier, and Node auto-download
-- Extension auto-install (HTML by default) and auto-update via `api.zed.dev`
-- Copilot / Codestral / OpenAI / Anthropic as *optional* providers
-- Zeta 1 / 2 / 2.1 *prompt formats* for local Ollama or OpenAI-compatible
-  servers
+- Extension auto-install (HTML by default) and user-initiated gallery
+  traffic via `api.zed.dev`
+- Zeta 1 / 2 / 2.1 *prompt formats* for local Ollama or
+  OpenAI-compatible servers
 - Local collab against `http://127.0.0.1:7331`
+- Provider-agnostic, silent manual AI providers (`language_model` and
+  friends) with no subscription or sign-in default
+
+`Item::telemetry_event_text`, `telemetry::event!` as a live macro, the
+hosted `EditPredictionProvider::Zed` default, plan chips, and the
+"Training Data Collection" menu are gone; do not restore them.
 
 ## Code Conventions
 
@@ -81,7 +97,7 @@ Docs (`docs/AGENTS.md`):
 - Do not add speculative docs for unreleased features.
 - Product docs must not claim hosted downloads, auto-update-on, Zeta as
   default, Zed Pro, or data sent to ZZZ servers.
-- Support links go to `https://githubgithubgithubgithubgithubgithubgithubgithubgithub.comcomcomcomcomcomcomcomcom/Xero-TeamXero-TeamXero-TeamXero-TeamXero-TeamXero-TeamXero-TeamXero-TeamXero-Team/ZZZ`, not
+- Support links go to `https://github.com/Xero-Team/ZZZ`, not
   `zed-industries/zed` or `zed.dev/community-links`.
 - Do not hotlink `https://zed.dev/img/...` or `https://images.zed.dev/...`.
   Remove the image markdown if there is no in-repo asset.
@@ -97,242 +113,95 @@ Tests: if a test exists only to cover rejected plan/sign-in/collection
 UX, delete the test with the UX. Update tests that still apply. Do not
 leave tests that require `Plan::ZedPro` chips or data-collection opt-in.
 
-## Work Order
+## Completed Boundary (regression triggers)
 
-Complete each group before the next. Verify after each group.
+Each item below is done and covered by `script/check-philosophy`. Treat a
+reappearance as a regression: delete the surface, then add a check if the
+gate missed it.
 
-### Group 1 — Product docs that still sell Zed cloud
+### Product docs
 
-Rewrite. Do not leave a page that contradicts `README.md`.
+`docs/src/update.md`, `reference/all-settings.md`, `ai/overview.md`,
+`ai/edit-prediction.md`, `completions.md`, `installation.md`, the
+`migrate/*` pages, `remote-development.md`, `worktree-trust.md`,
+`ai/llm-providers.md`, `ai/external-agents.md`, `uninstall.md`,
+`troubleshooting.md`, `getting-started.md`, `linux.md`,
+`development/feature-process.md`, `development/release-notes.md`,
+`development/glossary.md`, `CODE_OF_CONDUCT.md`, and
+`extensions/README.md` no longer sell Zed cloud, hosted downloads,
+Zeta-as-default, Zed Pro, Copilot sign-in as a default path, Discord/
+`zed.dev` support, or `images.zed.dev` screenshots. `ai/ai-improvement.md`,
+`ai/billing.md`, `ai/subscription.md`, `ai/plans-and-usage.md` are absent.
+Support and feature-request links point at this repository.
 
-| File | Required change |
-| --- | --- |
-| `docs/src/update.md` | Auto-update is off. No hosted updater. Build from source. |
-| `docs/src/reference/all-settings.md` | `auto_update` default `false`. Edit prediction provider default is omitted/`none`, not `"zed"`. Remove Zeta-as-default examples. |
-| `docs/src/ai/overview.md` | Local Ollama/llama.cpp first. No Zeta default. Copilot/Codestral only as explicit opt-in. |
-| `docs/src/ai/edit-prediction.md` | Title/body: local provider preference. Remove "Configuring Zeta" as hosted setup. Keep local zeta/zeta2 *format* examples. Copilot sign-in is not a getting-started path. |
-| `docs/src/completions.md` | Do not call Zeta "ZZZ's own model". Point at edit-prediction docs. |
-| `docs/src/ai/ai-improvement.md` | Delete the page, or replace with a short "ZZZ does not collect training data" notice. Remove it from `docs/src/SUMMARY.md`. |
-| `docs/src/ai/privacy-and-security.md` | Local-first. No "we collect data to improve the product". Do not link ai-improvement as a data-sharing program. |
-| `docs/src/installation.md` | Source build only. Remove brew/winget/`./script/install.sh` as hosted download. |
-| `docs/src/migrate/vs-code.md` | Source build. No `zed.dev/download`. No ZZZ Pro. No "Sign in to GitHub" as the AI path. |
-| `docs/src/migrate/intellij.md` | Same as vs-code. |
-| `docs/src/migrate/pycharm.md` | Same as vs-code. |
-| `docs/src/migrate/webstorm.md` | Same as vs-code. |
-| `docs/src/migrate/rustrover.md` | Same as vs-code. |
-| `docs/src/remote-development.md` | No `zed.dev/releases` download. Embedded remote_server. Remove product-page link. |
-| `docs/src/worktree-trust.md` | Do not say Copilot is globally installed by default. |
-| `docs/src/ai/llm-providers.md` | Copilot Chat is optional and silent. Do not lead with "Sign in to use GitHub Copilot". |
-| `docs/src/ai/external-agents.md` | Claude/ChatGPT login belongs to the external agent, not ZZZ. |
-| `docs/src/uninstall.md` | Community link → GitHub. |
-| `docs/src/troubleshooting.md` | Issues → GitHub. Remove Discord/`zed.dev` staff support. Remove `images.zed.dev` screenshots. |
-| `docs/src/getting-started.md` | Discussions → GitHub issues. |
-| `docs/src/linux.md` | Issue links: GitHub, or mark upstream Zed issues as upstream. |
-| `docs/src/development/feature-process.md` | Feature requests go to this repository, not `zed-industries` discussions. |
-| `docs/src/development/release-notes.md` | Do not describe hosted Zed release automation as ZZZ process. |
-| `docs/src/development/glossary.md` | Relative docs links, not `zed.dev/docs`. |
-| `CODE_OF_CONDUCT.md` | Stop redirecting to `zed.dev/code-of-conduct`. Inline or point at this repo. |
-| `extensions/README.md` | Relative repo paths. Marketplace may mention `api.zed.dev` as user-initiated. |
+### Legal
 
-Keep as-is if still accurate: `docs/src/ai/billing.md`,
-`subscription.md`, `plans-and-usage.md`, `models.md`,
-`configuration.md`, `docs/src/development/privacy-boundary.md`,
-`legal/terms.md`.
+`legal/privacy-policy.md` states ZZZ has no accounts, telemetry, payments,
+or hosted AI. `legal/subprocessors.md` says "no default subprocessors".
+`legal/third-party-terms.md` covers only providers the user configures.
+No `privacy@zed.dev`, "Zed Industries", or telemetry opt-out copy remains.
 
-### Group 2 — Legal
+### Install and release scripts
 
-Rewrite to match `legal/terms.md`. ZZZ has no accounts, payments,
-telemetry, hosted AI, or subprocessors by default.
+`script/install.sh` has no `cloud.zed.dev` / `zed.dev/releases` download
+and points at local builds. `script/lib/deploy-helpers.sh` does not print
+`collab.zed.dev`. The hosted `after_release.rs` workflow generator and
+its `cloud.zed.dev/releases/refresh` POST are gone.
 
-| File | Required change |
-| --- | --- |
-| `legal/privacy-policy.md` | Full rewrite. No Zed Industries, `privacy@zed.dev`, opt-out telemetry, or subscription data. |
-| `legal/subprocessors.md` | Replace with "no default subprocessors" or delete and drop dead links. |
-| `legal/third-party-terms.md` | Only terms of providers the user configures. No "Zed hosts on your behalf". |
+### Live product code
 
-### Group 3 — Install and release scripts
-
-| File | Required change |
-| --- | --- |
-| `script/install.sh` | Must not curl `cloud.zed.dev` or `zed.dev/releases`. Print that ZZZ has no hosted binaries and point at local build docs. |
-| `script/lib/deploy-helpers.sh` | Do not print `collab.zed.dev` as a ZZZ destination. |
-| `tooling/xtask/src/tasks/workflows/after_release.rs` | Do not POST `cloud.zed.dev/releases/refresh` or open `zed.dev/releases`. |
-
-### Group 4 — Live product code
-
-Delete the UX, not the whole crate. If a compile error needs a rejected
-type, revert and cut a smaller surface.
-
-**Plans and onboarding**
-
-- `crates/ai_onboarding/src/plan_definitions.rs`: remove plan/trial/upsell
-  lists. If the crate still needs a component, render provider-neutral
-  "configure a local provider" copy only.
-- `crates/ai_onboarding/src/young_account_banner.rs`: delete the banner
-  and all call sites.
-- `crates/ai_onboarding/src/ai_onboarding.rs`: remove `Plan::Zed*`
-  branches, `sign_in` CTA, "Welcome to Zed AI". Empty `sign_in`
-  callbacks are not enough.
-- `crates/ai_onboarding/src/agent_panel_onboarding_content.rs`: remove
-  `Plan::ZedProTrial` / `ZedPro` checks.
-- `crates/agent_ui/src/agent_configuration.rs`: delete
-  `render_zed_plan_info` and its call sites (Free/Pro/Trial/Business/
-  Student chips).
-- `crates/onboarding/src/onboarding.rs`: rename or remove the no-op
-  `SignIn` action so the public action is not a sign-in.
-
-Do not keep `Plan` chips with neutralized copy. Absence means the chip
-is gone.
-
-**Collab**
-
-- Multi-user collab crates are absent: `call`, `channel`, `collab`,
-  `collab_ui`, `livekit_client`, `livekit_api`.
-- Keep SSH/WSL/Docker remote development (`Project::remote`).
-
-**Copilot**
-
-- Keep `crates/copilot`, `copilot_ui`, `copilot_chat`.
-- Remove subscription / "Sign in to use GitHub Copilot" as a default
-  path. Status-bar entry may exist only after the user selects Copilot
-  as provider.
-- Rewrite remaining copy in `crates/copilot_ui/src/sign_in.rs` so it
-  does not pitch GitHub subscriptions.
-
-**Zeta hosted collection**
-
-- `crates/edit_prediction/src/edit_prediction.rs`: `can_collect_data`
-  must be false. Remove `rand::random_ratio(1, 1000)` capture.
-- `crates/edit_prediction/src/zeta.rs`: do not attach repo URLs or
-  capture payloads for training.
-- `crates/edit_prediction/src/zzz_edit_prediction_delegate.rs`: remove
-  data-collection toggle API usage from the product UI path.
-- `crates/edit_prediction_ui/src/edit_prediction_button.rs`: remove
-  "Training Data Collection" menu and "Powered by Zeta".
-- `crates/edit_prediction_ui`: rating modal and upload entry point
-  are absent. Do not restore `rate_prediction_modal.rs`.
-- `crates/settings_content/src/language.rs`:
-  `EditPredictionProvider::Zed` must not display as "Zed AI".
-  `allow_data_collection` default is never collect.
-- `crates/settings_ui/src/page_data.rs`: remove "built-in Zeta model"
-  copy and the data-collection control, or make the control absent.
-
-**Hosted URLs in code**
-
-- `crates/context_server/src/oauth.rs`: `CIMD_URL` must not be
-  `https://zed.dev/oauth/client-metadata.json`. Use a loopback or
-  omit client-metadata URL if the MCP OAuth flow allows. Do not invent
-  a hosted ZZZ OAuth service.
-- `crates/cloud_api_client/src/cloud_api_client.rs`: do not default the
-  host to `cloud.zed.dev`. Use the configured `server_url` only.
-- `crates/http_client/src/http_client.rs`: keep
-  `build_zed_extension_marketplace_url` → `api.zed.dev`. Cloud/LLM URL
-  builders must not map an unset local `server_url` onto
-  `cloud.zed.dev`.
-- `crates/client/src/zzz_urls.rs`: keep `about:blank`; fix comments that
-  still say "Zed AI".
-
-### Group 5 — Defaults and locales
-
-`assets/settings/default.json`:
-
-- Delete the `edit_predictions.copilot` object from defaults.
-- Delete the `edit_predictions.codestral` object (including
-  `https://codestral.mistral.ai`) from defaults.
-- Set `edit_predictions.allow_data_collection` to `"no"`, or remove the
-  key if the schema default is never-collect.
-- Delete `language_models["zed.dev"]`.
-- Keep other provider `api_url` values; they are contacted only after
-  the user selects that provider.
-- Do not set `edit_predictions.provider` to `"zed"` or `"copilot"`.
-
-`assets/settings/initial_*.json`: replace `https://zed.dev/docs/...`
-comments with in-repo doc paths.
-
-`assets/locales/en.json` and `zh-CN.json`:
-
-- `ai_onboarding.welcome_zed_ai`
-- `settings_ui.page_data.description.set.up.different.edit.prediction.providers.in.complement.to.zed.s.built.in.zeta.model`
-- `edit_prediction_ui.button.powered_by_zeta`
-- `copilot_ui.sign_in.*` subscription / "Sign in to use GitHub Copilot"
-  strings
-
-### Group 6 — Hosted images and leftover zed.dev links
-
-Remove or replace. Do not leave broken `![...](https://zed.dev/...)`.
-
-Files known to hotlink product assets or site pages:
-
-- `docs/src/project-panel.md`
-- `docs/src/troubleshooting.md`
-- `docs/src/outline-panel.md`
-- `docs/src/command-palette.md`
-- `docs/src/tab-switcher.md`
-- `docs/src/repl.md`
-- `docs/src/remote-development.md`
-- `docs/src/themes.md`
-- `docs/src/icon-themes.md`
-- `docs/src/extensions/themes.md`
-- `docs/src/extensions/icon-themes.md`
-- `docs/src/extensions/mcp-extensions.md`
-- `docs/src/extensions/debugger-extensions.md`
-- `docs/src/languages/{toml,java,ocaml,python,proto,ansible,diff}.md`
-- `docs/src/tasks.md`
-- `docs/src/globs.md`
-
-`https://zed.dev/schema/...` may stay. `https://api.zed.dev` may stay
-when documenting user-initiated gallery traffic.
-
-### Group 7 — Dead telemetry APIs
-
-`telemetry::event!` is already a no-op. `Item::telemetry_event_text`
-still returns event names and has no live sender.
-
-This group is second-knife. After groups 1–6:
-
-- Return `None` from remaining `telemetry_event_text` impls, or remove
-  the trait method and all impls if that compiles without new APIs.
-- Known `Some("... Opened")` impls include onboarding, welcome,
-  audio_viewer, extensions_ui, project search, REPL, diagnostics,
-  git_ui diffs/commits, markdown preview, language_tools views,
-  pdf/svg viewers, dap_log, agent_diff, agent_registry.
-- `crates/action_log` empty `telemetry_report_*` shims and
-  `crates/language_models/src/provider/anthropic/telemetry.rs` may stay
-  as no-ops until a later crate deletion.
-
-Do not reintroduce a telemetry crate.
-
-### Group 8 — Extend `script/check-philosophy`
-
-Add checks that would have caught this pass. Keep the script in bash +
-`rg` like the existing checks.
-
-Required new assertions:
-
-- `docs/src/update.md` does not say auto-update is on by default.
-- `docs/src/reference/all-settings.md` does not document `auto_update`
-  default `true` or edit prediction provider default `"zed"`.
-- `docs/src/ai/overview.md` / `completions.md` / `edit-prediction.md`
-  do not call Zeta the default provider.
-- `script/install.sh` does not contain `cloud.zed.dev` or
-  `zed.dev/releases`.
-- `legal/privacy-policy.md` does not contain `privacy@zed.dev`,
-  `Zed Industries`, or "opt out of Software telemetry".
-- `assets/settings/default.json` has no `language_models` key `zed.dev`,
-  no `edit_predictions.codestral.api_url` on `codestral.mistral.ai`,
-  and `allow_data_collection` is not `"yes"`.
-- `crates/context_server/src/oauth.rs` does not hardcode
-  `https://zed.dev/oauth/client-metadata.json`.
-- `crates/ai_onboarding` and `crates/agent_ui` have no
-  `render_zed_plan_info` / `PlanDefinitions.pro_plan` product chips.
+- The `ai_onboarding` crate, its `PlanDefinitions` / young-account banner,
+  and `render_zed_plan_info` plan chips are absent. `crates/onboarding`
+  has no public `SignIn` action.
 - Multi-user collab crates (`call`, `channel`, `collab`, `collab_ui`,
-  `livekit_client`, `livekit_api`) are absent.
+  `livekit_client`, `livekit_api`) are absent; SSH/WSL/Docker remote
+  development (`Project::remote`) stays.
+- Copilot crates and their subscription sign-in UX are absent. Provider-
+  agnostic AI remains with no default sign-in path.
+- The `edit_prediction` and `edit_prediction_ui` crates are absent, so
+  the "Training Data Collection" menu, `rate_prediction_modal.rs`, Zeta
+  hosted collection capture, `can_collect_data`, and the
+  `allow_data_collection` default are gone with them.
+- `crates/context_server/src/oauth.rs` `CIMD_URL` is
+  `http://127.0.0.1/oauth/client-metadata.json`, not a hosted
+  `zed.dev` URL. Cloud/LLM URL builders do not fall back to
+  `cloud.zed.dev` when `server_url` is unset. `api.zed.dev` remains only
+  for user-initiated gallery traffic.
 
-Do not weaken existing checks.
+### Defaults and locales
+
+`assets/settings/default.json` has no `language_models["zed.dev"]`, no
+`edit_predictions.codestral.api_url` on `codestral.mistral.ai`, no
+`allow_data_collection`, and no `edit_predictions.provider` set to
+`"zed"` or `"copilot"`. `initial_*.json` comments use in-repo doc paths.
+The commercial, Zeta-built-in, and Copilot-subscription locale keys were
+removed from both catalogs; the two catalogs keep identical key sets
+(`cargo xtask check locale-keys`).
+
+### Hosted links and telemetry
+
+No `![...](https://zed.dev/...)` or `https://images.zed.dev/...` hotlinks
+remain in `docs/src/`. `https://zed.dev/schema/...` may stay;
+`https://api.zed.dev` may stay for user-initiated gallery traffic.
+`telemetry::event!` is not a live sender, `Item::telemetry_event_text` is
+absent, and no telemetry crate or directory was reintroduced.
+
+### Regression net
+
+`script/check-philosophy` asserts, among 67+ checks: auto-update is off,
+edit prediction does not default to `"zed"` or Copilot, Zeta is not called
+the default provider, `install.sh` has no hosted binaries, the privacy
+policy has no Zed Industries telemetry opt-out, `default.json` has no
+hosted AI collection, `CIMD_URL` is not hosted, plan chips and
+`render_zed_plan_info` are absent, multi-user collab crates are absent,
+`cloud_api_client` is absent, `Item::telemetry_event_text` is absent, and
+network hosts are allowlisted. Read the script's `check "..."` lines for
+the authoritative list before adding a new one.
 
 ## Verification
 
-After each group, run the narrowest commands that cover touched files.
+After any change that touches a guarded surface, run the narrowest
+commands that cover the touched files.
 
 ```sh
 cargo xtask check philosophy
@@ -345,11 +214,6 @@ Rust, only touched crates:
 cargo check --locked -p <crate>
 cargo test --locked -p <crate> <test_filter>
 ```
-
-Typical crates for group 4: `zzz`, `ai_onboarding`, `agent_ui`,
-`edit_prediction`, `edit_prediction_ui`, `settings_ui`,
-`settings_content`, `context_server`, `cloud_api_client`, `http_client`,
-`client`, `language_models`.
 
 Docs, only touched files:
 
@@ -367,14 +231,14 @@ If Prettier or rustfmt rewrites an unrelated region, restore it.
 
 Stop and leave the tree clean if:
 
-- a deletion cannot compile without importing account, billing,
-  telemetry, native-agent, or hosted-Zed APIs
+- a fix cannot compile without importing account, billing, telemetry,
+  native-agent, or hosted-Zed APIs
 - `script/install.sh` would still download a binary after the edit
 - a doc rewrite would claim ZZZ ships Zeta, auto-update, or accounts
-- the user asked only for a subset and the next group is out of that
+- the user asked only for a subset and the next change is out of that
   subset
 
-Record the file, the reason, and which groups already passed.
+Record the file, the reason, and which invariants already passed.
 
 ## Commits
 

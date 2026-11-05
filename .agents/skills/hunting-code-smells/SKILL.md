@@ -82,10 +82,11 @@ unrelated documentation.
    module the user named. Confirm the worktree is clean except files this
    session owns. If the scope is large, review one crate at a time.
 2. Mechanical pass. Run the cheap checks in `REFERENCE.md` section 7:
-   `cargo xtask clippy` (or `cargo xtask clippy -p <crate>`), `cargo fmt --check`,
-   the `script/check-*` helpers that apply, the locale-parity check, and the
-   fast `rg` detectors for the P0 hard rules. Record every FAIL.
-3. Manual pass. Read the target against `REFERENCE.md` in severity order:
+   `cargo xtask clippy` (or `cargo xtask clippy -p <crate>`),
+   `cargo fmt --all -- --check`, `cargo xtask check`, the locale-parity
+   check, and the fast `rg` detectors for the P0 hard rules. Record every
+   FAIL.
+ 3. Manual pass. Read the target against `REFERENCE.md` in severity order:
    section 1 (P0 hard rules), section 2 (Rust idiom), section 3 (Clean Code
    structure), section 4 (GPUI/architecture), section 5 (i18n/docs), section 6
    (quality optimization leads). Cite `file:line` for each finding.

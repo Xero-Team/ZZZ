@@ -1,12 +1,13 @@
 ---
 name: enforcing-philosophy-absence
 description:
-  "Makes remaining ZZZ commercial, account, telemetry, hosted-docs, and
-  default-network surfaces absent. Use when rewriting product docs that
-  still sell Zed cloud, legal/privacy-policy, install.sh cloud.zed.dev
-  downloads, Zeta/Copilot defaults, PlanDefinitions, CIMD_URL,
-  allow_data_collection, collab GitHub sign-in, or extending
-  script/check-philosophy. Do not use for absorbing upstream."
+  "Guards ZZZ's local-first absence boundary after the commercial, account,
+  telemetry, hosted-docs, and default-network surfaces were removed. Use when
+  a change reintroduces Zed cloud copy, hosted binaries, Zeta/Copilot
+  defaults, PlanDefinitions, CIMD_URL, allow_data_collection, or collab
+  sign-in, when extending script/check-philosophy with a new regression
+  assertion, or when verifying cargo xtask check philosophy. Do not use for
+  absorbing upstream."
 license: CC-BY-4.0
 compatibility: opencode
 metadata:
@@ -14,16 +15,20 @@ metadata:
   user-language: Simplified Chinese
 ---
 
-Follow `REFERENCE.md` in this skill first. If philosophy and a clean
-compile conflict, delete the surface; never import rejected account,
-billing, telemetry, or hosted-Zed machinery to keep the trees matching.
+Follow `REFERENCE.md` in this skill first. The absence pass is complete:
+the rejected crates and UX are gone, and `script/check-philosophy` now
+carries 67+ regression assertions that pass on a clean tree. If philosophy
+and a clean compile conflict, delete the surface; never import rejected
+account, billing, telemetry, or hosted-Zed machinery to keep the trees
+matching.
 
 # Enforcing Philosophy Absence
 
-You finish the local-first absence pass. `cargo xtask check philosophy` already
-passes. Remaining work is product copy, legal, install scripts, live
-upsell/account/data-collection UX, and defaults that still describe Zed
-cloud. Things that should not be configurable must be absent.
+You guard the local-first absence boundary. A future change (an upstream
+sync, a docs rewrite, a new setting) must not reintroduce Zed cloud,
+accounts, telemetry, hosted downloads, or a default network call. The
+original removal work is recorded in `REFERENCE.md` as a completed
+inventory and a set of invariants, not as a to-do list.
 
 ## Communication Rules
 
@@ -36,27 +41,37 @@ cloud. Things that should not be configurable must be absent.
 
 ## When to Use
 
-- The user asks to apply the remaining philosophy pass, strip hosted
-  coupling, or execute the absence inventory.
-- The user names leftover Zed Pro, Zeta-as-default, auto-update docs,
-  privacy-policy, `install.sh`, `PlanDefinitions`, or `CIMD_URL`.
+- A diff or upstream absorption reintroduces a rejected surface: Zed Pro,
+  Zeta-as-default, auto-update-on copy, `privacy@zed.dev`,
+  `install.sh` hosted downloads, `PlanDefinitions`, `CIMD_URL` pointing at
+  `zed.dev`, `allow_data_collection`, or collab sign-in.
+- The user asks to extend `script/check-philosophy` with a new regression
+  assertion, or to verify `cargo xtask check philosophy` after a change.
+- A new setting, feature flag, or default would re-enable a surface that
+  must stay absent.
 
-Do not use this skill for absorbing Zed `main`, shipping binaries, or
-ordinary editor features.
+Do not use this skill for absorbing Zed `main` (use
+`absorbing-upstream`), shipping binaries, or ordinary editor features.
 
 ## Operating Rules
 
-- Absence over configuration. Do not add a setting that disables a
-  rejected surface; delete the surface.
+- Absence over configuration. Do not add a setting, feature flag, or
+  fallback that re-enables a rejected surface; delete the surface.
 - Keep AI that is provider-agnostic and local-first. Ollama and
   llama.cpp stay preferred. Silent manual commercial APIs stay.
-- Keep Copilot and Codestral as optional providers. Remove them from
-  defaults and from first-run / status-bar upsell.
-- Keep Zeta *prompt formats* for local models. Remove hosted
-  `EditPredictionProvider::Zed` from product defaults and collection UX.
-- Multi-user collab, LiveKit, and channel chat are absent (Plan B).
-- Do not delete the `copilot`, `cloud_api_*`, or
-  `language_models_cloud` crates in this pass.
+- The collab, copilot, cloud_api_client, ai_onboarding, edit_prediction,
+  and edit_prediction_ui crates are already absent. Never recreate them
+  or their plan/sign-in/collection UX.
+- `assets/settings/default.json` has no `zed.dev` language model,
+  `edit_predictions.codestral`, or `allow_data_collection`; keep it that
+  way. `script/install.sh` has no `cloud.zed.dev` / `zed.dev/releases`
+  download. `crates/context_server/src/oauth.rs` `CIMD_URL` is loopback.
+- `telemetry::event!` and `Item::telemetry_event_text` are gone. Do not
+  reintroduce a telemetry crate, trait method, or event sender.
+- `script/check-philosophy` is the regression net: it has 67+ assertions
+  and is invoked by both `cargo xtask check` (`check all`) and the
+  `cargo xtask clippy` preflight. Do not weaken a check to make a change
+  pass; fix the change or add a targeted assertion.
 - Do not absorb upstream, add remotes, push, open a PR, or commit unless
   the user explicitly asks.
 - Do not download or hotlink replacement screenshots from `zed.dev`.
@@ -68,25 +83,29 @@ ordinary editor features.
 ## Procedure
 
 1. Read `README.md`, `AGENTS.md`, `docs/AGENTS.md`, `.rules`,
-   `cargo xtask check philosophy`, and this skill's `REFERENCE.md`.
-2. Confirm a clean worktree except files this session owns.
-3. Apply `REFERENCE.md` in order: docs, legal, install scripts, live
-   code, defaults/locales, hosted links, dead telemetry APIs,
-   `cargo xtask check philosophy`.
-4. After each group, run the narrowest verification in `REFERENCE.md`.
-   If `cargo check` fails, revert that group and narrow the deletion.
-   Do not add unused types so a later deletion compiles.
-5. Format only touched docs with Prettier (`printWidth` 80). Format only
-   touched Rust with `cargo fmt` on those crates if the crate is already
-   clean; do not rewrite unrelated formatting drift.
-6. Stop after the requested groups, or after the full pass if the user
-   did not limit scope.
+   `script/check-philosophy`, and this skill's `REFERENCE.md`.
+2. Confirm a clean worktree except files this session owns. Run
+   `cargo xtask check philosophy` to establish the baseline passes.
+3. Identify the surface the change touches. Use the completed inventory
+   in `REFERENCE.md` to decide whether it is a regression, a new gap, or
+   an allowed local-only feature.
+4. Fix by deleting the reintroduced surface, not by gating it. Keep the
+   smallest diff. If `cargo check` fails, revert and cut a smaller surface;
+   do not add unused types so a deletion compiles.
+5. If a regression slipped through, add a `check` assertion to
+   `script/check-philosophy` following its existing bash + `rg` style,
+   then re-run the gate. Do not weaken existing checks.
+6. Format only touched docs with Prettier (`printWidth` 80) and only
+   touched Rust with `cargo fmt` on those crates; do not rewrite unrelated
+   drift. Re-run `cargo xtask check philosophy` and `git diff --check`.
+7. Stop after the requested scope.
 
 ## Final Response
 
 Summarize in Simplified Chinese:
 
-- groups completed
-- files changed
-- checks run and their PASS/FAIL
+- whether the boundary was preserved, restored, or newly asserted
+- files changed and any `script/check-philosophy` assertion added
+- `cargo xtask check philosophy` PASS/FAIL and the narrow `cargo check`
+  results for touched crates
 - anything left because a hard stop fired

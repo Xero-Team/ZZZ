@@ -60,7 +60,7 @@ These come from `.rules`, `AGENTS.md`, `clippy.toml`, and
 | Z-I18N-MISS | User-facing text is localized | `rg -n 'Label::new\("|\.child\("[A-Z]|SharedString::from\("[A-Z]' <path>` (leads) | `i18n::tr(cx, "key", "fallback")` |
 | Z-I18N-KEYS | Key sets match in both catalogs | see section 7 locale parity | add the missing key to `en.json` and `zh-CN.json` |
 | Z-I18N-FB | In-code `fallback` equals `en.json` value | `rg -n 'tr\(cx, "[^"]+", "[^"]*"' <path>` | make fallback identical to the `en.json` entry |
-| Z-PHIL | No rejected commercial/network surface returns | `cargo xtask clippy` runs `cargo xtask check philosophy`; `cargo xtask check philosophy` | delete the surface; never gate it behind a setting |
+| Z-PHIL | No rejected commercial/network surface returns | `cargo xtask check philosophy` (also run as the `cargo xtask clippy` preflight); `script/check-philosophy` | delete the surface; never gate it behind a setting |
 | Z-COMMENT | Comments explain why only | `rg -n '^\s*//' <path>` | delete restating/organizational comments |
 | Z-NAMES | Full-word variable names | naming pass | rename abbreviations |
 | Z-FILES | Prefer existing files; no speculative new files | `git diff --stat` | fold into the existing logical component |
@@ -237,15 +237,27 @@ From `docs/src/development/bloat.md`. Leads, not rules.
 Run from the repository root.
 
 ```sh
-# hard gate + workspace lints + philosophy (scoped form: -p <crate>)
+# hard gate + workspace lints + philosophy preflight (scoped form: -p <crate>)
 cargo xtask clippy
 cargo xtask clippy -p <crate>
 
 cargo fmt --all -- --check
 
+# compiler-free repository gates; `check all` runs the whole set
+cargo xtask check
+
+# or run the individual gates that matter for the touched area
 cargo xtask check todos
 cargo xtask check keys
+cargo xtask check scroll-handlers
 cargo xtask check licenses
+cargo xtask check locale-keys
+cargo xtask check dco
+cargo xtask check philosophy
+cargo xtask check upstream-ledger
+cargo xtask check workflows
+
+# local-only, needs extra tools on PATH
 cargo xtask check links
 ```
 
@@ -335,8 +347,10 @@ Write the report in Simplified Chinese. Keep code identifiers in English.
 - ZZZ: `.rules`, `AGENTS.md`, `docs/AGENTS.md`,
   `docs/src/development/bloat.md`,
   `docs/src/development/ownership-and-data-flow.md`, `docs/src/mission.md`,
-  `clippy.toml`, `Cargo.toml` `[workspace.lints]`, `script/clippy`,
-  `cargo xtask check philosophy`.
+  `clippy.toml`, `Cargo.toml` `[workspace.lints]`,
+  `tooling/xtask/src/tasks/check.rs`, `script/check-philosophy`,
+  `cargo xtask check philosophy` (the `script/clippy` shim forwards to
+  `cargo xtask clippy`).
 - `clean-code-skills` (Robert C. Martin, *Clean Code*, ch. 17 smell
   taxonomy) — https://github.com/hatlesswizard/clean-code-skills.
 - `rust-skills` (265 Rust rules) — https://github.com/leonardomso/rust-skills.

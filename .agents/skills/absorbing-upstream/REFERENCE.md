@@ -7,9 +7,9 @@ Normative rules for the `absorbing-upstream` skill.
 Override only when the user supplies a value.
 
 ```text
-LAST_REVIEWED_UPSTREAM=37faef81f74fc1bb08be9939c4cffc8ede6ced2f
+LAST_REVIEWED_UPSTREAM=c7bea343838f42b4c14151393e41f0bbe033c95e
 LOCAL_BASE_BRANCH=main
-LOCAL_BASE_COMMIT=4d3b091b22be4a46f9fbb40df60c7473c1caf7e3
+LOCAL_BASE_COMMIT=d1518d139ff6b509d08955579f5f22fd70595a63
 UPSTREAM_URL=https://github.com/zed-industries/zed.git
 UPSTREAM_REF=refs/heads/main
 WORK_BRANCH=sync/upstream-YYYY-MM-DD
@@ -20,11 +20,15 @@ CREATE_PR=no
 PUSH=no
 ```
 
-As of 2026-10-27, local `main` is `4d3b091b22`. The last completed
-sync is `docs/src/development/upstream/upstream-sync-2026-10-27.md` through
-`37faef81` on `sync/upstream-2026-10-27`, and its full re-audit is
-`docs/src/development/upstream/upstream-sync-audit-2026-10-27.md`. Query again at
-run start. The next range starts after `LAST_REVIEWED_UPSTREAM`.
+As of 2026-11-05, local `main` is `d1518d139f`. The last completed
+sync is `docs/src/development/upstream/upstream-sync-2026-11-04.md` on
+`sync/upstream-2026-11-04`; its addendum advances the reviewed baseline
+to `c7bea343838f` (the live upstream head at the second 2026-11-04
+query). The most recent full re-audit is
+`docs/src/development/upstream/upstream-sync-audit-2026-11-03.md` (38
+non-audit reports, 1453 decision rows). Query live upstream again at
+run start; never trust these recorded values as the live head. The next
+range starts after `LAST_REVIEWED_UPSTREAM`.
 
 ## Philosophy
 
@@ -197,7 +201,7 @@ isolation failure. "Looks unrelated" is not a reason.
 
 ```sh
 git diff --check
-cargo fmt --check
+cargo fmt --all -- --check
 cargo check --locked -p <touched_crate>
 cargo test --locked -p <crate> <test_filter>
 ```
@@ -229,8 +233,8 @@ Create or append `REPORT` using the 2026-08-07 shape:
    `CONFLICT`.
 
 ```sh
-cd docs && npx prettier --write src/development/<report>.md
-cd docs && npx prettier --check src/development/<report>.md
+cd docs && npx prettier --write src/development/upstream/<report>.md
+cd docs && npx prettier --check src/development/upstream/<report>.md
 ```
 
 Do not run Prettier across all of `docs/src/`. Advance the reviewed
