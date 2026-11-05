@@ -23,7 +23,7 @@ use markdown::{Markdown, MarkdownOptions};
 pub use mention::*;
 use project::lsp_store::{FormatTrigger, LspFormatTarget};
 use project::{
-    AgentLocation, Project,
+    AgentLocation, Project, ProjectPath,
     git_store::{GitStoreCheckpoint, GitStoreEvent, RepositoryEvent},
 };
 use serde::{Deserialize, Serialize};
@@ -942,7 +942,17 @@ impl ToolCall {
         project: WeakEntity<Project>,
         cx: &mut AsyncApp,
     ) -> Option<ResolvedLocation> {
-        let buffer = project
+        // Tool-call locations can point at directories, at files that have since been
+        // deleted (e.g. shell-tool output), or at paths outside any worktree. Blindly
+        // opening such a path as a single-file worktree makes the host try to read a
+        // directory as a file, and leaves behind worktrees whose roots no longer exist.
+        // Resolve the path first so that only real, openable files get a buffer.
+        enum OpenTarget {
+            InWorktree(ProjectPath),
+            Absolute(String),
+        }
+
+        let target = project
             .update(cx, |project, cx| {
                 if let Some(path) = project.project_path_for_absolute_path(&location.path, cx) {
                     if project
@@ -951,17 +961,40 @@ impl ToolCall {
                     {
                         return None;
                     }
-                    Some(project.open_buffer(path, cx))
-                } else if is_absolute(
-                    location.path.to_string_lossy().as_ref(),
-                    project.path_style(cx),
-                ) {
-                    Some(project.open_local_buffer(&location.path, cx))
+                    Some(OpenTarget::InWorktree(path))
                 } else {
-                    None
+                    let path = location.path.to_string_lossy().into_owned();
+                    is_absolute(&path, project.path_style(cx)).then_some(OpenTarget::Absolute(path))
                 }
             })
             .ok()??;
+
+        // For paths outside a worktree, `resolve_abs_file_path` consults the correct
+        // filesystem: the local one for local projects and the remote host (via
+        // `GetPathMetadata`) for SSH projects. It yields `None` for directories and
+        // for paths that do not exist, so we never create a bogus worktree for them.
+        let buffer = match target {
+            OpenTarget::InWorktree(path) => project
+                .update(cx, |project, cx| project.open_buffer(path, cx))
+                .ok()?,
+            OpenTarget::Absolute(path) => {
+                let is_file = project
+                    .update(cx, |project, cx| project.resolve_abs_file_path(&path, cx))
+                    .ok()?
+                    .await
+                    .is_some();
+                if !is_file {
+                    return None;
+                }
+                // Keep the original path semantics; the resolved value is only the
+                // gate that proves the location is an existing file.
+                project
+                    .update(cx, |project, cx| {
+                        project.open_local_buffer(&location.path, cx)
+                    })
+                    .ok()?
+            }
+        };
         let buffer = buffer.await.log_err()?;
         let position = buffer.update(cx, |buffer, _| {
             let snapshot = buffer.snapshot();
@@ -5895,6 +5928,75 @@ mod tests {
                 1
             );
         });
+    }
+
+    #[gpui::test]
+    async fn test_tool_call_location_ignores_directories_and_missing_files(
+        cx: &mut TestAppContext,
+    ) {
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(
+            path!("/tmp/skills/test-skill"),
+            json!({ "SKILL.md": "skill body" }),
+        )
+        .await;
+        let project = Project::test(fs, [], cx).await;
+        let connection = Rc::new(FakeAgentConnection::new());
+        let thread = cx
+            .update(|cx| {
+                connection.new_session(
+                    project.clone(),
+                    PathList::new(&[Path::new(path!("/project"))]),
+                    cx,
+                )
+            })
+            .await
+            .unwrap();
+
+        let initial_worktree_count =
+            project.read_with(cx, |project, cx| project.worktrees(cx).count());
+
+        // A directory and a path that no longer exists must not be turned into
+        // single-file worktrees: the host cannot read a directory as a file, and
+        // a vanished root leaves behind a worktree without an exact VFS root.
+        for path in [
+            path!("/tmp/skills/test-skill"),
+            path!("/tmp/skills/test-skill/deleted.out"),
+        ] {
+            thread
+                .update(cx, |thread, cx| {
+                    thread.handle_session_update(
+                        acp::SessionUpdate::ToolCall(
+                            acp::ToolCall::new("read", "Read")
+                                .kind(acp::ToolKind::Read)
+                                .status(acp::ToolCallStatus::Completed)
+                                .locations(vec![acp::ToolCallLocation::new(PathBuf::from(path))]),
+                        ),
+                        cx,
+                    )
+                })
+                .unwrap();
+        }
+
+        cx.run_until_parked();
+
+        thread.read_with(cx, |thread, _| {
+            for entry in &thread.entries {
+                if let AgentThreadEntry::ToolCall(tool_call) = entry {
+                    assert!(
+                        tool_call.resolved_locations.iter().all(|l| l.is_none()),
+                        "non-file locations must not resolve to buffers"
+                    );
+                }
+            }
+        });
+        assert_eq!(
+            project.read_with(cx, |project, cx| project.worktrees(cx).count()),
+            initial_worktree_count,
+            "non-file locations must not create worktrees"
+        );
     }
 
     #[gpui::test(iterations = 10)]
