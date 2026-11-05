@@ -2630,6 +2630,7 @@ impl TelegramPanel {
                 })
                 .child(
                     v_flex()
+                        .flex_1()
                         .min_w_0()
                         .gap_0p5()
                         .child(
@@ -2647,7 +2648,6 @@ impl TelegramPanel {
                             )
                         }),
                 )
-                .child(div().flex_1())
                 .when(self.view_model.has_more_history, |this| {
                     this.child(
                         IconButton::new("telegram-load-older", IconName::ChevronUp)
@@ -2722,7 +2722,30 @@ impl TelegramPanel {
             )
             .when_some(topic_bar, |this, bar| this.child(bar))
             .when_some(pinned, |this, pinned| this.child(pinned))
-            .child(div().flex_1().min_h_0().child(transcript))
+            .child(div().relative().flex_1().min_h_0().child(transcript).when(
+                show_jump_to_bottom,
+                |this| {
+                    this.child(
+                        div().absolute().bottom_2().right_4().child(
+                            IconButton::new("telegram-jump-to-bottom", IconName::ChevronDown)
+                                .icon_size(IconSize::Small)
+                                .tooltip(Tooltip::text(tr(
+                                    cx,
+                                    "telegram_panel.jump_to_latest",
+                                    "Jump to latest",
+                                )))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.history_list_state.set_follow_mode(FollowMode::Tail);
+                                    this.history_list_state.scroll_to_end();
+                                    if let Some(chat_id) = this.view_model.selected_chat {
+                                        this.engine.send(Command::SelectChat { chat_id });
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
+                    )
+                },
+            ))
             .child(composer)
             .into_any_element();
 
@@ -2730,27 +2753,6 @@ impl TelegramPanel {
             .relative()
             .size_full()
             .child(conversation)
-            .when(show_jump_to_bottom, |this| {
-                this.child(
-                    div().absolute().bottom(px(96.)).right_4().child(
-                        IconButton::new("telegram-jump-to-bottom", IconName::ChevronDown)
-                            .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::text(tr(
-                                cx,
-                                "telegram_panel.jump_to_latest",
-                                "Jump to latest",
-                            )))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.history_list_state.set_follow_mode(FollowMode::Tail);
-                                this.history_list_state.scroll_to_end();
-                                if let Some(chat_id) = this.view_model.selected_chat {
-                                    this.engine.send(Command::SelectChat { chat_id });
-                                }
-                                cx.notify();
-                            })),
-                    ),
-                )
-            })
             .child(self.render_drop_target(cx))
             .into_any_element()
     }
