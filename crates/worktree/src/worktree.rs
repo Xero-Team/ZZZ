@@ -1034,6 +1034,17 @@ impl Worktree {
         }
     }
 
+    /// Whether this worktree can be reconstructed on a remote client.
+    ///
+    /// A worktree whose exact VFS root is missing cannot be described by a
+    /// `WorktreeMetadata` that a client can turn back into a `Worktree::remote`
+    /// (`try_remote` requires `vfs_root`), and its buffers cannot be opened by
+    /// path. Such worktrees arise when a single-file root is deleted before the
+    /// worktree is torn down, and must not be published in `UpdateProject`.
+    pub fn has_exact_vfs_root(&self) -> bool {
+        self.vfs_path_for_path(RelPath::empty()).is_some()
+    }
+
     pub fn metadata_proto(&self) -> proto::WorktreeMetadata {
         let snapshot = self.snapshot();
         proto::WorktreeMetadata {

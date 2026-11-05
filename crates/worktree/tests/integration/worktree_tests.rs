@@ -140,6 +140,69 @@ fn test_remote_worktree_rejects_missing_exact_root(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
+fn test_remote_worktree_rejects_missing_vfs_root(cx: &mut TestAppContext) {
+    cx.update(|cx| {
+        let settings_store = SettingsStore::test(cx);
+        cx.set_global(settings_store);
+    });
+    // A worktree whose root lost its exact VFS identity cannot be reconstructed
+    // on a client. `try_remote` must reject such metadata instead of producing a
+    // half-initialized worktree, which is why `worktree_metadata_protos` filters
+    // these out before sending `UpdateProject`.
+    let result = cx.update(|cx| {
+        Worktree::try_remote(
+            1,
+            clock::ReplicaId::new(1),
+            proto::WorktreeMetadata {
+                id: 1,
+                root_name: "project".to_owned(),
+                visible: true,
+                root_repo_is_linked_worktree: false,
+                abs_path_v2: native_path_wire("/home/user/project"),
+                root_repo_common_dir_v2: None,
+                vfs_root: None,
+            },
+            AnyProtoClient::new(NoopProtoClient::new()),
+            PathStyle::Posix,
+            cx,
+        )
+    });
+    assert!(result.is_err());
+}
+
+#[gpui::test]
+async fn test_local_worktree_metadata_has_exact_vfs_root(cx: &mut TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.background_executor.clone());
+    fs.insert_tree("/root", json!({ "a.txt": "content" })).await;
+
+    let tree = Worktree::local(
+        Path::new("/root"),
+        true,
+        fs,
+        Default::default(),
+        true,
+        WorktreeId::from_proto(0),
+        &mut cx.to_async(),
+    )
+    .await
+    .unwrap();
+    cx.read(|cx| tree.read(cx).as_local().unwrap().scan_complete())
+        .await;
+
+    tree.read_with(cx, |tree, _| {
+        assert!(
+            tree.has_exact_vfs_root(),
+            "a healthy local worktree must expose an exact VFS root"
+        );
+        assert!(
+            tree.metadata_proto().vfs_root.is_some(),
+            "metadata for a healthy worktree must carry its VFS root"
+        );
+    })
+}
+
+#[gpui::test]
 async fn test_stage_binary_file_from_vfs_uses_bounded_chunks(_cx: &mut TestAppContext) {
     let contents = (0..700 * 1024)
         .map(|index| (index % 251) as u8)

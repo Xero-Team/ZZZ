@@ -16930,3 +16930,68 @@ async fn test_path_queries_for_single_file_worktrees(cx: &mut gpui::TestAppConte
         Some("README")
     );
 }
+
+#[gpui::test]
+async fn test_set_worktrees_from_proto_keeps_store_on_bad_metadata(cx: &mut TestAppContext) {
+    fn metadata(id: u64, vfs_root: bool) -> rpc::proto::WorktreeMetadata {
+        let native = vfs::NativePath::from_unix_bytes(b"/root/project")
+            .expect("test native path must be valid");
+        rpc::proto::WorktreeMetadata {
+            id,
+            root_name: "project".to_owned(),
+            visible: true,
+            root_repo_is_linked_worktree: false,
+            abs_path_v2: Some(rpc::proto::NativePathV2::from_native_path(&native)),
+            root_repo_common_dir_v2: None,
+            vfs_root: vfs_root.then(|| {
+                rpc::proto::VfsPathV2::from_vfs_path(&vfs::VfsPath::new(
+                    vfs::MountId::new(1),
+                    vfs::ProviderPath::root(vfs::PathEncoding::PortableUtf8),
+                ))
+            }),
+        }
+    }
+
+    init_test(cx);
+    let store = cx.new(|cx| {
+        project::worktree_store::WorktreeStore::remote(
+            true,
+            rpc::AnyProtoClient::new(rpc::NoopProtoClient::new()),
+            0,
+            PathStyle::Posix,
+            project::worktree_store::WorktreeIdCounter::get(cx),
+        )
+    });
+
+    // Start from one valid worktree.
+    store
+        .update(cx, |store, cx| {
+            store.set_worktrees_from_proto(vec![metadata(1, true)], ReplicaId::LOCAL, cx)
+        })
+        .expect("valid metadata should be accepted");
+    assert_eq!(store.read_with(cx, |store, _| store.worktrees().count()), 1);
+
+    // A later update mixes the existing worktree with one that lacks an exact
+    // VFS root. `try_remote` rejects it; the store must keep its prior state
+    // instead of being drained and left half-empty.
+    let result = store.update(cx, |store, cx| {
+        store.set_worktrees_from_proto(
+            vec![metadata(1, true), metadata(2, false)],
+            ReplicaId::LOCAL,
+            cx,
+        )
+    });
+    assert!(result.is_err(), "malformed metadata must be rejected");
+
+    let ids = store.read_with(cx, |store, cx| {
+        store
+            .worktrees()
+            .map(|worktree| worktree.read(cx).id().to_proto())
+            .collect::<Vec<_>>()
+    });
+    assert_eq!(
+        ids,
+        vec![1],
+        "a failed update must not drop or corrupt existing worktrees"
+    );
+}

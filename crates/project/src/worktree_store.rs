@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::{Context as _, Result, anyhow, bail};
-use collections::HashMap;
+use collections::{HashMap, HashSet};
 use fs::{Fs, copy_recursive};
 use futures::{FutureExt, future::Shared};
 use gpui::{
@@ -1074,6 +1074,34 @@ impl WorktreeStore {
         replica_id: ReplicaId,
         cx: &mut Context<Self>,
     ) -> Result<()> {
+        let (client, project_id) = self.upstream_client().context("invalid project")?;
+        let existing_ids: HashSet<_> = self
+            .worktrees()
+            .map(|worktree| worktree.read(cx).id())
+            .collect();
+
+        // Reconstruct every worktree the client does not already have *before*
+        // mutating the store. `try_remote` rejects malformed metadata (e.g. a
+        // missing exact VFS root), and a single bad entry must not leave the
+        // store half-emptied: that used to drop all worktrees and cascade into
+        // "no such worktree", settings and buffer errors.
+        let mut new_worktrees = HashMap::default();
+        for worktree in &worktrees {
+            let id = WorktreeId::from_proto(worktree.id);
+            if existing_ids.contains(&id) {
+                continue;
+            }
+            let worktree = Worktree::try_remote(
+                project_id,
+                replica_id,
+                worktree.clone(),
+                client.clone(),
+                self.path_style(),
+                cx,
+            )?;
+            new_worktrees.insert(id, worktree);
+        }
+
         let mut old_worktrees_by_id = self
             .worktrees
             .drain(..)
@@ -1083,12 +1111,9 @@ impl WorktreeStore {
             })
             .collect::<HashMap<_, _>>();
 
-        let (client, project_id) = self.upstream_client().context("invalid project")?;
-
         for worktree in worktrees {
-            if let Some(old_worktree) =
-                old_worktrees_by_id.remove(&WorktreeId::from_proto(worktree.id))
-            {
+            let id = WorktreeId::from_proto(worktree.id);
+            if let Some(old_worktree) = old_worktrees_by_id.remove(&id) {
                 let push_strong_handle =
                     self.retain_worktrees || old_worktree.read(cx).is_visible();
                 let handle = if push_strong_handle {
@@ -1097,15 +1122,7 @@ impl WorktreeStore {
                     WorktreeHandle::Weak(old_worktree.downgrade())
                 };
                 self.worktrees.push(handle);
-            } else {
-                let worktree = Worktree::try_remote(
-                    project_id,
-                    replica_id,
-                    worktree,
-                    client.clone(),
-                    self.path_style(),
-                    cx,
-                )?;
+            } else if let Some(worktree) = new_worktrees.remove(&id) {
                 self.add(&worktree, cx);
             }
         }
@@ -1208,6 +1225,7 @@ impl WorktreeStore {
 
     pub fn worktree_metadata_protos(&self, cx: &App) -> Vec<proto::WorktreeMetadata> {
         self.worktrees()
+            .filter(|worktree| worktree.read(cx).has_exact_vfs_root())
             .map(|worktree| worktree.read(cx).metadata_proto())
             .collect()
     }
