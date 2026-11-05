@@ -86,6 +86,16 @@ const ITER_COUNT_MUL: NonZero<usize> = NonZero::new(4).unwrap();
 /// Do we keep stderr empty while running the tests?
 static QUIET: AtomicBool = AtomicBool::new(false);
 
+/// Fallible operations in the profiler propagate to `main`, whose `Result`
+/// return prints the error and exits nonzero.
+type PerfResult<T> = Result<T, Box<dyn std::error::Error>>;
+
+/// Builds a boxed error from a static message, used to turn `Option`/`Result`
+/// failures from external APIs into the profiler's common error type.
+fn perf_error(message: &str) -> Box<dyn std::error::Error> {
+    Box::<dyn std::error::Error>::from(message.to_owned())
+}
+
 /// Report a failure into the output and skip an iteration.
 macro_rules! fail {
     ($output:ident, $name:expr, $kind:expr) => {{
@@ -109,16 +119,19 @@ enum OutputKind<'a> {
 
 impl OutputKind<'_> {
     /// Logs the output of a run as per the `OutputKind`.
-    fn log(&self, output: &Output, t_bin: &str) {
+    fn log(&self, output: &Output, t_bin: &str) -> PerfResult<()> {
         match self {
             OutputKind::Markdown => println!("{output}"),
             OutputKind::Json(ident) => {
                 // We're going to be in tooling/perf/$whatever.
-                let wspace_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
-                    .join("..")
-                    .join("..");
+                let wspace_dir = PathBuf::from(
+                    std::env::var("CARGO_MANIFEST_DIR")
+                        .map_err(|_| perf_error("CARGO_MANIFEST_DIR is not set"))?,
+                )
+                .join("..")
+                .join("..");
                 let runs_dir = PathBuf::from(&wspace_dir).join(consts::RUNS_DIR);
-                std::fs::create_dir_all(&runs_dir).unwrap();
+                std::fs::create_dir_all(&runs_dir)?;
                 assert!(
                     !ident.to_string_lossy().is_empty(),
                     "FATAL: Empty filename specified!"
@@ -128,11 +141,11 @@ impl OutputKind<'_> {
                 // would be reduced to just "gpui".
                 let test_bin_stripped = Path::new(t_bin)
                     .file_name()
-                    .unwrap()
+                    .ok_or_else(|| perf_error("test binary path has no file name"))?
                     .to_str()
-                    .unwrap()
+                    .ok_or_else(|| perf_error("test binary path is not valid UTF-8"))?
                     .rsplit_once('-')
-                    .unwrap()
+                    .ok_or_else(|| perf_error("test binary file name has no '-' separator"))?
                     .0;
                 let mut file_path = runs_dir.join(ident);
                 file_path
@@ -142,16 +155,14 @@ impl OutputKind<'_> {
                     .write(true)
                     .create(true)
                     .truncate(true)
-                    .open(&file_path)
-                    .unwrap();
-                out_file
-                    .write_all(&serde_json::to_vec(&output).unwrap())
-                    .unwrap();
+                    .open(&file_path)?;
+                out_file.write_all(&serde_json::to_vec(output)?)?;
                 if !QUIET.load(Ordering::Relaxed) {
                     eprintln!("JSON output written to {}", file_path.display());
                 }
             }
         }
+        Ok(())
     }
 }
 
@@ -238,7 +249,7 @@ fn parse_mdata(t_bin: &str, mdata_fn: &str) -> Result<TestMdata, FailKind> {
 }
 
 /// Compares the perf results of two profiles as per the arguments passed in.
-fn compare_profiles(args: &[String]) {
+fn compare_profiles(args: &[String]) -> PerfResult<()> {
     let mut save_to = None;
     let mut ident_idx = 0;
     args.first().inspect(|a| {
@@ -256,7 +267,8 @@ fn compare_profiles(args: &[String]) {
     let ident_old = args
         .get(ident_idx + 1)
         .expect("FATAL: missing identifier for old run");
-    let wspace_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let wspace_dir = std::env::var("CARGO_MANIFEST_DIR")
+        .map_err(|_| perf_error("CARGO_MANIFEST_DIR is not set"))?;
     let runs_dir = PathBuf::from(&wspace_dir)
         .join("..")
         .join("..")
@@ -266,8 +278,10 @@ fn compare_profiles(args: &[String]) {
     let mut outputs_new = Output::blank();
     let mut outputs_old = Output::blank();
 
-    for e in runs_dir.read_dir().unwrap() {
-        let Ok(entry) = e else {
+    for entry in runs_dir.read_dir()? {
+        // A single unreadable or malformed run file should not abort the whole
+        // comparison, so skip it with a diagnostic rather than unwrapping.
+        let Ok(entry) = entry else {
             continue;
         };
         let Ok(metadata) = entry.metadata() else {
@@ -280,26 +294,35 @@ fn compare_profiles(args: &[String]) {
 
             // A little helper to avoid code duplication. Reads the `output` from
             // a json file, then merges it into what we have so far.
-            let read_into = |output: &mut Output| {
+            let read_into = |output: &mut Output| -> PerfResult<()> {
                 let mut elems = name.split('.').skip(1);
-                let prefix = elems.next().unwrap();
-                assert_eq!("json", elems.next().unwrap());
-                assert!(elems.next().is_none());
+                let prefix = elems
+                    .next()
+                    .ok_or_else(|| perf_error("run file name has no crate prefix"))?;
+                if elems.next() != Some("json") || elems.next().is_some() {
+                    return Err(perf_error("run file name is not <ident>.<crate>.json"));
+                }
                 let mut buffer = Vec::new();
-                let _ = OpenOptions::new()
+                OpenOptions::new()
                     .read(true)
-                    .open(entry.path())
-                    .unwrap()
-                    .read_to_end(&mut buffer)
-                    .unwrap();
-                let o_other: Output = serde_json::from_slice(&buffer).unwrap();
+                    .open(entry.path())?
+                    .read_to_end(&mut buffer)?;
+                let o_other: Output = serde_json::from_slice(&buffer)?;
                 output.merge(o_other, prefix);
+                Ok(())
             };
 
-            if name.starts_with(ident_old) {
-                read_into(&mut outputs_old);
+            let target = if name.starts_with(ident_old) {
+                Some(&mut outputs_old)
             } else if name.starts_with(ident_new) {
-                read_into(&mut outputs_new);
+                Some(&mut outputs_new)
+            } else {
+                None
+            };
+            if let Some(target) = target
+                && let Err(error) = read_into(target)
+            {
+                eprintln!("Skipping run file {name}: {error}");
             }
         }
     }
@@ -310,12 +333,12 @@ fn compare_profiles(args: &[String]) {
             .create(true)
             .write(true)
             .truncate(true)
-            .open(filename)
-            .expect("FATAL: couldn't save run results to file");
-        file.write_all(format!("{res}").as_bytes()).unwrap();
+            .open(filename)?;
+        file.write_all(format!("{res}").as_bytes())?;
     } else {
         println!("{res}");
     }
+    Ok(())
 }
 
 /// Runs a test binary, filtering out tests which aren't marked for perf triage
@@ -403,8 +426,9 @@ fn spawn_and_iterate(t_bin: &str, t_name: &str, count: NonZero<usize>) -> Option
     cmd.stdout(Stdio::null());
     cmd.stderr(Stdio::null());
     let pre = Instant::now();
-    // Discard the output beyond ensuring success.
-    let out = cmd.spawn().unwrap().wait();
+    // Discard the output beyond ensuring success. A failure to spawn the test
+    // binary is reported as a failed iteration via `None`.
+    let out = cmd.spawn().ok()?.wait();
     let post = Instant::now();
     out.iter().find_map(|s| s.success().then_some(post - pre))
 }
@@ -427,7 +451,7 @@ fn triage_test(
     let mut iter_count = DEFAULT_ITER_COUNT;
     // It's possible that the first loop of a test might be an outlier (e.g. it's
     // doing some caching), in which case we want to skip it.
-    let duration_once = spawn_and_iterate(t_bin, t_name, NonZero::new(1).unwrap())?;
+    let duration_once = spawn_and_iterate(t_bin, t_name, NonZero::<usize>::MIN)?;
     loop {
         let duration = spawn_and_iterate(t_bin, t_name, iter_count)?;
         if duration.saturating_sub(duration_once) > thresh {
@@ -468,7 +492,7 @@ fn hyp_binary() -> Option<Command> {
     reason = "perf intentionally shells out to test binaries and helper tools"
 )]
 fn hyp_profile(t_bin: &str, t_name: &str, iterations: NonZero<usize>) -> Option<Timings> {
-    let mut perf_cmd = hyp_binary().expect("Couldn't find the Hyperfine binary on the system");
+    let mut perf_cmd = hyp_binary()?;
 
     // Warm up the cache and print markdown output to stdout, which we parse.
     perf_cmd.args([
@@ -484,25 +508,25 @@ fn hyp_profile(t_bin: &str, t_name: &str, iterations: NonZero<usize>) -> Option<
         &format!("{t_bin} --exact {t_name}"),
     ]);
     perf_cmd.env(consts::ITER_ENV_VAR, format!("{iterations}"));
-    let p_out = perf_cmd.output().unwrap();
+    let p_out = perf_cmd.output().ok()?;
     if !p_out.status.success() {
         return None;
     }
 
     let cmd_output = String::from_utf8_lossy(&p_out.stdout);
     // Can't use .last() since we have a trailing newline. Sigh.
-    let results_line = cmd_output.lines().nth(3).unwrap();
+    let results_line = cmd_output.lines().nth(3)?;
     // Grab the values out of the pretty-print.
     // TODO: Parse json instead.
     let mut res_iter = results_line.split_whitespace();
     // Durations are given in milliseconds, so account for that.
-    let mean = Duration::from_secs_f64(res_iter.nth(5).unwrap().parse::<f64>().unwrap() / 1000.);
-    let stddev = Duration::from_secs_f64(res_iter.nth(1).unwrap().parse::<f64>().unwrap() / 1000.);
+    let mean = Duration::from_secs_f64(res_iter.nth(5)?.parse::<f64>().ok()? / 1000.);
+    let stddev = Duration::from_secs_f64(res_iter.nth(1)?.parse::<f64>().ok()? / 1000.);
 
     Some(Timings { mean, stddev })
 }
 
-fn main() {
+fn main() -> PerfResult<()> {
     let args = std::env::args().collect::<Vec<_>>();
     // We get passed the test we need to run as the 1st argument after our own name.
     let t_bin = args
@@ -511,8 +535,7 @@ fn main() {
 
     // We're being asked to compare two results, not run the profiler.
     if t_bin == "compare" {
-        compare_profiles(&args[2..]);
-        return;
+        return compare_profiles(&args[2..]);
     }
 
     // Minimum test importance we care about this run.
@@ -617,8 +640,8 @@ fn main() {
 
     // No need making an empty json file on every empty test bin.
     if output.is_empty() {
-        return;
+        return Ok(());
     }
 
-    out_kind.log(&output, t_bin);
+    out_kind.log(&output, t_bin)
 }

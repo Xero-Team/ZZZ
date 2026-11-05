@@ -2701,8 +2701,12 @@ fn run_multi_workspace_sidebar_visual_tests(
                             "zzz.visual_test_runner.multi_workspace.refine_thread_view_scrolling_behavior",
                             "Refine thread view scrolling behavior",
                         ),
+                        // These are fixed, valid UTC timestamps used only as
+                        // visual-test fixture data; UTC has no DST ambiguity, so
+                        // the epoch fallback is never reached in practice.
                         chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2024, 6, 15, 10, 30, 0)
-                            .unwrap(),
+                            .single()
+                            .unwrap_or_default(),
                     ),
                     1 => (
                         "visual-test-thread-1",
@@ -2712,7 +2716,8 @@ fn run_multi_workspace_sidebar_visual_tests(
                             "Add line numbers option to FileEditBlock",
                         ),
                         chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2024, 6, 15, 11, 0, 0)
-                            .unwrap(),
+                            .single()
+                            .unwrap_or_default(),
                     ),
                     _ => continue,
                 };

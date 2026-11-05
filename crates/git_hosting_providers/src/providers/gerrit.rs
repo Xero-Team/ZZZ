@@ -72,7 +72,13 @@ impl GitHostingProvider for Gerrit {
         let BuildCommitPermalinkParams { sha } = params;
         let ParsedGitRemote { owner: _, repo } = remote;
 
-        self.base_url().join(&format!("{repo}/+/{sha}")).unwrap()
+        // `base_url()` is an absolute http(s) URL supplied by the provider, so
+        // joining a relative path only fails for `cannot-be-a-base` schemes.
+        // Falling back to the bare base keeps a usable permalink.
+        let base_url = self.base_url();
+        base_url
+            .join(&format!("{repo}/+/{sha}"))
+            .unwrap_or_else(|_error| base_url.clone())
     }
 
     fn build_permalink(&self, remote: ParsedGitRemote, params: BuildPermalinkParams) -> Url {
@@ -83,10 +89,12 @@ impl GitHostingProvider for Gerrit {
             selection,
         } = params;
 
-        let mut permalink = self
-            .base_url()
+        // See `build_commit_permalink`: joining onto an absolute http(s) base
+        // cannot fail except for `cannot-be-a-base` schemes.
+        let base_url = self.base_url();
+        let mut permalink = base_url
             .join(&format!("{repo}/+/{sha}/{path}"))
-            .unwrap();
+            .unwrap_or_else(|_error| base_url.clone());
         permalink.set_fragment(
             selection
                 .map(|selection| self.line_fragment(&selection))

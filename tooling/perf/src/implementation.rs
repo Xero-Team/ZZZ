@@ -401,12 +401,17 @@ impl std::fmt::Display for Output {
                         metadata.weight
                     )?,
                 },
-                // No metadata, couldn't even parse the test output.
+                // No metadata, couldn't even parse the test output. A missing
+                // metadata always comes with a failure, but if a deserialized
+                // run ever pairs `None` with `Ok`, report it as bad metadata
+                // instead of panicking.
                 None => writeln!(
                     f,
-                    "| ({}) {} | N/A | N/A | N/A | N/A | N/A |",
-                    timings.as_ref().unwrap_err(),
-                    name
+                    "| ({}) {name} | N/A | N/A | N/A | N/A | N/A |",
+                    match timings {
+                        Err(failure) => failure.clone(),
+                        Ok(_) => FailKind::BadMetadata,
+                    }
                 )?,
             }
         }

@@ -35,7 +35,10 @@ impl ConflictSetSnapshot {
                     .cmp(&range.start, buffer)
                     .then(Ordering::Greater)
             })
-            .unwrap_err();
+            // The comparator never yields `Ordering::Equal`, so the search always
+            // returns the insertion point. `Result<usize, usize>` carries an index
+            // in either variant, which is exactly the boundary we need.
+            .unwrap_or_else(|insertion_ix| insertion_ix);
         let end_ix = start_ix
             + self.conflicts[start_ix..]
                 .binary_search_by(|conflict| {
@@ -45,7 +48,7 @@ impl ConflictSetSnapshot {
                         .cmp(&range.end, buffer)
                         .then(Ordering::Less)
                 })
-                .unwrap_err();
+                .unwrap_or_else(|insertion_ix| insertion_ix);
         &self.conflicts[start_ix..end_ix]
     }
 

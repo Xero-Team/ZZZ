@@ -1962,11 +1962,9 @@ fn update_window(mut state: RefMut<WaylandWindowState>) {
                 region.add(x, y, width, height);
             });
 
-            state
-                .background_effects
-                .as_ref()
-                .unwrap()
-                .set_blur_region(Some(&region));
+            if let Some(background_effects) = &state.background_effects {
+                background_effects.set_blur_region(Some(&region));
+            }
         } else if let Some(background_effects) = state.background_effects.take() {
             background_effects.destroy();
         }
@@ -1977,7 +1975,9 @@ fn update_window(mut state: RefMut<WaylandWindowState>) {
                 let blur = blur_manager.create(&state.surface, &state.globals.qh, ());
                 state.kde_blur = Some(blur);
             }
-            state.kde_blur.as_ref().unwrap().commit();
+            if let Some(kde_blur) = &state.kde_blur {
+                kde_blur.commit();
+            }
         } else {
             blur_manager.unset(&state.surface);
             if let Some(b) = state.kde_blur.take() {

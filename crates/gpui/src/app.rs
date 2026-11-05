@@ -127,6 +127,10 @@ impl AppCell {
         // origin may remain after release; the next group replaces it.
         let starts_borrow_group = self.app.try_borrow_mut().is_ok();
         let attempted = std::panic::Location::caller();
+        // GPUI runs all entity and UI work on one foreground thread, so a
+        // shared `App` borrow can only fail if an entity update re-entered
+        // itself. That is an unrecoverable invariant violation with no valid
+        // `Ref` to return; keep the diagnostic and surface it.
         let borrow = self
             .app
             .try_borrow()
@@ -146,6 +150,8 @@ impl AppCell {
     #[doc(hidden)]
     #[track_caller]
     pub fn borrow_mut(&self) -> AppRefMut<'_> {
+        // See `borrow`: a conflicting mutable borrow is an unrecoverable
+        // re-entry, and `AppRefMut` has no error channel to propagate it.
         self.try_borrow_mut().unwrap()
     }
 
