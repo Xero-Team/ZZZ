@@ -65,6 +65,10 @@ const DRAFT_SYNC_DELAY: Duration = Duration::from_millis(600);
 const MEDIA_CACHE_MAX_BYTES: u64 = 512 * 1024 * 1024;
 /// Maximum age for on-disk media before it is evicted.
 const MEDIA_CACHE_MAX_AGE: Duration = Duration::from_hours(30 * 24);
+/// How many times a media download is retried after Telegram reports an
+/// expired file reference. One refetch is enough to mint a fresh reference.
+/// <https://core.telegram.org/api/file-references>
+const MEDIA_FILE_REFERENCE_RETRIES: usize = 1;
 /// How many data-center migrations a QR login token may trigger before the
 /// engine gives up and reports [`EngineError::QrTooManyMigrations`].
 const QR_MIGRATION_LIMIT: usize = 3;
@@ -6352,6 +6356,48 @@ async fn fetch_gap(
     page
 }
 
+/// Whether a media download failed because Telegram expired the media's file
+/// reference. grammers 0.11 does not refresh references itself (its
+/// `DownloadIter` carries a `TODO handle FILEREF_UPGRADE_NEEDED`), so the
+/// engine must refetch the message and try again.
+///
+/// Small files go through `Client::load`, which wraps the `InvocationError` in
+/// an `io::Error` via `io::Error::other`; large files use the concurrent
+/// downloader and return the `InvocationError` directly. Cover both shapes.
+/// <https://core.telegram.org/api/file-references>
+fn is_expired_file_reference(error: &InvocationError) -> bool {
+    // Every `FILE_REFERENCE_*` error (expired, invalid, empty, or the indexed
+    // `FILE_REFERENCE_%d_EXPIRED` form) means the same thing: refetch the source
+    // message to mint a fresh reference. grammers' `RpcError::from` already
+    // strips the index digit into `value`, so a single prefix check covers all
+    // of them. The retry is bounded, so being permissive here is harmless.
+    fn is_expired_rpc(rpc: &grammers_client::sender::RpcError) -> bool {
+        rpc.name.starts_with("FILE_REFERENCE_")
+    }
+
+    match error {
+        InvocationError::Rpc(rpc) => is_expired_rpc(rpc),
+        InvocationError::Io(io) => io
+            .get_ref()
+            .and_then(|source| source.downcast_ref::<InvocationError>())
+            .is_some_and(
+                |invocation| matches!(invocation, InvocationError::Rpc(rpc) if is_expired_rpc(rpc)),
+            ),
+        _ => false,
+    }
+}
+
+/// Removes a failed download's target. `Client::load` creates the file before
+/// the first `upload.getFile` request, so a failed download can leave a zero or
+/// partial file that `download()` would otherwise treat as a cache hit.
+fn remove_partial_download(path: &Path) {
+    if let Err(error) = std::fs::remove_file(path)
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        log::debug!("failed to remove a partial Telegram download: {error}");
+    }
+}
+
 /// Downloads a message's original media to `path`, creating parent directories.
 async fn download_media_file(
     client: &Client,
@@ -6365,27 +6411,42 @@ async fn download_media_file(
             return Err(EngineError::Other);
         }
     }
-    let message = client
-        .get_messages_by_id(peer_ref, &[message_id])
-        .await
-        .map_err(|error| {
-            log::warn!("failed to fetch a Telegram message for download: {error}");
-            EngineError::from_invocation(&error)
-        })?
-        .pop()
-        .flatten();
-    let Some(message) = message else {
-        return Ok(None);
-    };
-    match message.download_media(&path).await {
-        Ok(true) => {
-            evict_cache_async(path.parent().and_then(Path::parent)).await;
-            Ok(Some(path))
-        }
-        Ok(false) => Ok(None),
-        Err(error) => {
-            log::warn!("failed to download Telegram media: {error}");
-            Err(EngineError::Other)
+    let mut attempt = 0;
+    loop {
+        // `get_messages_by_id` always hits the network, so each attempt starts
+        // with a freshly minted file reference for the media.
+        let message = client
+            .get_messages_by_id(peer_ref, &[message_id])
+            .await
+            .map_err(|error| {
+                log::warn!("failed to fetch a Telegram message for download: {error}");
+                EngineError::from_invocation(&error)
+            })?
+            .pop()
+            .flatten();
+        let Some(message) = message else {
+            return Ok(None);
+        };
+        match message.download_media(&path).await {
+            Ok(true) => {
+                evict_cache_async(path.parent().and_then(Path::parent)).await;
+                return Ok(Some(path));
+            }
+            Ok(false) => return Ok(None),
+            Err(error)
+                if is_expired_file_reference(&error) && attempt < MEDIA_FILE_REFERENCE_RETRIES =>
+            {
+                log::debug!(
+                    "Telegram file reference expired for {message_id}, refetching the message"
+                );
+                remove_partial_download(&path);
+                attempt += 1;
+            }
+            Err(error) => {
+                log::warn!("failed to download Telegram media: {error}");
+                remove_partial_download(&path);
+                return Err(EngineError::from_invocation(&error));
+            }
         }
     }
 }
@@ -6431,38 +6492,54 @@ async fn fetch_thumbnail_bytes(
     peer_ref: PeerRef,
     message_id: i32,
 ) -> Result<Option<Vec<u8>>, EngineError> {
-    let message = client
-        .get_messages_by_id(peer_ref, &[message_id])
-        .await
-        .map_err(|error| {
-            log::warn!("failed to fetch a Telegram message for its thumbnail: {error}");
-            EngineError::from_invocation(&error)
-        })?
-        .pop()
-        .flatten();
-    let Some(message) = message else {
-        return Ok(None);
-    };
-    let Some(media) = message.media() else {
-        return Ok(None);
-    };
-    let Some(thumbnail) = select_thumbnail(&media) else {
-        return Ok(None);
-    };
-
-    let mut download = client.iter_download(&thumbnail);
-    let mut bytes = Vec::new();
+    let mut attempt = 0;
     loop {
-        match download.next().await {
-            Ok(Some(chunk)) => bytes.extend_from_slice(&chunk),
-            Ok(None) => break,
+        // `get_messages_by_id` always hits the network, so each attempt starts
+        // with a freshly minted file reference for the thumbnail.
+        let message = client
+            .get_messages_by_id(peer_ref, &[message_id])
+            .await
+            .map_err(|error| {
+                log::warn!("failed to fetch a Telegram message for its thumbnail: {error}");
+                EngineError::from_invocation(&error)
+            })?
+            .pop()
+            .flatten();
+        let Some(message) = message else {
+            return Ok(None);
+        };
+        let Some(media) = message.media() else {
+            return Ok(None);
+        };
+        let Some(thumbnail) = select_thumbnail(&media) else {
+            return Ok(None);
+        };
+
+        let mut download = client.iter_download(&thumbnail);
+        let mut bytes = Vec::new();
+        let result = loop {
+            match download.next().await {
+                Ok(Some(chunk)) => bytes.extend_from_slice(&chunk),
+                Ok(None) => break Ok(()),
+                Err(error) => break Err(error),
+            }
+        };
+        match result {
+            Ok(()) => return Ok((!bytes.is_empty()).then_some(bytes)),
+            Err(error)
+                if is_expired_file_reference(&error) && attempt < MEDIA_FILE_REFERENCE_RETRIES =>
+            {
+                log::debug!(
+                    "Telegram thumbnail file reference expired for {message_id}, refetching the message"
+                );
+                attempt += 1;
+            }
             Err(error) => {
                 log::warn!("failed to download a Telegram thumbnail: {error}");
                 return Err(EngineError::from_invocation(&error));
             }
         }
     }
-    Ok((!bytes.is_empty()).then_some(bytes))
 }
 
 /// The file extension for downloadable media, derived from the document name
@@ -6683,10 +6760,10 @@ mod tests {
     use super::{
         DownloadState, DownloadTarget, EngineConfig, EngineState, HistoryCursor, LoadedDialog,
         MediaKind, MediaSnapshot, MessageSnapshot, SendState, ViewModel, apply_poll_results,
-        avatar_initials, current_unix_timestamp, evict_cache_with, media_extension,
-        media_file_path, merge_history, next_history_page, normalize_loaded_dialogs,
-        normalize_phone, replace_sent_messages, reply_header_snapshot, thumbnail_extension,
-        thumbnail_file_path, upload_failure,
+        avatar_initials, current_unix_timestamp, evict_cache_with, is_expired_file_reference,
+        media_extension, media_file_path, merge_history, next_history_page,
+        normalize_loaded_dialogs, normalize_phone, remove_partial_download, replace_sent_messages,
+        reply_header_snapshot, thumbnail_extension, thumbnail_file_path, upload_failure,
     };
     use crate::error::EngineError;
     use crate::model::{PollOptionSnapshot, PollSnapshot};
@@ -7133,6 +7210,57 @@ mod tests {
     fn upload_failure_without_an_rpc_error_is_a_send_failure() {
         let plain = std::io::Error::other("disk full");
         assert_eq!(upload_failure(&plain), EngineError::SendFailed);
+    }
+
+    fn file_reference_rpc(name: &str) -> InvocationError {
+        InvocationError::Rpc(RpcError {
+            code: 400,
+            name: name.to_owned(),
+            value: None,
+            caused_by: None,
+        })
+    }
+
+    #[test]
+    fn expired_file_reference_is_detected_for_both_error_shapes() {
+        // Large files return the RPC error directly; small files go through
+        // `Client::load`, which wraps it in an `io::Error` via `io::Error::other`.
+        for name in [
+            "FILE_REFERENCE_EXPIRED",
+            "FILE_REFERENCE_INVALID",
+            "FILE_REFERENCE_EMPTY",
+            "FILE_REFERENCE_2_EXPIRED",
+        ] {
+            let direct = file_reference_rpc(name);
+            assert!(
+                is_expired_file_reference(&direct),
+                "{name} should be treated as an expired file reference"
+            );
+            let wrapped = InvocationError::Io(std::io::Error::other(direct));
+            assert!(
+                is_expired_file_reference(&wrapped),
+                "wrapped {name} should be treated as an expired file reference"
+            );
+        }
+        assert!(!is_expired_file_reference(&file_reference_rpc(
+            "PEER_ID_INVALID"
+        )));
+        assert!(!is_expired_file_reference(&InvocationError::Io(
+            std::io::Error::other("connection reset")
+        )));
+    }
+
+    #[test]
+    fn partial_downloads_are_removed_without_reporting_a_missing_file() {
+        let root = temporary_cache("partial-download");
+        let path = root.join("7.jpg");
+        std::fs::create_dir_all(&root).expect("create cache dir");
+        std::fs::write(&path, b"partial").expect("write partial file");
+        remove_partial_download(&path);
+        assert!(!path.is_file());
+        // A second removal (the file is already gone) must not panic or log an error.
+        remove_partial_download(&path);
+        std::fs::remove_dir_all(&root).ok();
     }
 
     fn forum_reply_header(
