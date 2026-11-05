@@ -23,6 +23,7 @@ use std::process::Command;
 use anyhow::{Context as _, Result, bail};
 use clap::{Args, Subcommand, ValueEnum};
 
+mod gpui_api;
 mod keymaps;
 mod scroll_handlers;
 
@@ -35,7 +36,8 @@ pub struct CheckArgs {
 #[derive(Subcommand)]
 enum CheckCommand {
     /// Every gate CI runs: markers, keymaps, scroll handlers, licenses,
-    /// locale catalog keys, DCO, philosophy, ledger, workflows.
+    /// locale catalog keys, DCO, philosophy, ledger, workflows, and the
+    /// `gpui` public API snapshot.
     All,
     /// Reject leftover markers for unfinished work.
     Todos,
@@ -63,6 +65,8 @@ enum CheckCommand {
     UpstreamLedger,
     /// Validate the `run:` patterns in the GitHub workflow files.
     Workflows,
+    /// Compare the `gpui` crate's public item signatures against a snapshot.
+    GpuiApi(gpui_api::GpuiApiArgs),
     /// Check documentation links with `lychee` (needs it on `PATH`).
     Links {
         /// Check remote links too instead of only local ones.
@@ -104,6 +108,7 @@ pub fn run_check(args: CheckArgs) -> Result<()> {
         CheckCommand::Philosophy => check_philosophy(),
         CheckCommand::UpstreamLedger => check_upstream_ledger(),
         CheckCommand::Workflows => check_workflows(),
+        CheckCommand::GpuiApi(args) => gpui_api::check(args),
         CheckCommand::Links { all } => check_links(all),
     }
 }
@@ -122,6 +127,7 @@ fn run_all() -> Result<()> {
         ("philosophy boundary", check_philosophy),
         ("upstream rejection ledger", check_upstream_ledger),
         ("GitHub workflow files", check_workflows),
+        ("gpui public API snapshot", gpui_api::check_snapshot),
     ];
 
     let mut failures = Vec::new();

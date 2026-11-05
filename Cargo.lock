@@ -21523,6 +21523,7 @@ dependencies = [
  "indoc",
  "itertools 0.15.0",
  "proc-macro2",
+ "quote",
  "regex",
  "serde",
  "serde_json",
