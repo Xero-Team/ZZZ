@@ -208,6 +208,8 @@
     - [GPUI Refactoring Execution Plan](./development/gui-framework-research/refactoring-plan.md)
     - [GPUI Refactoring Goal](./development/gui-framework-research/goal.md)
     - [GPUI Refactoring Progress](./development/gpui-refactor-progress.md)
+    - [GPUI Maintainability Completion Plan](./development/gui-framework-research/maintainability-plan.md)
+    - [GPUI Maintainability Progress](./development/gui-framework-research/maintainability-progress.md)
     - [Native IME Validation Runbook](./development/gui-framework-research/ime-validation-runbook.md)
     - [GPUI and Qt Base Gap Analysis](./development/gui-framework-research/qtbase-gap-report.md)
     - [GPUI Qt Base Gap Completion Plan](./development/gui-framework-research/qtbase-completion-plan.md)

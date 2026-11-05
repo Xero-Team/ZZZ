@@ -34,6 +34,14 @@ runbooks under `docs/src/development/gui-framework-research/`. Keep a platform
 claim in your application tied to a tested target and feature set.
 
 - [Contexts](docs/contexts.md)
+- [Entities and state](docs/entity.md)
+- [Elements](docs/element.md)
+- [Rendering and the frame lifecycle](docs/render.md)
+- [Async execution](docs/async.md)
+- [Focus and key dispatch](docs/focus.md)
+- [Key Dispatch](docs/key_dispatch.md)
+- [Testing](docs/test.md)
+- [Platform abstraction](docs/platform.md)
 - [Accessibility semantics](docs/accessibility.md)
 
 Everything in GPUI starts with an `Application`. You can create one with
@@ -85,7 +93,7 @@ In addition to the systems above, GPUI provides a range of smaller services that
 
 - Actions are user-defined structs that are used for converting keystrokes into logical operations in your UI. Use this for implementing keyboard shortcuts, such as cmd-q. See the `action` module for more information.
 
-- Platform services, such as `quit the app` or `open a URL` are available as methods on the `app::App`.
+- Platform services, such as `quit the app` or `open a URL` are available as methods on the `app::App`. Lifecycle and window-control methods return `Result`; a backend that cannot perform the operation returns an error rather than a silent no-op. See [Platform abstraction](docs/platform.md).
 
 - An async executor that is integrated with the platform's event loop. See the `executor` module for more information.,
 
