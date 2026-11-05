@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use std::ops::Range;
 
 use gpui::{
@@ -759,10 +760,12 @@ fn run_example() {
         window
             .update(cx, |view, window, cx| {
                 window.focus(&view.text_input.focus_handle(cx), cx);
-                cx.activate(true);
+                cx.activate(true).log_err();
             })
             .unwrap();
-        cx.on_action(|_: &Quit, cx| cx.quit());
+        cx.on_action(|_: &Quit, cx| {
+            cx.quit().log_err();
+        });
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
     });
 }

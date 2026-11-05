@@ -1271,13 +1271,11 @@ mod element {
             window: &mut Window,
             cx: &mut App,
         ) -> (gpui::LayoutId, Self::RequestLayoutState) {
-            let style = Style {
-                flex_grow: 1.,
-                flex_shrink: 1.,
-                flex_basis: relative(0.).into(),
-                size: size(relative(1.).into(), relative(1.).into()),
-                ..Style::default()
-            };
+            let mut style = Style::default();
+            style.flex_grow = 1.;
+            style.flex_shrink = 1.;
+            style.flex_basis = relative(0.).into();
+            style.size = size(relative(1.).into(), relative(1.).into());
             (window.request_layout(style, None, cx), ())
         }
 

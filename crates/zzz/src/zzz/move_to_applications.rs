@@ -349,7 +349,7 @@ async fn copy_app_bundle(source: &Path, destination: &Path) -> Result<()> {
 fn restart_into(app_path: PathBuf, cx: &mut AsyncWindowContext) -> Result<()> {
     cx.update(|_window, cx| {
         cx.set_restart_path(app_path);
-        cx.restart();
+        cx.restart().log_err();
     })?;
     Ok(())
 }

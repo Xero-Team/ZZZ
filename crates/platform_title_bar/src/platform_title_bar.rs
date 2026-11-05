@@ -1,6 +1,7 @@
 pub mod platforms;
 mod system_window_tabs;
 
+use gpui::ResultExt as _;
 use gpui::{
     Action, AnyElement, App, Context, Decorations, Entity, Hsla, InteractiveElement, IntoElement,
     MouseButton, ParentElement, StatefulInteractiveElement, Styled, WeakEntity, Window,
@@ -259,7 +260,7 @@ impl Render for PlatformTitleBar {
                         |this| {
                             this.on_click(|event, window, _| {
                                 if event.click_count() == 2 {
-                                    window.zoom_window();
+                                    window.zoom_window().log_err();
                                 }
                             })
                         },

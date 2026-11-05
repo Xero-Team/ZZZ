@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -175,8 +176,10 @@ fn run_example() {
             cx.set_http_client(Arc::new(http_client));
         }
 
-        cx.activate(true);
-        cx.on_action(|_: &Quit, cx| cx.quit());
+        cx.activate(true).log_err();
+        cx.on_action(|_: &Quit, cx| {
+            cx.quit().log_err();
+        });
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
         cx.set_menus(vec![Menu {
             name: "Image".into(),

@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use gpui::{
     App, Bounds, Context, Div, ElementId, FocusHandle, KeyBinding, SharedString, Stateful, Window,
     WindowBounds, WindowOptions, actions, div, prelude::*, px, size,
@@ -55,7 +56,7 @@ impl Example {
     }
 
     fn on_quit(&mut self, _: &Quit, _window: &mut Window, cx: &mut Context<Self>) {
-        cx.quit();
+        cx.quit().log_err();
     }
 }
 
@@ -212,7 +213,7 @@ fn run_example() {
         )
         .unwrap();
 
-        cx.activate(true);
+        cx.activate(true).log_err();
     });
 }
 

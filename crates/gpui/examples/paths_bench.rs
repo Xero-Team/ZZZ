@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use gpui::{
     Background, Bounds, ColorSpace, Context, Path, PathBuilder, Pixels, Render, TitlebarOptions,
     Window, WindowBounds, WindowOptions, canvas, div, linear_color_stop, linear_gradient, point,
@@ -90,7 +91,7 @@ fn run_example() {
             |window, cx| cx.new(|cx| PaintingViewer::new(window, cx)),
         )
         .unwrap();
-        cx.activate(true);
+        cx.activate(true).log_err();
     });
 }
 

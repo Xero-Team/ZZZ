@@ -1059,8 +1059,10 @@ impl App {
     }
 
     /// Gracefully quit the application via the platform's standard routine.
-    pub fn quit(&self) {
-        self.platform.quit();
+    ///
+    /// Returns an error when the platform backend does not support quitting.
+    pub fn quit(&self) -> Result<()> {
+        self.platform.quit()
     }
 
     /// Returns the current policy for hiding the cursor in response to
@@ -1315,31 +1317,31 @@ impl App {
     }
 
     /// Instructs the platform to activate the application by bringing it to the foreground.
-    pub fn activate(&self, ignoring_other_apps: bool) {
-        if self.platform.lifecycle_capabilities().activate {
-            self.platform.activate(ignoring_other_apps);
-        }
+    ///
+    /// Returns an error when the platform backend does not support activation.
+    pub fn activate(&self, ignoring_other_apps: bool) -> Result<()> {
+        self.platform.activate(ignoring_other_apps)
     }
 
     /// Hide the application at the platform level.
-    pub fn hide(&self) {
-        if self.platform.lifecycle_capabilities().hide {
-            self.platform.hide();
-        }
+    ///
+    /// Returns an error when the platform backend does not support hiding.
+    pub fn hide(&self) -> Result<()> {
+        self.platform.hide()
     }
 
     /// Hide other applications at the platform level.
-    pub fn hide_other_apps(&self) {
-        if self.platform.lifecycle_capabilities().hide_other_apps {
-            self.platform.hide_other_apps();
-        }
+    ///
+    /// Returns an error when the platform backend does not support hiding other applications.
+    pub fn hide_other_apps(&self) -> Result<()> {
+        self.platform.hide_other_apps()
     }
 
     /// Unhide other applications at the platform level.
-    pub fn unhide_other_apps(&self) {
-        if self.platform.lifecycle_capabilities().hide_other_apps {
-            self.platform.unhide_other_apps();
-        }
+    ///
+    /// Returns an error when the platform backend does not support unhiding other applications.
+    pub fn unhide_other_apps(&self) -> Result<()> {
+        self.platform.unhide_other_apps()
     }
 
     /// Returns the lifecycle operations implemented by the current platform backend.
@@ -1591,7 +1593,9 @@ impl App {
     }
 
     /// Restarts the application.
-    pub fn restart(&mut self) {
+    ///
+    /// Returns an error when the platform backend does not support restarting.
+    pub fn restart(&mut self) -> Result<()> {
         self.restart_observers
             .clone()
             .retain(&(), |observer| observer(self));
@@ -1891,7 +1895,7 @@ impl App {
                     };
 
                     if quit_on_empty && cx.windows.is_empty() {
-                        cx.quit();
+                        cx.quit().log_err();
                     }
                 } else {
                     cx.windows.get_mut(id)?.replace(window);
@@ -3052,6 +3056,7 @@ mod test {
         AppContext, BackgroundExecutor, ForegroundExecutor, TestAppContext, TestDispatcher,
         TestPlatform,
     };
+    use gpui_util::ResultExt as _;
 
     #[gpui::test]
     fn app_borrow_diagnostics(cx: &mut TestAppContext) {
@@ -3177,7 +3182,7 @@ mod test {
 
         cx.update(|cx| {
             cx.set_restart_path(restart_path.clone());
-            cx.restart();
+            cx.restart().log_err();
         });
 
         let (path, restart_arguments) = restart.await.expect("restart was not requested");

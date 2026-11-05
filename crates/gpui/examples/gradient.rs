@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use gpui::{
     App, Bounds, ColorSpace, Context, Half, Render, Window, WindowOptions, canvas, div,
     linear_color_stop, linear_gradient, point, prelude::*, px, size,
@@ -255,7 +256,7 @@ fn run_example() {
             |_, cx| cx.new(|_| GradientViewer::new()),
         )
         .unwrap();
-        cx.activate(true);
+        cx.activate(true).log_err();
     });
 }
 

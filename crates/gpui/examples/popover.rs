@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use gpui::{
     Anchor, App, Context, Div, Hsla, Stateful, Window, WindowOptions, anchored, deferred, div,
     prelude::*, px,
@@ -174,7 +175,7 @@ fn run_example() {
             })
         })
         .unwrap();
-        cx.activate(true);
+        cx.activate(true).log_err();
     });
 }
 

@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use std::{ops::Range, rc::Rc, time::Duration};
 
 use gpui::{
@@ -472,7 +473,7 @@ fn run_example() {
         )
         .unwrap();
 
-        cx.activate(true);
+        cx.activate(true).log_err();
     });
 }
 

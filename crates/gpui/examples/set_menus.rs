@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use gpui::{
     App, Context, Global, Menu, MenuItem, SharedString, SystemMenuType, Window, WindowOptions,
     actions, div, prelude::*,
@@ -27,7 +28,7 @@ fn run_example() {
         cx.set_global(AppState::new());
 
         // Bring the menu bar to the foreground (so you can see the menu bar)
-        cx.activate(true);
+        cx.activate(true).log_err();
         // Register the `quit` function so it can be referenced
         // by the `MenuItem::action` in the menu bar
         cx.on_action(quit);
@@ -118,7 +119,7 @@ actions!(set_menus, [Quit, ToggleCheck]);
 // Define the quit function that is registered with the App
 fn quit(_: &Quit, cx: &mut App) {
     println!("Gracefully quitting the application...");
-    cx.quit();
+    cx.quit().log_err();
 }
 
 fn toggle_check(_: &ToggleCheck, cx: &mut App) {

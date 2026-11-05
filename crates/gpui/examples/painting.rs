@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use gpui::{
     Background, Bounds, ColorSpace, Context, MouseDownEvent, Path, PathBuilder, PathStyle, Pixels,
     Point, Render, StrokeOptions, Window, WindowOptions, canvas, div, linear_color_stop,
@@ -452,10 +453,10 @@ fn run_example() {
         )
         .unwrap();
         cx.on_window_closed(|cx, _window_id| {
-            cx.quit();
+            cx.quit().log_err();
         })
         .detach();
-        cx.activate(true);
+        cx.activate(true).log_err();
     });
 }
 

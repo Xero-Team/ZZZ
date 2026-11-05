@@ -146,11 +146,17 @@ actions!(
 
 pub fn init(cx: &mut App) {
     #[cfg(target_os = "macos")]
-    cx.on_action(|_: &Hide, cx| cx.hide());
+    cx.on_action(|_: &Hide, cx| {
+        cx.hide().log_err();
+    });
     #[cfg(target_os = "macos")]
-    cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
+    cx.on_action(|_: &HideOthers, cx| {
+        cx.hide_other_apps().log_err();
+    });
     #[cfg(target_os = "macos")]
-    cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
+    cx.on_action(|_: &ShowAll, cx| {
+        cx.unhide_other_apps().log_err();
+    });
     cx.on_action(quit);
 
     cx.observe_flag::<PanicFeatureFlag, _>({
@@ -304,7 +310,7 @@ fn bind_on_window_closed(cx: &mut App) -> Option<gpui::Subscription> {
             .then(|| {
                 cx.on_window_closed(|cx, _window_id| {
                     if cx.windows().is_empty() {
-                        cx.quit();
+                        cx.quit().log_err();
                     }
                 })
             })
@@ -313,7 +319,7 @@ fn bind_on_window_closed(cx: &mut App) -> Option<gpui::Subscription> {
     {
         Some(cx.on_window_closed(|cx, _window_id| {
             if cx.windows().is_empty() {
-                cx.quit();
+                cx.quit().log_err();
             }
         }))
     }
@@ -621,7 +627,7 @@ fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
         cx.spawn(async move |_, cx| {
             if prompt.await == Ok(0) {
                 cx.update(|cx| {
-                    cx.quit();
+                    cx.quit().log_err();
                 });
             }
         })
@@ -657,7 +663,7 @@ fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
         );
         cx.spawn(async move |_, cx| {
             if prompt.await == Ok(0) {
-                cx.update(|cx| cx.quit());
+                cx.update(|cx| cx.quit()).log_err();
             }
         })
         .detach()
@@ -707,7 +713,7 @@ fn show_software_emulation_warning_if_needed(
         cx.spawn(async move |_, cx| {
             if prompt.await == Ok(1) {
                 cx.update(|cx| {
-                    cx.quit();
+                    cx.quit().log_err();
                 });
             }
         })
@@ -876,10 +882,10 @@ fn register_actions(
             },
         )
         .register_action(|_, _: &Minimize, window, _| {
-            window.minimize_window();
+            window.minimize_window().log_err();
         })
         .register_action(|_, _: &Zoom, window, _| {
-            window.zoom_window();
+            window.zoom_window().log_err();
         })
         .register_action(|_, _: &ToggleFullScreen, window, cx| {
             let use_simple_fullscreen = PlatformStyle::platform() == PlatformStyle::Mac
@@ -1165,7 +1171,7 @@ fn register_actions(
                     app_state.clone(),
                     cx,
                     |workspace, window, cx| {
-                        cx.activate(true);
+                        cx.activate(true).log_err();
                         initialize_new_window(workspace, window, cx);
                     },
                 )
@@ -1644,7 +1650,7 @@ fn quit(_: &Quit, cx: &mut App) {
         }
         futures::future::join_all(flush_tasks).await;
 
-        cx.update(|cx| cx.quit());
+        cx.update(|cx| cx.quit()).log_err();
         anyhow::Ok(())
     })
     .detach_and_log_err(cx);

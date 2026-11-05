@@ -73,17 +73,33 @@ impl crate::AppLifecycle for VisualTestPlatform {
         panic!("VisualTestPlatform::run should not be called in tests")
     }
 
-    fn quit(&self) {}
+    fn quit(&self) -> Result<()> {
+        Ok(())
+    }
 
-    fn restart(&self, _binary_path: Option<PathBuf>, _arguments: Vec<std::ffi::OsString>) {}
+    fn restart(
+        &self,
+        _binary_path: Option<PathBuf>,
+        _arguments: Vec<std::ffi::OsString>,
+    ) -> Result<()> {
+        Ok(())
+    }
 
-    fn activate(&self, _ignoring_other_apps: bool) {}
+    fn activate(&self, _ignoring_other_apps: bool) -> Result<()> {
+        Ok(())
+    }
 
-    fn hide(&self) {}
+    fn hide(&self) -> Result<()> {
+        Ok(())
+    }
 
-    fn hide_other_apps(&self) {}
+    fn hide_other_apps(&self) -> Result<()> {
+        Ok(())
+    }
 
-    fn unhide_other_apps(&self) {}
+    fn unhide_other_apps(&self) -> Result<()> {
+        Ok(())
+    }
 
     fn on_quit(&self, _callback: Box<dyn FnMut()>) {}
 

@@ -1,3 +1,4 @@
+use gpui::ResultExt as _;
 use gpui::prelude::*;
 use gpui::{
     App, Bounds, Context, ElementId, SharedString, Task, Window, WindowBounds, WindowOptions, div,
@@ -417,6 +418,6 @@ fn main() {
             |_, cx| cx.new(HelloWeb::new),
         )
         .expect("failed to open window");
-        cx.activate(true);
+        cx.activate(true).log_err();
     });
 }

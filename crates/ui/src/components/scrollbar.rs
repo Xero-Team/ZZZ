@@ -1343,12 +1343,10 @@ impl<T: ScrollableHandle> Element for ScrollbarElement<T> {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        let scrollbar_style = Style {
-            position: Position::Absolute,
-            inset: Edges::default(),
-            size: size(relative(1.), relative(1.)).map(Into::into),
-            ..Default::default()
-        };
+        let mut scrollbar_style = Style::default();
+        scrollbar_style.position = Position::Absolute;
+        scrollbar_style.inset = Edges::default();
+        scrollbar_style.size = size(relative(1.), relative(1.)).map(Into::into);
 
         (window.request_layout(scrollbar_style, None, cx), ())
     }

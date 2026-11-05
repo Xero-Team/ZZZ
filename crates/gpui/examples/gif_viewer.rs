@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use gpui::{App, Context, Render, Window, WindowOptions, div, img, prelude::*};
 use gpui_platform::application;
 use std::path::PathBuf;
@@ -38,7 +39,7 @@ fn run_example() {
             |_, cx| cx.new(|_| GifViewer::new(gif_path)),
         )
         .unwrap();
-        cx.activate(true);
+        cx.activate(true).log_err();
     });
 }
 

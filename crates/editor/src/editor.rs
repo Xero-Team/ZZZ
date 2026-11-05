@@ -384,7 +384,7 @@ pub fn init(cx: &mut App) {
             app_state,
             cx,
             |workspace, window, cx| {
-                cx.activate(true);
+                cx.activate(true).log_err();
                 Editor::new_file(workspace, &Default::default(), window, cx)
             },
         )

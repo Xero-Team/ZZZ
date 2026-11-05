@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -114,7 +115,7 @@ fn run_example() {
             ..Default::default()
         };
         cx.open_window(options, |_, cx| {
-            cx.activate(false);
+            cx.activate(false).log_err();
             cx.new(|_| AnimationExample {})
         })
         .unwrap();

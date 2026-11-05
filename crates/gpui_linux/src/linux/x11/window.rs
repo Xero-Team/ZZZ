@@ -1640,7 +1640,7 @@ impl gpui::WindowHost for X11Window {
         state.renderer.update_transparency(transparent);
     }
 
-    fn minimize(&self) {
+    fn minimize(&self) -> anyhow::Result<()> {
         let state = self.0.state.borrow();
         const WINDOW_ICONIC_STATE: u32 = 3;
         let message = ClientMessageEvent::new(
@@ -1659,9 +1659,10 @@ impl gpui::WindowHost for X11Window {
             ),
         )
         .log_err();
+        Ok(())
     }
 
-    fn zoom(&self) {
+    fn zoom(&self) -> anyhow::Result<()> {
         let state = self.0.state.borrow();
         self.set_wm_hints(
             || "X11 SendEvent to maximize a window failed.",
@@ -1670,6 +1671,7 @@ impl gpui::WindowHost for X11Window {
             state.atoms._NET_WM_STATE_MAXIMIZED_HORZ,
         )
         .log_err();
+        Ok(())
     }
 
     fn toggle_fullscreen(&self) {
@@ -2037,23 +2039,23 @@ impl PlatformWindow for X11Window {
 }
 
 fn x11_capabilities() -> gpui::PlatformCapabilities {
-    gpui::PlatformCapabilities {
-        text_input: true,
-        ime_candidate_position: true,
-        accessibility: cfg!(feature = "accessibility"),
-        headless_renderer: false,
-        frame_callbacks: true,
-        system_bell: true,
-        native_prompt: false,
-        clipboard: gpui::ClipboardCapabilities::READ_WRITE,
-        window_controls: gpui::WindowControls::default(),
-        window_services: gpui::WindowServiceCapabilities {
-            decorations: true,
-            client_inset: true,
-            app_id: true,
-            ..Default::default()
-        },
-    }
+    let mut capabilities = gpui::PlatformCapabilities::default();
+    capabilities.text_input = true;
+    capabilities.ime_candidate_position = true;
+    capabilities.accessibility = cfg!(feature = "accessibility");
+    capabilities.headless_renderer = false;
+    capabilities.frame_callbacks = true;
+    capabilities.system_bell = true;
+    capabilities.native_prompt = false;
+    capabilities.clipboard = gpui::ClipboardCapabilities::READ_WRITE;
+    capabilities.window_controls = gpui::WindowControls::default();
+    capabilities.window_services = gpui::WindowServiceCapabilities {
+        decorations: true,
+        client_inset: true,
+        app_id: true,
+        ..Default::default()
+    };
+    capabilities
 }
 
 #[cfg(test)]

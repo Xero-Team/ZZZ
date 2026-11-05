@@ -165,7 +165,7 @@ pub fn clone_and_open(
                                 app_state,
                                 cx,
                                 move |workspace, window, cx| {
-                                    cx.activate(true);
+                                    cx.activate(true).log_err();
                                     create_worktree_and_run_on_success(
                                         workspace,
                                         destination_path,

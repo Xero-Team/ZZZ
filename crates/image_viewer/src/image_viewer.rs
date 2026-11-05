@@ -317,17 +317,9 @@ impl Element for ImageContentElement {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        (
-            window.request_layout(
-                Style {
-                    size: size(relative(1.).into(), relative(1.).into()),
-                    ..Default::default()
-                },
-                [],
-                cx,
-            ),
-            (),
-        )
+        let mut style = Style::default();
+        style.size = size(relative(1.).into(), relative(1.).into());
+        (window.request_layout(style, [], cx), ())
     }
 
     fn prepaint(

@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use gpui::{
     App, Bounds, Context, KeyBinding, PromptButton, PromptLevel, Window, WindowBounds, WindowKind,
     WindowOptions, actions, div, prelude::*, px, rgb, size,
@@ -249,7 +250,7 @@ impl Render for WindowDemo {
                 .unwrap();
             }))
             .child(button("Hide Application", |window, cx| {
-                cx.hide();
+                cx.hide().log_err();
 
                 // Restore the application after 3 seconds
                 window
@@ -258,7 +259,7 @@ impl Render for WindowDemo {
                             .timer(std::time::Duration::from_secs(3))
                             .await;
                         cx.update(|_, cx| {
-                            cx.activate(false);
+                            cx.activate(false).log_err();
                         })
                     })
                     .detach();
@@ -330,8 +331,10 @@ fn run_example() {
         )
         .unwrap();
 
-        cx.activate(true);
-        cx.on_action(|_: &Quit, cx| cx.quit());
+        cx.activate(true).log_err();
+        cx.on_action(|_: &Quit, cx| {
+            cx.quit().log_err();
+        });
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
     });
 }

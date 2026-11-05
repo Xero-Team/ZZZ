@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use std::{
     borrow::Cow,
     ops::{Deref, DerefMut},
@@ -391,7 +392,7 @@ fn run_example() {
 
         window
             .update(cx, |_view, _window, cx| {
-                cx.activate(true);
+                cx.activate(true).log_err();
             })
             .unwrap();
     });

@@ -40,8 +40,6 @@ use crate::{
     SystemWindowTab, Task, ThreadTaskTimings, Window, WindowControlArea, hash, point, px, size,
 };
 use anyhow::Result;
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
-use anyhow::bail;
 use async_task::Runnable;
 use futures::channel::oneshot;
 #[cfg(any(test, feature = "test-support"))]
@@ -118,18 +116,39 @@ pub fn guess_compositor() -> &'static str {
 }
 
 /// Application lifecycle owned by the platform event loop.
+///
+/// Operations a backend cannot perform return an error rather than silently
+/// succeeding. Each method defaults to an "unsupported" error so that a new
+/// backend never accidentally presents an unimplemented operation as a no-op
+/// success; backends override only what they actually implement.
 #[expect(missing_docs)]
 pub trait AppLifecycle {
     fn lifecycle_capabilities(&self) -> AppLifecycleCapabilities {
         AppLifecycleCapabilities::default()
     }
     fn run(&self, on_finish_launching: Box<dyn 'static + FnOnce()>);
-    fn quit(&self);
-    fn restart(&self, binary_path: Option<PathBuf>, arguments: Vec<std::ffi::OsString>);
-    fn activate(&self, ignoring_other_apps: bool);
-    fn hide(&self);
-    fn hide_other_apps(&self);
-    fn unhide_other_apps(&self);
+    fn quit(&self) -> Result<()> {
+        anyhow::bail!("quitting is not supported by this platform")
+    }
+    fn restart(
+        &self,
+        _binary_path: Option<PathBuf>,
+        _arguments: Vec<std::ffi::OsString>,
+    ) -> Result<()> {
+        anyhow::bail!("restarting is not supported by this platform")
+    }
+    fn activate(&self, _ignoring_other_apps: bool) -> Result<()> {
+        anyhow::bail!("activating the application is not supported by this platform")
+    }
+    fn hide(&self) -> Result<()> {
+        anyhow::bail!("hiding the application is not supported by this platform")
+    }
+    fn hide_other_apps(&self) -> Result<()> {
+        anyhow::bail!("hiding other applications is not supported by this platform")
+    }
+    fn unhide_other_apps(&self) -> Result<()> {
+        anyhow::bail!("unhiding other applications is not supported by this platform")
+    }
     fn on_quit(&self, callback: Box<dyn FnMut()>);
     fn on_reopen(&self, callback: Box<dyn FnMut()>);
 }
@@ -526,6 +545,7 @@ pub struct WindowServiceCapabilities {
 }
 
 /// Capabilities exposed by a platform window implementation.
+#[non_exhaustive]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct PlatformCapabilities {
     /// Whether the platform has a text-input/IME bridge.
@@ -752,7 +772,7 @@ impl WindowButtonLayout {
             && layout.left.iter().all(Option::is_none)
             && layout.right.iter().all(Option::is_none)
         {
-            bail!(
+            anyhow::bail!(
                 "button layout string {:?} contains no valid buttons (unrecognized: {})",
                 layout_string,
                 unrecognized.join(", ")
@@ -856,8 +876,14 @@ pub trait WindowHost {
     fn background_appearance(&self) -> WindowBackgroundAppearance;
     fn set_title(&mut self, title: &str);
     fn set_background_appearance(&self, background_appearance: WindowBackgroundAppearance);
-    fn minimize(&self);
-    fn zoom(&self);
+    /// Minimize the window. Returns an error when the backend cannot minimize.
+    fn minimize(&self) -> Result<()> {
+        anyhow::bail!("minimizing the window is not supported by this platform")
+    }
+    /// Zoom (maximize) the window. Returns an error when the backend cannot zoom.
+    fn zoom(&self) -> Result<()> {
+        anyhow::bail!("zooming the window is not supported by this platform")
+    }
     fn toggle_fullscreen(&self);
     fn is_fullscreen(&self) -> bool;
     fn frame_waker(&self) -> Option<Rc<dyn Fn()>> {
@@ -2830,5 +2856,40 @@ mod tests {
     #[test]
     fn test_window_button_layout_parse_all_invalid() {
         assert!(WindowButtonLayout::parse("asdfghjkl").is_err());
+    }
+
+    /// A backend that overrides none of the optional lifecycle operations.
+    /// It inherits the trait defaults, which must surface unsupported work as
+    /// an error instead of a successful no-op.
+    struct UnsupportedLifecycle;
+
+    impl AppLifecycle for UnsupportedLifecycle {
+        fn run(&self, on_finish_launching: Box<dyn 'static + FnOnce()>) {
+            on_finish_launching();
+        }
+        fn on_quit(&self, _callback: Box<dyn FnMut()>) {}
+        fn on_reopen(&self, _callback: Box<dyn FnMut()>) {}
+    }
+
+    #[test]
+    fn default_lifecycle_operations_report_unsupported_instead_of_succeeding() {
+        let lifecycle = UnsupportedLifecycle;
+        assert!(lifecycle.quit().is_err());
+        assert!(lifecycle.restart(None, Vec::new()).is_err());
+        assert!(lifecycle.activate(false).is_err());
+        assert!(lifecycle.hide().is_err());
+        assert!(lifecycle.hide_other_apps().is_err());
+        assert!(lifecycle.unhide_other_apps().is_err());
+    }
+
+    #[test]
+    fn default_lifecycle_capabilities_are_all_unsupported() {
+        let capabilities = UnsupportedLifecycle.lifecycle_capabilities();
+        assert_eq!(capabilities, AppLifecycleCapabilities::default());
+        assert!(!capabilities.quit);
+        assert!(!capabilities.restart);
+        assert!(!capabilities.activate);
+        assert!(!capabilities.hide);
+        assert!(!capabilities.hide_other_apps);
     }
 }

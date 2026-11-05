@@ -5,7 +5,7 @@ use askpass::EncryptedPassword;
 use clap::Parser;
 use client::{Client, UserStore};
 use futures::channel::oneshot;
-use gpui::AppContext as _;
+use gpui::{AppContext as _, ResultExt as _};
 use http_client::FakeHttpClient;
 use language::LanguageRegistry;
 use node_runtime::NodeRuntime;
@@ -222,7 +222,7 @@ fn main() -> Result<(), anyhow::Error> {
                 "Finished project search after {elapsed:?}. Matched {matched_files} files and {matched_chunks} excerpts"
             );
             drop(project);
-            cx.update(|cx| cx.quit());
+            cx.update(|cx| cx.quit()).log_err();
 
             anyhow::Ok(())
         })

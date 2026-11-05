@@ -1002,12 +1002,12 @@ impl WgpuRenderer {
     }
 
     pub fn gpu_specs(&self) -> GpuSpecs {
-        GpuSpecs {
-            is_software_emulated: self.adapter_info.device_type == wgpu::DeviceType::Cpu,
-            device_name: self.adapter_info.name.clone(),
-            driver_name: self.adapter_info.driver.clone(),
-            driver_info: self.adapter_info.driver_info.clone(),
-        }
+        let mut specs = GpuSpecs::default();
+        specs.is_software_emulated = self.adapter_info.device_type == wgpu::DeviceType::Cpu;
+        specs.device_name = self.adapter_info.name.clone();
+        specs.driver_name = self.adapter_info.driver.clone();
+        specs.driver_info = self.adapter_info.driver_info.clone();
+        specs
     }
 
     pub fn max_texture_size(&self) -> u32 {

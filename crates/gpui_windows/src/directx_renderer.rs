@@ -871,12 +871,12 @@ impl DirectXRenderer {
         .context("Failed to get gpu driver info")
         .log_err()
         .unwrap_or("Unknown Driver".to_owned());
-        Ok(GpuSpecs {
-            is_software_emulated,
-            device_name,
-            driver_name,
-            driver_info: driver_version,
-        })
+        let mut specs = GpuSpecs::default();
+        specs.is_software_emulated = is_software_emulated;
+        specs.device_name = device_name;
+        specs.driver_name = driver_name;
+        specs.driver_info = driver_version;
+        Ok(specs)
     }
 
     pub(crate) fn get_font_info() -> &'static FontInfo {

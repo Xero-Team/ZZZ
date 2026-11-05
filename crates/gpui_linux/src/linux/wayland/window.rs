@@ -1420,13 +1420,14 @@ impl gpui::WindowHost for WaylandWindow {
         update_window(state);
     }
 
-    fn minimize(&self) {
+    fn minimize(&self) -> anyhow::Result<()> {
         if let Some(toplevel) = self.borrow().surface_state.toplevel() {
             toplevel.set_minimized();
         }
+        Ok(())
     }
 
-    fn zoom(&self) {
+    fn zoom(&self) -> anyhow::Result<()> {
         let state = self.borrow();
         if let Some(toplevel) = state.surface_state.toplevel() {
             if state.maximized {
@@ -1435,6 +1436,7 @@ impl gpui::WindowHost for WaylandWindow {
                 toplevel.set_maximized();
             }
         }
+        Ok(())
     }
 
     fn toggle_fullscreen(&self) {
@@ -1712,24 +1714,24 @@ fn wayland_capabilities(
     window_controls: WindowControls,
     system_bell: bool,
 ) -> gpui::PlatformCapabilities {
-    gpui::PlatformCapabilities {
-        text_input: true,
-        ime_candidate_position: true,
-        accessibility: cfg!(feature = "accessibility"),
-        headless_renderer: false,
-        frame_callbacks: true,
-        system_bell,
-        native_prompt: false,
-        clipboard: gpui::ClipboardCapabilities::READ_WRITE,
-        window_controls,
-        window_services: gpui::WindowServiceCapabilities {
-            decorations: true,
-            input_region: true,
-            client_inset: true,
-            app_id: true,
-            ..Default::default()
-        },
-    }
+    let mut capabilities = gpui::PlatformCapabilities::default();
+    capabilities.text_input = true;
+    capabilities.ime_candidate_position = true;
+    capabilities.accessibility = cfg!(feature = "accessibility");
+    capabilities.headless_renderer = false;
+    capabilities.frame_callbacks = true;
+    capabilities.system_bell = system_bell;
+    capabilities.native_prompt = false;
+    capabilities.clipboard = gpui::ClipboardCapabilities::READ_WRITE;
+    capabilities.window_controls = window_controls;
+    capabilities.window_services = gpui::WindowServiceCapabilities {
+        decorations: true,
+        input_region: true,
+        client_inset: true,
+        app_id: true,
+        ..Default::default()
+    };
+    capabilities
 }
 
 #[cfg(test)]

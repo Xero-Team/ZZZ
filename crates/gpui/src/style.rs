@@ -175,6 +175,7 @@ pub struct GridTemplate {
 }
 
 /// The CSS styling that can be applied to an element via the `Styled` trait
+#[non_exhaustive]
 #[derive(Clone, Refineable, Debug)]
 #[refineable(Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Style {

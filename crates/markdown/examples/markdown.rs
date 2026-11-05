@@ -1,4 +1,5 @@
 use assets::Assets;
+use gpui::ResultExt as _;
 use gpui::{Entity, KeyBinding, StyleRefinement, WindowOptions, prelude::*, rgb};
 use language::LanguageRegistry;
 use markdown::{Markdown, MarkdownElement, MarkdownStyle};
@@ -50,7 +51,7 @@ pub fn main() {
         languages::init(language_registry.clone(), fs, node_runtime, cx);
         Assets.load_fonts(cx).unwrap();
 
-        cx.activate(true);
+        cx.activate(true).log_err();
         cx.open_window(WindowOptions::default(), |_, cx| {
             cx.new(|cx| MarkdownExample::new(MARKDOWN_EXAMPLE.into(), language_registry, cx))
         })

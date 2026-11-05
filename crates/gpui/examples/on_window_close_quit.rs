@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use gpui::{
     App, Bounds, Context, FocusHandle, KeyBinding, Window, WindowBounds, WindowOptions, actions,
     div, prelude::*, px, rgb, size,
@@ -44,7 +45,7 @@ fn run_example() {
         cx.bind_keys([KeyBinding::new("cmd-w", CloseWindow, None)]);
         cx.on_window_closed(|cx, _window_id| {
             if cx.windows().is_empty() {
-                cx.quit();
+                cx.quit().log_err();
             }
         })
         .detach();
@@ -55,7 +56,7 @@ fn run_example() {
                 ..Default::default()
             },
             |window, cx| {
-                cx.activate(false);
+                cx.activate(false).log_err();
                 cx.new(|cx| {
                     let focus_handle = cx.focus_handle();
                     focus_handle.focus(window, cx);

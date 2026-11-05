@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use gpui::{App, Bounds, Context, Window, WindowBounds, WindowOptions, div, prelude::*, px, size};
 use gpui_platform::application;
 
@@ -55,7 +56,7 @@ fn run_example() {
             |_, cx| cx.new(|_| Scrollable {}),
         )
         .unwrap();
-        cx.activate(true);
+        cx.activate(true).log_err();
     });
 }
 

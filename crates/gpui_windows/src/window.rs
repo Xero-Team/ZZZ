@@ -903,11 +903,12 @@ impl gpui::WindowHost for WindowsWindow {
         }
     }
 
-    fn minimize(&self) {
+    fn minimize(&self) -> Result<()> {
         unsafe { ShowWindowAsync(self.0.hwnd, SW_MINIMIZE).ok().log_err() };
+        Ok(())
     }
 
-    fn zoom(&self) {
+    fn zoom(&self) -> Result<()> {
         unsafe {
             if IsWindowVisible(self.0.hwnd).as_bool() {
                 ShowWindowAsync(self.0.hwnd, SW_MAXIMIZE).ok().log_err();
@@ -916,6 +917,7 @@ impl gpui::WindowHost for WindowsWindow {
                 self.state.initial_placement.set(Some(status));
             }
         }
+        Ok(())
     }
 
     fn toggle_fullscreen(&self) {
@@ -1128,22 +1130,22 @@ impl PlatformWindow for WindowsWindow {
 }
 
 fn windows_capabilities() -> gpui::PlatformCapabilities {
-    gpui::PlatformCapabilities {
-        text_input: true,
-        ime_candidate_position: true,
-        accessibility: cfg!(feature = "accessibility"),
-        headless_renderer: cfg!(any(test, feature = "test-support")),
-        frame_callbacks: true,
-        system_bell: true,
-        native_prompt: true,
-        clipboard: gpui::ClipboardCapabilities::READ_WRITE,
-        window_controls: gpui::WindowControls {
-            move_window: false,
-            resize_window: false,
-            ..gpui::WindowControls::default()
-        },
-        window_services: gpui::WindowServiceCapabilities::default(),
-    }
+    let mut capabilities = gpui::PlatformCapabilities::default();
+    capabilities.text_input = true;
+    capabilities.ime_candidate_position = true;
+    capabilities.accessibility = cfg!(feature = "accessibility");
+    capabilities.headless_renderer = cfg!(any(test, feature = "test-support"));
+    capabilities.frame_callbacks = true;
+    capabilities.system_bell = true;
+    capabilities.native_prompt = true;
+    capabilities.clipboard = gpui::ClipboardCapabilities::READ_WRITE;
+    capabilities.window_controls = gpui::WindowControls {
+        move_window: false,
+        resize_window: false,
+        ..gpui::WindowControls::default()
+    };
+    capabilities.window_services = gpui::WindowServiceCapabilities::default();
+    capabilities
 }
 
 #[implement(IDropTarget)]

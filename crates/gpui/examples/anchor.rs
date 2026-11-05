@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use gpui::{
     Anchor, AnchoredPositionMode, App, Axis, Bounds, Context, Half as _, InteractiveElement,
     ParentElement, Pixels, Point, Render, SharedString, Size, Window, WindowBounds, WindowOptions,
@@ -184,7 +185,7 @@ fn run_example() {
             },
         )
         .unwrap();
-        cx.activate(true);
+        cx.activate(true).log_err();
     });
 }
 

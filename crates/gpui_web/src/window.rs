@@ -715,13 +715,8 @@ impl gpui::WindowHost for WebWindow {
 
     fn set_background_appearance(&self, _background: WindowBackgroundAppearance) {}
 
-    fn minimize(&self) {
-        log::warn!("WebWindow::minimize is not supported in the browser");
-    }
-
-    fn zoom(&self) {
-        log::warn!("WebWindow::zoom is not supported in the browser");
-    }
+    // minimize/zoom are deliberately not overridden: they inherit
+    // WindowHost's "unsupported" error rather than silently succeeding.
 
     fn toggle_fullscreen(&self) {
         let Some(document) = self.inner.browser_window.document() else {
@@ -858,18 +853,18 @@ impl PlatformWindow for WebWindow {
 }
 
 fn web_capabilities(window_controls: WindowControls) -> gpui::PlatformCapabilities {
-    gpui::PlatformCapabilities {
-        text_input: false,
-        ime_candidate_position: false,
-        accessibility: false,
-        headless_renderer: false,
-        frame_callbacks: true,
-        system_bell: false,
-        native_prompt: false,
-        clipboard: gpui::ClipboardCapabilities::WRITE_ONLY,
-        window_controls,
-        window_services: gpui::WindowServiceCapabilities::default(),
-    }
+    let mut capabilities = gpui::PlatformCapabilities::default();
+    capabilities.text_input = false;
+    capabilities.ime_candidate_position = false;
+    capabilities.accessibility = false;
+    capabilities.headless_renderer = false;
+    capabilities.frame_callbacks = true;
+    capabilities.system_bell = false;
+    capabilities.native_prompt = false;
+    capabilities.clipboard = gpui::ClipboardCapabilities::WRITE_ONLY;
+    capabilities.window_controls = window_controls;
+    capabilities.window_services = gpui::WindowServiceCapabilities::default();
+    capabilities
 }
 
 #[cfg(test)]

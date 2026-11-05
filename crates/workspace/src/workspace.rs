@@ -10000,7 +10000,7 @@ pub fn reload(cx: &mut App) {
                 return anyhow::Ok(());
             }
         }
-        cx.update(|cx| cx.restart());
+        cx.update(|cx| cx.restart()).log_err();
         anyhow::Ok(())
     })
     .detach_and_log_err(cx);

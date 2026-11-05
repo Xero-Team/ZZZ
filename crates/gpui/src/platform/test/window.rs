@@ -352,13 +352,8 @@ impl crate::WindowHost for TestWindow {
 
     fn set_background_appearance(&self, _background: WindowBackgroundAppearance) {}
 
-    fn minimize(&self) {
-        unimplemented!()
-    }
-
-    fn zoom(&self) {
-        unimplemented!()
-    }
+    // minimize/zoom are deliberately not overridden: they inherit
+    // WindowHost's "unsupported" error rather than panicking.
 
     fn toggle_fullscreen(&self) {
         let mut lock = self.0.lock();

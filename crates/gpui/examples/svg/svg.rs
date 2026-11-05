@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use std::fs;
 use std::path::PathBuf;
 
@@ -85,7 +86,7 @@ fn run_example() {
                 |_, cx| cx.new(|_| SvgExample),
             )
             .unwrap();
-            cx.activate(true);
+            cx.activate(true).log_err();
         });
 }
 

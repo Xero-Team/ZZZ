@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use gpui::{
     App, Bounds, BoxShadow, Context, Div, SharedString, Window, WindowBounds, WindowOptions, div,
     hsla, point, prelude::*, px, relative, rgb, size,
@@ -583,7 +584,7 @@ fn run_example() {
         )
         .unwrap();
 
-        cx.activate(true);
+        cx.activate(true).log_err();
     });
 }
 

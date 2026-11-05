@@ -418,16 +418,17 @@ impl gpui::AppLifecycle for WindowsPlatform {
         }
     }
 
-    fn quit(&self) {
+    fn quit(&self) -> Result<()> {
         self.foreground_executor()
             .spawn(async { unsafe { PostQuitMessage(0) } })
             .detach();
+        Ok(())
     }
 
-    fn restart(&self, binary_path: Option<PathBuf>, arguments: Vec<OsString>) {
+    fn restart(&self, binary_path: Option<PathBuf>, arguments: Vec<OsString>) -> Result<()> {
         let pid = std::process::id();
         let Some(app_path) = binary_path.or(self.app_path().log_err()) else {
-            return;
+            anyhow::bail!("unable to find the running app to restart it");
         };
         let script = r#"
             $pidToWaitFor = $env:ZZZ_RESTART_PID
@@ -483,23 +484,12 @@ impl gpui::AppLifecycle for WindowsPlatform {
                 }
             })
             .detach();
+        Ok(())
     }
 
-    fn activate(&self, _ignoring_other_apps: bool) {
-        log::warn!("WindowsPlatform::activate is not supported");
-    }
-
-    fn hide(&self) {
-        log::warn!("WindowsPlatform::hide is not supported");
-    }
-
-    fn hide_other_apps(&self) {
-        log::warn!("WindowsPlatform::hide_other_apps is not supported");
-    }
-
-    fn unhide_other_apps(&self) {
-        log::warn!("WindowsPlatform::unhide_other_apps is not supported");
-    }
+    // activate/hide/hide_other_apps/unhide_other_apps are deliberately not
+    // overridden: they inherit AppLifecycle's "unsupported" error rather than
+    // silently succeeding with a warning.
 
     fn on_quit(&self, callback: Box<dyn FnMut()>) {
         self.inner.state.callbacks.quit.set(Some(callback));

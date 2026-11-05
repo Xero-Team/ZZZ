@@ -1,3 +1,4 @@
+use gpui_util::ResultExt as _;
 use std::{future::Future, rc::Rc, sync::Arc};
 
 use anyhow::{Result, anyhow};
@@ -161,7 +162,7 @@ impl BenchAppContext {
             if deterministic {
                 cx.background_executor().forbid_parking();
             }
-            cx.quit();
+            cx.quit().log_err();
         });
         self.run_until_idle();
     }

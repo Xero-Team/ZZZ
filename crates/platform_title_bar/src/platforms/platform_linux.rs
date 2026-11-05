@@ -1,3 +1,4 @@
+use gpui::ResultExt as _;
 use gpui::{
     Action, AnyElement, Hsla, MAX_BUTTONS_PER_SIDE, MouseButton, WindowButton, prelude::*, svg,
 };
@@ -236,9 +237,15 @@ impl RenderOnce for WindowControl {
                     return;
                 }
                 match self.icon {
-                    WindowControlType::Minimize => window.minimize_window(),
-                    WindowControlType::Restore => window.zoom_window(),
-                    WindowControlType::Maximize => window.zoom_window(),
+                    WindowControlType::Minimize => {
+                        window.minimize_window().log_err();
+                    }
+                    WindowControlType::Restore => {
+                        window.zoom_window().log_err();
+                    }
+                    WindowControlType::Maximize => {
+                        window.zoom_window().log_err();
+                    }
                     WindowControlType::Close => window.dispatch_action(
                         self.close_action
                             .as_ref()

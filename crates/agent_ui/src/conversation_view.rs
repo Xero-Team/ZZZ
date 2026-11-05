@@ -2738,7 +2738,7 @@ impl ConversationView {
                     log::error!("root view should be a MultiWorkspace");
                     return;
                 };
-                cx.activate(true);
+                cx.activate(true).log_err();
 
                 let workspace_handle = root_workspace.clone();
                 let agent = root_connection.clone();

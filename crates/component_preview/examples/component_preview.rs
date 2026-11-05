@@ -3,6 +3,7 @@
 //! Run with: `cargo run -p component_preview --example component_preview"`
 use assets::Assets;
 use fs::RealFs;
+use gpui::ResultExt as _;
 use gpui::{AppContext as _, Bounds, KeyBinding, WindowBounds, WindowOptions, actions, size};
 
 use client::{Client, UserStore};
@@ -20,7 +21,7 @@ use component_preview::{ComponentPreview, init};
 actions!(component_preview, [Quit]);
 
 fn quit(_: &Quit, cx: &mut App) {
-    cx.quit();
+    cx.quit().log_err();
 }
 
 fn main() {
@@ -150,6 +151,6 @@ fn main() {
         )
         .expect("Failed to open component preview window");
 
-        cx.activate(true);
+        cx.activate(true).log_err();
     });
 }

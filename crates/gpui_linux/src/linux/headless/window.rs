@@ -87,26 +87,26 @@ impl HeadlessWindow {
 }
 
 fn headless_capabilities() -> gpui::PlatformCapabilities {
-    gpui::PlatformCapabilities {
-        text_input: false,
-        ime_candidate_position: false,
-        accessibility: false,
-        headless_renderer: false,
-        frame_callbacks: false,
-        system_bell: false,
-        native_prompt: false,
-        clipboard: gpui::ClipboardCapabilities::NONE,
-        window_controls: gpui::WindowControls {
-            attention: false,
-            move_window: false,
-            resize_window: false,
-            fullscreen: true,
-            maximize: false,
-            minimize: false,
-            window_menu: false,
-        },
-        window_services: gpui::WindowServiceCapabilities::default(),
-    }
+    let mut capabilities = gpui::PlatformCapabilities::default();
+    capabilities.text_input = false;
+    capabilities.ime_candidate_position = false;
+    capabilities.accessibility = false;
+    capabilities.headless_renderer = false;
+    capabilities.frame_callbacks = false;
+    capabilities.system_bell = false;
+    capabilities.native_prompt = false;
+    capabilities.clipboard = gpui::ClipboardCapabilities::NONE;
+    capabilities.window_controls = gpui::WindowControls {
+        attention: false,
+        move_window: false,
+        resize_window: false,
+        fullscreen: true,
+        maximize: false,
+        minimize: false,
+        window_menu: false,
+    };
+    capabilities.window_services = gpui::WindowServiceCapabilities::default();
+    capabilities
 }
 
 impl gpui::AccessibilityBridge for HeadlessWindow {}
@@ -194,9 +194,8 @@ impl gpui::WindowHost for HeadlessWindow {
 
     fn set_background_appearance(&self, _background: WindowBackgroundAppearance) {}
 
-    fn minimize(&self) {}
-
-    fn zoom(&self) {}
+    // minimize/zoom are deliberately not overridden: they inherit
+    // WindowHost's "unsupported" error rather than silently succeeding.
 
     fn toggle_fullscreen(&self) {
         let mut state = self.0.borrow_mut();

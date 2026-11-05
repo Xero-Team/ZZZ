@@ -8,6 +8,7 @@
 
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use std::time::Duration;
 
 use gpui::{
@@ -137,7 +138,7 @@ fn run_example() {
             |window, cx| cx.new(|cx| HelloWorld::new(window, cx)),
         )
         .unwrap();
-        cx.activate(true);
+        cx.activate(true).log_err();
     });
 }
 

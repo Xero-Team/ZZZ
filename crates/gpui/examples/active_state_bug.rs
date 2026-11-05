@@ -1,4 +1,5 @@
 /// Click the button — the `.active()` background gets stuck on every other click.
+use gpui::ResultExt as _;
 use gpui::*;
 use gpui_platform::application;
 
@@ -42,6 +43,6 @@ fn main() {
             |_, cx| cx.new(|_| Example),
         )
         .unwrap();
-        cx.activate(true);
+        cx.activate(true).log_err();
     });
 }

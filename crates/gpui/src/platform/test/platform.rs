@@ -282,30 +282,24 @@ impl crate::AppLifecycle for TestPlatform {
         on_finish_launching();
     }
 
-    fn quit(&self) {}
+    fn quit(&self) -> Result<()> {
+        Ok(())
+    }
 
-    fn restart(&self, path: Option<PathBuf>, arguments: Vec<std::ffi::OsString>) {
+    fn restart(&self, path: Option<PathBuf>, arguments: Vec<std::ffi::OsString>) -> Result<()> {
         if let Some(tx) = self.expect_restart.take() {
             tx.send((path, arguments))
                 .expect("channel receiver should be alive");
         }
+        Ok(())
     }
 
-    fn activate(&self, _ignoring_other_apps: bool) {
-        //
+    fn activate(&self, _ignoring_other_apps: bool) -> Result<()> {
+        Ok(())
     }
 
-    fn hide(&self) {
-        unimplemented!()
-    }
-
-    fn hide_other_apps(&self) {
-        unimplemented!()
-    }
-
-    fn unhide_other_apps(&self) {
-        unimplemented!()
-    }
+    // hide/hide_other_apps/unhide_other_apps are deliberately not overridden:
+    // they inherit AppLifecycle's "unsupported" error rather than panicking.
 
     fn on_quit(&self, _callback: Box<dyn FnMut()>) {}
 

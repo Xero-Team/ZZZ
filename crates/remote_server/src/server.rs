@@ -279,7 +279,7 @@ fn start_server(
                         // TODO: This is a hack, because in a headless project, shutdown isn't executed
                         // when calling quit, but it should be.
                         cx.shutdown();
-                        cx.quit();
+                        cx.quit().log_err();
                     });
                     break;
                 }
@@ -464,7 +464,7 @@ pub fn execute_run(
         release_channel::init(app_version, cx);
         if let Err(error) = gpui_tokio::init(cx) {
             log::error!("{error:#}");
-            cx.quit();
+            cx.quit().log_err();
             return;
         }
 
@@ -505,7 +505,7 @@ pub fn execute_run(
                 Ok(http_client) => Arc::new(http_client),
                 Err(error) => {
                     log::error!("failed to initialize the HTTP client: {error:#}");
-                    cx.quit();
+                    cx.quit().log_err();
                     return;
                 }
             }

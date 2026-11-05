@@ -462,7 +462,7 @@ fn main() {
         release_channel::init(app_version, cx);
         if let Err(error) = gpui_tokio::init(cx) {
             log::error!("{error:#}");
-            cx.quit();
+            cx.quit().log_err();
             return;
         }
         if let Some(app_commit_sha) = app_commit_sha {
@@ -770,7 +770,7 @@ fn main() {
         cx.set_menus(menus);
         initialize_workspace(app_state.clone(), cx);
 
-        cx.activate(true);
+        cx.activate(true).log_err();
 
         let urls: Vec<_> = args
             .paths_or_urls

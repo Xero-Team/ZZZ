@@ -140,6 +140,7 @@ macro_rules! bench_main {
     };
 }
 pub use gpui_shared_string::*;
+pub use gpui_util::ResultExt;
 pub use gpui_util::arc_cow::ArcCow;
 pub use http_client;
 pub use input::*;
@@ -352,6 +353,7 @@ where
 }
 
 /// Information about the GPU GPUI is running on.
+#[non_exhaustive]
 #[derive(Default, Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct GpuSpecs {
     /// Whether the GPU is really a fake (like `llvmpipe`) running on the CPU.

@@ -1,4 +1,5 @@
 use assets::Assets;
+use gpui::ResultExt as _;
 use gpui::{Entity, KeyBinding, Length, StyleRefinement, WindowOptions, rgb};
 use language::LanguageRegistry;
 use markdown::{Markdown, MarkdownElement, MarkdownStyle};
@@ -31,7 +32,7 @@ pub fn main() {
         theme_settings::init(LoadThemes::JustBase, cx);
         Assets.load_fonts(cx).unwrap();
 
-        cx.activate(true);
+        cx.activate(true).log_err();
         let _ = cx.open_window(WindowOptions::default(), |_, cx| {
             cx.new(|cx| {
                 let markdown = cx.new(|cx| Markdown::new(MARKDOWN_EXAMPLE.into(), None, None, cx));

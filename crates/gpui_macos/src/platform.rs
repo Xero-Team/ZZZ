@@ -520,7 +520,7 @@ impl gpui::AppLifecycle for MacPlatform {
         }
     }
 
-    fn quit(&self) {
+    fn quit(&self) -> Result<()> {
         // Quitting the app causes us to close windows, which invokes `Window::on_close` callbacks
         // synchronously before this method terminates. If we call `Platform::quit` while holding a
         // borrow of the app state (which most of the time we will do), we will end up
@@ -538,9 +538,15 @@ impl gpui::AppLifecycle for MacPlatform {
                 let _: () = msg_send![app, terminate: nil];
             }
         }
+
+        Ok(())
     }
 
-    fn restart(&self, binary_path: Option<PathBuf>, arguments: Vec<std::ffi::OsString>) {
+    fn restart(
+        &self,
+        binary_path: Option<PathBuf>,
+        arguments: Vec<std::ffi::OsString>,
+    ) -> Result<()> {
         use std::os::unix::process::CommandExt as _;
 
         let app_pid = std::process::id().to_string();
@@ -556,8 +562,7 @@ impl gpui::AppLifecycle for MacPlatform {
             None => match std::env::current_exe() {
                 Ok(app_path) => app_path,
                 Err(error) => {
-                    log::error!("unable to find the running app to restart it: {error}");
-                    return;
+                    anyhow::bail!("unable to find the running app to restart it: {error}");
                 }
             },
         };
@@ -591,36 +596,40 @@ impl gpui::AppLifecycle for MacPlatform {
 
         match restart_process {
             Ok(_) => self.quit(),
-            Err(e) => log::error!("failed to spawn restart script: {:?}", e),
+            Err(e) => anyhow::bail!("failed to spawn restart script: {e:?}"),
         }
     }
 
-    fn activate(&self, ignoring_other_apps: bool) {
+    fn activate(&self, ignoring_other_apps: bool) -> Result<()> {
         unsafe {
             let app = NSApplication::sharedApplication(nil);
             app.activateIgnoringOtherApps_(ignoring_other_apps.to_objc());
         }
+        Ok(())
     }
 
-    fn hide(&self) {
+    fn hide(&self) -> Result<()> {
         unsafe {
             let app = NSApplication::sharedApplication(nil);
             let _: () = msg_send![app, hide: nil];
         }
+        Ok(())
     }
 
-    fn hide_other_apps(&self) {
+    fn hide_other_apps(&self) -> Result<()> {
         unsafe {
             let app = NSApplication::sharedApplication(nil);
             let _: () = msg_send![app, hideOtherApplications: nil];
         }
+        Ok(())
     }
 
-    fn unhide_other_apps(&self) {
+    fn unhide_other_apps(&self) -> Result<()> {
         unsafe {
             let app = NSApplication::sharedApplication(nil);
             let _: () = msg_send![app, unhideAllApplications: nil];
         }
+        Ok(())
     }
 
     fn on_quit(&self, callback: Box<dyn FnMut()>) {

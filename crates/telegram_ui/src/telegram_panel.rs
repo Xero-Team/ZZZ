@@ -698,7 +698,7 @@ impl TelegramPanel {
             cx,
             move |this, event, window, cx| match event {
                 ui::NotificationWindowEvent::Accepted => {
-                    cx.activate(true);
+                    cx.activate(true).log_err();
                     // This callback runs with the panel already on the update
                     // stack, so revealing it here would re-enter its own update
                     // through `PanelHandle::set_active`.

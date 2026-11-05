@@ -1632,14 +1632,15 @@ impl gpui::WindowHost for MacWindow {
         }
     }
 
-    fn minimize(&self) {
+    fn minimize(&self) -> anyhow::Result<()> {
         let window = self.0.lock().native_window;
         unsafe {
             window.miniaturize_(nil);
         }
+        Ok(())
     }
 
-    fn zoom(&self) {
+    fn zoom(&self) -> anyhow::Result<()> {
         let this = self.0.lock();
         let window = this.native_window;
         let closed = this.closed.clone();
@@ -1650,6 +1651,7 @@ impl gpui::WindowHost for MacWindow {
                 })
             })
             .detach();
+        Ok(())
     }
 
     fn toggle_fullscreen(&self) {
@@ -2112,28 +2114,28 @@ impl PlatformWindow for MacWindow {
 }
 
 fn macos_capabilities() -> gpui::PlatformCapabilities {
-    gpui::PlatformCapabilities {
-        text_input: true,
-        ime_candidate_position: true,
-        accessibility: cfg!(feature = "accessibility"),
-        headless_renderer: cfg!(any(test, feature = "test-support")),
-        frame_callbacks: true,
-        system_bell: true,
-        native_prompt: true,
-        clipboard: gpui::ClipboardCapabilities::READ_WRITE,
-        window_controls: gpui::WindowControls {
-            resize_window: false,
-            ..gpui::WindowControls::default()
-        },
-        window_services: gpui::WindowServiceCapabilities {
-            document_metadata: true,
-            character_palette: true,
-            simple_fullscreen: true,
-            system_tabs: true,
-            titlebar_actions: true,
-            ..Default::default()
-        },
-    }
+    let mut capabilities = gpui::PlatformCapabilities::default();
+    capabilities.text_input = true;
+    capabilities.ime_candidate_position = true;
+    capabilities.accessibility = cfg!(feature = "accessibility");
+    capabilities.headless_renderer = cfg!(any(test, feature = "test-support"));
+    capabilities.frame_callbacks = true;
+    capabilities.system_bell = true;
+    capabilities.native_prompt = true;
+    capabilities.clipboard = gpui::ClipboardCapabilities::READ_WRITE;
+    capabilities.window_controls = gpui::WindowControls {
+        resize_window: false,
+        ..gpui::WindowControls::default()
+    };
+    capabilities.window_services = gpui::WindowServiceCapabilities {
+        document_metadata: true,
+        character_palette: true,
+        simple_fullscreen: true,
+        system_tabs: true,
+        titlebar_actions: true,
+        ..Default::default()
+    };
+    capabilities
 }
 
 impl rwh::HasWindowHandle for MacWindow {

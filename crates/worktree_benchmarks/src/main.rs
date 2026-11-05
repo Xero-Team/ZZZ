@@ -1,3 +1,4 @@
+use gpui::ResultExt as _;
 use std::{
     path::Path,
     sync::{Arc, atomic::AtomicUsize},
@@ -47,7 +48,7 @@ fn main() {
                 elapsed
             );
             cx.update(|cx| {
-                cx.quit();
+                cx.quit().log_err();
             })
         })
         .detach();

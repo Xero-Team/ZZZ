@@ -4108,7 +4108,7 @@ impl Render for SettingsWindow {
                             this.open_current_settings_file(window, cx);
                         }))
                         .on_action(|_: &Minimize, window, _cx| {
-                            window.minimize_window();
+                            window.minimize_window().log_err();
                         })
                         .on_action(cx.listener(|this, _: &search::FocusSearch, window, cx| {
                             this.search_bar.focus_handle(cx).focus(window, cx);

@@ -1,5 +1,6 @@
 #![cfg_attr(target_family = "wasm", no_main)]
 
+use gpui::ResultExt as _;
 use gpui::{
     App, Bounds, Context, Div, ElementId, FocusHandle, KeyBinding, SharedString, Stateful, Window,
     WindowBounds, WindowOptions, actions, div, prelude::*, px, size,
@@ -199,7 +200,7 @@ fn run_example() {
         )
         .unwrap();
 
-        cx.activate(true);
+        cx.activate(true).log_err();
     });
 }
 

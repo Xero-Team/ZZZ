@@ -181,11 +181,16 @@ impl<P: LinuxClient + 'static> gpui::AppLifecycle for LinuxPlatform<P> {
         }
     }
 
-    fn quit(&self) {
+    fn quit(&self) -> Result<()> {
         self.inner.with_common(|common| common.signal.stop());
+        Ok(())
     }
 
-    fn restart(&self, binary_path: Option<PathBuf>, arguments: Vec<std::ffi::OsString>) {
+    fn restart(
+        &self,
+        binary_path: Option<PathBuf>,
+        arguments: Vec<std::ffi::OsString>,
+    ) -> anyhow::Result<()> {
         use std::os::unix::process::CommandExt as _;
 
         // get the process id of the current process
@@ -197,8 +202,7 @@ impl<P: LinuxClient + 'static> gpui::AppLifecycle for LinuxPlatform<P> {
             match self.app_path() {
                 Ok(path) => path,
                 Err(err) => {
-                    log::error!("Failed to get app path: {:?}", err);
-                    return;
+                    anyhow::bail!("Failed to get app path: {:?}", err);
                 }
             }
         };
@@ -233,25 +237,13 @@ impl<P: LinuxClient + 'static> gpui::AppLifecycle for LinuxPlatform<P> {
 
         match restart_process {
             Ok(_) => self.quit(),
-            Err(e) => log::error!("failed to spawn restart script: {:?}", e),
+            Err(e) => anyhow::bail!("failed to spawn restart script: {:?}", e),
         }
     }
 
-    fn activate(&self, _ignoring_other_apps: bool) {
-        log::info!("activate is not implemented on Linux, ignoring the call")
-    }
-
-    fn hide(&self) {
-        log::info!("hide is not implemented on Linux, ignoring the call")
-    }
-
-    fn hide_other_apps(&self) {
-        log::info!("hide_other_apps is not implemented on Linux, ignoring the call")
-    }
-
-    fn unhide_other_apps(&self) {
-        log::info!("unhide_other_apps is not implemented on Linux, ignoring the call")
-    }
+    // activate/hide/hide_other_apps/unhide_other_apps are deliberately not
+    // overridden: they inherit AppLifecycle's "unsupported" error rather than
+    // silently succeeding with a log line.
 
     fn on_quit(&self, callback: Box<dyn FnMut()>) {
         self.inner.with_common(|common| {

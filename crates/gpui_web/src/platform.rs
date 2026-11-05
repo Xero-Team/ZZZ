@@ -132,31 +132,9 @@ impl gpui::AppLifecycle for WebPlatform {
         });
     }
 
-    fn quit(&self) {
-        log::warn!("WebPlatform::quit called, but quitting is not supported in the browser .");
-    }
-
-    fn restart(&self, _binary_path: Option<PathBuf>, _arguments: Vec<std::ffi::OsString>) {
-        log::warn!("WebPlatform::restart called, but restart is not supported in the browser");
-    }
-
-    fn activate(&self, _ignoring_other_apps: bool) {
-        log::warn!("WebPlatform::activate called, but activation is not supported in the browser");
-    }
-
-    fn hide(&self) {
-        log::warn!("WebPlatform::hide called, but hiding is not supported in the browser");
-    }
-
-    fn hide_other_apps(&self) {
-        log::warn!("WebPlatform::hide_other_apps called, but hiding other apps is not supported");
-    }
-
-    fn unhide_other_apps(&self) {
-        log::warn!(
-            "WebPlatform::unhide_other_apps called, but restoring other apps is not supported"
-        );
-    }
+    // quit/restart/activate/hide/hide_other_apps/unhide_other_apps are
+    // deliberately not overridden: they inherit AppLifecycle's "unsupported"
+    // error rather than silently succeeding with a warning.
 
     fn on_quit(&self, callback: Box<dyn FnMut()>) {
         self.callbacks.borrow_mut().quit = Some(callback);

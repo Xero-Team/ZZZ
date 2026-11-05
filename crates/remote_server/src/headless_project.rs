@@ -1411,7 +1411,7 @@ impl HeadlessProject {
                 // TODO: This is a hack, because in a headless project, shutdown isn't executed
                 // when calling quit, but it should be.
                 cx.shutdown();
-                cx.quit();
+                cx.quit().log_err();
             })
         })
         .detach();

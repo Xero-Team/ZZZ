@@ -5,6 +5,7 @@ use std::sync::Arc;
 /// The default set of colors for gpui.
 ///
 /// These are used for styling base components, examples and more.
+#[non_exhaustive]
 #[derive(Clone, Debug)]
 pub struct Colors {
     /// Text color
