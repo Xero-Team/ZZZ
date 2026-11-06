@@ -645,7 +645,28 @@ fn main() {
     }
 }
 
+/// mimalloc v3 enables transparent huge pages by default on Linux. The editor
+/// allocates mostly small, short-lived objects, so 2 MiB pages inflate resident
+/// memory by roughly 300 MB for a small throughput gain. Default THP off and
+/// keep any explicit `MIMALLOC_ALLOW_THP` value so it can be turned back on.
+///
+/// mimalloc reads its options from a process-load constructor, before `main`,
+/// so a settings file cannot change this. Installed bundles reach the editor
+/// through this CLI; `cargo run` gets the same default from
+/// `.cargo/config.toml`.
+fn set_default_mimalloc_options() {
+    const ALLOW_THP: &str = "MIMALLOC_ALLOW_THP";
+    let explicitly_set =
+        env::vars_os().any(|(key, _)| key.to_string_lossy().eq_ignore_ascii_case(ALLOW_THP));
+    if !explicitly_set {
+        // SAFETY: this runs at the start of `run()`, before any thread is spawned.
+        unsafe { env::set_var(ALLOW_THP, "0") };
+    }
+}
+
 fn run() -> Result<()> {
+    set_default_mimalloc_options();
+
     #[cfg(unix)]
     util::prevent_root_execution();
 

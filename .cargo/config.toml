@@ -27,6 +27,12 @@ rustflags = ["-C", "link-arg=-fuse-ld=lld"]
 
 [env]
 MACOSX_DEPLOYMENT_TARGET = "10.15.7"
+# mimalloc v3 enables transparent huge pages by default, which inflates the
+# editor's resident memory by ~300 MB on Linux for a mostly small-object
+# workload. Default it off for `cargo run` / `cargo test`; an explicit value in
+# the environment wins (force = false). Installed bundles get the same default
+# from the CLI launcher in crates/cli/src/main.rs.
+MIMALLOC_ALLOW_THP = { value = "0", force = false }
 # `cargo miri test` keeps the harness's global executor threads alive until the
 # process exits, which Miri rejects as a leak. Ignore that check so the test
 # suite can run under Miri; an explicit MIRIFLAGS in the environment still wins.

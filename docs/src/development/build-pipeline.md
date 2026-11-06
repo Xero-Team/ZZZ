@@ -362,6 +362,42 @@ text layout, search, and the UI, which makes it the cheapest place to buy
 throughput and to lower fragmentation. Build with `--no-default-features` to
 get glibc malloc back when you compare allocation behaviour.
 
+### Transparent huge pages {#allocator-thp}
+
+mimalloc v3 turns on transparent huge pages (THP) on Linux by default. THP
+helps large, long-lived, sequentially scanned allocations: 2 MiB pages cut TLB
+misses and page-table work. The editor's workload is the opposite, many small
+and short-lived objects, so the kernel promotes 2 MiB pages that stay resident
+and the process reports roughly 300 MB more RSS than with THP off. A small
+allocation churn microbenchmark puts the throughput difference at about 5
+percent, so ZZZ defaults THP off:
+
+```sh
+MIMALLOC_ALLOW_THP=1 zzz    # opt back in, for example for a huge workspace
+```
+
+mimalloc reads its options from a process-load constructor, before `main`, so
+this is an environment variable rather than a `settings.json` option. The CLI
+launcher sets `MIMALLOC_ALLOW_THP=0` when the variable is absent, and
+`.cargo/config.toml` does the same for `cargo run` and `cargo test`. An
+explicit value, upper or lower case, always wins. mimalloc only consults
+THP on Linux and Android; on FreeBSD, macOS, and Windows the variable is read
+but has no effect, so setting it there is harmless.
+
+The other knobs are left at mimalloc's defaults on purpose:
+
+- `MIMALLOC_ARENA_RESERVE` reserves virtual address space, not resident memory.
+  The 1 GiB default costs no RSS by itself and keeps `mmap` calls down.
+- `MIMALLOC_ARENA_EAGER_COMMIT=0` lowers peak RSS further, but the frame
+  benchmarks in [Measured effects](#measured) show it gives back the typing
+  throughput gain.
+- `MIMALLOC_PURGE_DELAY` controls how long freed pages stay resident before
+  being returned to the OS. Shorter values measured within noise on an idle
+  window and add work to interactive frees.
+
+If you change any of these, measure frame time and peak RSS with
+`crates/editor/benches/editor_frame_workload.rs` first.
+
 ## What is already at the limit {#at-the-limit}
 
 - `opt-level = 3`, fat LTO, one CGU per crate, `panic = "abort"`.
