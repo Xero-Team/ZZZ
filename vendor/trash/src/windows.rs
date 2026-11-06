@@ -2,22 +2,29 @@ use crate::{Error, TrashContext, TrashItem, TrashItemMetadata, TrashItemSize};
 use std::{
     borrow::Borrow,
     cell::RefCell,
-    ffi::{c_void, OsStr, OsString},
+    ffi::{OsStr, OsString, c_void},
     os::windows::{ffi::OsStrExt, prelude::*},
     path::{Component, Path, PathBuf, Prefix},
     time::SystemTime,
 };
 
 use windows::Win32::{
-    Foundation::*, Storage::EnhancedStorage::*, System::Com::*, System::SystemServices::*, UI::Shell::*,
+    Foundation::*, Storage::EnhancedStorage::*, System::Com::*, System::SystemServices::*,
+    UI::Shell::*,
 };
 use windows::{
-    core::{implement, ComObject, Interface, Ref, HRESULT, PCWSTR, PWSTR},
     Win32::System::Com::StructuredStorage::PropVariantToBSTR,
+    core::{ComObject, HRESULT, Interface, PCWSTR, PWSTR, Ref, implement},
 };
 
-const SCID_ORIGINAL_LOCATION: PROPERTYKEY = PROPERTYKEY { fmtid: PSGUID_DISPLACED, pid: PID_DISPLACED_FROM };
-const SCID_DATE_DELETED: PROPERTYKEY = PROPERTYKEY { fmtid: PSGUID_DISPLACED, pid: PID_DISPLACED_DATE };
+const SCID_ORIGINAL_LOCATION: PROPERTYKEY = PROPERTYKEY {
+    fmtid: PSGUID_DISPLACED,
+    pid: PID_DISPLACED_FROM,
+};
+const SCID_DATE_DELETED: PROPERTYKEY = PROPERTYKEY {
+    fmtid: PSGUID_DISPLACED,
+    pid: PID_DISPLACED_DATE,
+};
 
 impl From<windows::core::Error> for Error {
     fn from(err: windows::core::Error) -> Error {
@@ -26,7 +33,10 @@ impl From<windows::core::Error> for Error {
             Some(reason) => format!("windows error: {reason} ({:#010x})", code.0 as u32),
             None => format!("windows error: {err}"),
         };
-        Error::Os { code: code.0, description }
+        Error::Os {
+            code: code.0,
+            description,
+        }
     }
 }
 
@@ -70,11 +80,16 @@ fn copy_engine_reason(code: HRESULT) -> Option<&'static str> {
         COPYENGINE_E_RECYCLE_FORCE_NUKE => "the Recycle Bin is not available on this drive",
         COPYENGINE_E_RECYCLE_SIZE_TOO_BIG => "the item is too large for the Recycle Bin",
         COPYENGINE_E_RECYCLE_PATH_TOO_LONG => "the item is too deep for the Recycle Bin",
-        COPYENGINE_E_RECYCLE_BIN_NOT_FOUND => "the Recycle Bin could not be found or is unavailable",
+        COPYENGINE_E_RECYCLE_BIN_NOT_FOUND => {
+            "the Recycle Bin could not be found or is unavailable"
+        }
         COPYENGINE_E_DIR_NOT_EMPTY => "the directory is not empty",
         COPYENGINE_E_ACCESSDENIED_READONLY => "the item is read-only",
-        COPYENGINE_E_CANNOT_MOVE_FROM_RECYCLE_BIN => "the item cannot be moved out of the Recycle Bin",
-        COPYENGINE_E_INTERNET_ITEM_STORAGE_PROVIDER_ERROR | COPYENGINE_E_INTERNET_ITEM_STORAGE_PROVIDER_PAUSED => {
+        COPYENGINE_E_CANNOT_MOVE_FROM_RECYCLE_BIN => {
+            "the item cannot be moved out of the Recycle Bin"
+        }
+        COPYENGINE_E_INTERNET_ITEM_STORAGE_PROVIDER_ERROR
+        | COPYENGINE_E_INTERNET_ITEM_STORAGE_PROVIDER_PAUSED => {
             "the storage provider of the item is unavailable"
         }
         COPYENGINE_E_BLOCKED_BY_EDP_POLICY => "blocked by policy",
@@ -88,7 +103,11 @@ fn describe_item_failure(path: &Path, code: HRESULT) -> String {
         Some(reason) => reason.to_string(),
         None => windows::core::Error::from(code).message(),
     };
-    format!("windows error: {}: {reason} ({:#010x})", path.display(), code.0 as u32)
+    format!(
+        "windows error: {}: {reason} ({:#010x})",
+        path.display(),
+        code.0 as u32
+    )
 }
 
 /// Collects, per item, why `IFileOperation` did not process it.
@@ -160,7 +179,12 @@ impl IFileOperationProgressSink_Impl for FailureSink_Impl {
     fn FinishOperations(&self, _result: HRESULT) -> windows::core::Result<()> {
         Ok(())
     }
-    fn PreRenameItem(&self, _flags: u32, _item: Ref<'_, IShellItem>, _new_name: &PCWSTR) -> windows::core::Result<()> {
+    fn PreRenameItem(
+        &self,
+        _flags: u32,
+        _item: Ref<'_, IShellItem>,
+        _new_name: &PCWSTR,
+    ) -> windows::core::Result<()> {
         Ok(())
     }
     fn PostRenameItem(
@@ -269,7 +293,9 @@ impl IFileOperationProgressSink_Impl for FailureSink_Impl {
 ///
 /// Returns the `(recycle-bin ID, source path)` of every item that reached the
 /// trash.
-fn perform_reporting_failures(operation: &IFileOperation) -> Result<Vec<(OsString, PathBuf)>, Error> {
+fn perform_reporting_failures(
+    operation: &IFileOperation,
+) -> Result<Vec<(OsString, PathBuf)>, Error> {
     let sink = ComObject::new(FailureSink {
         failures: RefCell::new(Vec::new()),
         trashed: RefCell::new(Vec::new()),
@@ -288,19 +314,27 @@ fn perform_reporting_failures(operation: &IFileOperation) -> Result<Vec<(OsStrin
         if failures.len() > 1 {
             description.push_str(&format!(" (and {} more item(s))", failures.len() - 1));
         }
-        return Err(Error::Os { code: code.0, description });
+        return Err(Error::Os {
+            code: code.0,
+            description,
+        });
     }
     performed?;
     if aborted? {
         // Aborted without a reason for any item, e.g. cancelled as a whole.
-        return Err(Error::Unknown { description: "Some operations were aborted".into() });
+        return Err(Error::Unknown {
+            description: "Some operations were aborted".into(),
+        });
     }
     unadvised?;
     Ok(trashed)
 }
 
 fn to_wide_path(path: impl AsRef<OsStr>) -> Vec<u16> {
-    path.as_ref().encode_wide().chain(std::iter::once(0)).collect()
+    path.as_ref()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
 }
 
 /// Converts a path to the form accepted by `SHCreateItemFromParsingName`.
@@ -373,14 +407,16 @@ impl TrashContext {
     ) -> Result<Option<Vec<TrashItem>>, Error> {
         ensure_com_initialized();
         unsafe {
-            let pfo: IFileOperation = CoCreateInstance(&FileOperation as *const _, None, CLSCTX_ALL)?;
+            let pfo: IFileOperation =
+                CoCreateInstance(&FileOperation as *const _, None, CLSCTX_ALL)?;
 
             pfo.SetOperationFlags(FOF_NO_UI | FOF_ALLOWUNDO | FOF_WANTNUKEWARNING)?;
 
             for full_path in full_paths.iter() {
                 let parsing_name = to_shell_parsing_name(full_path);
 
-                let shi: IShellItem = SHCreateItemFromParsingName(PCWSTR(parsing_name.as_ptr()), None)?;
+                let shi: IShellItem =
+                    SHCreateItemFromParsingName(PCWSTR(parsing_name.as_ptr()), None)?;
 
                 pfo.DeleteItem(&shi, None)?;
             }
@@ -403,8 +439,14 @@ impl TrashContext {
                 .into_iter()
                 .map(|(id, source_path)| TrashItem {
                     id,
-                    name: source_path.file_name().map(OsStr::to_owned).unwrap_or_default(),
-                    original_parent: source_path.parent().map(Path::to_path_buf).unwrap_or_default(),
+                    name: source_path
+                        .file_name()
+                        .map(OsStr::to_owned)
+                        .unwrap_or_default(),
+                    original_parent: source_path
+                        .parent()
+                        .map(Path::to_path_buf)
+                        .unwrap_or_default(),
                     time_deleted,
                 })
                 .collect();
@@ -427,7 +469,8 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
     unsafe {
         let mut item_vec = Vec::new();
 
-        let recycle_bin: IShellItem = SHGetKnownFolderItem(&FOLDERID_RecycleBinFolder, KF_FLAG_DEFAULT, None)?;
+        let recycle_bin: IShellItem =
+            SHGetKnownFolderItem(&FOLDERID_RecycleBinFolder, KF_FLAG_DEFAULT, None)?;
 
         let pesi: IEnumShellItems = recycle_bin.BindToHandler(None, &BHID_EnumItems)?;
 
@@ -455,7 +498,10 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
                     // Converting a String back to OsString doesn't do extra work
                     item_vec.push(TrashItem {
                         id,
-                        name: name.into_string().map_err(|original| Error::ConvertOsString { original })?.into(),
+                        name: name
+                            .into_string()
+                            .map_err(|original| Error::ConvertOsString { original })?
+                            .into(),
                         original_parent: PathBuf::from(original_location),
                         time_deleted: date_deleted,
                     });
@@ -473,7 +519,8 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
 pub fn is_empty() -> Result<bool, Error> {
     ensure_com_initialized();
     unsafe {
-        let recycle_bin: IShellItem = SHGetKnownFolderItem(&FOLDERID_RecycleBinFolder, KF_FLAG_DEFAULT, None)?;
+        let recycle_bin: IShellItem =
+            SHGetKnownFolderItem(&FOLDERID_RecycleBinFolder, KF_FLAG_DEFAULT, None)?;
         let pesi: IEnumShellItems = recycle_bin.BindToHandler(None, &BHID_EnumItems)?;
 
         let mut count = 0u32;
@@ -559,7 +606,10 @@ where
     for item in items.iter() {
         let path = item.original_path();
         if path.exists() {
-            return Err(Error::RestoreCollision { path, remaining_items: items });
+            return Err(Error::RestoreCollision {
+                path,
+                remaining_items: items,
+            });
         }
     }
     ensure_com_initialized();
@@ -571,10 +621,16 @@ where
             let parsing_name = PCWSTR(id_as_wide.as_ptr());
             let trash_item: IShellItem = SHCreateItemFromParsingName(parsing_name, None)?;
             let parent_path_wide = to_wide_path(&item.original_parent);
-            let orig_folder_shi: IShellItem = SHCreateItemFromParsingName(PCWSTR(parent_path_wide.as_ptr()), None)?;
+            let orig_folder_shi: IShellItem =
+                SHCreateItemFromParsingName(PCWSTR(parent_path_wide.as_ptr()), None)?;
             let name_wstr = to_wide_path(&item.name);
 
-            pfo.MoveItem(&trash_item, &orig_folder_shi, PCWSTR(name_wstr.as_ptr()), None)?;
+            pfo.MoveItem(
+                &trash_item,
+                &orig_folder_shi,
+                PCWSTR(name_wstr.as_ptr()),
+                None,
+            )?;
         }
         if !items.is_empty() {
             pfo.PerformOperations()?;
@@ -631,7 +687,10 @@ struct CoInitializer {}
 impl CoInitializer {
     fn new() -> CoInitializer {
         //let first = INITIALIZER_THREAD_COUNT.fetch_add(1, Ordering::SeqCst) == 0;
-        #[cfg(all(not(feature = "coinit_multithreaded"), not(feature = "coinit_apartmentthreaded")))]
+        #[cfg(all(
+            not(feature = "coinit_multithreaded"),
+            not(feature = "coinit_apartmentthreaded")
+        ))]
         {
             0 = "THIS IS AN ERROR ON PURPOSE. Either the `coinit_multithreaded` or the `coinit_apartmentthreaded` feature must be specified";
         }
@@ -654,7 +713,10 @@ impl CoInitializer {
         }
         let hr = unsafe { CoInitializeEx(None, init_mode) };
         if hr.is_err() {
-            panic!("Call to CoInitializeEx failed. HRESULT: {:?}. Consider using `trash` with the feature `coinit_multithreaded`", hr);
+            panic!(
+                "Call to CoInitializeEx failed. HRESULT: {:?}. Consider using `trash` with the feature `coinit_multithreaded`",
+                hr
+            );
         }
         CoInitializer {}
     }
@@ -680,21 +742,31 @@ mod tests {
     use super::{copy_engine_reason, to_shell_parsing_name};
     use std::path::Path;
     use windows::{
-        core::HRESULT,
         Win32::{
             Foundation::E_ACCESSDENIED,
             UI::Shell::{
-                COPYENGINE_E_ACCESS_DENIED_SRC, COPYENGINE_E_REQUIRES_ELEVATION, COPYENGINE_S_DONT_PROCESS_CHILDREN,
+                COPYENGINE_E_ACCESS_DENIED_SRC, COPYENGINE_E_REQUIRES_ELEVATION,
+                COPYENGINE_S_DONT_PROCESS_CHILDREN,
             },
         },
+        core::HRESULT,
     };
 
     #[test]
     fn copy_engine_failures_get_their_own_words() {
-        assert_eq!(copy_engine_reason(COPYENGINE_E_REQUIRES_ELEVATION), Some("the operation requires elevation"));
-        assert_eq!(copy_engine_reason(COPYENGINE_E_ACCESS_DENIED_SRC), Some("access denied to the source"));
+        assert_eq!(
+            copy_engine_reason(COPYENGINE_E_REQUIRES_ELEVATION),
+            Some("the operation requires elevation")
+        );
+        assert_eq!(
+            copy_engine_reason(COPYENGINE_E_ACCESS_DENIED_SRC),
+            Some("access denied to the source")
+        );
         // Unlisted copy engine failures still are not handed to FormatMessage.
-        assert_eq!(copy_engine_reason(HRESULT(0x8027_00FF_u32 as i32)), Some("the shell's file operation failed"));
+        assert_eq!(
+            copy_engine_reason(HRESULT(0x8027_00FF_u32 as i32)),
+            Some("the shell's file operation failed")
+        );
         // A success code of the copy engine is no failure.
         assert_eq!(copy_engine_reason(COPYENGINE_S_DONT_PROCESS_CHILDREN), None);
         // Other facilities: the system's own message is right.
@@ -716,13 +788,19 @@ mod tests {
         // What `canonicalize` returns for a mapped drive or a UNC path.
         // Before the fix this came out as `UNC\host\share\dir\file.txt`,
         // which the shell reads as a relative path (issue #55).
-        assert_eq!(convert(r"\\?\UNC\host\share\dir\file.txt"), r"\\host\share\dir\file.txt");
+        assert_eq!(
+            convert(r"\\?\UNC\host\share\dir\file.txt"),
+            r"\\host\share\dir\file.txt"
+        );
     }
 
     #[test]
     fn non_verbatim_paths_are_unchanged() {
         assert_eq!(convert(r"C:\dir\file.txt"), r"C:\dir\file.txt");
-        assert_eq!(convert(r"\\host\share\dir\file.txt"), r"\\host\share\dir\file.txt");
+        assert_eq!(
+            convert(r"\\host\share\dir\file.txt"),
+            r"\\host\share\dir\file.txt"
+        );
         assert_eq!(convert(r"dir\file.txt"), r"dir\file.txt");
     }
 
@@ -761,7 +839,10 @@ mod tests {
             convert(r"\\?\UNC\nas-01\My Photos\2026.09 trip\日本語 ファイル.jpg"),
             r"\\nas-01\My Photos\2026.09 trip\日本語 ファイル.jpg"
         );
-        assert_eq!(convert(r"\\?\C:\a.b\c..d\file.tar.gz"), r"C:\a.b\c..d\file.tar.gz");
+        assert_eq!(
+            convert(r"\\?\C:\a.b\c..d\file.tar.gz"),
+            r"C:\a.b\c..d\file.tar.gz"
+        );
     }
 
     #[test]
@@ -769,12 +850,18 @@ mod tests {
         // `components()` normalizes these; the shell accepts either form.
         assert_eq!(convert(r"\\?\C:\dir\"), r"C:\dir");
         assert_eq!(convert(r"\\?\C:\dir\\file.txt"), r"C:\dir\file.txt");
-        assert_eq!(convert(r"\\?\UNC\host\share\dir\\file.txt"), r"\\host\share\dir\file.txt");
+        assert_eq!(
+            convert(r"\\?\UNC\host\share\dir\\file.txt"),
+            r"\\host\share\dir\file.txt"
+        );
     }
 
     #[test]
     fn long_paths_are_not_truncated() {
-        let deep = (0..40).map(|i| format!("folder{i:02}")).collect::<Vec<_>>().join(r"\");
+        let deep = (0..40)
+            .map(|i| format!("folder{i:02}"))
+            .collect::<Vec<_>>()
+            .join(r"\");
         let input = format!(r"\\?\UNC\host\share\{deep}\file.txt");
         let expected = format!(r"\\host\share\{deep}\file.txt");
         assert!(input.len() > 260);

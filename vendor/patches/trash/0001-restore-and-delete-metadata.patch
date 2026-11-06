@@ -11,7 +11,7 @@ index a6a7d88..df92462 100644
      "NSURL",
  ] }
 diff --git a/src/freedesktop.rs b/src/freedesktop.rs
-index 08b6652..514b97c 100644
+index 08b6652..d72bc74 100644
 --- a/src/freedesktop.rs
 +++ b/src/freedesktop.rs
 @@ -17,11 +17,12 @@ use std::{
@@ -65,7 +65,7 @@ index 08b6652..514b97c 100644
              } else {
                  // Try the per-volume trash first ($topdir/.Trash/$uid or
                  // $topdir/.Trash-$uid).  When that fails because the
-@@ -55,19 +68,35 @@ impl TrashContext {
+@@ -55,27 +68,50 @@ impl TrashContext {
                  // trash - the spec says an implementation "MUST either
                  // trash the file into the user's home trash or refuse to
                  // trash it" when per-volume trash is unavailable.
@@ -109,7 +109,277 @@ index 08b6652..514b97c 100644
      }
  }
  
-@@ -493,7 +522,7 @@ fn move_to_trash(
+ pub fn list() -> Result<Vec<TrashItem>, Error> {
+-    let EvaluatedTrashFolders { trash_folders, home_error, sorted_mount_points } = eval_trash_folders()?;
++    let EvaluatedTrashFolders {
++        trash_folders,
++        home_error,
++        sorted_mount_points,
++    } = eval_trash_folders()?;
+ 
+     if trash_folders.is_empty() {
+-        warn!("No trash folder was found. The error when looking for the 'home trash' was: {:?}", home_error);
++        warn!(
++            "No trash folder was found. The error when looking for the 'home trash' was: {:?}",
++            home_error
++        );
+         return Ok(vec![]);
+     }
+     let home = home_trash().ok();
+@@ -90,7 +126,10 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
+         };
+         let info_folder = folder.join("info");
+         if !info_folder.is_dir() {
+-            warn!("The path {:?} did not point to a directory, skipping this trash folder.", info_folder);
++            warn!(
++                "The path {:?} did not point to a directory, skipping this trash folder.",
++                info_folder
++            );
+             continue;
+         }
+         let read_dir = match std::fs::read_dir(&info_folder) {
+@@ -99,7 +138,10 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
+                 // After all the earlier checks, it's still possible that the directory does not exist at this point (or is not readable)
+                 // because another process may have deleted it or modified its access rights in the meantime.
+                 // So let's just pring a warning and continue to the rest of the folders
+-                warn!("The trash info folder {:?} could not be read. Error was {:?}", info_folder, e);
++                warn!(
++                    "The trash info folder {:?} could not be read. Error was {:?}",
++                    info_folder, e
++                );
+                 continue;
+             }
+         };
+@@ -108,7 +150,10 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
+                 Ok(entry) => entry,
+                 Err(e) => {
+                     // Another thread or process may have removed that entry by now
+-                    debug!("Tried resolving the trash info `DirEntry` but it failed with: '{}'", e);
++                    debug!(
++                        "Tried resolving the trash info `DirEntry` but it failed with: '{}'",
++                        e
++                    );
+                     continue;
+                 }
+             };
+@@ -117,20 +162,29 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
+                 Ok(f_type) => f_type,
+                 Err(e) => {
+                     // Another thread or process may have removed that entry by now
+-                    debug!("Tried getting the file type of the trash info `DirEntry` but failed with: {}", e);
++                    debug!(
++                        "Tried getting the file type of the trash info `DirEntry` but failed with: {}",
++                        e
++                    );
+                     continue;
+                 }
+             };
+             let info_path = info_entry.path();
+             if !file_type.is_file() {
+-                warn!("Found an item that's not a file, among the trash info files. This is unexpected. The path to the item is: '{:?}'", info_path);
++                warn!(
++                    "Found an item that's not a file, among the trash info files. This is unexpected. The path to the item is: '{:?}'",
++                    info_path
++                );
+                 continue;
+             }
+             let info_file = match File::open(&info_path) {
+                 Ok(file) => file,
+                 Err(e) => {
+                     // Another thread or process may have removed that entry by now
+-                    debug!("Tried opening the trash info '{:?}' but failed with: {}", info_path, e);
++                    debug!(
++                        "Tried opening the trash info '{:?}' but failed with: {}",
++                        info_path, e
++                    );
+                     continue;
+                 }
+             };
+@@ -159,7 +213,9 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
+                 };
+                 // Trash specification §6: extra lines are ignored and the first
+                 // occurrence of each key wins. Split once: '=' is valid in paths.
+-                let Some((key, value)) = line.split_once('=') else { continue };
++                let Some((key, value)) = line.split_once('=') else {
++                    continue;
++                };
+                 let key = key.trim();
+                 if key == "Path" && !path_seen {
+                     path_seen = true;
+@@ -168,12 +224,17 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
+                     let path = decode_uri_path(Path::new(value));
+                     if path.file_name().is_none()
+                         || path.as_os_str().as_bytes().contains(&0)
+-                        || (path.is_relative() && path.components().any(|c| c == Component::ParentDir))
++                        || (path.is_relative()
++                            && path.components().any(|c| c == Component::ParentDir))
+                     {
+                         warn!("Invalid original path in {:?}", info_path);
+                         continue 'trash_item;
+                     }
+-                    let path = if path.is_relative() { top_dir.join(path) } else { path };
++                    let path = if path.is_relative() {
++                        top_dir.join(path)
++                    } else {
++                        path
++                    };
+                     name = path.file_name().map(OsStr::to_owned);
+                     original_parent = path.parent().map(Path::to_owned);
+                 } else if key == "DeletionDate" && !date_seen {
+@@ -186,7 +247,12 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
+                         let naive_local = match parsed_time {
+                             Ok(t) => t,
+                             Err(e) => {
+-                                log::error!("Failed to parse the deletion date of the trash item {:?}. The deletion date was '{}'. Parse error was: {:?}", name, value, e);
++                                log::error!(
++                                    "Failed to parse the deletion date of the trash item {:?}. The deletion date was '{}'. Parse error was: {:?}",
++                                    name,
++                                    value,
++                                    e
++                                );
+                                 continue 'trash_item;
+                             }
+                         };
+@@ -207,14 +273,28 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
+             if let Some(name) = name {
+                 if let Some(original_parent) = original_parent {
+                     if time_deleted.is_none() {
+-                        warn!("Could not determine the deletion time of the trash item. (The `DeletionDate` field is probably missing from the info file.) The info file path is: '{:?}'", info_path);
++                        warn!(
++                            "Could not determine the deletion time of the trash item. (The `DeletionDate` field is probably missing from the info file.) The info file path is: '{:?}'",
++                            info_path
++                        );
+                     }
+-                    result.push(TrashItem { id, name, original_parent, time_deleted: time_deleted.unwrap_or(-1) });
++                    result.push(TrashItem {
++                        id,
++                        name,
++                        original_parent,
++                        time_deleted: time_deleted.unwrap_or(-1),
++                    });
+                 } else {
+-                    warn!("Could not determine the original parent folder of the trash item. (The `Path` field is probably missing from the info file.) The info file path is: '{:?}'", info_path);
++                    warn!(
++                        "Could not determine the original parent folder of the trash item. (The `Path` field is probably missing from the info file.) The info file path is: '{:?}'",
++                        info_path
++                    );
+                 }
+             } else {
+-                warn!("Could not determine the name of the trash item. (The `Path` field is probably missing from the info file.) The info file path is: '{:?}'", info_path);
++                warn!(
++                    "Could not determine the name of the trash item. (The `Path` field is probably missing from the info file.) The info file path is: '{:?}'",
++                    info_path
++                );
+             }
+         }
+     }
+@@ -239,7 +319,10 @@ pub fn is_empty() -> Result<bool, Error> {
+                 }
+             }
+             Err(e) => {
+-                warn!("The trash files folder {:?} could not be read. Error was {:?}", bin, e);
++                warn!(
++                    "The trash files folder {:?} could not be read. Error was {:?}",
++                    bin, e
++                );
+             }
+         }
+     }
+@@ -248,13 +331,19 @@ pub fn is_empty() -> Result<bool, Error> {
+ }
+ 
+ pub fn trash_folders() -> Result<HashSet<PathBuf>, Error> {
+-    let EvaluatedTrashFolders { trash_folders, home_error, .. } = eval_trash_folders()?;
++    let EvaluatedTrashFolders {
++        trash_folders,
++        home_error,
++        ..
++    } = eval_trash_folders()?;
+ 
+     if trash_folders.is_empty() {
+         return match home_error {
+             Some(e) => Err(e),
+             None => Err(Error::Unknown {
+-                description: "Could not find a valid 'home trash' nor valid trashes on other mount points".into(),
++                description:
++                    "Could not find a valid 'home trash' nor valid trashes on other mount points"
++                        .into(),
+             }),
+         };
+     }
+@@ -303,7 +392,11 @@ fn eval_trash_folders() -> Result<EvaluatedTrashFolders, Error> {
+         .map_err(|(p, e)| fs_error(p, e))?;
+     }
+ 
+-    Ok(EvaluatedTrashFolders { trash_folders, home_error, sorted_mount_points })
++    Ok(EvaluatedTrashFolders {
++        trash_folders,
++        home_error,
++        sorted_mount_points,
++    })
+ }
+ pub fn metadata(item: &TrashItem) -> Result<TrashItemMetadata, Error> {
+     // When purging an item the "in-trash" filename must be parsed from the trashinfo filename
+@@ -342,7 +435,10 @@ fn ensure_virtually_exists(path: &Path) -> Result<(), Error> {
+     if virtually_exists(path).map_err(|e| fs_error(path, e))? {
+         Ok(())
+     } else {
+-        Err(fs_error(path, std::io::Error::new(std::io::ErrorKind::NotFound, MISSING_TRASH_FILE)))
++        Err(fs_error(
++            path,
++            std::io::Error::new(std::io::ErrorKind::NotFound, MISSING_TRASH_FILE),
++        ))
+     }
+ }
+ 
+@@ -406,7 +502,8 @@ where
+         // if it already exists.
+         let original_path = item.original_path();
+         // Make sure the parent exists so that `create_dir` doesn't faile due to that.
+-        std::fs::create_dir_all(&item.original_parent).map_err(|e| fs_error(&item.original_parent, e))?;
++        std::fs::create_dir_all(&item.original_parent)
++            .map_err(|e| fs_error(&item.original_parent, e))?;
+         let mut collision = false;
+         if file.is_dir() {
+             // NOTE create_dir_all succeeds when the path already exist but create_dir
+@@ -420,7 +517,11 @@ where
+             }
+         } else {
+             // File or symlink
+-            if let Err(e) = OpenOptions::new().create_new(true).write(true).open(&original_path) {
++            if let Err(e) = OpenOptions::new()
++                .create_new(true)
++                .write(true)
++                .open(&original_path)
++            {
+                 if e.kind() == std::io::ErrorKind::AlreadyExists {
+                     collision = true;
+                 } else {
+@@ -430,7 +531,10 @@ where
+         }
+         if collision {
+             let remaining: Vec<_> = std::iter::once(item).chain(iter).collect();
+-            return Err(Error::RestoreCollision { path: original_path, remaining_items: remaining });
++            return Err(Error::RestoreCollision {
++                path: original_path,
++                remaining_items: remaining,
++            });
+         }
+         std::fs::rename(&file, &original_path).map_err(|e| fs_error(&file, e))?;
+         std::fs::remove_file(info_file).map_err(|e| fs_error(info_file, e))?;
+@@ -467,7 +571,10 @@ fn execute_on_mounted_trash_folders<F: FnMut(PathBuf) -> Result<(), FsError>>(
+                 }
+             }
+         } else {
+-            warn!("A Trash folder was found at '{:?}', but it's invalid because it's {:?}", trash_path, validity);
++            warn!(
++                "A Trash folder was found at '{:?}', but it's invalid because it's {:?}",
++                trash_path, validity
++            );
+         }
+     }
+     // See if there's a ".Trash-$UID" directory at the mounted location
+@@ -493,7 +600,7 @@ fn move_to_trash(
      src: impl AsRef<Path>,
      trash_folder: impl AsRef<Path>,
      _topdir: impl AsRef<Path>,
@@ -118,7 +388,38 @@ index 08b6652..514b97c 100644
      let src = src.as_ref();
      let trash_folder = trash_folder.as_ref();
      let files_folder = trash_folder.join("files");
-@@ -580,12 +609,21 @@ fn move_to_trash(
+@@ -533,7 +640,10 @@ fn move_to_trash(
+         info_name.push(&in_trash_name);
+         info_name.push(".trashinfo");
+         let info_file_path = info_folder.join(&info_name);
+-        let info_result = OpenOptions::new().create_new(true).write(true).open(&info_file_path);
++        let info_result = OpenOptions::new()
++            .create_new(true)
++            .write(true)
++            .open(&info_file_path);
+         match info_result {
+             Err(error) => {
+                 if error.kind() == std::io::ErrorKind::AlreadyExists {
+@@ -567,10 +677,16 @@ fn move_to_trash(
+         let path = files_folder.join(&in_trash_name);
+         match move_items_no_replace(src, &path) {
+             Err((path, error)) => {
+-                debug!("Failed moving item to the trash (this is usually OK). {:?}", error);
++                debug!(
++                    "Failed moving item to the trash (this is usually OK). {:?}",
++                    error
++                );
+                 // Try to delete the info file
+                 if let Err(info_err) = std::fs::remove_file(info_file_path) {
+-                    warn!("Created the trash info file, then failed to move the item to the trash. So far it's OK, but then failed remove the initial info file. There's either a bug in this program or another faulty program is manupulating the Trash. The error was: {:?}", info_err);
++                    warn!(
++                        "Created the trash info file, then failed to move the item to the trash. So far it's OK, but then failed remove the initial info file. There's either a bug in this program or another faulty program is manupulating the Trash. The error was: {:?}",
++                        info_err
++                    );
+                 }
+                 if error.kind() == std::io::ErrorKind::AlreadyExists {
+                     continue;
+@@ -580,12 +696,21 @@ fn move_to_trash(
              }
              Ok(_) => {
                  // We did it!
@@ -143,7 +444,757 @@ index 08b6652..514b97c 100644
  }
  
  /// An error may mean that a collision was found.
-@@ -1710,7 +1748,3 @@ mod tests {
+@@ -596,14 +721,19 @@ fn move_items_no_replace(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result
+     try_creating_placeholders(src, dst)?;
+ 
+     // Try to rename first (fastest option for same filesystem)
+-    let Err(e) = std::fs::rename(src, dst) else { return Ok(()) };
++    let Err(e) = std::fs::rename(src, dst) else {
++        return Ok(());
++    };
+ 
+     let needs_cross_device_copy = e.kind() == ErrorKind::CrossesDevices;
+     if !needs_cross_device_copy {
+         return Err((src.to_owned(), e));
+     }
+ 
+-    debug!("Cross-device move detected, falling back to copy+delete for {:?}", src);
++    debug!(
++        "Cross-device move detected, falling back to copy+delete for {:?}",
++        src
++    );
+ 
+     // Copy the file/directory
+     if src.is_dir() {
+@@ -631,7 +761,11 @@ fn try_creating_placeholders(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Re
+         std::fs::create_dir(dst).map_err(|e| (dst.to_owned(), e))?;
+     } else {
+         // Symlink or file
+-        OpenOptions::new().create_new(true).write(true).open(dst).map_err(|e| (dst.to_owned(), e))?;
++        OpenOptions::new()
++            .create_new(true)
++            .write(true)
++            .open(dst)
++            .map_err(|e| (dst.to_owned(), e))?;
+     }
+     Ok(())
+ }
+@@ -666,7 +800,10 @@ fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<(), FsEr
+ fn decode_uri_path(path: impl AsRef<Path>) -> PathBuf {
+     // Decode all bytes together: pushing a component beginning with an encoded
+     // slash onto a PathBuf would discard the preceding path. Keep non-UTF-8 bytes.
+-    OsString::from_vec(urlencoding::decode_binary(path.as_ref().as_os_str().as_bytes()).into_owned()).into()
++    OsString::from_vec(
++        urlencoding::decode_binary(path.as_ref().as_os_str().as_bytes()).into_owned(),
++    )
++    .into()
+ }
+ 
+ fn encode_uri_path(path: impl AsRef<Path>) -> String {
+@@ -681,12 +818,18 @@ fn encode_uri_path(path: impl AsRef<Path>) -> String {
+             if let Component::Normal(part) = component {
+                 urlencoding::encode_binary(part.as_bytes()).to_string()
+             } else {
+-                component.as_os_str().to_str().expect("Path components such as '/' are valid Unicode").to_owned()
++                component
++                    .as_os_str()
++                    .to_str()
++                    .expect("Path components such as '/' are valid Unicode")
++                    .to_owned()
+             }
+         })
+         .collect();
+ 
+-    path.to_str().expect("URL encoded bytes is valid Unicode").to_owned()
++    path.to_str()
++        .expect("URL encoded bytes is valid Unicode")
++        .to_owned()
+ }
+ 
+ #[derive(Eq, PartialEq, Debug)]
+@@ -729,12 +872,18 @@ fn home_trash() -> Result<PathBuf, Error> {
+             return Ok(home_path.join(".local/share/Trash"));
+         }
+     }
+-    Err(Error::Unknown { description: "Neither the XDG_DATA_HOME nor the HOME environment variable was found".into() })
++    Err(Error::Unknown {
++        description: "Neither the XDG_DATA_HOME nor the HOME environment variable was found".into(),
++    })
+ }
+ 
+ fn get_first_topdir_containing_path<'a>(path: &Path, mnt_points: &'a [MountPoint]) -> &'a Path {
+     let root: &'static Path = Path::new("/");
+-    mnt_points.iter().map(|mp| mp.mnt_dir.as_path()).find(|mount_path| path.starts_with(mount_path)).unwrap_or(root)
++    mnt_points
++        .iter()
++        .map(|mp| mp.mnt_dir.as_path())
++        .find(|mount_path| path.starts_with(mount_path))
++        .unwrap_or(root)
+ }
+ 
+ /// Canonicalize a path. If the path doesn't exist, the canonical form of the
+@@ -745,14 +894,26 @@ fn canonicalize_path_or_parents(mut path: &Path) -> Result<PathBuf, Error> {
+     loop {
+         match path.canonicalize() {
+             Ok(canonical) => {
+-                return Ok(popped_path_components.iter().rev().fold(canonical, |acc, component| acc.join(component)));
++                return Ok(popped_path_components
++                    .iter()
++                    .rev()
++                    .fold(canonical, |acc, component| acc.join(component)));
+             }
+             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+-                let file_name = path.file_name().ok_or(Error::CanonicalizePath { original: path.to_owned() })?;
++                let file_name = path.file_name().ok_or(Error::CanonicalizePath {
++                    original: path.to_owned(),
++                })?;
+                 popped_path_components.push(file_name.to_owned());
+-                path = path.parent().ok_or(Error::CanonicalizePath { original: path.to_owned() })?;
++                path = path.parent().ok_or(Error::CanonicalizePath {
++                    original: path.to_owned(),
++                })?;
++            }
++            Err(e) => {
++                return Err(Error::FileSystem {
++                    path: path.to_owned(),
++                    source: e,
++                });
+             }
+-            Err(e) => return Err(Error::FileSystem { path: path.to_owned(), source: e }),
+         }
+     }
+ }
+@@ -794,13 +955,20 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+     //let file;
+     let read_arg = CString::new("r").unwrap();
+     let mounts_path = CString::new("/proc/mounts").unwrap();
+-    let mut file = unsafe { libc::fopen(mounts_path.as_c_str().as_ptr(), read_arg.as_c_str().as_ptr()) };
++    let mut file = unsafe {
++        libc::fopen(
++            mounts_path.as_c_str().as_ptr(),
++            read_arg.as_c_str().as_ptr(),
++        )
++    };
+     if file.is_null() {
+         let mtab_path = CString::new("/etc/mtab").unwrap();
+         file = unsafe { libc::fopen(mtab_path.as_c_str().as_ptr(), read_arg.as_c_str().as_ptr()) };
+     }
+     if file.is_null() {
+-        return Err(Error::Unknown { description: "Neither '/proc/mounts' nor '/etc/mtab' could be opened.".into() });
++        return Err(Error::Unknown {
++            description: "Neither '/proc/mounts' nor '/etc/mtab' could be opened.".into(),
++        });
+     }
+     defer! { unsafe { libc::fclose(file); } }
+     let mut result = Vec::new();
+@@ -816,7 +984,10 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+         let mount_point = unsafe {
+             MountPoint {
+                 mnt_dir: dir.into(),
+-                _mnt_fsname: CStr::from_ptr((*mntent).mnt_fsname).to_str().unwrap().into(),
++                _mnt_fsname: CStr::from_ptr((*mntent).mnt_fsname)
++                    .to_str()
++                    .unwrap()
++                    .into(),
+                 _mnt_type: CStr::from_ptr((*mntent).mnt_type).to_str().unwrap().into(),
+             }
+         };
+@@ -824,7 +995,9 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+     }
+     if result.is_empty() {
+         return Err(Error::Unknown {
+-            description: "A mount points file could be opened, but the call to `getmntent` returned NULL.".into(),
++            description:
++                "A mount points file could be opened, but the call to `getmntent` returned NULL."
++                    .into(),
+         });
+     }
+     Ok(result)
+@@ -859,7 +1032,8 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+     if count < 1 {
+         return Ok(Vec::new());
+     }
+-    let fs_infos: &[libc::statfs] = unsafe { std::slice::from_raw_parts(fs_infos as _, count as _) };
++    let fs_infos: &[libc::statfs] =
++        unsafe { std::slice::from_raw_parts(fs_infos as _, count as _) };
+ 
+     let mut result = Vec::new();
+     for fs_info in fs_infos {
+@@ -877,8 +1051,11 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+         };
+         let mount_from = c_buf_to_str(&fs_info.f_mntfromname).unwrap_or_default();
+ 
+-        let mount_point =
+-            MountPoint { mnt_dir: mount_to.into(), _mnt_fsname: mount_from.into(), _mnt_type: fs_type.into() };
++        let mount_point = MountPoint {
++            mnt_dir: mount_to.into(),
++            _mnt_fsname: mount_from.into(),
++            _mnt_type: fs_type.into(),
++        };
+         result.push(mount_point);
+     }
+     Ok(result)
+@@ -914,7 +1091,8 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+     if count < 1 {
+         return Ok(Vec::new());
+     }
+-    let fs_infos: &[libc::statvfs] = unsafe { std::slice::from_raw_parts(fs_infos as _, count as _) };
++    let fs_infos: &[libc::statvfs] =
++        unsafe { std::slice::from_raw_parts(fs_infos as _, count as _) };
+ 
+     let mut result = Vec::new();
+     for fs_info in fs_infos {
+@@ -932,8 +1110,11 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+         };
+         let mount_from = c_buf_to_str(&fs_info.f_mntfromname).unwrap_or_default();
+ 
+-        let mount_point =
+-            MountPoint { mnt_dir: mount_to.into(), _mnt_fsname: mount_from.into(), _mnt_type: fs_type.into() };
++        let mount_point = MountPoint {
++            mnt_dir: mount_to.into(),
++            _mnt_fsname: mount_from.into(),
++            _mnt_type: fs_type.into(),
++        };
+         result.push(mount_point);
+     }
+     Ok(result)
+@@ -948,7 +1129,9 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+ )))]
+ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+     // On platforms that don't have support yet, return an error
+-    Err(Error::Unknown { description: "Mount points cannot be determined on this operating system".into() })
++    Err(Error::Unknown {
++        description: "Mount points cannot be determined on this operating system".into(),
++    })
+ }
+ 
+ #[cfg(test)]
+@@ -956,7 +1139,7 @@ mod tests {
+     use defer::defer;
+     use serial_test::serial;
+     use std::{
+-        collections::{hash_map::Entry, HashMap},
++        collections::{HashMap, hash_map::Entry},
+         env,
+         ffi::{OsStr, OsString},
+         fmt,
+@@ -970,11 +1153,10 @@ mod tests {
+     use log::warn;
+ 
+     use crate::{
+-        canonicalize_paths, delete, delete_all,
++        Error, canonicalize_paths, delete, delete_all,
+         os_limited::{list, purge_all, restore_all},
+         platform::encode_uri_path,
+         tests::get_unique_name,
+-        Error,
+     };
+ 
+     use super::{canonicalize_path_or_parents, decode_uri_path};
+@@ -1006,7 +1188,11 @@ mod tests {
+         let date = "DeletionDate=2026-01-02T03:04:05\n";
+         let expected_time = if cfg!(feature = "chrono") {
+             use chrono::TimeZone;
+-            chrono::Local.with_ymd_and_hms(2026, 1, 2, 3, 4, 5).earliest().unwrap().timestamp()
++            chrono::Local
++                .with_ymd_and_hms(2026, 1, 2, 3, 4, 5)
++                .earliest()
++                .unwrap()
++                .timestamp()
+         } else {
+             -1
+         };
+@@ -1030,30 +1216,56 @@ mod tests {
+             ),
+             (
+                 "duplicate-valid-dates",
+-                format!("[Trash Info]\nPath={}\n{date}DeletionDate=2026-02-03T04:05:06\n", encode_uri_path(&first)),
++                format!(
++                    "[Trash Info]\nPath={}\n{date}DeletionDate=2026-02-03T04:05:06\n",
++                    encode_uri_path(&first)
++                ),
+                 Some(first.clone()),
+             ),
+             (
+                 "invalid-first-date",
+-                format!("[Trash Info]\nPath={}\nDeletionDate=invalid\n{date}", encode_uri_path(&first)),
+-                if cfg!(feature = "chrono") { None } else { Some(first.clone()) },
++                format!(
++                    "[Trash Info]\nPath={}\nDeletionDate=invalid\n{date}",
++                    encode_uri_path(&first)
++                ),
++                if cfg!(feature = "chrono") {
++                    None
++                } else {
++                    Some(first.clone())
++                },
+             ),
+             (
+                 "path-whitespace",
+-                format!("[Trash Info]\nPath = \t{} \t\n{date}", encode_uri_path(&first)),
++                format!(
++                    "[Trash Info]\nPath = \t{} \t\n{date}",
++                    encode_uri_path(&first)
++                ),
+                 Some(first.clone()),
+             ),
+             (
+                 "date-whitespace",
+-                format!("[Trash Info]\nPath={}\nDeletionDate = \t2026-01-02T03:04:05 \t\n", encode_uri_path(&first)),
++                format!(
++                    "[Trash Info]\nPath={}\nDeletionDate = \t2026-01-02T03:04:05 \t\n",
++                    encode_uri_path(&first)
++                ),
+                 Some(first.clone()),
+             ),
+             (
+                 "encoded-spaces",
+-                format!("[Trash Info]\nPath={}\n{date}", encode_uri_path(original.join(" leading and trailing "))),
++                format!(
++                    "[Trash Info]\nPath={}\n{date}",
++                    encode_uri_path(original.join(" leading and trailing "))
++                ),
+                 Some(original.join(" leading and trailing ")),
+             ),
+-            ("invalid-first-path", format!("[Trash Info]\nPath=/\nPath={}\n{date}", encode_uri_path(&first)), None),
++            (
++                "invalid-first-path",
++                format!(
++                    "[Trash Info]\nPath=/\nPath={}\n{date}",
++                    encode_uri_path(&first)
++                ),
++                None,
++            ),
+             (
+                 "relative",
+                 format!("[Trash Info]\nPath=original/relative.txt\n{date}"),
+@@ -1071,21 +1283,60 @@ mod tests {
+             ),
+             (
+                 "absolute-encoded-separator",
+-                format!("[Trash Info]\nPath={}/%2Fseparator.txt\n{date}", encode_uri_path(&original)),
++                format!(
++                    "[Trash Info]\nPath={}/%2Fseparator.txt\n{date}",
++                    encode_uri_path(&original)
++                ),
+                 Some(original.join("separator.txt")),
+             ),
+-            ("encoded-parent-traversal", format!("[Trash Info]\nPath=original/../%2Foutside\n{date}"), None),
+-            ("parent-traversal", format!("[Trash Info]\nPath=../outside\n{date}"), None),
++            (
++                "encoded-parent-traversal",
++                format!("[Trash Info]\nPath=original/../%2Foutside\n{date}"),
++                None,
++            ),
++            (
++                "parent-traversal",
++                format!("[Trash Info]\nPath=../outside\n{date}"),
++                None,
++            ),
+             ("empty-path", format!("[Trash Info]\nPath=\n{date}"), None),
+             ("root-path", format!("[Trash Info]\nPath=/\n{date}"), None),
+             ("dot-path", format!("[Trash Info]\nPath=.\n{date}"), None),
+-            ("dot-slash-path", format!("[Trash Info]\nPath=./\n{date}"), None),
+-            ("encoded-dot-path", format!("[Trash Info]\nPath=%2E\n{date}"), None),
+-            ("relative-parent-path", format!("[Trash Info]\nPath=original/..\n{date}"), None),
+-            ("absolute-parent-path", format!("[Trash Info]\nPath=/tmp/..\n{date}"), None),
+-            ("encoded-parent-path", format!("[Trash Info]\nPath=/tmp/%2E%2E\n{date}"), None),
+-            ("nul-path", format!("[Trash Info]\nPath=original/%00.txt\n{date}"), None),
+-            ("invalid-header", format!("[Other]\nPath=original/other.txt\n{date}"), None),
++            (
++                "dot-slash-path",
++                format!("[Trash Info]\nPath=./\n{date}"),
++                None,
++            ),
++            (
++                "encoded-dot-path",
++                format!("[Trash Info]\nPath=%2E\n{date}"),
++                None,
++            ),
++            (
++                "relative-parent-path",
++                format!("[Trash Info]\nPath=original/..\n{date}"),
++                None,
++            ),
++            (
++                "absolute-parent-path",
++                format!("[Trash Info]\nPath=/tmp/..\n{date}"),
++                None,
++            ),
++            (
++                "encoded-parent-path",
++                format!("[Trash Info]\nPath=/tmp/%2E%2E\n{date}"),
++                None,
++            ),
++            (
++                "nul-path",
++                format!("[Trash Info]\nPath=original/%00.txt\n{date}"),
++                None,
++            ),
++            (
++                "invalid-header",
++                format!("[Other]\nPath=original/other.txt\n{date}"),
++                None,
++            ),
+         ];
+         for (id, record, _) in &cases {
+             std::fs::write(info.join(format!("{id}.trashinfo")), record).unwrap();
+@@ -1102,15 +1353,26 @@ mod tests {
+             let receipt = info.join(format!("{id}.trashinfo"));
+             match expected {
+                 Some(expected) => {
+-                    let item = items.get(receipt.as_os_str()).unwrap_or_else(|| panic!("missing record {id}"));
++                    let item = items
++                        .get(receipt.as_os_str())
++                        .unwrap_or_else(|| panic!("missing record {id}"));
+                     assert_eq!(&item.original_path(), expected, "record {id}");
+-                    assert_eq!(item.time_deleted, expected_time, "first deletion date must be retained for {id}");
++                    assert_eq!(
++                        item.time_deleted, expected_time,
++                        "first deletion date must be retained for {id}"
++                    );
+                 }
+-                None => assert!(!items.contains_key(receipt.as_os_str()), "invalid record {id} must be skipped"),
++                None => assert!(
++                    !items.contains_key(receipt.as_os_str()),
++                    "invalid record {id} must be skipped"
++                ),
+             }
+         }
+ 
+-        for (id, expected) in [("non-unicode", non_unicode), ("encoded-separator", original.join("separator.txt"))] {
++        for (id, expected) in [
++            ("non-unicode", non_unicode),
++            ("encoded-separator", original.join("separator.txt")),
++        ] {
+             let receipt = info.join(format!("{id}.trashinfo"));
+             restore_all([items[receipt.as_os_str()].clone()]).unwrap();
+             assert_eq!(std::fs::read(expected).unwrap(), b"payload");
+@@ -1127,7 +1389,9 @@ mod tests {
+         let file_name_prefix = get_unique_name();
+         let batches: usize = 2;
+         let files_per_batch: usize = 3;
+-        let names: Vec<OsString> = (0..files_per_batch).map(|i| format!("{}#{}", file_name_prefix, i).into()).collect();
++        let names: Vec<OsString> = (0..files_per_batch)
++            .map(|i| format!("{}#{}", file_name_prefix, i).into())
++            .collect();
+         for _ in 0..batches {
+             for path in &names {
+                 File::create_new(path).unwrap();
+@@ -1136,7 +1400,9 @@ mod tests {
+             let result = delete_all_using_system_program(&names);
+             if let Err(SystemTrashError::NoTrashProgram) = &result {
+                 // For example may be the case on build systems that don't have a destop environment
+-                warn!("No system default trashing utility was found, using this crate's implementation");
++                warn!(
++                    "No system default trashing utility was found, using this crate's implementation"
++                );
+                 delete_all(&names).unwrap();
+             } else {
+                 result.unwrap();
+@@ -1145,7 +1411,11 @@ mod tests {
+         let items = list().unwrap();
+         let items: HashMap<_, Vec<_>> = items
+             .into_iter()
+-            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
++            .filter(|x| {
++                x.name
++                    .as_encoded_bytes()
++                    .starts_with(file_name_prefix.as_bytes())
++            })
+             .fold(HashMap::new(), |mut map, x| {
+                 match map.entry(x.name.clone()) {
+                     Entry::Occupied(mut entry) => {
+@@ -1176,8 +1446,13 @@ mod tests {
+ 
+         let file_name_prefix = get_unique_name();
+         let file_count = 2;
+-        let names: Vec<OsString> = (0..file_count).map(|i| format!("{}#{}", file_name_prefix, i).into()).collect();
+-        let symlink_names: Vec<OsString> = names.iter().map(|name| format!("{:?}-symlink", name).into()).collect();
++        let names: Vec<OsString> = (0..file_count)
++            .map(|i| format!("{}#{}", file_name_prefix, i).into())
++            .collect();
++        let symlink_names: Vec<OsString> = names
++            .iter()
++            .map(|name| format!("{:?}-symlink", name).into())
++            .collect();
+ 
+         // Test file symbolic link and directory symbolic link
+         File::create_new(&names[0]).unwrap();
+@@ -1198,7 +1473,8 @@ mod tests {
+             delete(symlink).unwrap();
+             let items = list().unwrap();
+             let item = items.into_iter().find(|it| it.name == *symlink).unwrap();
+-            restore_all([item.clone()]).expect("The broken symbolic link should be restored successfully.");
++            restore_all([item.clone()])
++                .expect("The broken symbolic link should be restored successfully.");
+ 
+             // Delete and Purge it without errors
+             delete(symlink).unwrap();
+@@ -1211,10 +1487,17 @@ mod tests {
+         let fake = format!("/tmp/{}", get_unique_name());
+         let path = decode_uri_path(&fake);
+ 
+-        assert_eq!(path.to_str().expect("Path is valid Unicode"), fake, "Decoded path shouldn't be different");
++        assert_eq!(
++            path.to_str().expect("Path is valid Unicode"),
++            fake,
++            "Decoded path shouldn't be different"
++        );
+ 
+         let encoded = encode_uri_path(&path);
+-        assert_eq!(encoded, fake, "URL encoded alphanumeric String shouldn't change");
++        assert_eq!(
++            encoded, fake,
++            "URL encoded alphanumeric String shouldn't change"
++        );
+     }
+ 
+     #[test]
+@@ -1225,7 +1508,10 @@ mod tests {
+         let mut bytes = base.into_encoded_bytes();
+         bytes.push(168);
+         let fake = OsString::from_vec(bytes);
+-        assert!(fake.to_str().is_none(), "Invalid Unicode cannot be a Rust String");
++        assert!(
++            fake.to_str().is_none(),
++            "Invalid Unicode cannot be a Rust String"
++        );
+ 
+         let path = decode_uri_path(&fake);
+         assert_eq!(path.as_os_str().as_encoded_bytes(), fake.as_encoded_bytes());
+@@ -1281,8 +1567,11 @@ mod tests {
+                         unix::fs::symlink(resolve(case_root, target), path).unwrap();
+                     }
+                     CanonicalizeFixture::Chmod { path, mode } => {
+-                        std::fs::set_permissions(resolve(case_root, path), std::fs::Permissions::from_mode(*mode))
+-                            .unwrap();
++                        std::fs::set_permissions(
++                            resolve(case_root, path),
++                            std::fs::Permissions::from_mode(*mode),
++                        )
++                        .unwrap();
+                     }
+                 }
+             }
+@@ -1326,17 +1615,25 @@ mod tests {
+                 name: "no perms to path",
+                 setup: &[
+                     CanonicalizeFixture::Dir("no-perms-path-parent/locked-path"),
+-                    CanonicalizeFixture::Chmod { path: "no-perms-path-parent/locked-path", mode: 0o000 },
++                    CanonicalizeFixture::Chmod {
++                        path: "no-perms-path-parent/locked-path",
++                        mode: 0o000,
++                    },
+                 ],
+                 input: "no-perms-path-parent/locked-path/child",
+                 expected: CanonicalizeExpectation::PermissionDenied,
+-                teardown: &[CanonicalizeFixture::Chmod { path: "no-perms-path-parent/locked-path", mode: 0o700 }],
++                teardown: &[CanonicalizeFixture::Chmod {
++                    path: "no-perms-path-parent/locked-path",
++                    mode: 0o700,
++                }],
+             },
+             CanonicalizeCase {
+                 name: "parent doesn't exist",
+                 setup: &[CanonicalizeFixture::Dir("parent-missing-grandparent")],
+                 input: "parent-missing-grandparent/missing-parent/leaf",
+-                expected: CanonicalizeExpectation::Canonical("parent-missing-grandparent/missing-parent/leaf"),
++                expected: CanonicalizeExpectation::Canonical(
++                    "parent-missing-grandparent/missing-parent/leaf",
++                ),
+                 teardown: &[],
+             },
+             CanonicalizeCase {
+@@ -1372,7 +1669,10 @@ mod tests {
+                 name: "no perms to parent",
+                 setup: &[
+                     CanonicalizeFixture::Dir("no-perms-parent-grandparent/locked-parent"),
+-                    CanonicalizeFixture::Chmod { path: "no-perms-parent-grandparent/locked-parent", mode: 0o000 },
++                    CanonicalizeFixture::Chmod {
++                        path: "no-perms-parent-grandparent/locked-parent",
++                        mode: 0o000,
++                    },
+                 ],
+                 input: "no-perms-parent-grandparent/locked-parent/leaf/child",
+                 expected: CanonicalizeExpectation::PermissionDenied,
+@@ -1393,30 +1693,45 @@ mod tests {
+                 setup: &[
+                     CanonicalizeFixture::Dir("grandparent-symlink-target/parent"),
+                     CanonicalizeFixture::File("grandparent-symlink-target/parent/leaf"),
+-                    CanonicalizeFixture::Symlink { path: "grandparent-link", target: "grandparent-symlink-target" },
++                    CanonicalizeFixture::Symlink {
++                        path: "grandparent-link",
++                        target: "grandparent-symlink-target",
++                    },
+                 ],
+                 input: "grandparent-link/parent/leaf",
+-                expected: CanonicalizeExpectation::Canonical("grandparent-symlink-target/parent/leaf"),
++                expected: CanonicalizeExpectation::Canonical(
++                    "grandparent-symlink-target/parent/leaf",
++                ),
+                 teardown: &[],
+             },
+             CanonicalizeCase {
+                 name: "grandparent is symlink but path doesn't exist",
+                 setup: &[
+                     CanonicalizeFixture::Dir("grandparent-symlink-target/parent"),
+-                    CanonicalizeFixture::Symlink { path: "grandparent-link", target: "grandparent-symlink-target" },
++                    CanonicalizeFixture::Symlink {
++                        path: "grandparent-link",
++                        target: "grandparent-symlink-target",
++                    },
+                 ],
+                 input: "grandparent-link/parent/missing-leaf",
+-                expected: CanonicalizeExpectation::Canonical("grandparent-symlink-target/parent/missing-leaf"),
++                expected: CanonicalizeExpectation::Canonical(
++                    "grandparent-symlink-target/parent/missing-leaf",
++                ),
+                 teardown: &[],
+             },
+             CanonicalizeCase {
+                 name: "grandparent is symlink but parent doesn't exist",
+                 setup: &[
+                     CanonicalizeFixture::Dir("grandparent-symlink-target"),
+-                    CanonicalizeFixture::Symlink { path: "grandparent-link", target: "grandparent-symlink-target" },
++                    CanonicalizeFixture::Symlink {
++                        path: "grandparent-link",
++                        target: "grandparent-symlink-target",
++                    },
+                 ],
+                 input: "grandparent-link/missing-parent/leaf",
+-                expected: CanonicalizeExpectation::Canonical("grandparent-symlink-target/missing-parent/leaf"),
++                expected: CanonicalizeExpectation::Canonical(
++                    "grandparent-symlink-target/missing-parent/leaf",
++                ),
+                 teardown: &[],
+             },
+             CanonicalizeCase {
+@@ -1429,7 +1744,10 @@ mod tests {
+                         path: "grandparent-symlink-target/parent-link",
+                         target: "gp-parent-symlink-target",
+                     },
+-                    CanonicalizeFixture::Symlink { path: "grandparent-link", target: "grandparent-symlink-target" },
++                    CanonicalizeFixture::Symlink {
++                        path: "grandparent-link",
++                        target: "grandparent-symlink-target",
++                    },
+                 ],
+                 input: "grandparent-link/parent-link/leaf",
+                 expected: CanonicalizeExpectation::Canonical("gp-parent-symlink-target/leaf"),
+@@ -1444,7 +1762,10 @@ mod tests {
+                         path: "grandparent-symlink-target/parent/path-link",
+                         target: "gp-path-symlink-target",
+                     },
+-                    CanonicalizeFixture::Symlink { path: "grandparent-link", target: "grandparent-symlink-target" },
++                    CanonicalizeFixture::Symlink {
++                        path: "grandparent-link",
++                        target: "grandparent-symlink-target",
++                    },
+                 ],
+                 input: "grandparent-link/parent/path-link",
+                 expected: CanonicalizeExpectation::Canonical("gp-path-symlink-target"),
+@@ -1465,21 +1786,32 @@ mod tests {
+                         path: "grandparent-symlink-target/path-parent-link",
+                         target: "gp-parent-path-parent-target",
+                     },
+-                    CanonicalizeFixture::Symlink { path: "grandparent-link", target: "grandparent-symlink-target" },
++                    CanonicalizeFixture::Symlink {
++                        path: "grandparent-link",
++                        target: "grandparent-symlink-target",
++                    },
+                 ],
+                 input: "grandparent-link/path-parent-link/path-link",
+-                expected: CanonicalizeExpectation::Canonical("gp-parent-path-symlink-target-parent/leaf-target"),
++                expected: CanonicalizeExpectation::Canonical(
++                    "gp-parent-path-symlink-target-parent/leaf-target",
++                ),
+                 teardown: &[],
+             },
+             CanonicalizeCase {
+                 name: "no perms to grandparent",
+                 setup: &[
+                     CanonicalizeFixture::Dir("locked-grandparent/parent"),
+-                    CanonicalizeFixture::Chmod { path: "locked-grandparent", mode: 0o000 },
++                    CanonicalizeFixture::Chmod {
++                        path: "locked-grandparent",
++                        mode: 0o000,
++                    },
+                 ],
+                 input: "locked-grandparent/parent/leaf/child",
+                 expected: CanonicalizeExpectation::PermissionDenied,
+-                teardown: &[CanonicalizeFixture::Chmod { path: "locked-grandparent", mode: 0o700 }],
++                teardown: &[CanonicalizeFixture::Chmod {
++                    path: "locked-grandparent",
++                    mode: 0o700,
++                }],
+             },
+         ];
+ 
+@@ -1493,22 +1825,38 @@ mod tests {
+                 CanonicalizeExpectation::Canonical(expected) => {
+                     let expected = resolve(&case_root, expected);
+                     let canonical = canonicalize_path_or_parents(&input).unwrap_or_else(|err| {
+-                        panic!("case `{}` unexpectedly failed for {:?}: {:?}", case.name, input, err);
++                        panic!(
++                            "case `{}` unexpectedly failed for {:?}: {:?}",
++                            case.name, input, err
++                        );
+                     });
+-                    assert_eq!(canonical, expected, "case `{}` produced an unexpected canonical path", case.name);
++                    assert_eq!(
++                        canonical, expected,
++                        "case `{}` produced an unexpected canonical path",
++                        case.name
++                    );
+                 }
+-                CanonicalizeExpectation::PermissionDenied => match canonicalize_path_or_parents(&input).unwrap_err() {
+-                    Error::FileSystem { path, source } => {
+-                        assert_eq!(path, input, "case `{}` returned an unexpected failing path", case.name);
+-                        assert_eq!(
+-                            source.kind(),
+-                            ErrorKind::PermissionDenied,
+-                            "case `{}` returned an unexpected error",
+-                            case.name
+-                        );
++                CanonicalizeExpectation::PermissionDenied => {
++                    match canonicalize_path_or_parents(&input).unwrap_err() {
++                        Error::FileSystem { path, source } => {
++                            assert_eq!(
++                                path, input,
++                                "case `{}` returned an unexpected failing path",
++                                case.name
++                            );
++                            assert_eq!(
++                                source.kind(),
++                                ErrorKind::PermissionDenied,
++                                "case `{}` returned an unexpected error",
++                                case.name
++                            );
++                        }
++                        err => panic!(
++                            "case `{}` returned an unexpected error for {:?}: {:?}",
++                            case.name, input, err
++                        ),
+                     }
+-                    err => panic!("case `{}` returned an unexpected error for {:?}: {:?}", case.name, input, err),
+-                },
++                }
+             }
+ 
+             apply_fixtures(&case_root, case.teardown);
+@@ -1545,7 +1893,9 @@ mod tests {
+ 
+     /// This is based on the electron library's implementation.
+     /// See: https://github.com/electron/electron/blob/34c4c8d5088fa183f56baea28809de6f2a427e02/shell/common/platform_util_linux.cc#L96
+-    pub fn delete_all_canonicalized_using_system_program(full_paths: Vec<PathBuf>) -> Result<(), SystemTrashError> {
++    pub fn delete_all_canonicalized_using_system_program(
++        full_paths: Vec<PathBuf>,
++    ) -> Result<(), SystemTrashError> {
+         static DEFAULT_TRASH: &str = "gio";
+         let trash = {
+             // Determine desktop environment and set accordingly.
+@@ -1710,7 +2060,3 @@ mod tests {
          DesktopEnvironment::Other
      }
  }
@@ -152,10 +1203,21 @@ index 08b6652..514b97c 100644
 -    Error::FileSystem { path: path.into(), source }
 -}
 diff --git a/src/lib.rs b/src/lib.rs
-index d5a2263..85f56fa 100644
+index d5a2263..e5ea727 100644
 --- a/src/lib.rs
 +++ b/src/lib.rs
-@@ -152,7 +152,35 @@ impl TrashContext {
+@@ -103,7 +103,9 @@ pub struct TrashContext {
+ }
+ impl TrashContext {
+     pub const fn new() -> Self {
+-        Self { platform_specific: platform::PlatformTrashContext::new() }
++        Self {
++            platform_specific: platform::PlatformTrashContext::new(),
++        }
+     }
+ 
+     /// Removes a single file or directory.
+@@ -152,7 +154,35 @@ impl TrashContext {
          trace!("Starting canonicalize_paths");
          let full_paths = canonicalize_paths(paths)?;
          trace!("Finished canonicalize_paths");
@@ -192,7 +1254,7 @@ index d5a2263..85f56fa 100644
      }
  }
  
-@@ -174,6 +202,24 @@ where
+@@ -174,6 +204,24 @@ where
      DEFAULT_TRASH_CTX.delete_all(paths)
  }
  
@@ -217,7 +1279,7 @@ index d5a2263..85f56fa 100644
  /// Provides information about an error.
  #[derive(Debug)]
  pub enum Error {
-@@ -186,15 +232,12 @@ pub enum Error {
+@@ -186,15 +234,18 @@ pub enum Error {
          description: String,
      },
  
@@ -233,29 +1295,86 @@ index d5a2263..85f56fa 100644
 -        feature = "freedesktop"
 +    #[cfg(any(
 +        target_os = "macos",
-+        all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"), feature = "freedesktop")
++        all(
++            unix,
++            not(target_os = "macos"),
++            not(target_os = "ios"),
++            not(target_os = "android"),
++            feature = "freedesktop"
++        )
      ))]
      FileSystem {
          path: PathBuf,
-@@ -305,6 +348,17 @@ pub fn into_unknown<E: std::fmt::Display>(err: E) -> Error {
-     Error::Unknown { description: format!("{err}") }
+@@ -296,13 +347,38 @@ impl error::Error for Error {
+                 feature = "portal",
+                 not(feature = "freedesktop")
+             ))]
+-            Self::Portal { status_code: _, source: e } => e.as_ref().map(|err| err as &(dyn error::Error + 'static)),
++            Self::Portal {
++                status_code: _,
++                source: e,
++            } => e.as_ref().map(|err| err as &(dyn error::Error + 'static)),
+             _ => None,
+         }
+     }
  }
- 
+ pub fn into_unknown<E: std::fmt::Display>(err: E) -> Error {
+-    Error::Unknown { description: format!("{err}") }
++    Error::Unknown {
++        description: format!("{err}"),
++    }
++}
++
 +/// Builds an [`Error::FileSystem`] for a path and the I/O error it produced.
 +///
 +/// Both the freedesktop and the macOS backends report failures this way.
 +#[cfg(any(
 +    target_os = "macos",
-+    all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"), feature = "freedesktop")
++    all(
++        unix,
++        not(target_os = "macos"),
++        not(target_os = "ios"),
++        not(target_os = "android"),
++        feature = "freedesktop"
++    )
 +))]
 +pub(crate) fn fs_error(path: impl Into<PathBuf>, source: std::io::Error) -> Error {
-+    Error::FileSystem { path: path.into(), source }
-+}
-+
++    Error::FileSystem {
++        path: path.into(),
++        source,
++    }
+ }
+ 
  pub(crate) fn canonicalize_paths<I, T>(paths: I) -> Result<Vec<PathBuf>, Error>
- where
-     I: IntoIterator<Item = T>,
-@@ -423,6 +477,57 @@ pub struct TrashItemMetadata {
+@@ -315,18 +391,22 @@ where
+         .map(|x| {
+             let target_ref = x.as_ref();
+             if target_ref.as_os_str().is_empty() {
+-                return Err(Error::CanonicalizePath { original: target_ref.to_owned() });
++                return Err(Error::CanonicalizePath {
++                    original: target_ref.to_owned(),
++                });
+             }
+             let target = if target_ref.is_relative() {
+-                let curr_dir = current_dir()
+-                    .map_err(|_| Error::CouldNotAccess { target: "[Current working directory]".into() })?;
++                let curr_dir = current_dir().map_err(|_| Error::CouldNotAccess {
++                    target: "[Current working directory]".into(),
++                })?;
+                 curr_dir.join(target_ref)
+             } else {
+                 target_ref.to_owned()
+             };
+             let parent = target.parent().ok_or(Error::TargetedRoot)?;
+-            let canonical_parent =
+-                parent.canonicalize().map_err(|_| Error::CanonicalizePath { original: parent.to_owned() })?;
++            let canonical_parent = parent.canonicalize().map_err(|_| Error::CanonicalizePath {
++                original: parent.to_owned(),
++            })?;
+             if let Some(file_name) = target.file_name() {
+                 Ok(canonical_parent.join(file_name))
+             } else {
+@@ -423,9 +503,75 @@ pub struct TrashItemMetadata {
      pub size: TrashItemSize,
  }
  
@@ -275,7 +1394,13 @@ index d5a2263..85f56fa 100644
 +#[cfg(any(
 +    target_os = "macos",
 +    target_os = "windows",
-+    all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"), feature = "freedesktop")
++    all(
++        unix,
++        not(target_os = "macos"),
++        not(target_os = "ios"),
++        not(target_os = "android"),
++        feature = "freedesktop"
++    )
 +))]
 +pub fn restore_all<I>(items: I) -> Result<(), Error>
 +where
@@ -300,7 +1425,10 @@ index d5a2263..85f56fa 100644
 +    let mut item_set = HashSet::with_capacity(items.len());
 +    for item in items.iter() {
 +        if !item_set.insert(ItemWrapper(item)) {
-+            return Err(Error::RestoreTwins { path: item.original_path(), items });
++            return Err(Error::RestoreTwins {
++                path: item.original_path(),
++                items,
++            });
 +        }
 +    }
 +
@@ -312,7 +1440,38 @@ index d5a2263..85f56fa 100644
 +
  #[cfg(any(
      target_os = "windows",
-     all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"), feature = "freedesktop")
+-    all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"), feature = "freedesktop")
++    all(
++        unix,
++        not(target_os = "macos"),
++        not(target_os = "ios"),
++        not(target_os = "android"),
++        feature = "freedesktop"
++    )
+ ))]
+ pub mod os_limited {
+     //! This module provides functionality which is only supported on Windows and
+@@ -437,7 +583,7 @@ pub mod os_limited {
+         hash::{Hash, Hasher},
+     };
+ 
+-    use super::{platform, Error, TrashItem, TrashItemMetadata};
++    use super::{Error, TrashItem, TrashItemMetadata, platform};
+ 
+     /// Returns all [`TrashItem`]s that are currently in the trash.
+     ///
+@@ -623,7 +769,10 @@ pub mod os_limited {
+         let mut item_set = HashSet::with_capacity(items.len());
+         for item in items.iter() {
+             if !item_set.insert(ItemWrapper(item)) {
+-                return Err(Error::RestoreTwins { path: item.original_path(), items });
++                return Err(Error::RestoreTwins {
++                    path: item.original_path(),
++                    items,
++                });
+             }
+         }
+         platform::restore_all(items)
 diff --git a/src/macos/mod.rs b/src/macos/mod.rs
 index a622310..5829b98 100644
 --- a/src/macos/mod.rs
@@ -935,10 +2094,15 @@ index 3c0b67c..4264bf3 100644
 +    }
 +}
 diff --git a/src/portal.rs b/src/portal.rs
-index af6fb99..073f092 100644
+index af6fb99..c016e78 100644
 --- a/src/portal.rs
 +++ b/src/portal.rs
-@@ -10,7 +10,7 @@ use rustix::fs::{fstat, open, openat, statat, AtFlags, FileType, Mode, OFlags, S
+@@ -6,11 +6,11 @@ use std::{
+ };
+ 
+ use once_cell::sync::OnceCell;
+-use rustix::fs::{fstat, open, openat, statat, AtFlags, FileType, Mode, OFlags, Stat};
++use rustix::fs::{AtFlags, FileType, Mode, OFlags, Stat, fstat, open, openat, statat};
  use rustix::io::Errno;
  use zbus::proxy;
  
@@ -947,7 +2111,38 @@ index af6fb99..073f092 100644
  
  #[proxy(
      interface = "org.freedesktop.portal.Trash",
-@@ -50,7 +50,11 @@ impl PlatformTrashContext {
+@@ -31,12 +31,18 @@ pub struct PlatformTrashContext {
+ 
+ impl PlatformTrashContext {
+     pub const fn new() -> Self {
+-        Self { conn: OnceCell::new(), proxy: OnceCell::new() }
++        Self {
++            conn: OnceCell::new(),
++            proxy: OnceCell::new(),
++        }
+     }
+ 
+     fn connection(&self) -> Result<&zbus::blocking::Connection, Error> {
+         self.conn.get_or_try_init(|| {
+-            zbus::blocking::Connection::session().map_err(|err| Error::Portal { status_code: None, source: Some(err) })
++            zbus::blocking::Connection::session().map_err(|err| Error::Portal {
++                status_code: None,
++                source: Some(err),
++            })
+         })
+     }
+ 
+@@ -44,31 +50,59 @@ impl PlatformTrashContext {
+         let conn = self.connection()?;
+ 
+         self.proxy.get_or_try_init(|| {
+-            TrashProxy::new(conn).map_err(|err| Error::Portal { status_code: None, source: Some(err) })
++            TrashProxy::new(conn).map_err(|err| Error::Portal {
++                status_code: None,
++                source: Some(err),
++            })
+         })
+     }
  }
  
  impl TrashContext {
@@ -960,7 +2155,34 @@ index af6fb99..073f092 100644
          let proxy = self.platform_specific.proxy()?;
  
          for path in full_paths {
-@@ -68,7 +72,14 @@ impl TrashContext {
+             let fd = match open_for_portal(&path) {
+                 Ok(fd) => fd,
+-                Err(err) => return Err(Error::Unknown { description: err.to_string() }),
++                Err(err) => {
++                    return Err(Error::Unknown {
++                        description: err.to_string(),
++                    });
++                }
+             };
+ 
+             match proxy.trash_file((&fd).into()) {
+                 Ok(code) => match code {
+                     1 => {}
+-                    num => return Err(Error::Portal { status_code: Some(num), source: None }),
++                    num => {
++                        return Err(Error::Portal {
++                            status_code: Some(num),
++                            source: None,
++                        });
++                    }
+                 },
+-                Err(err) => return Err(Error::Portal { status_code: None, source: Some(err) }),
++                Err(err) => {
++                    return Err(Error::Portal {
++                        status_code: None,
++                        source: Some(err),
++                    });
++                }
              }
          }
  
@@ -976,19 +2198,626 @@ index af6fb99..073f092 100644
      }
  }
  
+@@ -97,14 +131,17 @@ pub fn open_for_portal(path: &Path) -> io::Result<OwnedFd> {
+     }
+ 
+     // error should be triggered if the path is `/`
+-    let (last, parents) = names.split_last().ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?;
++    let (last, parents) = names
++        .split_last()
++        .ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?;
+ 
+     // Traversing known names only needs search permission, not directory read permission.
+     let dir_flags = OFlags::PATH | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+ 
+     let mut dir = open("/", dir_flags, Mode::empty())?;
+     for name in parents {
+-        dir = openat(&dir, *name, dir_flags, Mode::empty()).map_err(|err| map_open_error(path, err))?;
++        dir = openat(&dir, *name, dir_flags, Mode::empty())
++            .map_err(|err| map_open_error(path, err))?;
+     }
+ 
+     // only open a file or directory
+@@ -112,28 +149,46 @@ pub fn open_for_portal(path: &Path) -> io::Result<OwnedFd> {
+     open_leaf_for_portal(&dir, last, path, &before)
+ }
+ 
+-fn open_leaf_for_portal(dir: &OwnedFd, name: &OsStr, path: &Path, before: &Stat) -> io::Result<OwnedFd> {
++fn open_leaf_for_portal(
++    dir: &OwnedFd,
++    name: &OsStr,
++    path: &Path,
++    before: &Stat,
++) -> io::Result<OwnedFd> {
+     let flags = match FileType::from_raw_mode(before.st_mode) {
+         FileType::RegularFile => OFlags::RDWR | OFlags::NOFOLLOW,
+         // Reject replacement symlinks even if they point to the original directory.
+         FileType::Directory => OFlags::PATH | OFlags::DIRECTORY | OFlags::NOFOLLOW,
+-        FileType::Symlink => return Err(unsupported(format!("path leaf {path:?}: trashing symlinks is unsupported"))),
++        FileType::Symlink => {
++            return Err(unsupported(format!(
++                "path leaf {path:?}: trashing symlinks is unsupported"
++            )));
++        }
+         other => return Err(unsupported(format!("unsupported file type: {other:?}"))),
+     };
+ 
+-    let fd = openat(dir, name, flags | OFlags::CLOEXEC, Mode::empty()).map_err(|err| map_open_error(path, err))?;
++    let fd = openat(dir, name, flags | OFlags::CLOEXEC, Mode::empty())
++        .map_err(|err| map_open_error(path, err))?;
+ 
+     // check that the thing being trashed hasn't been swapped
+     let after = fstat(&fd)?;
+     if (after.st_dev, after.st_ino) != (before.st_dev, before.st_ino) {
+-        return Err(io::Error::new(io::ErrorKind::Other, "file changed while opening"));
++        return Err(io::Error::new(
++            io::ErrorKind::Other,
++            "file changed while opening",
++        ));
+     }
+ 
+     if FileType::from_raw_mode(after.st_mode) == FileType::Directory {
+         // The portal rejects O_PATH descriptors carrying O_NOFOLLOW. Reopen "."
+         // through the checked descriptor so we keep the same directory without
+         // resolving the original leaf again or following a replacement symlink.
+-        return Ok(openat(&fd, ".", OFlags::PATH | OFlags::DIRECTORY | OFlags::CLOEXEC, Mode::empty())?);
++        return Ok(openat(
++            &fd,
++            ".",
++            OFlags::PATH | OFlags::DIRECTORY | OFlags::CLOEXEC,
++            Mode::empty(),
++        )?);
+     }
+ 
+     Ok(fd)
+@@ -143,7 +198,7 @@ fn open_leaf_for_portal(dir: &OwnedFd, name: &OsStr, path: &Path, before: &Stat)
+ mod tests {
+     use serial_test::serial;
+     use std::fs::{self, File};
+-    use std::os::unix::fs::{symlink, PermissionsExt};
++    use std::os::unix::fs::{PermissionsExt, symlink};
+     use std::path::Path;
+     use std::process::Command;
+ 
+@@ -151,10 +206,12 @@ mod tests {
+     use crate::{delete, delete_all};
+ 
+     use super::open_leaf_for_portal;
+-    use rustix::fs::{open, statat, AtFlags, Mode, OFlags};
++    use rustix::fs::{AtFlags, Mode, OFlags, open, statat};
+ 
+     fn is_program_in_path(program: &str) -> bool {
+-        let Some(paths) = std::env::var_os("PATH") else { return false };
++        let Some(paths) = std::env::var_os("PATH") else {
++            return false;
++        };
+         std::env::split_paths(&paths).any(|dir| dir.join(program).is_file())
+     }
+ 
+@@ -176,7 +233,9 @@ mod tests {
+     fn trash_multiple_files() {
+         init_logging();
+ 
+-        let names: Vec<_> = (0..3).map(|i| format!("{}-{}", get_unique_name(), i)).collect();
++        let names: Vec<_> = (0..3)
++            .map(|i| format!("{}-{}", get_unique_name(), i))
++            .collect();
+         for name in &names {
+             File::create_new(name).unwrap();
+         }
+@@ -184,7 +243,11 @@ mod tests {
+         delete_all(&names).unwrap();
+ 
+         for name in &names {
+-            assert!(!Path::new(name).exists(), "{} should have been trashed", name);
++            assert!(
++                !Path::new(name).exists(),
++                "{} should have been trashed",
++                name
++            );
+         }
+     }
+ 
+@@ -221,12 +284,21 @@ mod tests {
+         });
+         fs::set_permissions(&ancestor, fs::Permissions::from_mode(0o111)).unwrap();
+         fs::set_permissions(&parent, fs::Permissions::from_mode(0o311)).unwrap();
+-        assert_eq!(fs::read_dir(&ancestor).unwrap_err().kind(), std::io::ErrorKind::PermissionDenied);
+-        assert_eq!(fs::read_dir(&parent).unwrap_err().kind(), std::io::ErrorKind::PermissionDenied);
++        assert_eq!(
++            fs::read_dir(&ancestor).unwrap_err().kind(),
++            std::io::ErrorKind::PermissionDenied
++        );
++        assert_eq!(
++            fs::read_dir(&parent).unwrap_err().kind(),
++            std::io::ErrorKind::PermissionDenied
++        );
+ 
+         delete(&target).unwrap();
+ 
+-        assert!(!target.exists(), "search permission on ancestors should be sufficient for trashing");
++        assert!(
++            !target.exists(),
++            "search permission on ancestors should be sufficient for trashing"
++        );
+     }
+ 
+     #[test]
+@@ -237,7 +309,12 @@ mod tests {
+         fs::create_dir(&target).unwrap();
+         File::create_new(target.join("payload")).unwrap();
+ 
+-        let parent = open(temp.path(), OFlags::PATH | OFlags::DIRECTORY | OFlags::CLOEXEC, Mode::empty()).unwrap();
++        let parent = open(
++            temp.path(),
++            OFlags::PATH | OFlags::DIRECTORY | OFlags::CLOEXEC,
++            Mode::empty(),
++        )
++        .unwrap();
+         let name = target.file_name().unwrap();
+         let before = statat(&parent, name, AtFlags::SYMLINK_NOFOLLOW).unwrap();
+ 
+@@ -247,9 +324,18 @@ mod tests {
+         symlink(&renamed, &target).unwrap();
+ 
+         let result = open_leaf_for_portal(&parent, name, &target, &before);
+-        assert!(result.is_err(), "opening a replacement symlink to the same directory must fail");
+-        assert!(target.is_symlink(), "the replacement symlink must remain in place");
+-        assert!(renamed.join("payload").is_file(), "the original directory must remain intact");
++        assert!(
++            result.is_err(),
++            "opening a replacement symlink to the same directory must fail"
++        );
++        assert!(
++            target.is_symlink(),
++            "the replacement symlink must remain in place"
++        );
++        assert!(
++            renamed.join("payload").is_file(),
++            "the original directory must remain intact"
++        );
+     }
+ 
+     #[test]
+@@ -267,8 +353,14 @@ mod tests {
+         // leave a read-only file behind for the next test run to trip over.
+         fs::set_permissions(&name, fs::Permissions::from_mode(0o644)).unwrap();
+ 
+-        assert!(result.is_err(), "trashing a read-only-opened file should fail, not silently succeed");
+-        assert!(Path::new(&name).exists(), "the file should be left in place when trashing fails");
++        assert!(
++            result.is_err(),
++            "trashing a read-only-opened file should fail, not silently succeed"
++        );
++        assert!(
++            Path::new(&name).exists(),
++            "the file should be left in place when trashing fails"
++        );
+ 
+         fs::remove_file(&name).unwrap();
+     }
+@@ -310,8 +402,14 @@ mod tests {
+         File::create_new(&via_gio).unwrap();
+         File::create_new(&via_crate).unwrap();
+ 
+-        let gio_status = Command::new("gio").args(["trash", &via_gio]).status().unwrap();
+-        assert!(gio_status.success(), "`gio trash` itself failed; not a crate issue");
++        let gio_status = Command::new("gio")
++            .args(["trash", &via_gio])
++            .status()
++            .unwrap();
++        assert!(
++            gio_status.success(),
++            "`gio trash` itself failed; not a crate issue"
++        );
+ 
+         delete(&via_crate).unwrap();
+ 
+diff --git a/src/tests.rs b/src/tests.rs
+index 9dee1e7..b8966b6 100644
+--- a/src/tests.rs
++++ b/src/tests.rs
+@@ -23,16 +23,27 @@ pub use utils::{get_unique_name, init_logging};
+ 
+ #[cfg(any(
+     target_os = "windows",
+-    all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"), feature = "freedesktop")
++    all(
++        unix,
++        not(target_os = "macos"),
++        not(target_os = "ios"),
++        not(target_os = "android"),
++        feature = "freedesktop"
++    )
+ ))]
+ mod os_limited {
+     use super::{get_unique_name, init_logging};
+     use serial_test::serial;
+-    use std::collections::{hash_map::Entry, HashMap};
++    use std::collections::{HashMap, hash_map::Entry};
+     use std::ffi::{OsStr, OsString};
+     use std::fs::File;
+ 
+-    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
++    #[cfg(all(
++        unix,
++        not(target_os = "macos"),
++        not(target_os = "ios"),
++        not(target_os = "android")
++    ))]
+     use std::os::unix::ffi::OsStringExt;
+ 
+     use crate as trash;
+@@ -45,11 +56,16 @@ mod os_limited {
+ 
+         let deletion_time = chrono::Utc::now();
+         let actual_unix_deletion_time = deletion_time.naive_utc().timestamp();
+-        assert_eq!(actual_unix_deletion_time, deletion_time.naive_local().timestamp());
++        assert_eq!(
++            actual_unix_deletion_time,
++            deletion_time.naive_local().timestamp()
++        );
+         let file_name_prefix = get_unique_name();
+         let batches: usize = 2;
+         let files_per_batch: usize = 3;
+-        let names: Vec<OsString> = (0..files_per_batch).map(|i| format!("{}#{}", file_name_prefix, i).into()).collect();
++        let names: Vec<OsString> = (0..files_per_batch)
++            .map(|i| format!("{}#{}", file_name_prefix, i).into())
++            .collect();
+         for _ in 0..batches {
+             for path in names.iter() {
+                 File::create_new(path).unwrap();
+@@ -59,7 +75,11 @@ mod os_limited {
+         let items = trash::os_limited::list().unwrap();
+         let items: HashMap<_, Vec<_>> = items
+             .into_iter()
+-            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
++            .filter(|x| {
++                x.name
++                    .as_encoded_bytes()
++                    .starts_with(file_name_prefix.as_bytes())
++            })
+             .fold(HashMap::new(), |mut map, x| {
+                 match map.entry(x.name.clone()) {
+                     Entry::Occupied(mut entry) => {
+@@ -81,8 +101,7 @@ mod os_limited {
+                             if diff > MAX_SECONDS_DIFFERENCE {
+                                 panic!(
+                                     "The deleted item does not have the timestamp that represents its deletion time. Expected: {}. Got: {}",
+-                                    actual_unix_deletion_time,
+-                                    item.time_deleted
++                                    actual_unix_deletion_time, item.time_deleted
+                                 );
+                             }
+                         }
+@@ -97,11 +116,18 @@ mod os_limited {
+         let _ = trash::os_limited::purge_all(items.iter().flat_map(|(_name, item)| item));
+     }
+ 
+-    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
++    #[cfg(all(
++        unix,
++        not(target_os = "macos"),
++        not(target_os = "ios"),
++        not(target_os = "android")
++    ))]
+     #[test]
+     #[serial]
+     fn list_invalid_utf8() {
+-        let mut name = OsStr::new(&get_unique_name()).to_os_string().into_encoded_bytes();
++        let mut name = OsStr::new(&get_unique_name())
++            .to_os_string()
++            .into_encoded_bytes();
+         name.push(168);
+         let name = OsString::from_vec(name);
+         File::create_new(&name).unwrap();
+@@ -110,7 +136,11 @@ mod os_limited {
+         // Listing items is already exhaustively checked above, so this test is mainly concerned
+         // with checking that listing non-Unicode names does not panic
+         trash::delete(&name).unwrap();
+-        let item = trash::os_limited::list().unwrap().into_iter().find(|item| item.name == name).unwrap();
++        let item = trash::os_limited::list()
++            .unwrap()
++            .into_iter()
++            .find(|item| item.name == name)
++            .unwrap();
+         let _ = trash::os_limited::purge_all([item]);
+     }
+ 
+@@ -133,7 +163,9 @@ mod os_limited {
+         let file_name_prefix = get_unique_name();
+         let batches: usize = 2;
+         let files_per_batch: usize = 3;
+-        let names: Vec<_> = (0..files_per_batch).map(|i| format!("{}#{}", file_name_prefix, i)).collect();
++        let names: Vec<_> = (0..files_per_batch)
++            .map(|i| format!("{}#{}", file_name_prefix, i))
++            .collect();
+         for _ in 0..batches {
+             for path in names.iter() {
+                 File::create_new(path).unwrap();
+@@ -145,14 +177,22 @@ mod os_limited {
+         let targets: Vec<_> = trash::os_limited::list()
+             .unwrap()
+             .into_iter()
+-            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
++            .filter(|x| {
++                x.name
++                    .as_encoded_bytes()
++                    .starts_with(file_name_prefix.as_bytes())
++            })
+             .collect();
+         assert_eq!(targets.len(), batches * files_per_batch);
+         trash::os_limited::purge_all(targets).unwrap();
+         let remaining = trash::os_limited::list()
+             .unwrap()
+             .into_iter()
+-            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
++            .filter(|x| {
++                x.name
++                    .as_encoded_bytes()
++                    .starts_with(file_name_prefix.as_bytes())
++            })
+             .count();
+         assert_eq!(remaining, 0);
+     }
+@@ -163,7 +203,9 @@ mod os_limited {
+         init_logging();
+         let file_name_prefix = get_unique_name();
+         let file_count: usize = 3;
+-        let names: Vec<_> = (0..file_count).map(|i| format!("{}#{}", file_name_prefix, i)).collect();
++        let names: Vec<_> = (0..file_count)
++            .map(|i| format!("{}#{}", file_name_prefix, i))
++            .collect();
+         for path in names.iter() {
+             File::create_new(path).unwrap();
+         }
+@@ -173,14 +215,22 @@ mod os_limited {
+         let targets: Vec<_> = trash::os_limited::list()
+             .unwrap()
+             .into_iter()
+-            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
++            .filter(|x| {
++                x.name
++                    .as_encoded_bytes()
++                    .starts_with(file_name_prefix.as_bytes())
++            })
+             .collect();
+         assert_eq!(targets.len(), file_count);
+         trash::os_limited::restore_all(targets).unwrap();
+         let remaining = trash::os_limited::list()
+             .unwrap()
+             .into_iter()
+-            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
++            .filter(|x| {
++                x.name
++                    .as_encoded_bytes()
++                    .starts_with(file_name_prefix.as_bytes())
++            })
+             .count();
+         assert_eq!(remaining, 0);
+ 
+@@ -209,7 +259,10 @@ mod os_limited {
+     fn list_and_restore_keep_the_extension() {
+         init_logging();
+         let file_name_prefix = get_unique_name();
+-        let names: Vec<String> = ["txt", "png", "html"].iter().map(|ext| format!("{file_name_prefix}.{ext}")).collect();
++        let names: Vec<String> = ["txt", "png", "html"]
++            .iter()
++            .map(|ext| format!("{file_name_prefix}.{ext}"))
++            .collect();
+         for path in names.iter() {
+             File::create_new(path).unwrap();
+         }
+@@ -218,7 +271,11 @@ mod os_limited {
+         let targets: Vec<_> = trash::os_limited::list()
+             .unwrap()
+             .into_iter()
+-            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
++            .filter(|x| {
++                x.name
++                    .as_encoded_bytes()
++                    .starts_with(file_name_prefix.as_bytes())
++            })
+             .collect();
+         let mut listed: Vec<OsString> = targets.iter().map(|item| item.name.clone()).collect();
+         listed.sort();
+@@ -249,7 +306,9 @@ mod os_limited {
+         let file_name_prefix = get_unique_name();
+         let file_count: usize = 3;
+         let collision_remaining = file_count - 1;
+-        let names: Vec<_> = (0..file_count).map(|i| format!("{}#{}", file_name_prefix, i)).collect();
++        let names: Vec<_> = (0..file_count)
++            .map(|i| format!("{}#{}", file_name_prefix, i))
++            .collect();
+         for path in names.iter() {
+             File::create_new(path).unwrap();
+         }
+@@ -260,12 +319,18 @@ mod os_limited {
+         let mut targets: Vec<_> = trash::os_limited::list()
+             .unwrap()
+             .into_iter()
+-            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
++            .filter(|x| {
++                x.name
++                    .as_encoded_bytes()
++                    .starts_with(file_name_prefix.as_bytes())
++            })
+             .collect();
+         targets.sort_by(|a, b| a.name.cmp(&b.name));
+         assert_eq!(targets.len(), file_count);
+         let remaining_count = match trash::os_limited::restore_all(targets) {
+-            Err(trash::Error::RestoreCollision { remaining_items, .. }) => {
++            Err(trash::Error::RestoreCollision {
++                remaining_items, ..
++            }) => {
+                 let contains = |v: &Vec<trash::TrashItem>, name: &String| {
+                     for curr in v.iter() {
+                         if curr.name.as_encoded_bytes() == name.as_bytes() {
+@@ -275,7 +340,10 @@ mod os_limited {
+                     false
+                 };
+                 // Are all items that got restored reside in the folder?
+-                for path in names.iter().filter(|filename| !contains(&remaining_items, filename)) {
++                for path in names
++                    .iter()
++                    .filter(|filename| !contains(&remaining_items, filename))
++                {
+                     assert!(File::open(path).is_ok());
+                 }
+                 remaining_items.len()
+@@ -284,13 +352,19 @@ mod os_limited {
+                 for path in names.iter() {
+                     std::fs::remove_file(path).ok();
+                 }
+-                panic!("restore_all was expected to return `trash::ErrorKind::RestoreCollision` but did not.");
++                panic!(
++                    "restore_all was expected to return `trash::ErrorKind::RestoreCollision` but did not."
++                );
+             }
+         };
+         let remaining = trash::os_limited::list()
+             .unwrap()
+             .into_iter()
+-            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
++            .filter(|x| {
++                x.name
++                    .as_encoded_bytes()
++                    .starts_with(file_name_prefix.as_bytes())
++            })
+             .collect::<Vec<_>>();
+         assert_eq!(remaining.len(), remaining_count);
+         trash::os_limited::purge_all(remaining).unwrap();
+@@ -306,7 +380,9 @@ mod os_limited {
+         init_logging();
+         let file_name_prefix = get_unique_name();
+         let file_count: usize = 4;
+-        let names: Vec<_> = (0..file_count).map(|i| format!("{}#{}", file_name_prefix, i)).collect();
++        let names: Vec<_> = (0..file_count)
++            .map(|i| format!("{}#{}", file_name_prefix, i))
++            .collect();
+         for path in names.iter() {
+             File::create_new(path).unwrap();
+         }
+@@ -319,7 +395,11 @@ mod os_limited {
+         let mut targets: Vec<_> = trash::os_limited::list()
+             .unwrap()
+             .into_iter()
+-            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
++            .filter(|x| {
++                x.name
++                    .as_encoded_bytes()
++                    .starts_with(file_name_prefix.as_bytes())
++            })
+             .collect();
+         targets.sort_by(|a, b| a.name.cmp(&b.name));
+         assert_eq!(targets.len(), file_count + 1); // plus one for one of the twins
+@@ -328,7 +408,9 @@ mod os_limited {
+                 assert_eq!(path.file_name().unwrap().to_str().unwrap(), twin_name);
+                 trash::os_limited::purge_all(items).unwrap();
+             }
+-            _ => panic!("restore_all was expected to return `trash::ErrorKind::RestoreTwins` but did not."),
++            _ => panic!(
++                "restore_all was expected to return `trash::ErrorKind::RestoreTwins` but did not."
++            ),
+         }
+     }
+ 
+@@ -339,6 +421,9 @@ mod os_limited {
+ 
+         let is_empty_list = trash::os_limited::list().unwrap().is_empty();
+         let is_empty = trash::os_limited::is_empty().unwrap();
+-        assert_eq!(is_empty, is_empty_list, "is_empty() should match empty status from list()");
++        assert_eq!(
++            is_empty, is_empty_list,
++            "is_empty() should match empty status from list()"
++        );
+     }
+ }
 diff --git a/src/windows.rs b/src/windows.rs
-index 80d11b1..5022c29 100644
+index 80d11b1..bece74a 100644
 --- a/src/windows.rs
 +++ b/src/windows.rs
-@@ -5,6 +5,7 @@ use std::{
-     ffi::{c_void, OsStr, OsString},
+@@ -2,21 +2,29 @@ use crate::{Error, TrashContext, TrashItem, TrashItemMetadata, TrashItemSize};
+ use std::{
+     borrow::Borrow,
+     cell::RefCell,
+-    ffi::{c_void, OsStr, OsString},
++    ffi::{OsStr, OsString, c_void},
      os::windows::{ffi::OsStrExt, prelude::*},
      path::{Component, Path, PathBuf, Prefix},
 +    time::SystemTime,
  };
  
  use windows::Win32::{
-@@ -99,6 +100,7 @@ fn describe_item_failure(path: &Path, code: HRESULT) -> String {
+-    Foundation::*, Storage::EnhancedStorage::*, System::Com::*, System::SystemServices::*, UI::Shell::*,
++    Foundation::*, Storage::EnhancedStorage::*, System::Com::*, System::SystemServices::*,
++    UI::Shell::*,
+ };
+ use windows::{
+-    core::{implement, ComObject, Interface, Ref, HRESULT, PCWSTR, PWSTR},
+     Win32::System::Com::StructuredStorage::PropVariantToBSTR,
++    core::{ComObject, HRESULT, Interface, PCWSTR, PWSTR, Ref, implement},
+ };
+ 
+-const SCID_ORIGINAL_LOCATION: PROPERTYKEY = PROPERTYKEY { fmtid: PSGUID_DISPLACED, pid: PID_DISPLACED_FROM };
+-const SCID_DATE_DELETED: PROPERTYKEY = PROPERTYKEY { fmtid: PSGUID_DISPLACED, pid: PID_DISPLACED_DATE };
++const SCID_ORIGINAL_LOCATION: PROPERTYKEY = PROPERTYKEY {
++    fmtid: PSGUID_DISPLACED,
++    pid: PID_DISPLACED_FROM,
++};
++const SCID_DATE_DELETED: PROPERTYKEY = PROPERTYKEY {
++    fmtid: PSGUID_DISPLACED,
++    pid: PID_DISPLACED_DATE,
++};
+ 
+ impl From<windows::core::Error> for Error {
+     fn from(err: windows::core::Error) -> Error {
+@@ -25,7 +33,10 @@ impl From<windows::core::Error> for Error {
+             Some(reason) => format!("windows error: {reason} ({:#010x})", code.0 as u32),
+             None => format!("windows error: {err}"),
+         };
+-        Error::Os { code: code.0, description }
++        Error::Os {
++            code: code.0,
++            description,
++        }
+     }
+ }
+ 
+@@ -69,11 +80,16 @@ fn copy_engine_reason(code: HRESULT) -> Option<&'static str> {
+         COPYENGINE_E_RECYCLE_FORCE_NUKE => "the Recycle Bin is not available on this drive",
+         COPYENGINE_E_RECYCLE_SIZE_TOO_BIG => "the item is too large for the Recycle Bin",
+         COPYENGINE_E_RECYCLE_PATH_TOO_LONG => "the item is too deep for the Recycle Bin",
+-        COPYENGINE_E_RECYCLE_BIN_NOT_FOUND => "the Recycle Bin could not be found or is unavailable",
++        COPYENGINE_E_RECYCLE_BIN_NOT_FOUND => {
++            "the Recycle Bin could not be found or is unavailable"
++        }
+         COPYENGINE_E_DIR_NOT_EMPTY => "the directory is not empty",
+         COPYENGINE_E_ACCESSDENIED_READONLY => "the item is read-only",
+-        COPYENGINE_E_CANNOT_MOVE_FROM_RECYCLE_BIN => "the item cannot be moved out of the Recycle Bin",
+-        COPYENGINE_E_INTERNET_ITEM_STORAGE_PROVIDER_ERROR | COPYENGINE_E_INTERNET_ITEM_STORAGE_PROVIDER_PAUSED => {
++        COPYENGINE_E_CANNOT_MOVE_FROM_RECYCLE_BIN => {
++            "the item cannot be moved out of the Recycle Bin"
++        }
++        COPYENGINE_E_INTERNET_ITEM_STORAGE_PROVIDER_ERROR
++        | COPYENGINE_E_INTERNET_ITEM_STORAGE_PROVIDER_PAUSED => {
+             "the storage provider of the item is unavailable"
+         }
+         COPYENGINE_E_BLOCKED_BY_EDP_POLICY => "blocked by policy",
+@@ -87,7 +103,11 @@ fn describe_item_failure(path: &Path, code: HRESULT) -> String {
+         Some(reason) => reason.to_string(),
+         None => windows::core::Error::from(code).message(),
+     };
+-    format!("windows error: {}: {reason} ({:#010x})", path.display(), code.0 as u32)
++    format!(
++        "windows error: {}: {reason} ({:#010x})",
++        path.display(),
++        code.0 as u32
++    )
+ }
+ 
+ /// Collects, per item, why `IFileOperation` did not process it.
+@@ -99,6 +119,7 @@ fn describe_item_failure(path: &Path, code: HRESULT) -> String {
  #[implement(IFileOperationProgressSink)]
  struct FailureSink {
      failures: RefCell<Vec<(PathBuf, HRESULT)>>,
@@ -996,7 +2825,7 @@ index 80d11b1..5022c29 100644
  }
  
  impl FailureSink {
-@@ -115,6 +117,39 @@ impl FailureSink {
+@@ -115,6 +136,39 @@ impl FailureSink {
              .unwrap_or_default();
          self.failures.borrow_mut().push((path, result));
      }
@@ -1036,7 +2865,21 @@ index 80d11b1..5022c29 100644
  }
  
  #[allow(non_snake_case)] // the method names are COM's
-@@ -189,8 +224,9 @@ impl IFileOperationProgressSink_Impl for FailureSink_Impl {
+@@ -125,7 +179,12 @@ impl IFileOperationProgressSink_Impl for FailureSink_Impl {
+     fn FinishOperations(&self, _result: HRESULT) -> windows::core::Result<()> {
+         Ok(())
+     }
+-    fn PreRenameItem(&self, _flags: u32, _item: Ref<'_, IShellItem>, _new_name: &PCWSTR) -> windows::core::Result<()> {
++    fn PreRenameItem(
++        &self,
++        _flags: u32,
++        _item: Ref<'_, IShellItem>,
++        _new_name: &PCWSTR,
++    ) -> windows::core::Result<()> {
+         Ok(())
+     }
+     fn PostRenameItem(
+@@ -189,8 +248,9 @@ impl IFileOperationProgressSink_Impl for FailureSink_Impl {
          _flags: u32,
          item: Ref<'_, IShellItem>,
          result: HRESULT,
@@ -1047,7 +2890,7 @@ index 80d11b1..5022c29 100644
          self.record(item, result);
          Ok(())
      }
-@@ -230,8 +266,14 @@ impl IFileOperationProgressSink_Impl for FailureSink_Impl {
+@@ -230,8 +290,16 @@ impl IFileOperationProgressSink_Impl for FailureSink_Impl {
  
  /// Runs `operation`'s queued work with a [`FailureSink`] attached and turns
  /// an aborted item into an error naming it and the reason.
@@ -1056,7 +2899,9 @@ index 80d11b1..5022c29 100644
 +///
 +/// Returns the `(recycle-bin ID, source path)` of every item that reached the
 +/// trash.
-+fn perform_reporting_failures(operation: &IFileOperation) -> Result<Vec<(OsString, PathBuf)>, Error> {
++fn perform_reporting_failures(
++    operation: &IFileOperation,
++) -> Result<Vec<(OsString, PathBuf)>, Error> {
 +    let sink = ComObject::new(FailureSink {
 +        failures: RefCell::new(Vec::new()),
 +        trashed: RefCell::new(Vec::new()),
@@ -1064,7 +2909,7 @@ index 80d11b1..5022c29 100644
      let sink_interface: IFileOperationProgressSink = sink.to_interface();
      let cookie = unsafe { operation.Advise(&sink_interface) }?;
      let performed = unsafe { operation.PerformOperations() };
-@@ -239,6 +281,7 @@ fn perform_reporting_failures(operation: &IFileOperation) -> Result<(), Error> {
+@@ -239,25 +307,34 @@ fn perform_reporting_failures(operation: &IFileOperation) -> Result<(), Error> {
      // Detach before any `?`: the operation holds a reference to the sink.
      let unadvised = unsafe { operation.Unadvise(cookie) };
      let failures = sink.failures.take();
@@ -1072,8 +2917,22 @@ index 80d11b1..5022c29 100644
  
      if let Some((path, code)) = failures.first() {
          let mut description = describe_item_failure(path, *code);
-@@ -253,7 +296,7 @@ fn perform_reporting_failures(operation: &IFileOperation) -> Result<(), Error> {
-         return Err(Error::Unknown { description: "Some operations were aborted".into() });
+         if failures.len() > 1 {
+             description.push_str(&format!(" (and {} more item(s))", failures.len() - 1));
+         }
+-        return Err(Error::Os { code: code.0, description });
++        return Err(Error::Os {
++            code: code.0,
++            description,
++        });
+     }
+     performed?;
+     if aborted? {
+         // Aborted without a reason for any item, e.g. cancelled as a whole.
+-        return Err(Error::Unknown { description: "Some operations were aborted".into() });
++        return Err(Error::Unknown {
++            description: "Some operations were aborted".into(),
++        });
      }
      unadvised?;
 -    Ok(())
@@ -1081,7 +2940,15 @@ index 80d11b1..5022c29 100644
  }
  
  fn to_wide_path(path: impl AsRef<OsStr>) -> Vec<u16> {
-@@ -323,7 +366,11 @@ impl PlatformTrashContext {
+-    path.as_ref().encode_wide().chain(std::iter::once(0)).collect()
++    path.as_ref()
++        .encode_wide()
++        .chain(std::iter::once(0))
++        .collect()
+ }
+ 
+ /// Converts a path to the form accepted by `SHCreateItemFromParsingName`.
+@@ -323,30 +400,67 @@ impl PlatformTrashContext {
  }
  impl TrashContext {
      /// See https://docs.microsoft.com/en-us/windows/win32/api/shellapi/ns-shellapi-_shfileopstructa
@@ -1093,8 +2960,20 @@ index 80d11b1..5022c29 100644
 +    ) -> Result<Option<Vec<TrashItem>>, Error> {
          ensure_com_initialized();
          unsafe {
-             let pfo: IFileOperation = CoCreateInstance(&FileOperation as *const _, None, CLSCTX_ALL)?;
-@@ -339,14 +386,39 @@ impl TrashContext {
+-            let pfo: IFileOperation = CoCreateInstance(&FileOperation as *const _, None, CLSCTX_ALL)?;
++            let pfo: IFileOperation =
++                CoCreateInstance(&FileOperation as *const _, None, CLSCTX_ALL)?;
+ 
+             pfo.SetOperationFlags(FOF_NO_UI | FOF_ALLOWUNDO | FOF_WANTNUKEWARNING)?;
+ 
+             for full_path in full_paths.iter() {
+                 let parsing_name = to_shell_parsing_name(full_path);
+ 
+-                let shi: IShellItem = SHCreateItemFromParsingName(PCWSTR(parsing_name.as_ptr()), None)?;
++                let shi: IShellItem =
++                    SHCreateItemFromParsingName(PCWSTR(parsing_name.as_ptr()), None)?;
+ 
+                 pfo.DeleteItem(&shi, None)?;
              }
              // https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ifileoperation-performoperations
              // PerformOperations can return a success code while items were skipped; the sink reports which and why.
@@ -1116,8 +2995,14 @@ index 80d11b1..5022c29 100644
 +                .into_iter()
 +                .map(|(id, source_path)| TrashItem {
 +                    id,
-+                    name: source_path.file_name().map(OsStr::to_owned).unwrap_or_default(),
-+                    original_parent: source_path.parent().map(Path::to_path_buf).unwrap_or_default(),
++                    name: source_path
++                        .file_name()
++                        .map(OsStr::to_owned)
++                        .unwrap_or_default(),
++                    original_parent: source_path
++                        .parent()
++                        .map(Path::to_path_buf)
++                        .unwrap_or_default(),
 +                    time_deleted,
 +                })
 +                .collect();
@@ -1138,3 +3023,182 @@ index 80d11b1..5022c29 100644
      }
  }
  
+@@ -355,7 +469,8 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
+     unsafe {
+         let mut item_vec = Vec::new();
+ 
+-        let recycle_bin: IShellItem = SHGetKnownFolderItem(&FOLDERID_RecycleBinFolder, KF_FLAG_DEFAULT, None)?;
++        let recycle_bin: IShellItem =
++            SHGetKnownFolderItem(&FOLDERID_RecycleBinFolder, KF_FLAG_DEFAULT, None)?;
+ 
+         let pesi: IEnumShellItems = recycle_bin.BindToHandler(None, &BHID_EnumItems)?;
+ 
+@@ -383,7 +498,10 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
+                     // Converting a String back to OsString doesn't do extra work
+                     item_vec.push(TrashItem {
+                         id,
+-                        name: name.into_string().map_err(|original| Error::ConvertOsString { original })?.into(),
++                        name: name
++                            .into_string()
++                            .map_err(|original| Error::ConvertOsString { original })?
++                            .into(),
+                         original_parent: PathBuf::from(original_location),
+                         time_deleted: date_deleted,
+                     });
+@@ -401,7 +519,8 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
+ pub fn is_empty() -> Result<bool, Error> {
+     ensure_com_initialized();
+     unsafe {
+-        let recycle_bin: IShellItem = SHGetKnownFolderItem(&FOLDERID_RecycleBinFolder, KF_FLAG_DEFAULT, None)?;
++        let recycle_bin: IShellItem =
++            SHGetKnownFolderItem(&FOLDERID_RecycleBinFolder, KF_FLAG_DEFAULT, None)?;
+         let pesi: IEnumShellItems = recycle_bin.BindToHandler(None, &BHID_EnumItems)?;
+ 
+         let mut count = 0u32;
+@@ -487,7 +606,10 @@ where
+     for item in items.iter() {
+         let path = item.original_path();
+         if path.exists() {
+-            return Err(Error::RestoreCollision { path, remaining_items: items });
++            return Err(Error::RestoreCollision {
++                path,
++                remaining_items: items,
++            });
+         }
+     }
+     ensure_com_initialized();
+@@ -499,10 +621,16 @@ where
+             let parsing_name = PCWSTR(id_as_wide.as_ptr());
+             let trash_item: IShellItem = SHCreateItemFromParsingName(parsing_name, None)?;
+             let parent_path_wide = to_wide_path(&item.original_parent);
+-            let orig_folder_shi: IShellItem = SHCreateItemFromParsingName(PCWSTR(parent_path_wide.as_ptr()), None)?;
++            let orig_folder_shi: IShellItem =
++                SHCreateItemFromParsingName(PCWSTR(parent_path_wide.as_ptr()), None)?;
+             let name_wstr = to_wide_path(&item.name);
+ 
+-            pfo.MoveItem(&trash_item, &orig_folder_shi, PCWSTR(name_wstr.as_ptr()), None)?;
++            pfo.MoveItem(
++                &trash_item,
++                &orig_folder_shi,
++                PCWSTR(name_wstr.as_ptr()),
++                None,
++            )?;
+         }
+         if !items.is_empty() {
+             pfo.PerformOperations()?;
+@@ -559,7 +687,10 @@ struct CoInitializer {}
+ impl CoInitializer {
+     fn new() -> CoInitializer {
+         //let first = INITIALIZER_THREAD_COUNT.fetch_add(1, Ordering::SeqCst) == 0;
+-        #[cfg(all(not(feature = "coinit_multithreaded"), not(feature = "coinit_apartmentthreaded")))]
++        #[cfg(all(
++            not(feature = "coinit_multithreaded"),
++            not(feature = "coinit_apartmentthreaded")
++        ))]
+         {
+             0 = "THIS IS AN ERROR ON PURPOSE. Either the `coinit_multithreaded` or the `coinit_apartmentthreaded` feature must be specified";
+         }
+@@ -582,7 +713,10 @@ impl CoInitializer {
+         }
+         let hr = unsafe { CoInitializeEx(None, init_mode) };
+         if hr.is_err() {
+-            panic!("Call to CoInitializeEx failed. HRESULT: {:?}. Consider using `trash` with the feature `coinit_multithreaded`", hr);
++            panic!(
++                "Call to CoInitializeEx failed. HRESULT: {:?}. Consider using `trash` with the feature `coinit_multithreaded`",
++                hr
++            );
+         }
+         CoInitializer {}
+     }
+@@ -608,21 +742,31 @@ mod tests {
+     use super::{copy_engine_reason, to_shell_parsing_name};
+     use std::path::Path;
+     use windows::{
+-        core::HRESULT,
+         Win32::{
+             Foundation::E_ACCESSDENIED,
+             UI::Shell::{
+-                COPYENGINE_E_ACCESS_DENIED_SRC, COPYENGINE_E_REQUIRES_ELEVATION, COPYENGINE_S_DONT_PROCESS_CHILDREN,
++                COPYENGINE_E_ACCESS_DENIED_SRC, COPYENGINE_E_REQUIRES_ELEVATION,
++                COPYENGINE_S_DONT_PROCESS_CHILDREN,
+             },
+         },
++        core::HRESULT,
+     };
+ 
+     #[test]
+     fn copy_engine_failures_get_their_own_words() {
+-        assert_eq!(copy_engine_reason(COPYENGINE_E_REQUIRES_ELEVATION), Some("the operation requires elevation"));
+-        assert_eq!(copy_engine_reason(COPYENGINE_E_ACCESS_DENIED_SRC), Some("access denied to the source"));
++        assert_eq!(
++            copy_engine_reason(COPYENGINE_E_REQUIRES_ELEVATION),
++            Some("the operation requires elevation")
++        );
++        assert_eq!(
++            copy_engine_reason(COPYENGINE_E_ACCESS_DENIED_SRC),
++            Some("access denied to the source")
++        );
+         // Unlisted copy engine failures still are not handed to FormatMessage.
+-        assert_eq!(copy_engine_reason(HRESULT(0x8027_00FF_u32 as i32)), Some("the shell's file operation failed"));
++        assert_eq!(
++            copy_engine_reason(HRESULT(0x8027_00FF_u32 as i32)),
++            Some("the shell's file operation failed")
++        );
+         // A success code of the copy engine is no failure.
+         assert_eq!(copy_engine_reason(COPYENGINE_S_DONT_PROCESS_CHILDREN), None);
+         // Other facilities: the system's own message is right.
+@@ -644,13 +788,19 @@ mod tests {
+         // What `canonicalize` returns for a mapped drive or a UNC path.
+         // Before the fix this came out as `UNC\host\share\dir\file.txt`,
+         // which the shell reads as a relative path (issue #55).
+-        assert_eq!(convert(r"\\?\UNC\host\share\dir\file.txt"), r"\\host\share\dir\file.txt");
++        assert_eq!(
++            convert(r"\\?\UNC\host\share\dir\file.txt"),
++            r"\\host\share\dir\file.txt"
++        );
+     }
+ 
+     #[test]
+     fn non_verbatim_paths_are_unchanged() {
+         assert_eq!(convert(r"C:\dir\file.txt"), r"C:\dir\file.txt");
+-        assert_eq!(convert(r"\\host\share\dir\file.txt"), r"\\host\share\dir\file.txt");
++        assert_eq!(
++            convert(r"\\host\share\dir\file.txt"),
++            r"\\host\share\dir\file.txt"
++        );
+         assert_eq!(convert(r"dir\file.txt"), r"dir\file.txt");
+     }
+ 
+@@ -689,7 +839,10 @@ mod tests {
+             convert(r"\\?\UNC\nas-01\My Photos\2026.09 trip\日本語 ファイル.jpg"),
+             r"\\nas-01\My Photos\2026.09 trip\日本語 ファイル.jpg"
+         );
+-        assert_eq!(convert(r"\\?\C:\a.b\c..d\file.tar.gz"), r"C:\a.b\c..d\file.tar.gz");
++        assert_eq!(
++            convert(r"\\?\C:\a.b\c..d\file.tar.gz"),
++            r"C:\a.b\c..d\file.tar.gz"
++        );
+     }
+ 
+     #[test]
+@@ -697,12 +850,18 @@ mod tests {
+         // `components()` normalizes these; the shell accepts either form.
+         assert_eq!(convert(r"\\?\C:\dir\"), r"C:\dir");
+         assert_eq!(convert(r"\\?\C:\dir\\file.txt"), r"C:\dir\file.txt");
+-        assert_eq!(convert(r"\\?\UNC\host\share\dir\\file.txt"), r"\\host\share\dir\file.txt");
++        assert_eq!(
++            convert(r"\\?\UNC\host\share\dir\\file.txt"),
++            r"\\host\share\dir\file.txt"
++        );
+     }
+ 
+     #[test]
+     fn long_paths_are_not_truncated() {
+-        let deep = (0..40).map(|i| format!("folder{i:02}")).collect::<Vec<_>>().join(r"\");
++        let deep = (0..40)
++            .map(|i| format!("folder{i:02}"))
++            .collect::<Vec<_>>()
++            .join(r"\");
+         let input = format!(r"\\?\UNC\host\share\{deep}\file.txt");
+         let expected = format!(r"\\host\share\{deep}\file.txt");
+         assert!(input.len() > 260);

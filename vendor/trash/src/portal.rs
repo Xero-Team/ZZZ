@@ -6,7 +6,7 @@ use std::{
 };
 
 use once_cell::sync::OnceCell;
-use rustix::fs::{fstat, open, openat, statat, AtFlags, FileType, Mode, OFlags, Stat};
+use rustix::fs::{AtFlags, FileType, Mode, OFlags, Stat, fstat, open, openat, statat};
 use rustix::io::Errno;
 use zbus::proxy;
 
@@ -31,12 +31,18 @@ pub struct PlatformTrashContext {
 
 impl PlatformTrashContext {
     pub const fn new() -> Self {
-        Self { conn: OnceCell::new(), proxy: OnceCell::new() }
+        Self {
+            conn: OnceCell::new(),
+            proxy: OnceCell::new(),
+        }
     }
 
     fn connection(&self) -> Result<&zbus::blocking::Connection, Error> {
         self.conn.get_or_try_init(|| {
-            zbus::blocking::Connection::session().map_err(|err| Error::Portal { status_code: None, source: Some(err) })
+            zbus::blocking::Connection::session().map_err(|err| Error::Portal {
+                status_code: None,
+                source: Some(err),
+            })
         })
     }
 
@@ -44,7 +50,10 @@ impl PlatformTrashContext {
         let conn = self.connection()?;
 
         self.proxy.get_or_try_init(|| {
-            TrashProxy::new(conn).map_err(|err| Error::Portal { status_code: None, source: Some(err) })
+            TrashProxy::new(conn).map_err(|err| Error::Portal {
+                status_code: None,
+                source: Some(err),
+            })
         })
     }
 }
@@ -60,15 +69,29 @@ impl TrashContext {
         for path in full_paths {
             let fd = match open_for_portal(&path) {
                 Ok(fd) => fd,
-                Err(err) => return Err(Error::Unknown { description: err.to_string() }),
+                Err(err) => {
+                    return Err(Error::Unknown {
+                        description: err.to_string(),
+                    });
+                }
             };
 
             match proxy.trash_file((&fd).into()) {
                 Ok(code) => match code {
                     1 => {}
-                    num => return Err(Error::Portal { status_code: Some(num), source: None }),
+                    num => {
+                        return Err(Error::Portal {
+                            status_code: Some(num),
+                            source: None,
+                        });
+                    }
                 },
-                Err(err) => return Err(Error::Portal { status_code: None, source: Some(err) }),
+                Err(err) => {
+                    return Err(Error::Portal {
+                        status_code: None,
+                        source: Some(err),
+                    });
+                }
             }
         }
 
@@ -108,14 +131,17 @@ pub fn open_for_portal(path: &Path) -> io::Result<OwnedFd> {
     }
 
     // error should be triggered if the path is `/`
-    let (last, parents) = names.split_last().ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?;
+    let (last, parents) = names
+        .split_last()
+        .ok_or_else(|| io::Error::from(io::ErrorKind::InvalidInput))?;
 
     // Traversing known names only needs search permission, not directory read permission.
     let dir_flags = OFlags::PATH | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
 
     let mut dir = open("/", dir_flags, Mode::empty())?;
     for name in parents {
-        dir = openat(&dir, *name, dir_flags, Mode::empty()).map_err(|err| map_open_error(path, err))?;
+        dir = openat(&dir, *name, dir_flags, Mode::empty())
+            .map_err(|err| map_open_error(path, err))?;
     }
 
     // only open a file or directory
@@ -123,28 +149,46 @@ pub fn open_for_portal(path: &Path) -> io::Result<OwnedFd> {
     open_leaf_for_portal(&dir, last, path, &before)
 }
 
-fn open_leaf_for_portal(dir: &OwnedFd, name: &OsStr, path: &Path, before: &Stat) -> io::Result<OwnedFd> {
+fn open_leaf_for_portal(
+    dir: &OwnedFd,
+    name: &OsStr,
+    path: &Path,
+    before: &Stat,
+) -> io::Result<OwnedFd> {
     let flags = match FileType::from_raw_mode(before.st_mode) {
         FileType::RegularFile => OFlags::RDWR | OFlags::NOFOLLOW,
         // Reject replacement symlinks even if they point to the original directory.
         FileType::Directory => OFlags::PATH | OFlags::DIRECTORY | OFlags::NOFOLLOW,
-        FileType::Symlink => return Err(unsupported(format!("path leaf {path:?}: trashing symlinks is unsupported"))),
+        FileType::Symlink => {
+            return Err(unsupported(format!(
+                "path leaf {path:?}: trashing symlinks is unsupported"
+            )));
+        }
         other => return Err(unsupported(format!("unsupported file type: {other:?}"))),
     };
 
-    let fd = openat(dir, name, flags | OFlags::CLOEXEC, Mode::empty()).map_err(|err| map_open_error(path, err))?;
+    let fd = openat(dir, name, flags | OFlags::CLOEXEC, Mode::empty())
+        .map_err(|err| map_open_error(path, err))?;
 
     // check that the thing being trashed hasn't been swapped
     let after = fstat(&fd)?;
     if (after.st_dev, after.st_ino) != (before.st_dev, before.st_ino) {
-        return Err(io::Error::new(io::ErrorKind::Other, "file changed while opening"));
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "file changed while opening",
+        ));
     }
 
     if FileType::from_raw_mode(after.st_mode) == FileType::Directory {
         // The portal rejects O_PATH descriptors carrying O_NOFOLLOW. Reopen "."
         // through the checked descriptor so we keep the same directory without
         // resolving the original leaf again or following a replacement symlink.
-        return Ok(openat(&fd, ".", OFlags::PATH | OFlags::DIRECTORY | OFlags::CLOEXEC, Mode::empty())?);
+        return Ok(openat(
+            &fd,
+            ".",
+            OFlags::PATH | OFlags::DIRECTORY | OFlags::CLOEXEC,
+            Mode::empty(),
+        )?);
     }
 
     Ok(fd)
@@ -154,7 +198,7 @@ fn open_leaf_for_portal(dir: &OwnedFd, name: &OsStr, path: &Path, before: &Stat)
 mod tests {
     use serial_test::serial;
     use std::fs::{self, File};
-    use std::os::unix::fs::{symlink, PermissionsExt};
+    use std::os::unix::fs::{PermissionsExt, symlink};
     use std::path::Path;
     use std::process::Command;
 
@@ -162,10 +206,12 @@ mod tests {
     use crate::{delete, delete_all};
 
     use super::open_leaf_for_portal;
-    use rustix::fs::{open, statat, AtFlags, Mode, OFlags};
+    use rustix::fs::{AtFlags, Mode, OFlags, open, statat};
 
     fn is_program_in_path(program: &str) -> bool {
-        let Some(paths) = std::env::var_os("PATH") else { return false };
+        let Some(paths) = std::env::var_os("PATH") else {
+            return false;
+        };
         std::env::split_paths(&paths).any(|dir| dir.join(program).is_file())
     }
 
@@ -187,7 +233,9 @@ mod tests {
     fn trash_multiple_files() {
         init_logging();
 
-        let names: Vec<_> = (0..3).map(|i| format!("{}-{}", get_unique_name(), i)).collect();
+        let names: Vec<_> = (0..3)
+            .map(|i| format!("{}-{}", get_unique_name(), i))
+            .collect();
         for name in &names {
             File::create_new(name).unwrap();
         }
@@ -195,7 +243,11 @@ mod tests {
         delete_all(&names).unwrap();
 
         for name in &names {
-            assert!(!Path::new(name).exists(), "{} should have been trashed", name);
+            assert!(
+                !Path::new(name).exists(),
+                "{} should have been trashed",
+                name
+            );
         }
     }
 
@@ -232,12 +284,21 @@ mod tests {
         });
         fs::set_permissions(&ancestor, fs::Permissions::from_mode(0o111)).unwrap();
         fs::set_permissions(&parent, fs::Permissions::from_mode(0o311)).unwrap();
-        assert_eq!(fs::read_dir(&ancestor).unwrap_err().kind(), std::io::ErrorKind::PermissionDenied);
-        assert_eq!(fs::read_dir(&parent).unwrap_err().kind(), std::io::ErrorKind::PermissionDenied);
+        assert_eq!(
+            fs::read_dir(&ancestor).unwrap_err().kind(),
+            std::io::ErrorKind::PermissionDenied
+        );
+        assert_eq!(
+            fs::read_dir(&parent).unwrap_err().kind(),
+            std::io::ErrorKind::PermissionDenied
+        );
 
         delete(&target).unwrap();
 
-        assert!(!target.exists(), "search permission on ancestors should be sufficient for trashing");
+        assert!(
+            !target.exists(),
+            "search permission on ancestors should be sufficient for trashing"
+        );
     }
 
     #[test]
@@ -248,7 +309,12 @@ mod tests {
         fs::create_dir(&target).unwrap();
         File::create_new(target.join("payload")).unwrap();
 
-        let parent = open(temp.path(), OFlags::PATH | OFlags::DIRECTORY | OFlags::CLOEXEC, Mode::empty()).unwrap();
+        let parent = open(
+            temp.path(),
+            OFlags::PATH | OFlags::DIRECTORY | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .unwrap();
         let name = target.file_name().unwrap();
         let before = statat(&parent, name, AtFlags::SYMLINK_NOFOLLOW).unwrap();
 
@@ -258,9 +324,18 @@ mod tests {
         symlink(&renamed, &target).unwrap();
 
         let result = open_leaf_for_portal(&parent, name, &target, &before);
-        assert!(result.is_err(), "opening a replacement symlink to the same directory must fail");
-        assert!(target.is_symlink(), "the replacement symlink must remain in place");
-        assert!(renamed.join("payload").is_file(), "the original directory must remain intact");
+        assert!(
+            result.is_err(),
+            "opening a replacement symlink to the same directory must fail"
+        );
+        assert!(
+            target.is_symlink(),
+            "the replacement symlink must remain in place"
+        );
+        assert!(
+            renamed.join("payload").is_file(),
+            "the original directory must remain intact"
+        );
     }
 
     #[test]
@@ -278,8 +353,14 @@ mod tests {
         // leave a read-only file behind for the next test run to trip over.
         fs::set_permissions(&name, fs::Permissions::from_mode(0o644)).unwrap();
 
-        assert!(result.is_err(), "trashing a read-only-opened file should fail, not silently succeed");
-        assert!(Path::new(&name).exists(), "the file should be left in place when trashing fails");
+        assert!(
+            result.is_err(),
+            "trashing a read-only-opened file should fail, not silently succeed"
+        );
+        assert!(
+            Path::new(&name).exists(),
+            "the file should be left in place when trashing fails"
+        );
 
         fs::remove_file(&name).unwrap();
     }
@@ -321,8 +402,14 @@ mod tests {
         File::create_new(&via_gio).unwrap();
         File::create_new(&via_crate).unwrap();
 
-        let gio_status = Command::new("gio").args(["trash", &via_gio]).status().unwrap();
-        assert!(gio_status.success(), "`gio trash` itself failed; not a crate issue");
+        let gio_status = Command::new("gio")
+            .args(["trash", &via_gio])
+            .status()
+            .unwrap();
+        assert!(
+            gio_status.success(),
+            "`gio trash` itself failed; not a crate issue"
+        );
 
         delete(&via_crate).unwrap();
 
