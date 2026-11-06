@@ -74,12 +74,16 @@ mod macos_build {
 
         let crate_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
 
+        // cbindgen's with_src does not follow window.rs's `mod` declarations into
+        // window/. List those files explicitly so ContentMask resolves to a
+        // concrete struct instead of an unresolved `ContentMask<ScaledPixels>`.
         let gpui_src_paths = [
             gpui_dir.join("src/atlas.rs"),
             gpui_dir.join("src/scene.rs"),
             gpui_dir.join("src/geometry.rs"),
             gpui_dir.join("src/color.rs"),
             gpui_dir.join("src/window.rs"),
+            gpui_dir.join("src/window/content_mask.rs"),
             gpui_dir.join("src/platform.rs"),
         ];
 
