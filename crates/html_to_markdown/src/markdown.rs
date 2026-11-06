@@ -188,6 +188,16 @@ impl HandleTag for TableHandler {
 
 pub struct StyledTextHandler;
 
+/// Writes the Markdown delimiter for a styled-text tag. The same delimiter
+/// opens and closes the span, so the start and end handlers share this mapping.
+fn push_styled_text_delimiter(tag: &str, writer: &mut MarkdownWriter) {
+    match tag {
+        "strong" => writer.push_str("**"),
+        "em" => writer.push_str("_"),
+        _ => {}
+    }
+}
+
 impl HandleTag for StyledTextHandler {
     fn should_handle(&self, tag: &str) -> bool {
         matches!(tag, "strong" | "em")
@@ -198,21 +208,12 @@ impl HandleTag for StyledTextHandler {
         tag: &HtmlElement,
         writer: &mut MarkdownWriter,
     ) -> StartTagOutcome {
-        match tag.tag() {
-            "strong" => writer.push_str("**"),
-            "em" => writer.push_str("_"),
-            _ => {}
-        }
-
+        push_styled_text_delimiter(tag.tag(), writer);
         StartTagOutcome::Continue
     }
 
     fn handle_tag_end(&mut self, tag: &HtmlElement, writer: &mut MarkdownWriter) {
-        match tag.tag() {
-            "strong" => writer.push_str("**"),
-            "em" => writer.push_str("_"),
-            _ => {}
-        }
+        push_styled_text_delimiter(tag.tag(), writer);
     }
 }
 
@@ -285,6 +286,25 @@ mod tests {
             Rc::new(RefCell::new(StyledTextHandler)),
             Rc::new(RefCell::new(CodeHandler)),
         ]
+    }
+
+    #[test]
+    fn styled_text_tags_emit_matching_open_and_close_delimiters() {
+        // Start and end must write the same delimiter. `em` has no end-to-end
+        // coverage in the conversion tests, so both branches are checked here.
+        for (tag, delimiter) in [("strong", "**"), ("em", "_")] {
+            let mut handler = StyledTextHandler;
+            let mut writer = MarkdownWriter::new();
+            let element = HtmlElement::new(tag.to_string(), RefCell::new(vec![]));
+
+            assert!(matches!(
+                handler.handle_tag_start(&element, &mut writer),
+                StartTagOutcome::Continue
+            ));
+            handler.handle_tag_end(&element, &mut writer);
+
+            assert_eq!(writer.markdown, format!("{delimiter}{delimiter}"));
+        }
     }
 
     #[test]

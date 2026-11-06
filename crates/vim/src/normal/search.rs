@@ -707,11 +707,15 @@ impl Replacement {
 
         let mut buffer = &mut search;
 
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        enum Section {
+            Search,
+            Replacement,
+            Flags,
+        }
+
         let mut escaped = false;
-        // 0 - parsing search
-        // 1 - parsing replacement
-        // 2 - parsing flags
-        let mut phase = 0;
+        let mut section = Section::Search;
 
         // Vim's default (magic) syntax needs a backslash for these
         // metacharacters; Zed's regex uses the bare form. Bare `(`/`)` are
@@ -721,12 +725,12 @@ impl Replacement {
         for c in chars {
             if escaped {
                 escaped = false;
-                if phase == 1 && c.is_ascii_digit() {
+                if section == Section::Replacement && c.is_ascii_digit() {
                     buffer.push('$')
-                } else if phase == 1 && c == '$' {
+                } else if section == Section::Replacement && c == '$' {
                     // Second '$' escapes by fallthrough
                     buffer.push('$')
-                } else if phase == 0 && VIM_ESCAPED_METACHARACTERS.contains(&c) {
+                } else if section == Section::Search && VIM_ESCAPED_METACHARACTERS.contains(&c) {
                 } else if c != delimiter {
                     buffer.push('\\')
                 }
@@ -734,20 +738,22 @@ impl Replacement {
             } else if c == '\\' {
                 escaped = true;
             } else if c == delimiter {
-                if phase == 0 {
-                    buffer = &mut replacement;
-                    phase = 1;
-                } else if phase == 1 {
-                    buffer = &mut flags;
-                    phase = 2;
-                } else {
-                    break;
+                match section {
+                    Section::Search => {
+                        buffer = &mut replacement;
+                        section = Section::Replacement;
+                    }
+                    Section::Replacement => {
+                        buffer = &mut flags;
+                        section = Section::Flags;
+                    }
+                    Section::Flags => break,
                 }
             } else {
                 // escape unescaped parens
-                if phase == 0 && (c == '(' || c == ')') {
+                if section == Section::Search && (c == '(' || c == ')') {
                     buffer.push('\\')
-                } else if phase == 1 && c == '$' {
+                } else if section == Section::Replacement && c == '$' {
                     // '$' is not special in the replacement clause,
                     // so we also escape here.
                     buffer.push('$')

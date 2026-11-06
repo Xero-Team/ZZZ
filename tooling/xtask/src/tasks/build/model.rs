@@ -393,14 +393,14 @@ impl Channel {
 
     /// Parses a channel name. Unknown values return `None` so each caller can
     /// apply its own default instead of silently baking in a wrong channel.
+    /// Names come from `as_str` so the forward and reverse mappings cannot
+    /// drift apart when a channel is added or renamed.
     fn from_str_value(value: &str) -> Option<Self> {
-        match value.trim() {
-            "dev" => Some(Channel::Dev),
-            "stable" => Some(Channel::Stable),
-            "preview" => Some(Channel::Preview),
-            "nightly" => Some(Channel::Nightly),
-            _ => None,
-        }
+        let value = value.trim();
+        Self::value_variants()
+            .iter()
+            .copied()
+            .find(|channel| channel.as_str() == value)
     }
 
     /// The channel a shipping artifact uses. `crates/zzz/RELEASE_CHANNEL`
@@ -491,5 +491,26 @@ mod tests {
         // baking a broken identity into an artifact.
         assert_eq!(Channel::shipping_from_env(Some("garbage")), Channel::Stable);
         assert_eq!(Channel::shipping_from_env(Some("")), Channel::Stable);
+    }
+
+    #[test]
+    fn channel_names_round_trip_for_every_variant() {
+        // `as_str` is the single source of names written into manifests and read
+        // back from the RELEASE_CHANNEL file and ZZZ_RELEASE_CHANNEL. Every name
+        // must parse back to its channel, or an override silently falls back to
+        // the shipping default instead of the channel the caller asked for.
+        // Iterate the derived variants so a newly added channel is covered
+        // without maintaining a second list in the test.
+        let channels = Channel::value_variants();
+        let names: Vec<_> = channels.iter().map(|channel| channel.as_str()).collect();
+        assert_eq!(
+            names,
+            ["dev", "stable", "preview", "nightly"],
+            "channel names are part of the CLI and build-override contract"
+        );
+        for channel in channels {
+            assert_eq!(Channel::from_str_value(channel.as_str()), Some(*channel));
+        }
+        assert_eq!(Channel::from_str_value(" unknown "), None);
     }
 }

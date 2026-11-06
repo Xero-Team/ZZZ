@@ -28,6 +28,24 @@ const APPLICATION_FONT_PATHS: &[&str] = &[
     "fonts/lilex/Lilex-Regular.ttf",
 ];
 
+/// Lists the embedded paths under `prefix`. `Assets` and `Docs` embed different
+/// directories but expose them through the same `AssetSource` contract, so the
+/// prefix filter lives here instead of being duplicated in both `list` methods.
+fn list_embedded(
+    paths: impl Iterator<Item = std::borrow::Cow<'static, str>>,
+    prefix: &str,
+) -> Vec<SharedString> {
+    paths
+        .filter_map(|path| {
+            if path.starts_with(prefix) {
+                Some(path.into())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 impl AssetSource for Assets {
     fn load(&self, path: &str) -> Result<Option<std::borrow::Cow<'static, [u8]>>> {
         Self::get(path)
@@ -36,15 +54,7 @@ impl AssetSource for Assets {
     }
 
     fn list(&self, path: &str) -> Result<Vec<SharedString>> {
-        Ok(Self::iter()
-            .filter_map(|p| {
-                if p.starts_with(path) {
-                    Some(p.into())
-                } else {
-                    None
-                }
-            })
-            .collect())
+        Ok(list_embedded(Self::iter(), path))
     }
 }
 
@@ -89,15 +99,7 @@ impl AssetSource for Docs {
     }
 
     fn list(&self, path: &str) -> Result<Vec<SharedString>> {
-        Ok(Self::iter()
-            .filter_map(|p| {
-                if p.starts_with(path) {
-                    Some(p.into())
-                } else {
-                    None
-                }
-            })
-            .collect())
+        Ok(list_embedded(Self::iter(), path))
     }
 }
 
@@ -123,7 +125,7 @@ pub fn lookup_docs_text(path: &str) -> Option<String> {
 mod tests {
     use gpui::AssetSource as _;
 
-    use super::{APPLICATION_FONT_PATHS, Assets};
+    use super::{APPLICATION_FONT_PATHS, Assets, Docs, all_docs, list_embedded};
 
     #[test]
     fn load_returns_embedded_asset_bytes() {
@@ -162,6 +164,32 @@ mod tests {
                 .iter()
                 .all(|path| !path.as_ref().starts_with("icons/"))
         );
+    }
+
+    #[test]
+    fn list_embedded_keeps_only_paths_with_the_prefix() {
+        use std::borrow::Cow;
+
+        let paths = [
+            Cow::Borrowed("fonts/a.ttf"),
+            Cow::Borrowed("fonts/b.ttf"),
+            Cow::Borrowed("icons/c.svg"),
+        ];
+        let listed = list_embedded(paths.into_iter(), "fonts/");
+        let listed: Vec<&str> = listed.iter().map(|path| path.as_ref()).collect();
+
+        assert_eq!(listed, ["fonts/a.ttf", "fonts/b.ttf"]);
+    }
+
+    #[test]
+    fn docs_list_uses_the_shared_prefix_filter() {
+        let all = all_docs();
+        assert!(!all.is_empty(), "docs are embedded at build time");
+
+        // An empty prefix admits every embedded path, in the same order as the
+        // direct `Docs::iter()` walk, so the two agree exactly.
+        assert_eq!(Docs.list("").unwrap(), all);
+        assert!(Docs.list("no-such-prefix/").unwrap().is_empty());
     }
 
     #[test]

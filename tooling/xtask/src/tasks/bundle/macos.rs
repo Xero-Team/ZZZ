@@ -209,6 +209,10 @@ fn cargo_bundle(context: &Context) -> Result<PathBuf> {
     let lock_file = fs::OpenOptions::new()
         .create(true)
         .write(true)
+        // The lock file is only a handle for `File::lock`; its contents are
+        // never read or written, so never truncate it (that would add a
+        // needless write to a file shared by concurrent bundle tasks).
+        .truncate(false)
         .open(&lock_path)
         .with_context(|| format!("failed to open {}", lock_path.display()))?;
     lock_file
