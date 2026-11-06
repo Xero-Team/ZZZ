@@ -11,9 +11,11 @@
 #
 # The image covers the Linux release build, the macOS cross build (zig,
 # cargo-zigbuild, Zed's cargo-bundle, hfsprogs, libdmg-hfsplus, and the macOS
-# SDK), and PGO (llvm-profdata, Xvfb, a software rasterizer). A plan that asks
-# for a Windows target also builds the msvc-wine layer (`WITH_MSVC=1`); the
-# planner requests it on its own and the `-msvc` image tag records it:
+# SDK), the FreeBSD cross build (both 14.5 sysroots, clang/lld wrappers, and
+# the two rust-std targets), and PGO (llvm-profdata, Xvfb, a software
+# rasterizer). A plan that asks for a Windows target also builds the msvc-wine
+# layer (`WITH_MSVC=1`); the planner requests it on its own and the `-msvc`
+# image tag records it:
 #
 #   podman build --build-arg WITH_MSVC=1 -f Dockerfile-toolchain -t <tag>-msvc .
 #
@@ -94,8 +96,10 @@ RUN cargo --version \
     && rustup target add \
         aarch64-apple-darwin \
         aarch64-pc-windows-msvc \
+        aarch64-unknown-freebsd \
         x86_64-apple-darwin \
-        x86_64-pc-windows-msvc
+        x86_64-pc-windows-msvc \
+        x86_64-unknown-freebsd
 
 ARG CARGO_ABOUT_VERSION=0.9.3 \
     CARGO_DEB_VERSION=3.8.0 \
@@ -253,6 +257,61 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 ENV CLANG_PATH="/usr/lib/llvm-${LLVM_VERSION}/bin/clang" \
     LIBCLANG_PATH="/usr/lib/llvm-${LLVM_VERSION}/lib"
+
+# FreeBSD cross toolchain. The two release `base.txz` archives unpack into
+# separate sysroots (amd64 and arm64 cannot share one), and a wrapper per
+# target pins `--target`, `--sysroot`, and `--ld-path` so Cargo's
+# `CARGO_TARGET_<TRIPLE>_LINKER` and cc-rs's `CC_<triple>` can point at a
+# single executable (Cargo does not split linker values on spaces).
+#
+# The archives are pinned to 14.5-RELEASE and verified with the SHA256 from
+# each release's MANIFEST, so the image tag describes the exact libc and
+# headers every FreeBSD artifact links against. `usr/lib`, `usr/include`, and
+# `lib` are present in `base.txz` and are what `require_cross` checks.
+ARG FREEBSD_VERSION=14.5-RELEASE \
+    FREEBSD_AMD64_SHA256=d16b68fe0e9e136ce67ab1084042c848bbffecd1eb295f206bd1c6785deb45a4 \
+    FREEBSD_ARM64_SHA256=4b7a61ed4ddbd598b5048d5800898ba0d43dcba4cdb12ba58302e0202eaa26aa
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends xz-utils \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /opt/freebsd/sysroot/amd64 /opt/freebsd/sysroot/arm64 /tmp/freebsd \
+    && for arch in amd64 arm64; do \
+        case "${arch}" in \
+            amd64) sum="${FREEBSD_AMD64_SHA256}" ;; \
+            arm64) sum="${FREEBSD_ARM64_SHA256}" ;; \
+        esac; \
+        curl --fail --silent --show-error --location \
+            "https://download.freebsd.org/ftp/releases/${arch}/${FREEBSD_VERSION}/base.txz" \
+            --output "/tmp/freebsd/${arch}.txz" \
+        && echo "${sum}  /tmp/freebsd/${arch}.txz" | sha256sum --check --strict - \
+        && tar --extract --xz --file "/tmp/freebsd/${arch}.txz" \
+            --directory "/opt/freebsd/sysroot/${arch}" \
+        && rm "/tmp/freebsd/${arch}.txz"; \
+    done \
+    && rm -rf /tmp/freebsd
+
+# One wrapper per target. `clang-23` from the LLVM pin above drives both the
+# link step (Cargo) and C compilation (cc-rs); the wrapper supplies the target,
+# sysroot, and lld. xtask sets `ZZZ_FREEBSD_SYSROOT` on the cargo command for
+# bindgen/CFLAGS, but the wrapper hard-codes the path so a linker invocation
+# needs no extra env.
+RUN for spec in "x86_64-unknown-freebsd amd64 x86_64" "aarch64-unknown-freebsd arm64 aarch64"; do \
+        set -- ${spec}; \
+        triple="$1"; archdir="$2"; short="$3"; \
+        wrapper="/usr/local/bin/zzz-freebsd-${short}-clang"; \
+        sysroot="/opt/freebsd/sysroot/${archdir}"; \
+        printf '#!/bin/sh\nexec /usr/bin/clang-%s --target=%s --sysroot=%s --ld-path=/usr/bin/ld.lld-%s "$@"\n' \
+            "${LLVM_VERSION}" "${triple}" "${sysroot}" "${LLVM_VERSION}" > "${wrapper}"; \
+        chmod 0755 "${wrapper}"; \
+    done
+# Mark the image as self-contained for FreeBSD cross builds. The planner's
+# wrap() injects the same value on `podman run`, but setting it here means a
+# shell entered with `podman run -it ... cargo xtask bundle` also resolves the
+# bundled sysroots instead of asking for host-side variables.
+ENV ZZZ_FREEBSD_IN_CONTAINER=1
+# The per-architecture sysroot is selected by `freebsd::image_sysroot` in xtask;
+# a single ZZZ_FREEBSD_SYSROOT value cannot describe both architectures.
+
 RUN if [ "${WITH_MSVC}" = "1" ]; then \
         ln --symbolic --force "/usr/bin/clang-${LLVM_VERSION}" /usr/local/bin/clang-cl; \
         ln --symbolic --force "/usr/bin/lld-link-${LLVM_VERSION}" /usr/local/bin/lld-link; \

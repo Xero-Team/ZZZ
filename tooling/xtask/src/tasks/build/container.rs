@@ -286,6 +286,14 @@ impl ContainerSpec {
 
         wrapped.push("--env".to_owned());
         wrapped.push("CARGO_TARGET_DIR=/src/target/container".to_owned());
+        // Every command in this image sees the FreeBSD sysroots, clang/lld
+        // wrappers, and rust-std targets that the image ships. The marker lets
+        // the planner's host-side capability checks and `freebsd::detect`
+        // resolve those bundled paths instead of probing the host, where a
+        // sysroot may not exist. Host-provided `ZZZ_FREEBSD_*` overrides are
+        // still forwarded below by name.
+        wrapped.push("--env".to_owned());
+        wrapped.push("ZZZ_FREEBSD_IN_CONTAINER=1".to_owned());
         // A task that has its own share of the job budget sets this itself;
         // passing both would leave the container with two values for one key.
         if !environment.contains_key("CARGO_BUILD_JOBS") {

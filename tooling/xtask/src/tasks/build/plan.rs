@@ -326,15 +326,16 @@ fn finish(
 }
 
 pub fn container_spec(workspace: &Path, request: &BuildRequest) -> Result<Option<ContainerSpec>> {
-    if !request.container.resolve(request.profile)
-        || request
+    // FreeBSD bundle tasks run inside the toolchain image on a Linux host: it
+    // ships both FreeBSD sysroots, clang/lld wrappers, and the rust-std
+    // targets. Only a native FreeBSD host (or `--container never`) builds them
+    // on the host with `ZZZ_FREEBSD_*` from the environment.
+    let freebsd_on_host = Platform::host() == Platform::FreeBSD
+        && request
             .targets
             .iter()
-            .any(|target| target.platform() == Platform::FreeBSD)
-    {
-        // The FreeBSD toolchain is host-provided (sysroot, linker, rust-std),
-        // so a Linux container would hide it. Plans with a FreeBSD target build
-        // on the host even when `--container auto` asked for the image.
+            .any(|target| target.platform() == Platform::FreeBSD);
+    if !request.container.resolve(request.profile) || freebsd_on_host {
         return Ok(None);
     }
     let jobs = request.jobs.unwrap_or_else(default_jobs).max(1);
@@ -718,8 +719,9 @@ impl Planner<'_> {
 
     /// Linux splits its formats: `tar.gz`, `deb`, and `rpm` run inside the
     /// toolchain image, while AppImage, Flatpak, and Snap need host tools and
-    /// network access. FreeBSD has only `tar.gz` and uses its own toolchain, so
-    /// it never enters the container. Every other platform is one task.
+    /// network access. FreeBSD has only `tar.gz` and runs inside the image on a
+    /// Linux host (the image ships its cross toolchain); every other platform
+    /// is one task.
     fn split_formats(&self, target: Target, formats: &[Format]) -> (Vec<Format>, Vec<Format>) {
         if target.platform() != Platform::Linux {
             return (formats.to_vec(), Vec::new());
@@ -819,12 +821,14 @@ impl Planner<'_> {
             return false;
         }
         // Native macOS and Windows bundles need Apple and Microsoft tooling
-        // that only runs on those hosts. The cross paths are the ones a Linux
-        // container can own.
+        // that only runs on those hosts. The Linux image owns the Linux, macOS,
+        // Windows, and FreeBSD cross paths; a native FreeBSD host packages its
+        // own targets without a container.
         match target.platform() {
             Platform::Linux => true,
-            Platform::Mac | Platform::Windows => Platform::host() == Platform::Linux,
-            Platform::FreeBSD => false,
+            Platform::Mac | Platform::Windows | Platform::FreeBSD => {
+                Platform::host() == Platform::Linux
+            }
         }
     }
 

@@ -274,16 +274,18 @@ fn default_targets(targets: Vec<Target>) -> Vec<Target> {
 /// `dist --all` means "everything the current settings can build". A Windows
 /// target makes the planner request the msvc-wine layer, so no target is
 /// silently dropped here: an environment that cannot build Windows fails while
-/// planning instead of producing a set that looks complete.
+/// planning instead of producing a set that looks complete. The toolchain
+/// image supplies the FreeBSD cross sysroots and wrappers, so those targets
+/// are included on a Linux host too.
 fn distributable_targets() -> Result<Vec<Target>> {
     let host = Platform::host();
+    // On a Linux host the toolchain image supplies the cross toolchains for
+    // Mac, Windows, and FreeBSD, so every distributable target is buildable.
+    // Other hosts produce only their own platform.
     let targets = Target::DISTRIBUTABLE
         .iter()
         .copied()
-        .filter(|target| {
-            target.platform() == host
-                || (host == Platform::Linux && target.platform() != Platform::FreeBSD)
-        })
+        .filter(|target| target.platform() == host || host == Platform::Linux)
         .collect::<Vec<_>>();
     if targets.is_empty() {
         bail!("this host cannot produce any distributable targets");

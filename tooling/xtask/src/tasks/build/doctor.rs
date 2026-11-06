@@ -632,10 +632,12 @@ fn is_macos_sdk(path: &Path) -> bool {
         .is_file()
 }
 
-/// FreeBSD cross builds bring their own sysroot, linker, and rust-std. Native
-/// FreeBSD hosts need only the installed standard library, so the cross
-/// requirements are reported as optional here: a Linux host that has not set
-/// them up can still build every other target.
+/// FreeBSD cross builds can get their sysroot, linker, and rust-std from the
+/// toolchain image (`cargo xtask build` containerizes FreeBSD targets on a
+/// Linux host) or from host-side variables (`--container never`, or a direct
+/// `cargo xtask bundle`). Native FreeBSD hosts need only the installed standard
+/// library. The host variables are optional: without them the image supplies
+/// everything, so a Linux host can still build every target.
 fn check_freebsd_toolchain(checks: &mut Vec<Check>) {
     if Platform::host() == Platform::FreeBSD {
         checks.push(Check {
@@ -667,11 +669,13 @@ fn check_freebsd_toolchain(checks: &mut Vec<Check>) {
             required: false,
             status: Status::Missing,
             detail: format!(
-                "{} is not set",
+                "{} is not set (the toolchain image supplies the sysroot)",
                 crate::tasks::build::freebsd::SYSROOT_VARIABLE
             ),
             remedy: Some(
-                "set ZZZ_FREEBSD_SYSROOT to a FreeBSD sysroot to cross-build FreeBSD targets"
+                "the toolchain image supplies the sysroot for a containerized build; set \
+                 ZZZ_FREEBSD_SYSROOT_<TRIPLE> (or ZZZ_FREEBSD_SYSROOT) only for a \
+                 --container never host build"
                     .to_owned(),
             ),
         },
@@ -705,12 +709,15 @@ fn check_freebsd_toolchain(checks: &mut Vec<Check>) {
                 category: "cross",
                 required: false,
                 status: Status::Missing,
-                detail: format!("no linker configured for {}", target.triple()),
-                remedy: Some(format!(
-                    "set CARGO_TARGET_{}_LINKER (or ZZZ_FREEBSD_LINKER_{0}) to a clang/lld \
-                     driver with --target={}",
-                    target.triple().to_ascii_uppercase().replace('-', "_"),
+                detail: format!(
+                    "no host linker for {} (the toolchain image supplies one)",
                     target.triple()
+                ),
+                remedy: Some(format!(
+                    "the toolchain image supplies the linker for a containerized build; set \
+                     CARGO_TARGET_{}_LINKER (or ZZZ_FREEBSD_LINKER_{0}) to an executable \
+                     clang/lld wrapper only for a --container never host build",
+                    target.triple().to_ascii_uppercase().replace('-', "_"),
                 )),
             },
         });

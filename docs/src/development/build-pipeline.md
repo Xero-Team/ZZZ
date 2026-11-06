@@ -99,12 +99,13 @@ overrides the default when you need a one-off channel.
 ### FreeBSD {#freebsd}
 
 The `x86_64-unknown-freebsd` and `aarch64-unknown-freebsd` targets produce
-`tar.gz` bundles through the same planner. A native FreeBSD host needs only
-the target's `rust-std`; a Linux cross build uses a host-provided sysroot and
-linker, configured with the environment variables documented in
-[Building ZZZ for FreeBSD](./freebsd.md). FreeBSD plans skip the Linux
-toolchain container automatically. `cargo xtask doctor` reports which parts of
-the cross toolchain are missing.
+`tar.gz` bundles through the same planner. On a Linux host the planner runs
+them inside the toolchain image, which ships both FreeBSD 14.5 sysroots, a
+clang/lld wrapper per architecture, and the two `rust-std` targets. A native
+FreeBSD host builds its own targets without the image. To supply the cross
+toolchain yourself, use `--container never` and the environment variables in
+[Building ZZZ for FreeBSD](./freebsd.md). `cargo xtask doctor` reports which
+parts of the host-provided toolchain are configured.
 
 The FreeBSD tarball carries the editor, the CLI, the license document, icons,
 and the desktop entry; shared libraries come from the system. The
@@ -212,9 +213,11 @@ The image is defined by `Dockerfile-toolchain`. Its tag is a hash of the files
 that define the toolchain, so editing the Dockerfile, `script/linux`,
 `script/install-cmake` (or the release helper it sources), or
 `rust-toolchain.toml` produces a new tag instead of silently reusing a stale
-image. `cargo xtask doctor` prints the tag and the exact build command when the
-image is missing; the plan builds it on demand before the first task that needs
-it.
+image. The FreeBSD sysroots, clang/lld wrappers, and `rust-std` targets are
+part of that Dockerfile, so a change to the FreeBSD toolchain produces a new
+tag too. `cargo xtask doctor` prints the tag and the exact build command when
+the image is missing; the plan builds it on demand before the first task that
+needs it.
 
 The base image is pinned by digest, so a rebuild does not pick up a newer Ubuntu
 point release. `ZZZ_BASE_IMAGE=debian:bookworm` swaps the base for a one-off
