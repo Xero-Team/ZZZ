@@ -16,7 +16,7 @@ cargo_metadata.workspace = true
 cargo_toml.workspace = true
 clap = { workspace = true, features = ["derive"] }
 compliance = { workspace = true, features = ["octo-client"] }
-flate2 = "1.1.10"
+flate2 = "1.1.11"
 gh-workflow.workspace = true
 hex.workspace = true
 indoc.workspace = true
@@ -36,4 +36,4 @@ tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
 toml.workspace = true
 toml_edit.workspace = true
-zip = { version = "9.2.2", default-features = false, features = ["deflate"] }
+zip = { version = "9.4.1", default-features = false, features = ["deflate"] }

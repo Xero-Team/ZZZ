@@ -19,15 +19,28 @@
 //! of the Rust community, please interact with us [in the tracking issue](https://github.com/Byron/trash-rs/issues/42)
 //! to help find a more permanent solution.
 //!
-//! ### Notes on the Linux implementation
+//! ### Notes on the two Linux implementations
 //!
-//! This library implements version 1.0 of the [Freedesktop.org
+//! When both features are enabled, `freedesktop` takes precedence. To use `portal`, disable
+//! default features and enable the `portal` feature without `freedesktop`.
+//!
+//! #### freedesktop (default)
+//! This one implements version 1.0 of the [Freedesktop.org
 //! Trash](https://specifications.freedesktop.org/trash-spec/trashspec-1.0.html) specification and
 //! aims to match the behaviour of Ubuntu 18.04 GNOME in cases of ambiguity. Most -if not all- Linux
 //! distributions that ship with a desktop environment follow this specification. For example
 //! GNOME, KDE, and XFCE all use this convention. This crate blindly assumes that the Linux
 //! distribution it runs on, follows this specification.
 //!
+//! #### portal
+//! This one implements the [XDG Desktop Portal Trash Portal TrashFile method](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Trash.html).
+//! The vast majority of standard systems have the XDG Desktop Portal running on them, like Flatpaks. This method of
+//! trashing files cannot silently fail if the underlying system does not support it, it just won't work.
+//! This backend is unsupported on non-Linux and non-FreeBSD platforms due to `O_PATH` not being available,
+//! resulting in directories not being able to be trashed at all. FreeBSD only added `O_PATH` around 13.0
+//! or 14.0, so use the freedesktop implementation or document this in your code's users.
+//! As well as trashing symbolic links using the Portal is unsupported due to an
+//! [upstream issue](https://github.com/flatpak/xdg-desktop-portal/issues/518).
 
 use std::ffi::OsString;
 use std::hash::{Hash, Hasher};
@@ -46,12 +59,33 @@ pub mod tests;
 mod platform;
 
 #[cfg(all(
+    any(target_os = "netbsd", target_os = "openbsd", target_os = "dragonfly"),
+    feature = "portal",
+    not(feature = "freedesktop")
+))]
+compile_error!(
+    "the `portal` feature is unavailable on non-Linux and non-FreeBSD platforms due to `O_PATH` not being available"
+);
+
+#[cfg(all(
     unix,
     not(target_os = "macos"),
     not(target_os = "ios"),
-    not(target_os = "android")
+    not(target_os = "android"),
+    feature = "freedesktop"
 ))]
 #[path = "freedesktop.rs"]
+mod platform;
+
+#[cfg(all(
+    unix,
+    not(target_os = "macos"),
+    not(target_os = "ios"),
+    not(target_os = "android"),
+    feature = "portal",
+    not(feature = "freedesktop")
+))]
+#[path = "portal.rs"]
 mod platform;
 
 #[cfg(target_os = "macos")]
@@ -69,15 +103,15 @@ pub struct TrashContext {
 }
 impl TrashContext {
     pub const fn new() -> Self {
-        Self {
-            platform_specific: platform::PlatformTrashContext::new(),
-        }
+        Self { platform_specific: platform::PlatformTrashContext::new() }
     }
 
     /// Removes a single file or directory.
     ///
-    /// When a symbolic link is provided to this function, the symbolic link will be removed and the link
-    /// target will be kept intact.
+    /// When a symbolic link is provided to this function, the symbolic link will be removed* and the link
+    /// target will be kept intact*.
+    ///
+    /// \* **[Trashing symbolic links is not supported on the Portal backend feature]**
     ///
     /// # Example
     ///
@@ -94,8 +128,10 @@ impl TrashContext {
 
     /// Removes all files/directories specified by the collection of paths provided as an argument.
     ///
-    /// When a symbolic link is provided to this function, the symbolic link will be removed and the link
-    /// target will be kept intact.
+    /// When a symbolic link is provided to this function, the symbolic link will be removed* and the link
+    /// target will be kept intact*.
+    ///
+    /// \* **[Trashing symbolic links is not supported on the Portal backend feature]**
     ///
     /// # Example
     ///
@@ -116,12 +152,11 @@ impl TrashContext {
         trace!("Starting canonicalize_paths");
         let full_paths = canonicalize_paths(paths)?;
         trace!("Finished canonicalize_paths");
-
         self.delete_all_canonicalized(full_paths, false).map(|_| ())
     }
 
     /// Same as `delete`, but returns a `TrashItem` describing where the file
-    /// ended up in trash.
+    /// ended up in the trash.
     pub fn delete_with_info<T: AsRef<Path>>(&self, path: T) -> Result<TrashItem, Error> {
         self.delete_all_with_info(&[path])?
             .pop()
@@ -130,8 +165,8 @@ impl TrashContext {
             })
     }
 
-    /// Same as `delete_all` but returns `TrashItem`s describing where files
-    /// ended up in the trash.
+    /// Same as `delete_all`, but returns `TrashItem`s describing where the
+    /// files ended up in the trash.
     pub fn delete_all_with_info<I, T>(&self, paths: I) -> Result<Vec<TrashItem>, Error>
     where
         I: IntoIterator<Item = T>,
@@ -156,13 +191,6 @@ pub fn delete<T: AsRef<Path>>(path: T) -> Result<(), Error> {
     DEFAULT_TRASH_CTX.delete(path)
 }
 
-/// Convenience method for `DEFAULT_TRASH_CTX.delete_with_info()`.
-///
-/// See: [`TrashContext::delete_with_info`](TrashContext::delete_with_info)
-pub fn delete_with_info<T: AsRef<Path>>(path: T) -> Result<TrashItem, Error> {
-    DEFAULT_TRASH_CTX.delete_with_info(path)
-}
-
 /// Convenience method for `DEFAULT_TRASH_CTX.delete_all()`.
 ///
 /// See: [`TrashContext::delete_all`](TrashContext::delete_all)
@@ -172,6 +200,13 @@ where
     T: AsRef<Path>,
 {
     DEFAULT_TRASH_CTX.delete_all(paths)
+}
+
+/// Convenience method for `DEFAULT_TRASH_CTX.delete_with_info()`.
+///
+/// See: [`TrashContext::delete_with_info`](TrashContext::delete_with_info)
+pub fn delete_with_info<T: AsRef<Path>>(path: T) -> Result<TrashItem, Error> {
+    DEFAULT_TRASH_CTX.delete_with_info(path)
 }
 
 /// Convenience method for `DEFAULT_TRASH_CTX.delete_all_with_info()`.
@@ -197,16 +232,33 @@ pub enum Error {
         description: String,
     },
 
+    /// **freedesktop and macOS only**
+    ///
     /// Error coming from file system
-    #[cfg(all(unix, not(target_os = "ios"), not(target_os = "android")))]
+    #[cfg(any(
+        target_os = "macos",
+        all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"), feature = "freedesktop")
+    ))]
     FileSystem {
         path: PathBuf,
         source: std::io::Error,
     },
 
-    /// The file got removed from trash. Either the trash was emptied or this
-    /// specific file was removed.
-    NoLongerInTrash,
+    /// **portal only**
+    ///
+    /// Error coming from system XDG Desktop Portal
+    #[cfg(all(
+        unix,
+        not(target_os = "macos"),
+        not(target_os = "ios"),
+        not(target_os = "android"),
+        feature = "portal",
+        not(feature = "freedesktop")
+    ))]
+    Portal {
+        status_code: Option<u32>,
+        source: Option<zbus::Error>,
+    },
 
     /// One of the target items was a root folder.
     /// If a list of items are requested to be removed by a single function call (e.g. `delete_all`)
@@ -275,25 +327,36 @@ impl error::Error for Error {
                 unix,
                 not(target_os = "macos"),
                 not(target_os = "ios"),
-                not(target_os = "android")
+                not(target_os = "android"),
+                feature = "freedesktop"
             ))]
             Self::FileSystem { path: _, source: e } => e.source(),
+            #[cfg(all(
+                unix,
+                not(target_os = "macos"),
+                not(target_os = "ios"),
+                not(target_os = "android"),
+                feature = "portal",
+                not(feature = "freedesktop")
+            ))]
+            Self::Portal { status_code: _, source: e } => e.as_ref().map(|err| err as &(dyn error::Error + 'static)),
             _ => None,
         }
     }
 }
 pub fn into_unknown<E: std::fmt::Display>(err: E) -> Error {
-    Error::Unknown {
-        description: format!("{err}"),
-    }
+    Error::Unknown { description: format!("{err}") }
 }
 
-#[cfg(all(unix, not(target_os = "ios"), not(target_os = "android")))]
-pub fn fs_error(path: impl Into<PathBuf>, source: std::io::Error) -> Error {
-    Error::FileSystem {
-        path: path.into(),
-        source,
-    }
+/// Builds an [`Error::FileSystem`] for a path and the I/O error it produced.
+///
+/// Both the freedesktop and the macOS backends report failures this way.
+#[cfg(any(
+    target_os = "macos",
+    all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"), feature = "freedesktop")
+))]
+pub(crate) fn fs_error(path: impl Into<PathBuf>, source: std::io::Error) -> Error {
+    Error::FileSystem { path: path.into(), source }
 }
 
 pub(crate) fn canonicalize_paths<I, T>(paths: I) -> Result<Vec<PathBuf>, Error>
@@ -306,22 +369,18 @@ where
         .map(|x| {
             let target_ref = x.as_ref();
             if target_ref.as_os_str().is_empty() {
-                return Err(Error::CanonicalizePath {
-                    original: target_ref.to_owned(),
-                });
+                return Err(Error::CanonicalizePath { original: target_ref.to_owned() });
             }
             let target = if target_ref.is_relative() {
-                let curr_dir = current_dir().map_err(|_| Error::CouldNotAccess {
-                    target: "[Current working directory]".into(),
-                })?;
+                let curr_dir = current_dir()
+                    .map_err(|_| Error::CouldNotAccess { target: "[Current working directory]".into() })?;
                 curr_dir.join(target_ref)
             } else {
                 target_ref.to_owned()
             };
             let parent = target.parent().ok_or(Error::TargetedRoot)?;
-            let canonical_parent = parent.canonicalize().map_err(|_| Error::CanonicalizePath {
-                original: parent.to_owned(),
-            })?;
+            let canonical_parent =
+                parent.canonicalize().map_err(|_| Error::CanonicalizePath { original: parent.to_owned() })?;
             if let Some(file_name) = target.file_name() {
                 Ok(canonical_parent.join(file_name))
             } else {
@@ -418,60 +477,31 @@ pub struct TrashItemMetadata {
     pub size: TrashItemSize,
 }
 
-#[cfg(all(not(target_os = "ios"), not(target_os = "android")))]
-/// Restores all the provided [`TrashItem`] to their original location.
+/// Restores all the provided [`TrashItem`]s to their original location.
 ///
 /// This function consumes the provided items.
 ///
 /// # Errors
 ///
-/// Errors this function may return include but are not limited to the following.
-///
-/// It may be the case that when restoring a file or a folder, the `original_path` already has
-/// a new item with the same name. When such a collision happens this function returns a
-/// [`RestoreCollision`] kind of error.
-///
-/// If two or more of the provided items have identical `original_path`s then a
-/// [`RestoreTwins`] kind of error is returned.
-///
-/// # Example
-///
-/// Basic usage:
-///
-/// ```
-/// use std::fs::File;
-/// use trash::{delete_with_info, restore_all};
-///
-/// let filename = "trash-restore_all-example";
-/// File::create_new(filename).unwrap();
-/// let item = delete_with_info(filename).unwrap();
-/// restore_all([item]).unwrap();
-/// std::fs::remove_file(filename).unwrap();
-/// ```
-///
-/// Retry restoring when encountering [`RestoreCollision`] error:
-///
-/// ```no_run
-/// use trash::{delete_with_info, restore_all};
-/// use trash::Error::RestoreCollision;
-///
-/// let items = vec![delete_with_info("some-file").unwrap()];
-/// if let Err(RestoreCollision { path, mut remaining_items }) = restore_all(items) {
-///     // keep all except the one(s) that couldn't be restored
-///     remaining_items.retain(|e| e.original_path() != path);
-///     restore_all(remaining_items).unwrap();
-/// }
-/// ```
+/// It may be the case that when restoring a file or a folder, the
+/// `original_path` already has a new item with the same name. When such a
+/// collision happens [`Error::RestoreCollision`] is returned with the
+/// remaining items, which the caller can retry after resolving it.
 ///
 /// [`RestoreCollision`]: Error::RestoreCollision
 /// [`RestoreTwins`]: Error::RestoreTwins
+#[cfg(any(
+    target_os = "macos",
+    target_os = "windows",
+    all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"), feature = "freedesktop")
+))]
 pub fn restore_all<I>(items: I) -> Result<(), Error>
 where
     I: IntoIterator<Item = TrashItem>,
 {
     use std::collections::HashSet;
 
-    // Check for twins here cause that's pretty platform independent.
+    // Check for twins here because that part is platform independent.
     struct ItemWrapper<'a>(&'a TrashItem);
     impl PartialEq for ItemWrapper<'_> {
         fn eq(&self, other: &Self) -> bool {
@@ -488,39 +518,31 @@ where
     let mut item_set = HashSet::with_capacity(items.len());
     for item in items.iter() {
         if !item_set.insert(ItemWrapper(item)) {
-            return Err(Error::RestoreTwins {
-                path: item.original_path(),
-                items,
-            });
+            return Err(Error::RestoreTwins { path: item.original_path(), items });
         }
     }
-    platform::restore_all(items)
+
+    #[cfg(target_os = "macos")]
+    return macos::restore_all(items);
+    #[cfg(not(target_os = "macos"))]
+    return os_limited::restore_all(items);
 }
 
 #[cfg(any(
     target_os = "windows",
-    all(
-        unix,
-        not(target_os = "macos"),
-        not(target_os = "ios"),
-        not(target_os = "android")
-    )
+    all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"), feature = "freedesktop")
 ))]
 pub mod os_limited {
     //! This module provides functionality which is only supported on Windows and
     //! Linux or other Freedesktop Trash compliant environment.
 
-    use std::borrow::Borrow;
+    use std::{
+        borrow::Borrow,
+        collections::HashSet,
+        hash::{Hash, Hasher},
+    };
 
-    #[cfg(all(
-        unix,
-        not(target_os = "macos"),
-        not(target_os = "ios"),
-        not(target_os = "android")
-    ))]
-    use std::collections::HashSet;
-
-    use super::{Error, TrashItem, TrashItemMetadata, platform};
+    use super::{platform, Error, TrashItem, TrashItemMetadata};
 
     /// Returns all [`TrashItem`]s that are currently in the trash.
     ///
@@ -563,7 +585,7 @@ pub mod os_limited {
     /// # Example
     ///
     /// ```
-    /// # #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))] {
+    /// # #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"), feature = "freedesktop"))] {
     /// use trash::os_limited::trash_folders;
     /// let trash_bins = trash_folders()?;
     /// println!("{trash_bins:#?}");
@@ -574,7 +596,8 @@ pub mod os_limited {
         unix,
         not(target_os = "macos"),
         not(target_os = "ios"),
-        not(target_os = "android")
+        not(target_os = "android"),
+        feature = "freedesktop"
     ))]
     pub fn trash_folders() -> Result<HashSet<std::path::PathBuf>, Error> {
         platform::trash_folders()
@@ -637,5 +660,77 @@ pub mod os_limited {
         <I as IntoIterator>::Item: Borrow<TrashItem>,
     {
         platform::purge_all(items)
+    }
+
+    /// Restores all the provided [`TrashItem`] to their original location.
+    ///
+    /// This function consumes the provided items.
+    ///
+    /// # Errors
+    ///
+    /// Errors this function may return include but are not limited to the following.
+    ///
+    /// It may be the case that when restoring a file or a folder, the `original_path` already has
+    /// a new item with the same name. When such a collision happens this function returns a
+    /// [`RestoreCollision`] kind of error.
+    ///
+    /// If two or more of the provided items have identical `original_path`s then a
+    /// [`RestoreTwins`] kind of error is returned.
+    ///
+    /// # Example
+    ///
+    /// Basic usage:
+    ///
+    /// ```
+    /// use std::fs::File;
+    /// use trash::os_limited::{list, restore_all};
+    ///
+    /// let filename = "trash-restore_all-example";
+    /// File::create_new(filename).unwrap();
+    /// restore_all(list().unwrap().into_iter().filter(|x| x.name == filename)).unwrap();
+    /// std::fs::remove_file(filename).unwrap();
+    /// ```
+    ///
+    /// Retry restoring when encountering [`RestoreCollision`] error:
+    ///
+    /// ```no_run
+    /// use trash::os_limited::{list, restore_all};
+    /// use trash::Error::RestoreCollision;
+    ///
+    /// let items = list().unwrap();
+    /// if let Err(RestoreCollision { path, mut remaining_items }) = restore_all(items) {
+    ///     // keep all except the one(s) that couldn't be restored
+    ///     remaining_items.retain(|e| e.original_path() != path);
+    ///     restore_all(remaining_items).unwrap();
+    /// }
+    /// ```
+    ///
+    /// [`RestoreCollision`]: Error::RestoreCollision
+    /// [`RestoreTwins`]: Error::RestoreTwins
+    pub fn restore_all<I>(items: I) -> Result<(), Error>
+    where
+        I: IntoIterator<Item = TrashItem>,
+    {
+        // Check for twins here cause that's pretty platform independent.
+        struct ItemWrapper<'a>(&'a TrashItem);
+        impl PartialEq for ItemWrapper<'_> {
+            fn eq(&self, other: &Self) -> bool {
+                self.0.original_path() == other.0.original_path()
+            }
+        }
+        impl Eq for ItemWrapper<'_> {}
+        impl Hash for ItemWrapper<'_> {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                self.0.original_path().hash(state);
+            }
+        }
+        let items = items.into_iter().collect::<Vec<_>>();
+        let mut item_set = HashSet::with_capacity(items.len());
+        for item in items.iter() {
+            if !item_set.insert(ItemWrapper(item)) {
+                return Err(Error::RestoreTwins { path: item.original_path(), items });
+            }
+        }
+        platform::restore_all(items)
     }
 }

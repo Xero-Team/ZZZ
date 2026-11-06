@@ -148,8 +148,8 @@ patches = ["vendor/patches/scap/0001-zzz-platform-integration.patch"]
 [[package]]
 name = "trash"
 repository = "https://github.com/ArturKovacs/trash.git"
-source_ref = "refs/tags/v5.2.9"
-revision = "54e0a2d69fdc058cc2efa19a497ec8f44631d61f"
+source_ref = "refs/tags/v5.3.0"
+revision = "0fdaf8dfea62d0d5270a918d160dfb58cb76eb3f"
 include = ["CHANGELOG.md", "Cargo.toml", "LICENSE.txt", "README.md", "src"]
 patches = ["vendor/patches/trash/0001-restore-and-delete-metadata.patch"]
 

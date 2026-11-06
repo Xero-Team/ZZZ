@@ -14,5 +14,5 @@ doctest = false
 workspace = true
 
 [build-dependencies]
-flate2 = "1.1.10"
-zip = { version = "9.2.2", default-features = false, features = ["deflate"] }
+flate2 = "1.1.11"
+zip = { version = "9.4.1", default-features = false, features = ["deflate"] }

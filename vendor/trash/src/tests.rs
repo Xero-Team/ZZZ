@@ -23,26 +23,16 @@ pub use utils::{get_unique_name, init_logging};
 
 #[cfg(any(
     target_os = "windows",
-    all(
-        unix,
-        not(target_os = "macos"),
-        not(target_os = "ios"),
-        not(target_os = "android")
-    )
+    all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android"), feature = "freedesktop")
 ))]
 mod os_limited {
     use super::{get_unique_name, init_logging};
     use serial_test::serial;
-    use std::collections::{HashMap, hash_map::Entry};
+    use std::collections::{hash_map::Entry, HashMap};
     use std::ffi::{OsStr, OsString};
     use std::fs::File;
 
-    #[cfg(all(
-        unix,
-        not(target_os = "macos"),
-        not(target_os = "ios"),
-        not(target_os = "android")
-    ))]
+    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
     use std::os::unix::ffi::OsStringExt;
 
     use crate as trash;
@@ -55,16 +45,11 @@ mod os_limited {
 
         let deletion_time = chrono::Utc::now();
         let actual_unix_deletion_time = deletion_time.naive_utc().timestamp();
-        assert_eq!(
-            actual_unix_deletion_time,
-            deletion_time.naive_local().timestamp()
-        );
+        assert_eq!(actual_unix_deletion_time, deletion_time.naive_local().timestamp());
         let file_name_prefix = get_unique_name();
         let batches: usize = 2;
         let files_per_batch: usize = 3;
-        let names: Vec<OsString> = (0..files_per_batch)
-            .map(|i| format!("{}#{}", file_name_prefix, i).into())
-            .collect();
+        let names: Vec<OsString> = (0..files_per_batch).map(|i| format!("{}#{}", file_name_prefix, i).into()).collect();
         for _ in 0..batches {
             for path in names.iter() {
                 File::create_new(path).unwrap();
@@ -74,11 +59,7 @@ mod os_limited {
         let items = trash::os_limited::list().unwrap();
         let items: HashMap<_, Vec<_>> = items
             .into_iter()
-            .filter(|x| {
-                x.name
-                    .as_encoded_bytes()
-                    .starts_with(file_name_prefix.as_bytes())
-            })
+            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
             .fold(HashMap::new(), |mut map, x| {
                 match map.entry(x.name.clone()) {
                     Entry::Occupied(mut entry) => {
@@ -100,7 +81,8 @@ mod os_limited {
                             if diff > MAX_SECONDS_DIFFERENCE {
                                 panic!(
                                     "The deleted item does not have the timestamp that represents its deletion time. Expected: {}. Got: {}",
-                                    actual_unix_deletion_time, item.time_deleted
+                                    actual_unix_deletion_time,
+                                    item.time_deleted
                                 );
                             }
                         }
@@ -115,18 +97,11 @@ mod os_limited {
         let _ = trash::os_limited::purge_all(items.iter().flat_map(|(_name, item)| item));
     }
 
-    #[cfg(all(
-        unix,
-        not(target_os = "macos"),
-        not(target_os = "ios"),
-        not(target_os = "android")
-    ))]
+    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
     #[test]
     #[serial]
     fn list_invalid_utf8() {
-        let mut name = OsStr::new(&get_unique_name())
-            .to_os_string()
-            .into_encoded_bytes();
+        let mut name = OsStr::new(&get_unique_name()).to_os_string().into_encoded_bytes();
         name.push(168);
         let name = OsString::from_vec(name);
         File::create_new(&name).unwrap();
@@ -135,11 +110,7 @@ mod os_limited {
         // Listing items is already exhaustively checked above, so this test is mainly concerned
         // with checking that listing non-Unicode names does not panic
         trash::delete(&name).unwrap();
-        let item = trash::os_limited::list()
-            .unwrap()
-            .into_iter()
-            .find(|item| item.name == name)
-            .unwrap();
+        let item = trash::os_limited::list().unwrap().into_iter().find(|item| item.name == name).unwrap();
         let _ = trash::os_limited::purge_all([item]);
     }
 
@@ -152,7 +123,7 @@ mod os_limited {
     #[test]
     fn restore_empty() {
         init_logging();
-        trash::restore_all(vec![]).unwrap();
+        trash::os_limited::restore_all(vec![]).unwrap();
     }
 
     #[test]
@@ -162,9 +133,7 @@ mod os_limited {
         let file_name_prefix = get_unique_name();
         let batches: usize = 2;
         let files_per_batch: usize = 3;
-        let names: Vec<_> = (0..files_per_batch)
-            .map(|i| format!("{}#{}", file_name_prefix, i))
-            .collect();
+        let names: Vec<_> = (0..files_per_batch).map(|i| format!("{}#{}", file_name_prefix, i)).collect();
         for _ in 0..batches {
             for path in names.iter() {
                 File::create_new(path).unwrap();
@@ -176,22 +145,14 @@ mod os_limited {
         let targets: Vec<_> = trash::os_limited::list()
             .unwrap()
             .into_iter()
-            .filter(|x| {
-                x.name
-                    .as_encoded_bytes()
-                    .starts_with(file_name_prefix.as_bytes())
-            })
+            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
             .collect();
         assert_eq!(targets.len(), batches * files_per_batch);
         trash::os_limited::purge_all(targets).unwrap();
         let remaining = trash::os_limited::list()
             .unwrap()
             .into_iter()
-            .filter(|x| {
-                x.name
-                    .as_encoded_bytes()
-                    .starts_with(file_name_prefix.as_bytes())
-            })
+            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
             .count();
         assert_eq!(remaining, 0);
     }
@@ -202,9 +163,7 @@ mod os_limited {
         init_logging();
         let file_name_prefix = get_unique_name();
         let file_count: usize = 3;
-        let names: Vec<_> = (0..file_count)
-            .map(|i| format!("{}#{}", file_name_prefix, i))
-            .collect();
+        let names: Vec<_> = (0..file_count).map(|i| format!("{}#{}", file_name_prefix, i)).collect();
         for path in names.iter() {
             File::create_new(path).unwrap();
         }
@@ -214,22 +173,14 @@ mod os_limited {
         let targets: Vec<_> = trash::os_limited::list()
             .unwrap()
             .into_iter()
-            .filter(|x| {
-                x.name
-                    .as_encoded_bytes()
-                    .starts_with(file_name_prefix.as_bytes())
-            })
+            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
             .collect();
         assert_eq!(targets.len(), file_count);
-        trash::restore_all(targets).unwrap();
+        trash::os_limited::restore_all(targets).unwrap();
         let remaining = trash::os_limited::list()
             .unwrap()
             .into_iter()
-            .filter(|x| {
-                x.name
-                    .as_encoded_bytes()
-                    .starts_with(file_name_prefix.as_bytes())
-            })
+            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
             .count();
         assert_eq!(remaining, 0);
 
@@ -247,6 +198,50 @@ mod os_limited {
         assert_eq!(missing, Vec::<&String>::new());
     }
 
+    /// The name of a listed item is its file name, extension included, and
+    /// restoring brings the file back under that name. On Windows the shell's
+    /// display names drop the extension of registered file types while the
+    /// "hide extensions for known file types" setting is on — the default —
+    /// so a name taken from them loses `.txt` here and the restored file is
+    /// renamed.
+    #[test]
+    #[serial]
+    fn list_and_restore_keep_the_extension() {
+        init_logging();
+        let file_name_prefix = get_unique_name();
+        let names: Vec<String> = ["txt", "png", "html"].iter().map(|ext| format!("{file_name_prefix}.{ext}")).collect();
+        for path in names.iter() {
+            File::create_new(path).unwrap();
+        }
+        trash::delete_all(&names).unwrap();
+
+        let targets: Vec<_> = trash::os_limited::list()
+            .unwrap()
+            .into_iter()
+            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
+            .collect();
+        let mut listed: Vec<OsString> = targets.iter().map(|item| item.name.clone()).collect();
+        listed.sort();
+        let mut expected: Vec<OsString> = names.iter().map(OsString::from).collect();
+        expected.sort();
+        if listed != expected {
+            // Three files that differ only in their extension would also be
+            // taken for twins of one original, and the restore refused.
+            let _ = trash::os_limited::purge_all(targets);
+            panic!("listed names {listed:?}, expected {expected:?}");
+        }
+
+        trash::os_limited::restore_all(targets).unwrap();
+        let mut missing = Vec::new();
+        for path in names.iter() {
+            if !std::path::Path::new(&path).is_file() {
+                missing.push(path.clone());
+            }
+            std::fs::remove_file(path).ok();
+        }
+        assert_eq!(missing, Vec::<String>::new());
+    }
+
     #[test]
     #[serial]
     fn restore_collision() {
@@ -254,9 +249,7 @@ mod os_limited {
         let file_name_prefix = get_unique_name();
         let file_count: usize = 3;
         let collision_remaining = file_count - 1;
-        let names: Vec<_> = (0..file_count)
-            .map(|i| format!("{}#{}", file_name_prefix, i))
-            .collect();
+        let names: Vec<_> = (0..file_count).map(|i| format!("{}#{}", file_name_prefix, i)).collect();
         for path in names.iter() {
             File::create_new(path).unwrap();
         }
@@ -267,18 +260,12 @@ mod os_limited {
         let mut targets: Vec<_> = trash::os_limited::list()
             .unwrap()
             .into_iter()
-            .filter(|x| {
-                x.name
-                    .as_encoded_bytes()
-                    .starts_with(file_name_prefix.as_bytes())
-            })
+            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
             .collect();
         targets.sort_by(|a, b| a.name.cmp(&b.name));
         assert_eq!(targets.len(), file_count);
-        let remaining_count = match trash::restore_all(targets) {
-            Err(trash::Error::RestoreCollision {
-                remaining_items, ..
-            }) => {
+        let remaining_count = match trash::os_limited::restore_all(targets) {
+            Err(trash::Error::RestoreCollision { remaining_items, .. }) => {
                 let contains = |v: &Vec<trash::TrashItem>, name: &String| {
                     for curr in v.iter() {
                         if curr.name.as_encoded_bytes() == name.as_bytes() {
@@ -288,10 +275,7 @@ mod os_limited {
                     false
                 };
                 // Are all items that got restored reside in the folder?
-                for path in names
-                    .iter()
-                    .filter(|filename| !contains(&remaining_items, filename))
-                {
+                for path in names.iter().filter(|filename| !contains(&remaining_items, filename)) {
                     assert!(File::open(path).is_ok());
                 }
                 remaining_items.len()
@@ -300,19 +284,13 @@ mod os_limited {
                 for path in names.iter() {
                     std::fs::remove_file(path).ok();
                 }
-                panic!(
-                    "restore_all was expected to return `trash::ErrorKind::RestoreCollision` but did not."
-                );
+                panic!("restore_all was expected to return `trash::ErrorKind::RestoreCollision` but did not.");
             }
         };
         let remaining = trash::os_limited::list()
             .unwrap()
             .into_iter()
-            .filter(|x| {
-                x.name
-                    .as_encoded_bytes()
-                    .starts_with(file_name_prefix.as_bytes())
-            })
+            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
             .collect::<Vec<_>>();
         assert_eq!(remaining.len(), remaining_count);
         trash::os_limited::purge_all(remaining).unwrap();
@@ -328,9 +306,7 @@ mod os_limited {
         init_logging();
         let file_name_prefix = get_unique_name();
         let file_count: usize = 4;
-        let names: Vec<_> = (0..file_count)
-            .map(|i| format!("{}#{}", file_name_prefix, i))
-            .collect();
+        let names: Vec<_> = (0..file_count).map(|i| format!("{}#{}", file_name_prefix, i)).collect();
         for path in names.iter() {
             File::create_new(path).unwrap();
         }
@@ -343,22 +319,16 @@ mod os_limited {
         let mut targets: Vec<_> = trash::os_limited::list()
             .unwrap()
             .into_iter()
-            .filter(|x| {
-                x.name
-                    .as_encoded_bytes()
-                    .starts_with(file_name_prefix.as_bytes())
-            })
+            .filter(|x| x.name.as_encoded_bytes().starts_with(file_name_prefix.as_bytes()))
             .collect();
         targets.sort_by(|a, b| a.name.cmp(&b.name));
         assert_eq!(targets.len(), file_count + 1); // plus one for one of the twins
-        match trash::restore_all(targets) {
+        match trash::os_limited::restore_all(targets) {
             Err(trash::Error::RestoreTwins { path, items }) => {
                 assert_eq!(path.file_name().unwrap().to_str().unwrap(), twin_name);
                 trash::os_limited::purge_all(items).unwrap();
             }
-            _ => panic!(
-                "restore_all was expected to return `trash::ErrorKind::RestoreTwins` but did not."
-            ),
+            _ => panic!("restore_all was expected to return `trash::ErrorKind::RestoreTwins` but did not."),
         }
     }
 
@@ -369,9 +339,6 @@ mod os_limited {
 
         let is_empty_list = trash::os_limited::list().unwrap().is_empty();
         let is_empty = trash::os_limited::is_empty().unwrap();
-        assert_eq!(
-            is_empty, is_empty_list,
-            "is_empty() should match empty status from list()"
-        );
+        assert_eq!(is_empty, is_empty_list, "is_empty() should match empty status from list()");
     }
 }
