@@ -25,6 +25,7 @@ use clap::{Args, Subcommand, ValueEnum};
 
 mod gpui_api;
 mod keymaps;
+mod locale_fallbacks;
 mod scroll_handlers;
 
 #[derive(Args)]
@@ -36,8 +37,8 @@ pub struct CheckArgs {
 #[derive(Subcommand)]
 enum CheckCommand {
     /// Every gate CI runs: markers, keymaps, scroll handlers, licenses,
-    /// locale catalog keys, DCO, philosophy, ledger, workflows, and the
-    /// `gpui` public API snapshot.
+    /// locale catalog keys and in-code fallbacks, DCO, philosophy, ledger,
+    /// workflows, and the `gpui` public API snapshot.
     All,
     /// Reject leftover markers for unfinished work.
     Todos,
@@ -49,6 +50,8 @@ enum CheckCommand {
     Licenses,
     /// Require the locale catalogs to have identical key sets.
     LocaleKeys,
+    /// Require in-code `i18n::tr` fallbacks to match the English catalog.
+    LocaleFallbacks,
     /// Require DCO sign-off on recent non-merge commits.
     Dco,
     /// Run ShellCheck over the scripts in the repository root's `script/`.
@@ -102,6 +105,7 @@ pub fn run_check(args: CheckArgs) -> Result<()> {
         CheckCommand::ScrollHandlers => scroll_handlers::check(),
         CheckCommand::Licenses => check_licenses(),
         CheckCommand::LocaleKeys => check_locale_keys(),
+        CheckCommand::LocaleFallbacks => locale_fallbacks::check(),
         CheckCommand::Dco => check_dco(),
         CheckCommand::Shellcheck { severity } => check_shellcheck(severity),
         CheckCommand::Vendor => run_script(&["script/vendor-sync", "check"], "vendor check"),
@@ -123,6 +127,7 @@ fn run_all() -> Result<()> {
         ("scroll handlers", scroll_handlers::check),
         ("crate licenses", check_licenses),
         ("locale catalog keys", check_locale_keys),
+        ("i18n fallbacks", locale_fallbacks::check),
         ("DCO sign-off", check_dco),
         ("philosophy boundary", check_philosophy),
         ("upstream rejection ledger", check_upstream_ledger),

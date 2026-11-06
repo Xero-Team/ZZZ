@@ -9019,28 +9019,7 @@ fn workspace_is_at_location(
         (
             SerializedWorkspaceLocation::Remote(workspace_remote),
             SerializedWorkspaceLocation::Remote(remote),
-        ) => match (workspace_remote, remote) {
-            (RemoteConnectionOptions::Ssh(_), RemoteConnectionOptions::Ssh(_)) => {
-                same_remote_connection_identity(Some(workspace_remote), Some(remote))
-            }
-            (
-                RemoteConnectionOptions::Wsl(workspace_remote),
-                RemoteConnectionOptions::Wsl(remote),
-            ) => {
-                // The WSL username is not consistently populated in the workspace location, so ignore it for now.
-                workspace_remote.distro_name == remote.distro_name
-            }
-            (
-                RemoteConnectionOptions::Docker(workspace_remote),
-                RemoteConnectionOptions::Docker(remote),
-            ) => workspace_remote.container_id == remote.container_id,
-            #[cfg(any(test, feature = "test-support"))]
-            (
-                RemoteConnectionOptions::Mock(workspace_remote),
-                RemoteConnectionOptions::Mock(remote),
-            ) => workspace_remote.id == remote.id,
-            _ => false,
-        },
+        ) => matches_remote_location(workspace_remote, remote),
         _ => false,
     }
 }
@@ -10636,6 +10615,67 @@ mod tests {
     use settings::{SettingsStore, SplicingVec};
     use util::path;
     use util::rel_path::rel_path;
+
+    #[test]
+    fn matches_remote_location_uses_persistence_identity() {
+        use remote::{DockerConnectionOptions, SshConnectionOptions, WslConnectionOptions};
+
+        let ssh = |host: &str, port: Option<u16>| {
+            RemoteConnectionOptions::Ssh(SshConnectionOptions {
+                host: host.into(),
+                port,
+                ..Default::default()
+            })
+        };
+        let wsl = |distro_name: &str, user: Option<&str>| {
+            RemoteConnectionOptions::Wsl(WslConnectionOptions {
+                distro_name: distro_name.to_string(),
+                user: user.map(str::to_string),
+            })
+        };
+        let docker = |container_id: &str| {
+            RemoteConnectionOptions::Docker(DockerConnectionOptions {
+                container_id: container_id.to_string(),
+                ..Default::default()
+            })
+        };
+
+        // SSH identity is the persisted host/user/port, not runtime-only fields.
+        assert!(matches_remote_location(
+            &ssh("example.com", Some(2222)),
+            &ssh("example.com", Some(2222))
+        ));
+        assert!(!matches_remote_location(
+            &ssh("example.com", Some(2222)),
+            &ssh("example.com", Some(2223))
+        ));
+        // WSL ignores the username; Docker keys on the container id.
+        assert!(matches_remote_location(
+            &wsl("Ubuntu", Some("anth")),
+            &wsl("Ubuntu", Some("root"))
+        ));
+        assert!(!matches_remote_location(
+            &wsl("Ubuntu", None),
+            &wsl("Debian", None)
+        ));
+        assert!(matches_remote_location(
+            &docker("container-123"),
+            &docker("container-123")
+        ));
+        assert!(!matches_remote_location(
+            &docker("container-123"),
+            &docker("container-456")
+        ));
+        // Different transport kinds are never the same remote.
+        assert!(!matches_remote_location(
+            &ssh("example.com", None),
+            &wsl("Ubuntu", None)
+        ));
+        assert!(!matches_remote_location(
+            &docker("container-123"),
+            &ssh("example.com", None)
+        ));
+    }
 
     #[gpui::test]
     async fn test_tab_disambiguation(cx: &mut TestAppContext) {

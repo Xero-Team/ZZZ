@@ -227,9 +227,14 @@ impl QuerySession {
         if let Some(handle) = self.current_query.take() {
             handle.cancel();
             self.manager.finish_query(&self.connection_id, handle.id());
-        }
-        if let Some(result_set) = &mut self.result_set {
-            result_set.mark_cancelled();
+            // Mark the result cancelled only when a query was actually running.
+            // `execute_cancellable` calls this at the start of every run, and a
+            // statement that fails while preparing returns before installing a
+            // new result set; re-labelling the completed result here would make
+            // that failure look like a user cancellation to `is_cancelled`.
+            if let Some(result_set) = &mut self.result_set {
+                result_set.mark_cancelled();
+            }
         }
     }
 
@@ -1295,6 +1300,40 @@ mod tests {
             assert_eq!(
                 manager.status(&connection_id),
                 Some(crate::model::ConnectionStatus::Connected)
+            );
+        });
+    }
+
+    #[test]
+    fn a_failed_statement_does_not_mark_the_previous_result_cancelled() {
+        futures::executor::block_on(async {
+            let mut session = new_session().await;
+
+            // A completed query leaves a Ready result set and no in-flight
+            // handle.
+            session.execute("SELECT 1", &[]).await.expect("first query");
+            assert_eq!(
+                session.result_set().map(|set| set.state),
+                Some(ResultSetState::Ready)
+            );
+
+            // The next statement fails while preparing, so `execute` returns
+            // before installing a new result set. `cancel_current()` at the
+            // start of the run must not re-label the completed result as a user
+            // cancellation: the UI would report "Cancelled." instead of the
+            // real error and keep showing stale rows.
+            assert!(
+                session.execute("THIS IS NOT VALID SQL", &[]).await.is_err(),
+                "an invalid statement must fail"
+            );
+            assert!(
+                !session.is_cancelled(),
+                "a failed statement must not look like a user cancellation"
+            );
+            assert_eq!(
+                session.result_set().map(|set| set.state),
+                Some(ResultSetState::Ready),
+                "the completed result set must keep its terminal state"
             );
         });
     }

@@ -2500,9 +2500,11 @@ impl Item for ResultSetView {
                 view.edit_running = false;
                 view.refresh_active_result(cx);
                 let message = match &outcome {
-                    Ok(()) => {
-                        QueryMessage::Info(tr(cx, "database.edit.rolled_back", "Rolled back."))
-                    }
+                    Ok(()) => QueryMessage::Info(tr(
+                        cx,
+                        "database.edit.rolled_back",
+                        "Rolled back. The database is unchanged.",
+                    )),
                     Err(error) => QueryMessage::Error(describe_error(cx, error)),
                 };
                 view.set_message(message, cx);

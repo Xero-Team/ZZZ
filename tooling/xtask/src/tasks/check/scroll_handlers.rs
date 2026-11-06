@@ -53,7 +53,24 @@ const LIST_STATE_METHODS: &[&str] = &[
 const ENTITY_METHODS: &[&str] = &["read", "read_with", "update", "update_in"];
 
 /// Calls that defer their closure until after the current borrow is released.
-const DEFER_METHODS: &[&str] = &["defer", "defer_in", "spawn", "background_spawn"];
+/// GPUI exposes window-scoped and priority-scoped variants; each runs the
+/// passed closure (or async block) later rather than synchronously.
+const DEFER_METHODS: &[&str] = &[
+    "defer",
+    "defer_in",
+    "spawn",
+    "spawn_in",
+    "spawn_in_with_priority",
+    "spawn_with_priority",
+    "background_spawn",
+];
+
+/// Whether an argument to a defer call is a closure or async block whose body
+/// runs later. Other arguments (a window handle, a context, a computed value)
+/// are evaluated synchronously while the handler still holds the borrow.
+fn is_deferred_body(argument: &Expr) -> bool {
+    matches!(argument, Expr::Closure(_) | Expr::Async(_))
+}
 
 pub fn check() -> Result<()> {
     let files = super::tracked_files("*.rs")?;
@@ -107,7 +124,6 @@ impl<'ast> Visit<'ast> for SourceVisitor<'_> {
             for argument in &call.args {
                 if let Expr::Closure(closure) = argument {
                     let mut finder = BorrowFinder {
-                        defer_depth: 0,
                         findings: Vec::new(),
                     };
                     finder.visit_expr(&closure.body);
@@ -125,29 +141,38 @@ impl<'ast> Visit<'ast> for SourceVisitor<'_> {
     }
 }
 
-/// Finds entity/ListState method calls that are not nested inside a defer call.
+/// Finds entity/ListState method calls that run synchronously in the handler.
+///
+/// A defer/spawn call only postpones its closure or async block. Its receiver
+/// and any other arguments are still evaluated synchronously while the
+/// `ListState` `RefCell` is borrowed, so those are scanned normally; only the
+/// deferred bodies are skipped, because everything inside them runs after the
+/// borrow is released.
 struct BorrowFinder {
-    defer_depth: usize,
     findings: Vec<(Span, String)>,
 }
 
 impl<'ast> Visit<'ast> for BorrowFinder {
     fn visit_expr_method_call(&mut self, call: &'ast ExprMethodCall) {
         let method = call.method.to_string();
-        let is_defer = DEFER_METHODS.contains(&method.as_str());
-        if is_defer {
-            self.defer_depth += 1;
-        } else if self.defer_depth == 0
-            && (ENTITY_METHODS.contains(&method.as_str())
-                || LIST_STATE_METHODS.contains(&method.as_str()))
+
+        if ENTITY_METHODS.contains(&method.as_str())
+            || LIST_STATE_METHODS.contains(&method.as_str())
         {
-            self.findings.push((call.span(), method));
+            self.findings.push((call.span(), method.clone()));
         }
 
-        visit::visit_expr_method_call(self, call);
-
-        if is_defer {
-            self.defer_depth -= 1;
+        if DEFER_METHODS.contains(&method.as_str()) {
+            // Visit the synchronously-evaluated parts, but not the closure or
+            // async block whose body runs after the borrow is released.
+            self.visit_expr(&call.receiver);
+            for argument in &call.args {
+                if !is_deferred_body(argument) {
+                    self.visit_expr(argument);
+                }
+            }
+        } else {
+            visit::visit_expr_method_call(self, call);
         }
     }
 }
@@ -232,5 +257,43 @@ mod tests {
             }
         "#;
         assert!(findings(source).is_empty());
+    }
+
+    #[test]
+    fn accepts_a_deferred_spawn_in_body() {
+        // `spawn_in` is the window-scoped sibling of `spawn`; its async body
+        // runs later, so entity updates inside it are not re-entrant.
+        let source = r#"
+            fn install(panel: Entity<Panel>, state: ListState, window: &mut Window) {
+                state.set_scroll_handler(move |_, _, cx| {
+                    let panel = panel.clone();
+                    cx.spawn_in(window, async move |this, cx| {
+                        panel.update(cx, |panel, cx| panel.refresh(cx));
+                    }).detach();
+                });
+            }
+        "#;
+        assert!(
+            findings(source).is_empty(),
+            "spawn_in bodies are deferred and must be allowed"
+        );
+    }
+
+    #[test]
+    fn rejects_a_synchronous_borrow_in_a_defer_argument() {
+        // Only the closure handed to `defer` runs later. An argument used to
+        // build that closure is evaluated synchronously, inside the handler,
+        // so a ListState borrow there still re-enters the borrow and panics.
+        let source = r#"
+            fn install(state: ListState) {
+                state.set_scroll_handler(move |_, _, cx| {
+                    cx.defer(build_handler(state.is_following_tail()));
+                });
+            }
+        "#;
+        assert_eq!(
+            findings(source),
+            vec!["test.rs:4: synchronous .is_following_tail() inside a scroll handler"]
+        );
     }
 }

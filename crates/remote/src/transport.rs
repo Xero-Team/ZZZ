@@ -182,7 +182,10 @@ fn parse_platform(output: &str) -> Result<RemotePlatform> {
         || arch.starts_with("aarch64")
     {
         RemoteArch::Aarch64
-    } else if arch.starts_with("x86") {
+    } else if arch.starts_with("x86") || arch.starts_with("amd64") {
+        // FreeBSD's `uname -m` calls x86_64 `amd64`; Windows reports the same
+        // spelling in `platform_windows`. Its ARM64 machines report `arm64`,
+        // which the Aarch64 branches above already cover.
         RemoteArch::X86_64
     } else {
         anyhow::bail!("unsupported remote architecture {arch:?}")
@@ -718,8 +721,17 @@ mod tests {
         assert_eq!(result.os, RemoteOs::Linux);
         assert_eq!(result.arch, RemoteArch::X86_64);
 
+        let result = parse_platform("FreeBSD amd64\n").unwrap();
+        assert_eq!(result.os, RemoteOs::FreeBSD);
+        assert_eq!(result.arch, RemoteArch::X86_64);
+
+        let result = parse_platform("FreeBSD arm64\n").unwrap();
+        assert_eq!(result.os, RemoteOs::FreeBSD);
+        assert_eq!(result.arch, RemoteArch::Aarch64);
+
         assert!(parse_platform("Windows x86_64\n").is_err());
         assert!(parse_platform("Linux armv7l\n").is_err());
+        assert!(parse_platform("FreeBSD powerpc64\n").is_err());
     }
 
     #[test]

@@ -407,25 +407,25 @@ fn is_assignment(word: &str) -> bool {
         && characters.all(|character| character == '_' || character.is_ascii_alphanumeric())
 }
 
-fn executable_matches(word: &str, expected: &str) -> bool {
+/// Normalizes an executable path to its lowercased name without a Windows
+/// `.exe` suffix. Windows filesystems are case-insensitive, so `RM.EXE`,
+/// `rm.Exe` and `rm.exe` all name the same program and must all be recognized
+/// by the hardcoded security rules.
+fn normalized_executable_name(word: &str) -> String {
     let file_name = word.rsplit(['/', '\\']).next().unwrap_or(word);
-    let executable = file_name
-        .strip_suffix(".exe")
-        .or_else(|| file_name.strip_suffix(".EXE"))
-        .unwrap_or(file_name);
-    executable.eq_ignore_ascii_case(expected)
+    let lower = file_name.to_ascii_lowercase();
+    match lower.strip_suffix(".exe") {
+        Some(stem) => stem.to_owned(),
+        None => lower,
+    }
+}
+
+fn executable_matches(word: &str, expected: &str) -> bool {
+    normalized_executable_name(word).eq_ignore_ascii_case(expected)
 }
 
 fn wrapper_arguments(parts: &[&str], index: usize) -> Option<usize> {
-    let word = parts.get(index)?;
-    let name = word
-        .rsplit(['/', '\\'])
-        .next()
-        .unwrap_or(word)
-        .strip_suffix(".exe")
-        .or_else(|| word.rsplit(['/', '\\']).next()?.strip_suffix(".EXE"))
-        .unwrap_or_else(|| word.rsplit(['/', '\\']).next().unwrap_or(word))
-        .to_ascii_lowercase();
+    let name = normalized_executable_name(parts.get(index)?);
     let next_index = match name.as_str() {
         "sudo" => skip_options(
             parts,
@@ -2347,6 +2347,18 @@ mod tests {
         t("rm.exe -rf /tmp /").is_deny();
         t("FOO=bar rm -rf /tmp /").is_deny();
         t("sudo rm -rf $HOME/subdir /tmp/../../").is_deny();
+    }
+
+    #[test]
+    fn hardcoded_blocks_rm_with_mixed_case_windows_extension() {
+        // Executable names are matched case-insensitively (Windows filesystems
+        // are), so the `.exe` suffix must be stripped in any casing too. The
+        // existing tests cover the all-lower and all-upper spellings; a mixed
+        // one must not become a way past the hardcoded deny rules.
+        t(r"C:\Windows\System32\rm.Exe -rf /tmp /").is_deny();
+        t("rm.Exe -rf /tmp /").is_deny();
+        t("sudo.Exe rm -rf /tmp /").is_deny();
+        t("SUDO.eXe rm -rf /tmp /").is_deny();
     }
 
     #[test]

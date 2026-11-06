@@ -1728,10 +1728,6 @@ impl GitStore {
                         }
                     })
                     .collect();
-                let is_active_repo_removed = repos_without_worktree
-                    .iter()
-                    .any(|repo_id| self.active_repo_id == Some(*repo_id));
-
                 for repo_id in repos_without_worktree {
                     self.repositories.remove(&repo_id);
                     self.worktree_ids.remove(&repo_id);
@@ -1744,15 +1740,24 @@ impl GitStore {
                     }
                 }
 
-                if is_active_repo_removed {
-                    self.select_fallback_active_repository(cx);
-                }
+                self.reconcile_active_repository(cx);
             }
             _ => {}
         }
     }
 
-    fn select_fallback_active_repository(&mut self, cx: &mut Context<Self>) {
+    /// Keep `active_repo_id` pointing at a repository that still exists. After
+    /// any removal the active repository may be gone; fall back to another
+    /// remaining repository so the Git panel keeps showing a repository instead
+    /// of "No Git Repositories". Emits only when the active selection actually
+    /// became invalid, preserving the current selection in every other case.
+    fn reconcile_active_repository(&mut self, cx: &mut Context<Self>) {
+        let active_is_gone = self
+            .active_repo_id
+            .is_some_and(|id| !self.repositories.contains_key(&id));
+        if !active_is_gone {
+            return;
+        }
         self.active_repo_id = self.repositories.keys().next().copied();
         cx.emit(GitStoreEvent::ActiveRepositoryChanged(self.active_repo_id));
     }
@@ -1937,10 +1942,6 @@ impl GitStore {
         }
 
         for id in removed_ids {
-            if self.active_repo_id == Some(id) {
-                self.active_repo_id = None;
-                cx.emit(GitStoreEvent::ActiveRepositoryChanged(None));
-            }
             self.repositories.remove(&id);
             if let Some(updates_tx) = updates_tx.as_ref() {
                 updates_tx
@@ -1948,6 +1949,7 @@ impl GitStore {
                     .ok();
             }
         }
+        self.reconcile_active_repository(cx);
     }
 
     fn on_trusted_worktrees_event(
@@ -2397,10 +2399,7 @@ impl GitStore {
                 update.project_id = project_id.to_proto();
                 client.send(update).log_err();
             }
-            if this.active_repo_id == Some(id) {
-                this.active_repo_id = this.repositories.keys().next().copied();
-                cx.emit(GitStoreEvent::ActiveRepositoryChanged(this.active_repo_id));
-            }
+            this.reconcile_active_repository(cx);
             cx.emit(GitStoreEvent::RepositoryRemoved(id));
         });
         Ok(())
@@ -9625,6 +9624,102 @@ mod tests {
 
     fn repo_paths(paths: &[&str]) -> Vec<RepoPath> {
         paths.iter().map(repo_path).collect()
+    }
+
+    #[gpui::test]
+    async fn removing_active_repository_during_worktree_scan_keeps_another_active(
+        cx: &mut TestAppContext,
+    ) {
+        init_test(cx);
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(
+            "/project",
+            json!({
+                "a": { ".git": {}, "file.txt": "a" },
+                "b": { ".git": {}, "file.txt": "b" },
+            }),
+        )
+        .await;
+        let project = Project::test(fs.clone(), [Path::new("/project")], cx).await;
+        project
+            .update(cx, |project, cx| project.git_scans_complete(cx))
+            .await;
+        cx.run_until_parked();
+
+        let git_store = project.read_with(cx, |project, _| project.git_store().clone());
+        let (active_repo, remaining_repo, active_path, worktree_id) =
+            git_store.read_with(cx, |git_store, cx| {
+                let mut repos: Vec<_> = git_store.repositories().values().cloned().collect();
+                repos.sort_by_key(|repo| repo.read(cx).work_directory_abs_path.clone());
+                assert_eq!(repos.len(), 2, "expected one repository per .git directory");
+                let worktree_id = *git_store
+                    .worktree_ids
+                    .values()
+                    .next()
+                    .and_then(|ids| ids.iter().next())
+                    .expect("repositories are attached to a worktree");
+                (
+                    repos[0].clone(),
+                    repos[1].clone(),
+                    repos[0].read(cx).work_directory_abs_path.clone(),
+                    worktree_id,
+                )
+            });
+
+        active_repo.update(cx, |repo, cx| repo.set_as_active_repository(cx));
+        git_store.read_with(cx, |git_store, _| {
+            assert_eq!(git_store.active_repository(), Some(active_repo.clone()));
+        });
+
+        // The worktree scanner reports that the active repository's .git
+        // directory disappeared (a removal update has no new path).
+        git_store.update(cx, |git_store, cx| {
+            let (project_environment, next_repository_id, native_execution_context, downstream) =
+                match &git_store.state {
+                    GitStoreState::Local {
+                        project_environment,
+                        next_repository_id,
+                        native_execution_context,
+                        downstream,
+                        ..
+                    } => (
+                        project_environment.clone(),
+                        next_repository_id.clone(),
+                        native_execution_context.clone(),
+                        downstream
+                            .as_ref()
+                            .map(|downstream| downstream.updates_tx.clone()),
+                    ),
+                    _ => panic!("test uses a local git store"),
+                };
+            let removal = UpdatedGitRepository {
+                work_directory_id: ProjectEntryId::MIN,
+                old_work_directory_abs_path: Some(active_path.clone()),
+                new_work_directory_abs_path: None,
+                dot_git_abs_path: None,
+                repository_dir_abs_path: None,
+                common_dir_abs_path: None,
+            };
+            let updates: UpdatedGitRepositoriesSet = std::sync::Arc::from([removal]);
+            git_store.update_repositories_from_worktree(
+                worktree_id,
+                project_environment,
+                next_repository_id,
+                downstream,
+                updates,
+                native_execution_context,
+                cx,
+            );
+        });
+
+        git_store.read_with(cx, |git_store, _| {
+            assert_eq!(git_store.repositories().len(), 1);
+            assert_eq!(
+                git_store.active_repository(),
+                Some(remaining_repo.clone()),
+                "removing the active repository must fall back to a remaining one"
+            );
+        });
     }
 
     #[gpui::test]

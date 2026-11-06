@@ -93,7 +93,14 @@ impl Window {
 
         match window_bounds {
             WindowBounds::Fullscreen(_) => platform_window.toggle_fullscreen(),
-            WindowBounds::Maximized(_) => platform_window.zoom()?,
+            WindowBounds::Maximized(_) => {
+                // The window's bounds are already applied through WindowParams;
+                // zoom only asks the window manager to enter the maximized
+                // state. Backends that cannot zoom (web, headless, test) treat
+                // it as best-effort, so a failure must not abort window
+                // creation. Log it and open the window anyway.
+                platform_window.zoom().log_err();
+            }
             WindowBounds::Windowed(_) => {}
         }
 

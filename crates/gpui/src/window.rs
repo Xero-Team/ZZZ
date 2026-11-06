@@ -1059,7 +1059,8 @@ mod tests {
     use crate::{
         AnyWindowHandle, AppContext as _, Bounds, Context, FocusHandle, InteractiveElement as _,
         IntoElement, ParentElement as _, Pixels, Render, RequestFrameOptions, Styled as _,
-        TestAppContext, Window, WindowAppearance, canvas, div, px, size,
+        TestAppContext, Window, WindowAppearance, WindowBounds, WindowOptions, canvas, div, px,
+        size,
     };
     #[cfg(feature = "frame-diagnostics")]
     use scheduler::Instant;
@@ -1084,6 +1085,26 @@ mod tests {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
             self.render_count.set(self.render_count.get() + 1);
             div()
+        }
+    }
+
+    #[gpui::test]
+    fn test_maximized_window_opens_when_backend_cannot_zoom(cx: &mut TestAppContext) {
+        // The test platform inherits WindowHost's "zoom unsupported" default.
+        // A maximized window must still open: its bounds are already applied
+        // through WindowParams, so requesting the maximized state is only a
+        // best-effort decoration, not a prerequisite for creating the window.
+        let result = cx.update(|cx| {
+            cx.open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Maximized(Bounds::maximized(None, cx))),
+                    ..Default::default()
+                },
+                |_, cx| cx.new(|_| EmptyView),
+            )
+        });
+        if let Err(error) = result {
+            panic!("a maximized window must open even when the backend cannot zoom: {error:#}");
         }
     }
 

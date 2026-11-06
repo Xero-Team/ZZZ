@@ -388,29 +388,35 @@ impl Channel {
             return Channel::Dev;
         };
 
-        match contents.trim() {
-            "stable" => Channel::Stable,
-            "preview" => Channel::Preview,
-            "nightly" => Channel::Nightly,
-            _ => Channel::Dev,
+        Self::from_str_value(&contents).unwrap_or(Channel::Dev)
+    }
+
+    /// Parses a channel name. Unknown values return `None` so each caller can
+    /// apply its own default instead of silently baking in a wrong channel.
+    fn from_str_value(value: &str) -> Option<Self> {
+        match value.trim() {
+            "dev" => Some(Channel::Dev),
+            "stable" => Some(Channel::Stable),
+            "preview" => Some(Channel::Preview),
+            "nightly" => Some(Channel::Nightly),
+            _ => None,
         }
     }
 
     /// The channel a shipping artifact uses. `crates/zzz/RELEASE_CHANNEL`
     /// describes development builds, so packaging defaults to `stable` unless
-    /// the caller names a channel or explicitly exports `ZZZ_RELEASE_CHANNEL`.
-    pub fn detect_shipping(workspace: &std::path::Path) -> Self {
-        if let Ok(value) = std::env::var("ZZZ_RELEASE_CHANNEL") {
-            match value.trim() {
-                "stable" => return Channel::Stable,
-                "preview" => return Channel::Preview,
-                "nightly" => return Channel::Nightly,
-                "dev" => return Channel::Dev,
-                _ => {}
-            }
-        }
-        let _ = workspace;
-        Channel::SHIPPING
+    /// the caller names a channel or exports `ZZZ_RELEASE_CHANNEL`.
+    pub fn detect_shipping() -> Self {
+        Self::shipping_from_env(std::env::var("ZZZ_RELEASE_CHANNEL").ok().as_deref())
+    }
+
+    /// Kept separate from `detect_shipping` so the override is testable without
+    /// mutating the process environment. Unknown values fall back to the
+    /// shipping channel rather than baking a broken identity into an artifact.
+    fn shipping_from_env(value: Option<&str>) -> Self {
+        value
+            .and_then(Self::from_str_value)
+            .unwrap_or(Self::SHIPPING)
     }
 }
 
@@ -467,5 +473,23 @@ mod tests {
         let host = Target::host_default();
         assert_eq!(host.platform(), Platform::host());
         assert!(!host.is_cross());
+    }
+
+    #[test]
+    fn shipping_channel_honors_the_environment_override() {
+        assert_eq!(Channel::shipping_from_env(None), Channel::Stable);
+        assert_eq!(
+            Channel::shipping_from_env(Some("preview")),
+            Channel::Preview
+        );
+        assert_eq!(
+            Channel::shipping_from_env(Some(" nightly ")),
+            Channel::Nightly
+        );
+        assert_eq!(Channel::shipping_from_env(Some("dev")), Channel::Dev);
+        // An unknown value must fall back to the shipping channel rather than
+        // baking a broken identity into an artifact.
+        assert_eq!(Channel::shipping_from_env(Some("garbage")), Channel::Stable);
+        assert_eq!(Channel::shipping_from_env(Some("")), Channel::Stable);
     }
 }

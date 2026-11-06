@@ -15,19 +15,29 @@ use semver::Version;
 /// `cargo run` and `cargo build`, where no packaging step sets the variable, so
 /// a development build remains `dev` without any extra flags.
 static RAW_RELEASE_CHANNEL_NAME: LazyLock<String> = LazyLock::new(|| {
-    if let Some(channel) = option_env!("ZZZ_RELEASE_CHANNEL")
+    let file = include_str!("../../zzz/RELEASE_CHANNEL");
+    let runtime_override = if cfg!(debug_assertions) {
+        env::var("ZZZ_RELEASE_CHANNEL").ok()
+    } else {
+        None
+    };
+    let channel_override = option_env!("ZZZ_RELEASE_CHANNEL")
+        .filter(|channel| !channel.trim().is_empty())
+        .or(runtime_override.as_deref());
+    resolve_raw_release_channel(channel_override, file)
+});
+
+/// Picks the raw channel name by priority: an explicit override (the
+/// compile-time packaging channel, or a runtime one in debug builds) wins over
+/// the embedded file. Blank overrides are ignored so a stray empty build flag
+/// cannot bake an invalid identity into the binary and make `RELEASE_CHANNEL`
+/// panic on first access.
+fn resolve_raw_release_channel(channel_override: Option<&str>, file: &str) -> String {
+    channel_override
         .map(str::trim)
         .filter(|channel| !channel.is_empty())
-    {
-        return channel.to_owned();
-    }
-    if cfg!(debug_assertions) {
-        env::var("ZZZ_RELEASE_CHANNEL")
-            .unwrap_or_else(|_| include_str!("../../zzz/RELEASE_CHANNEL").trim().to_owned())
-    } else {
-        include_str!("../../zzz/RELEASE_CHANNEL").trim().to_owned()
-    }
-});
+        .map_or_else(|| file.trim().to_owned(), str::to_owned)
+}
 
 /// stable | dev
 pub static RELEASE_CHANNEL_NAME: LazyLock<String> =
@@ -342,8 +352,8 @@ mod tests {
         );
         assert_eq!(ReleaseChannel::from_str("beta"), Err(InvalidReleaseChannel));
 
-        // The compile-time override is how `cargo xtask bundle --channel` bakes
-        // the shipping channel into a release binary. It must win over the file.
+        // The resolved value must always be a parseable channel, whichever
+        // source it came from; `RELEASE_CHANNEL` panics on an unknown name.
         assert!(!RAW_RELEASE_CHANNEL_NAME.is_empty());
         assert!(ReleaseChannel::from_str(&RAW_RELEASE_CHANNEL_NAME).is_ok());
 
@@ -359,5 +369,22 @@ mod tests {
             ReleaseChannel::ALL,
             [ReleaseChannel::Dev, ReleaseChannel::Stable]
         );
+    }
+
+    #[test]
+    fn raw_channel_prefers_an_override_and_ignores_blank_ones() {
+        // The compile-time packaging channel is how `cargo xtask bundle
+        // --channel` bakes an identity into a release binary; it wins over the
+        // development file.
+        assert_eq!(
+            resolve_raw_release_channel(Some(" preview "), "dev\n"),
+            "preview"
+        );
+        assert_eq!(resolve_raw_release_channel(None, "dev\n"), "dev");
+        // A stray empty build flag must fall back to the file. Without this,
+        // `RAW_RELEASE_CHANNEL_NAME` is empty and `RELEASE_CHANNEL` panics on
+        // first access.
+        assert_eq!(resolve_raw_release_channel(Some(""), "dev\n"), "dev");
+        assert_eq!(resolve_raw_release_channel(Some("   "), "dev\n"), "dev");
     }
 }

@@ -194,6 +194,11 @@ fn escape_link_destination(url: &str) -> String {
             ' ' => escaped.push_str("%20"),
             '\n' => escaped.push_str("%0A"),
             '\r' => escaped.push_str("%0D"),
+            // A backslash is an escape character even inside a pointy-bracket
+            // destination: a trailing one would turn the closing `>` into `\>`,
+            // so the link stops parsing. Double it to keep the original URL;
+            // percent-encoding here would silently change the URL's value.
+            '\\' => escaped.push_str("\\\\"),
             other => escaped.push(other),
         }
     }
@@ -664,5 +669,27 @@ mod tests {
         // Bold and italic start together; bold ends later so it must open first.
         let result = entities_to_markdown("abcdef", &[italic(0, 2), bold(0, 6)]).unwrap();
         assert_eq!(result, "**_ab_cdef**");
+    }
+
+    #[test]
+    fn link_destination_with_backslash_round_trips() {
+        // A backslash is one of the characters that selects the pointy-bracket
+        // destination form, but it stays an active escape character inside that
+        // form. A trailing one turns the closing `>` into `\>`, so the whole
+        // link stops parsing and the message keeps the raw markdown instead of
+        // the link. Escape the backslash so the original URL survives the
+        // round-trip unchanged.
+        for url in ["https://x/a\\b", "https://x/a\\"] {
+            let result = entities_to_markdown("docs", &[text_url(0, 4, url)]).expect("link");
+            let (text, entities) = grammers_client::parsers::parse_markdown_message(&result);
+            assert_eq!(text, "docs", "link syntax broke for {url:?}: {result:?}");
+            assert!(
+                entities.iter().any(|entity| matches!(
+                    entity,
+                    tl::enums::MessageEntity::TextUrl(parsed) if parsed.url == url
+                )),
+                "URL changed for {url:?}: {result:?}"
+            );
+        }
     }
 }

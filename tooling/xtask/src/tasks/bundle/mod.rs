@@ -54,7 +54,7 @@ pub struct BundleArgs {
     /// Release channel baked into the binary and the bundle name. Defaults to
     /// the shipping channel, so `cargo xtask bundle` produces a release build;
     /// `cargo run` and `cargo build` stay on `dev`.
-    #[arg(long, value_enum, default_value = "stable")]
+    #[arg(long, value_enum)]
     channel: Option<Channel>,
     /// Comma-separated artifact formats (repeatable). Defaults to the target's
     /// shipped default.
@@ -110,9 +110,7 @@ pub struct Context {
 
 pub fn run_bundle(args: BundleArgs) -> Result<()> {
     let workspace = std::env::current_dir()?;
-    let channel = args
-        .channel
-        .unwrap_or_else(|| Channel::detect_shipping(&workspace));
+    let channel = args.channel.unwrap_or_else(Channel::detect_shipping);
     let targets = if args.targets.is_empty() {
         vec![Target::host_default()]
     } else {

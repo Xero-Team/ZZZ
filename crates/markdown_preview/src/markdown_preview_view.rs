@@ -945,7 +945,6 @@ impl MarkdownPreviewView {
                         workspace_directory.as_deref(),
                         project.as_ref(),
                         source_project_path.as_ref(),
-                        PathStyle::local(),
                         cx,
                     )
                 }
@@ -1212,17 +1211,34 @@ fn open_preview_path_with_position(
         .detach_and_log_err(cx);
 }
 
+/// Percent-decode a Markdown image destination. A malformed escape falls back
+/// to the original text, so a broken URL is still treated as a local path.
+fn decode_image_destination(dest_url: &str) -> String {
+    urlencoding::decode(dest_url)
+        .map_or_else(|_| dest_url.to_owned(), |decoded| decoded.into_owned())
+}
+
+/// A leading `/` or `\` addresses a path from the workspace root instead of
+/// the Markdown source's directory. Return the path without that prefix.
+/// Preview rendering and clipboard embedding share this rule so both always
+/// interpret the same destination identically.
+fn strip_workspace_root_prefix(decoded: &str) -> Option<&str> {
+    ['/', '\\']
+        .iter()
+        .find_map(|prefix| decoded.strip_prefix(*prefix))
+}
+
 /// Resolves a Markdown image destination to a client-side filesystem path.
 /// This is the local-workspace fallback used when no project context is
 /// available, and by the clipboard resolver, which can only embed bytes from
-/// the local filesystem.
+/// the local filesystem. Client paths always use the host's native style.
 fn resolve_local_preview_image_path(
     decoded: &str,
     workspace_relative_path: Option<&str>,
     base_directory: Option<&Path>,
     workspace_directory: Option<&Path>,
-    client_path_style: PathStyle,
 ) -> Option<PathBuf> {
+    let client_path_style = PathStyle::local();
     let path = if let (Some(stripped), Some(root)) = (workspace_relative_path, workspace_directory)
     {
         client_path_style.join(root, Path::new(stripped))?
@@ -1242,7 +1258,6 @@ fn resolve_preview_image(
     workspace_directory: Option<&Path>,
     project: Option<&Entity<Project>>,
     source_project_path: Option<&ProjectPath>,
-    client_path_style: PathStyle,
     cx: &App,
 ) -> Option<ImageSource> {
     if dest_url.starts_with("data:") {
@@ -1255,11 +1270,8 @@ fn resolve_preview_image(
         ))));
     }
 
-    let decoded = urlencoding::decode(dest_url)
-        .map_or_else(|_| dest_url.to_owned(), |decoded| decoded.into_owned());
-    let workspace_relative_path = ['/', '\\']
-        .iter()
-        .find_map(|prefix| decoded.strip_prefix(*prefix));
+    let decoded = decode_image_destination(dest_url);
+    let workspace_relative_path = strip_workspace_root_prefix(&decoded);
 
     if let (Some(project), Some(source_project_path)) = (project, source_project_path) {
         let project_path = resolve_project_path_for_preview_image(
@@ -1295,7 +1307,6 @@ fn resolve_preview_image(
         workspace_relative_path,
         base_directory,
         workspace_directory,
-        client_path_style,
     )?;
 
     Some(ImageSource::Resource(Resource::Path(Arc::from(
@@ -1359,17 +1370,13 @@ fn resolve_preview_clipboard_image_src(
         return None;
     }
 
-    let decoded = urlencoding::decode(dest_url)
-        .map_or_else(|_| dest_url.to_owned(), |decoded| decoded.into_owned());
-    let workspace_relative_path = ['/', '\\']
-        .iter()
-        .find_map(|prefix| decoded.strip_prefix(*prefix));
+    let decoded = decode_image_destination(dest_url);
+    let workspace_relative_path = strip_workspace_root_prefix(&decoded);
     let path = resolve_local_preview_image_path(
         &decoded,
         workspace_relative_path,
         base_directory,
         workspace_directory,
-        PathStyle::local(),
     )?;
 
     embed_local_image_for_clipboard(&path, cx).or_else(|| file_url_for_path(&path))
@@ -2237,9 +2244,36 @@ mod tests {
     };
 
     use super::{
-        ImageSource, MarkdownPreviewView, Resource, filter_non_rendered_matches,
-        preview_path_with_position, resolve_preview_clipboard_image_src, resolve_preview_image,
+        ImageSource, MarkdownPreviewView, Resource, decode_image_destination,
+        filter_non_rendered_matches, preview_path_with_position,
+        resolve_preview_clipboard_image_src, resolve_preview_image, strip_workspace_root_prefix,
     };
+
+    #[test]
+    fn decodes_image_destinations_and_falls_back_on_malformed_escapes() {
+        assert_eq!(
+            decode_image_destination("images/a%20b.png"),
+            "images/a b.png"
+        );
+        assert_eq!(decode_image_destination("plain.png"), "plain.png");
+        // Invalid UTF-8 in a percent escape is the only reason `decode` fails;
+        // the original text must survive so it is still treated as a local path.
+        assert_eq!(decode_image_destination("bad%FF.png"), "bad%FF.png");
+    }
+
+    #[test]
+    fn strips_both_workspace_root_prefixes() {
+        assert_eq!(
+            strip_workspace_root_prefix("/assets/pic.png"),
+            Some("assets/pic.png")
+        );
+        assert_eq!(
+            strip_workspace_root_prefix("\\assets\\pic.png"),
+            Some("assets\\pic.png")
+        );
+        assert_eq!(strip_workspace_root_prefix("pic.png"), None);
+        assert_eq!(strip_workspace_root_prefix(""), None);
+    }
 
     #[test]
     fn filters_matches_in_non_rendered_link_source() {
@@ -2331,7 +2365,6 @@ mod tests {
                     Some(&workspace_directory),
                     None,
                     None,
-                    util::paths::PathStyle::local(),
                     cx,
                 );
                 assert_resolved_preview_image_path(resolved, image_file.as_path());
@@ -2343,7 +2376,6 @@ mod tests {
                 Some(&workspace_directory),
                 None,
                 None,
-                util::paths::PathStyle::local(),
                 cx,
             );
             assert!(missing.is_none());
@@ -2376,7 +2408,6 @@ mod tests {
                 None,
                 Some(&project),
                 Some(&source_project_path),
-                util::paths::PathStyle::local(),
                 cx,
             );
             assert!(
@@ -2391,7 +2422,6 @@ mod tests {
                 None,
                 Some(&project),
                 Some(&source_project_path),
-                util::paths::PathStyle::local(),
                 cx,
             );
             assert!(matches!(resolved, Some(ImageSource::Custom(_))));
@@ -2404,7 +2434,6 @@ mod tests {
                     None,
                     Some(&project),
                     Some(&source_project_path),
-                    util::paths::PathStyle::local(),
                     cx,
                 ),
                 Some(ImageSource::Resource(Resource::Uri(_)))
@@ -2416,7 +2445,6 @@ mod tests {
                     None,
                     Some(&project),
                     Some(&source_project_path),
-                    util::paths::PathStyle::local(),
                     cx,
                 )
                 .is_none()

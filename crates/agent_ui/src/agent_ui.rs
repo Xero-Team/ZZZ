@@ -113,12 +113,8 @@ pub(crate) fn resolve_agent_image(
         // Try the destination as written, then as relative to every worktree
         // root. `find_project_path` works in remote workspaces too, since it
         // matches against the worktree's own (remote) absolute path.
-        let mut candidate_paths = vec![decoded.clone()];
-        candidate_paths.extend(
-            worktree_roots
-                .iter()
-                .map(|root| root.join(&decoded).to_string_lossy().into_owned()),
-        );
+        let mut candidate_paths = vec![PathBuf::from(decoded.as_str())];
+        candidate_paths.extend(worktree_roots.iter().map(|root| root.join(&decoded)));
 
         for candidate in &candidate_paths {
             let project_path = project.read(cx).find_project_path(candidate, cx);
