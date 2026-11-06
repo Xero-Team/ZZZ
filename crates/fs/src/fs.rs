@@ -502,8 +502,13 @@ impl FileHandle for std::fs::File {
         // `kinfo_file` is a plain C struct made of integers, so an all-zero value is valid
         // and only the size field has to be populated before the call.
         let mut kif = MaybeUninit::<libc::kinfo_file>::zeroed();
+        // `kf_structsize` is the byte size of the struct. libc defines the
+        // `KINFO_FILE_SIZE` constant only on the x86 FreeBSD architectures, so
+        // derive it from the type itself to keep every architecture building.
+        let structsize = libc::c_int::try_from(std::mem::size_of::<libc::kinfo_file>())
+            .map_err(|_| anyhow::anyhow!("kinfo_file does not fit in kf_structsize"))?;
         // SAFETY: `MaybeUninit::zeroed` produced a valid `kinfo_file`.
-        unsafe { kif.assume_init_mut().kf_structsize = libc::KINFO_FILE_SIZE };
+        unsafe { kif.assume_init_mut().kf_structsize = structsize };
 
         let result = unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_KINFO, kif.as_mut_ptr()) };
         anyhow::ensure!(result != -1, "fcntl returned -1");

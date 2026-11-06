@@ -55,6 +55,13 @@ Each architecture uses its own sysroot under
 archives against the pinned 14.5-RELEASE SHA256 sums, so the libc and headers
 in every FreeBSD artifact are reproducible.
 
+`base.txz` is a minimal system, so the image also installs the FreeBSD 14
+X11, ALSA, fontconfig, Wayland, and FFmpeg package closure into each sysroot.
+Their `.pc` files and libraries live under `usr/local`, where the target-specific
+`PKG_CONFIG_*` variables set by `freebsd.rs::apply` find them. `script/freebsd-packages.py`
+computes the package set; it is one of the hashed image inputs, so editing it
+produces a new image tag.
+
 > **Note:** A native FreeBSD host builds its own targets without the image.
 > Use `cargo xtask bundle --target x86_64-unknown-freebsd` there.
 

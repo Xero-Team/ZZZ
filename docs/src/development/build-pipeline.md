@@ -211,13 +211,13 @@ cargo xtask build --container never      # accept the host's floor
 
 The image is defined by `Dockerfile-toolchain`. Its tag is a hash of the files
 that define the toolchain, so editing the Dockerfile, `script/linux`,
-`script/install-cmake` (or the release helper it sources), or
-`rust-toolchain.toml` produces a new tag instead of silently reusing a stale
-image. The FreeBSD sysroots, clang/lld wrappers, and `rust-std` targets are
-part of that Dockerfile, so a change to the FreeBSD toolchain produces a new
-tag too. `cargo xtask doctor` prints the tag and the exact build command when
-the image is missing; the plan builds it on demand before the first task that
-needs it.
+`script/install-cmake` (or the release helper it sources),
+`script/freebsd-packages.py`, or `rust-toolchain.toml` produces a new tag
+instead of silently reusing a stale image. The FreeBSD sysroots, GUI package
+closure, clang/lld wrappers, and `rust-std` targets are part of that Dockerfile
+and its helper, so a change to the FreeBSD toolchain produces a new tag too.
+`cargo xtask doctor` prints the tag and the exact build command when the image
+is missing; the plan builds it on demand before the first task that needs it.
 
 The base image is pinned by digest, so a rebuild does not pick up a newer Ubuntu
 point release. `ZZZ_BASE_IMAGE=debian:bookworm` swaps the base for a one-off

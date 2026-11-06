@@ -196,20 +196,28 @@ fn assemble_app(context: &Context) -> Result<PathBuf> {
 /// one. The manifest edit is restored even when cargo-bundle fails.
 fn cargo_bundle(context: &Context) -> Result<PathBuf> {
     let manifest = context.workspace.join("crates/zzz/Cargo.toml");
+
+    // The aarch64 and x86_64 macOS bundle tasks run in parallel and rewrite
+    // this same manifest. Hold a cross-process exclusive lock over the whole
+    // read -> rewrite -> cargo bundle -> restore window so neither task ever
+    // reads the other's temporary table promotion. The lock lives in the shared
+    // target dir (both containers bind-mount it) and is released when
+    // `lock_file` drops at the end of this function.
+    let lock_path = context.target_dir.join(".zzz-cargo-bundle.lock");
+    fs::create_dir_all(&context.target_dir)
+        .with_context(|| format!("failed to create {}", context.target_dir.display()))?;
+    let lock_file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(&lock_path)
+        .with_context(|| format!("failed to open {}", lock_path.display()))?;
+    lock_file
+        .lock()
+        .with_context(|| format!("failed to lock {}", lock_path.display()))?;
+
     let original = fs::read_to_string(&manifest)
         .with_context(|| format!("failed to read {}", manifest.display()))?;
-    // `dev` is already the default table; only the named release channels carry
-    // a `bundle-<channel>` table that has to be promoted for cargo-bundle.
-    let rewritten = if context.channel == Channel::Dev {
-        original.clone()
-    } else {
-        let from = format!("package.metadata.bundle-{}", context.channel.as_str());
-        let rewritten = original.replace(&from, "package.metadata.bundle");
-        if rewritten == original {
-            bail!("{} does not declare [{from}]", manifest.display());
-        }
-        rewritten
-    };
+    let rewritten = promote_channel_tables(&original, context.channel, &manifest)?;
     let mut guard = None;
     if rewritten != original {
         fs::write(&manifest, rewritten)
@@ -259,6 +267,40 @@ fn cargo_bundle(context: &Context) -> Result<PathBuf> {
         );
     }
     Ok(path)
+}
+
+/// Prepares the manifest text `cargo-bundle` reads. Zed's cargo-bundle fork
+/// looks only at `package.metadata.bundle` / `package.metadata.bundle.bin.zzz`,
+/// so for a named release channel we promote that channel's `bundle-<channel>`
+/// tables into those names. The `dev` channel is already the default and needs
+/// no edit.
+///
+/// The manifest also declares the `dev` tables under the promoted names, so they
+/// have to be parked under an inert name first: a plain promotion would leave
+/// two `[package.metadata.bundle]` tables (and two `...bin.zzz` tables), and
+/// `cargo metadata` would fail with `duplicate key`. The parked tables live only
+/// in the temporary file; `ManifestGuard` restores the original as soon as
+/// cargo-bundle finishes.
+fn promote_channel_tables(original: &str, channel: Channel, manifest: &Path) -> Result<String> {
+    if channel == Channel::Dev {
+        return Ok(original.to_owned());
+    }
+
+    let from = format!("package.metadata.bundle-{}", channel.as_str());
+    if !original.contains(&format!("[{from}]")) {
+        bail!("{} does not declare [{from}]", manifest.display());
+    }
+
+    Ok(original
+        .replace(
+            "[package.metadata.bundle]",
+            "[package.metadata.bundle-dev-parked]",
+        )
+        .replace(
+            "[package.metadata.bundle.bin.zzz]",
+            "[package.metadata.bundle-dev-parked.bin.zzz]",
+        )
+        .replace(&from, "package.metadata.bundle"))
 }
 
 struct ManifestGuard {
@@ -886,5 +928,77 @@ mod tests {
         let stripped = strip_associated_domains(source);
         assert!(!stripped.contains("associated-domains"));
         assert!(stripped.contains("<key>other</key>"));
+    }
+
+    // Minimal manifest with the same shape as crates/zzz/Cargo.toml: a `dev`
+    // default table plus a named-channel pair. A plain promotion would leave
+    // two `[package.metadata.bundle]` tables, which `cargo metadata` rejects
+    // with `duplicate key`.
+    const MANIFEST: &str = r#"
+[package]
+name = "zzz"
+version = "1.0.0"
+
+[package.metadata.bundle]
+name = "ZZZ Dev"
+identifier = "dev.zzz.ZZZ-Dev"
+
+[package.metadata.bundle.bin.zzz]
+name = "ZZZ Dev"
+
+[package.metadata.bundle-stable]
+name = "ZZZ"
+identifier = "dev.zzz.ZZZ"
+
+[package.metadata.bundle-stable.bin.zzz]
+name = "ZZZ"
+
+[package.metadata.bundle-nightly]
+name = "ZZZ Nightly"
+"#;
+
+    #[test]
+    fn promotion_produces_a_parseable_manifest() {
+        let manifest = std::path::Path::new("Cargo.toml");
+        let rewritten = promote_channel_tables(MANIFEST, Channel::Stable, manifest).unwrap();
+
+        // The exact operation that failed in `cargo bundle`: parsing the
+        // promoted manifest must not report a duplicate key.
+        let parsed: toml::Value = toml::from_str(&rewritten)
+            .expect("promoted manifest must be valid TOML (no duplicate keys)");
+        let metadata = &parsed["package"]["metadata"];
+
+        // The stable tables are now the default ones cargo-bundle reads.
+        assert_eq!(metadata["bundle"]["name"].as_str(), Some("ZZZ"));
+        assert_eq!(
+            metadata["bundle"]["bin"]["zzz"]["name"].as_str(),
+            Some("ZZZ")
+        );
+        // The dev tables were parked, not deleted or left colliding.
+        assert_eq!(
+            metadata["bundle-dev-parked"]["name"].as_str(),
+            Some("ZZZ Dev")
+        );
+        // The promoted channel's own name is gone; unrelated channels stay.
+        assert!(metadata.get("bundle-stable").is_none());
+        assert_eq!(
+            metadata["bundle-nightly"]["name"].as_str(),
+            Some("ZZZ Nightly")
+        );
+    }
+
+    #[test]
+    fn dev_channel_is_left_untouched() {
+        let manifest = std::path::Path::new("Cargo.toml");
+        let rewritten = promote_channel_tables(MANIFEST, Channel::Dev, manifest).unwrap();
+        assert_eq!(rewritten, MANIFEST);
+    }
+
+    #[test]
+    fn missing_channel_table_is_rejected() {
+        let manifest = std::path::Path::new("Cargo.toml");
+        let result = promote_channel_tables(MANIFEST, Channel::Preview, manifest);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("bundle-preview"));
     }
 }

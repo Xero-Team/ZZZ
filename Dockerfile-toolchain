@@ -6,8 +6,9 @@
 # release built on a rolling distribution only starts there. Building inside a
 # pinned image turns "which machine built this" into a recorded input: the tag
 # is hashed from this file, `script/linux`, `script/install-cmake` (and the
-# helper it sources), and `rust-toolchain.toml`, so editing any of them produces
-# a new tag instead of silently reusing a stale image.
+# helper it sources), `script/freebsd-packages.py`, and `rust-toolchain.toml`,
+# so editing any of them produces a new tag instead of silently reusing a stale
+# image.
 #
 # The image covers the Linux release build, the macOS cross build (zig,
 # cargo-zigbuild, Zed's cargo-bundle, hfsprogs, libdmg-hfsplus, and the macOS
@@ -328,6 +329,23 @@ RUN if [ "${WITH_MSVC}" = "1" ]; then \
     fi
 
 ENV MSVC_ROOT=/opt/msvc
+
+# `base.txz` is a minimal system: it has no X11, ALSA, fontconfig, Wayland, or
+# FFmpeg development files. The GUI links against those libraries through
+# `pkg-config`, so install their FreeBSD 14 package closure into each sysroot.
+# `freebsd.rs::apply` points the target-specific `PKG_CONFIG_*` variables at
+# `usr/local/{libdata,share}/pkgconfig` inside the sysroot, which is exactly
+# where FreeBSD packages place their `.pc` files and libraries.
+#
+# This is the last layer on purpose: the slow `base.txz` and MSVC downloads
+# above stay cached when only the package set changes. `zstd` is needed to
+# unpack `packagesite.pkg` and each `.pkg`; `python3` drives the downloader.
+COPY script/freebsd-packages.py script/freebsd-packages.py
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends python3 zstd \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 script/freebsd-packages.py --arch amd64 --dest /opt/freebsd/sysroot/amd64 \
+    && python3 script/freebsd-packages.py --arch arm64 --dest /opt/freebsd/sysroot/arm64
 
 # The build container is disposable: it must not accumulate a home directory or
 # a target directory of its own, because both are mounted from the host.

@@ -53,6 +53,7 @@ pub mod profiler;
     feature = "test-support",
     target_os = "windows",
     target_os = "linux",
+    target_os = "freebsd",
     target_family = "wasm"
 ))]
 #[expect(missing_docs)]
@@ -156,6 +157,7 @@ pub use profiler::*;
     feature = "test-support",
     target_os = "windows",
     target_os = "linux",
+    target_os = "freebsd",
     target_family = "wasm"
 ))]
 pub use queue::{PriorityQueueReceiver, PriorityQueueSender};

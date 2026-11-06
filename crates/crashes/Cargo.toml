@@ -14,10 +14,8 @@ path = "src/crashes.rs"
 [dependencies]
 async-process.workspace = true
 cfg-if.workspace = true
-crash-handler.workspace = true
 futures.workspace = true
 log.workspace = true
-minidumper.workspace = true
 parking_lot.workspace = true
 paths.workspace = true
 release_channel.workspace = true
@@ -25,6 +23,13 @@ serde.workspace = true
 serde_json.workspace = true
 system_specs.workspace = true
 zstd.workspace = true
+
+# `minidumper` pulls in `minidump-writer`, whose platform backends cover only
+# Linux, Android, Windows, and macOS; it does not compile on FreeBSD. The
+# FreeBSD implementation is a no-op, so neither crate is needed there.
+[target.'cfg(not(target_os = "freebsd"))'.dependencies]
+crash-handler.workspace = true
+minidumper.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 mach2.workspace = true

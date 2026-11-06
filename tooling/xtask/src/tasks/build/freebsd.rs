@@ -228,17 +228,56 @@ impl FreeBSDEnvironment {
             .env(sysroot_variable(target), &sysroot_value)
             .env("ZZZ_FREEBSD_SYSROOT", &sysroot_value);
         if let Some(cc) = &self.c_compiler {
-            command.env(format!("CC_{}", cc_key(target)), cc);
+            let cc_key = cc_key(target);
+            command
+                .env(format!("CC_{}", cc_key), cc)
+                .env(format!("CXX_{}", cc_key), cc);
         }
-        // bindgen and the C builds need the sysroot headers. `BINDGEN_*` is a
-        // clang argument; `CFLAGS`/`CXXFLAGS` reach cc-rs. `ZZZ_FREEBSD_SYSROOT`
-        // is also exported for build scripts that look for it; the linker
-        // wrapper itself hard-codes the path and needs none of these.
+        // bindgen and the C builds need the sysroot headers. These are
+        // target-specific on purpose: a plain `CFLAGS` would also be picked up
+        // by build scripts compiled for the host (proc-macro dependency chains
+        // such as bundled SQLite), which would then see FreeBSD headers through
+        // a host compiler that defines `__linux__` and fail on Linux-only
+        // symbols such as `mremap`. cc-rs reads `<var>_<target_u>` and bindgen
+        // reads `BINDGEN_EXTRA_CLANG_ARGS_<target_u>` for the target build,
+        // while host builds keep their own default flags. The linker/CC
+        // wrapper already hard-codes the sysroot for the compiler invocation,
+        // so these flags are belt-and-suspenders for bindgen and cc-rs.
+        let target_key = cc_key(target);
         let sysroot_flag = format!("--sysroot={}", sysroot.display());
         command
-            .env("BINDGEN_EXTRA_CLANG_ARGS", &sysroot_flag)
-            .env("CFLAGS", &sysroot_flag)
-            .env("CXXFLAGS", &sysroot_flag);
+            .env(
+                format!("BINDGEN_EXTRA_CLANG_ARGS_{}", target_key),
+                &sysroot_flag,
+            )
+            .env(format!("CFLAGS_{}", target_key), &sysroot_flag)
+            .env(format!("CXXFLAGS_{}", target_key), &sysroot_flag);
+        // The GUI's `-sys` crates (x11, alsa, fontconfig, freetype, wayland,
+        // ffmpeg) discover their libraries through `pkg-config`. In a cross
+        // build the default search path would find the host's libraries, so
+        // point the target-specific variables at the FreeBSD `.pc` files in
+        // the sysroot. `pkg-config` rewrites each `.pc` prefix through
+        // `PKG_CONFIG_SYSROOT_DIR`, which makes the reported `-I`/`-L` paths
+        // land inside the sysroot. The plain (host) variables are left alone:
+        // host/proc-macro build scripts read `<var>_<host>` or the unsuffixed
+        // name and must keep using host libraries.
+        let pkgconfig_dirs = [
+            sysroot.join("usr/local/libdata/pkgconfig"),
+            sysroot.join("usr/local/share/pkgconfig"),
+            sysroot.join("usr/libdata/pkgconfig"),
+        ]
+        .into_iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(":");
+        command
+            .env(format!("PKG_CONFIG_ALLOW_CROSS_{}", target_key), "1")
+            .env(
+                format!("PKG_CONFIG_SYSROOT_DIR_{}", target_key),
+                &sysroot_value,
+            )
+            .env(format!("PKG_CONFIG_LIBDIR_{}", target_key), &pkgconfig_dirs)
+            .env(format!("PKG_CONFIG_PATH_{}", target_key), &pkgconfig_dirs);
         if !rustflags.trim().is_empty() || !self.extra_rustflags.is_empty() {
             command
                 .env("RUSTFLAGS", compose(rustflags, &self.extra_rustflags))

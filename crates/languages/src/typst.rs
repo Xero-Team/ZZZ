@@ -24,6 +24,8 @@ impl TypstLspAdapter {
     const OS_NAME: &'static str = "apple-darwin";
     #[cfg(target_os = "linux")]
     const OS_NAME: &'static str = "unknown-linux-musl";
+    #[cfg(target_os = "freebsd")]
+    const OS_NAME: &'static str = "unknown-freebsd";
     #[cfg(target_os = "windows")]
     const OS_NAME: &'static str = "pc-windows-msvc";
 
