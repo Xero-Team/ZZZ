@@ -2616,6 +2616,7 @@ impl TelegramPanel {
             h_flex()
                 .w_full()
                 .px_2()
+                .py_1()
                 .gap_1p5()
                 .items_center()
                 .when(narrow, |this| {
@@ -2719,7 +2720,7 @@ impl TelegramPanel {
                 h_flex()
                     .flex_none()
                     .w_full()
-                    .h(Tab::container_height(cx))
+                    .min_h(Tab::container_height(cx))
                     .border_b_1()
                     .border_color(cx.theme().colors().border)
                     .child(self.render_centered(header, cx)),

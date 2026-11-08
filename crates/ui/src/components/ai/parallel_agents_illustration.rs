@@ -1,5 +1,6 @@
 use crate::{DiffStat, Divider, prelude::*};
 use gpui::{Animation, AnimationExt, pulsating_between};
+use i18n::tr;
 use std::time::Duration;
 
 #[derive(IntoElement)]
@@ -13,6 +14,24 @@ impl ParallelAgentsIllustration {
 
 impl RenderOnce for ParallelAgentsIllustration {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let fix_branch_label: SharedString = tr(
+            cx,
+            "ui.parallel_agents_illustration.fix_branch_label",
+            "Fix branch label",
+        )
+        .into();
+        let improve_thread_id: SharedString = tr(
+            cx,
+            "ui.parallel_agents_illustration.improve_thread_id",
+            "Improve thread id",
+        )
+        .into();
+        let refactor_archive_view: SharedString = tr(
+            cx,
+            "ui.parallel_agents_illustration.refactor_archive_view",
+            "Refactor archive view",
+        )
+        .into();
         let icon_container = || h_flex().size_4().flex_shrink_0().justify_center();
 
         let loading_bar = |id: &'static str, width: DefiniteLength, duration_ms: u64| {
@@ -103,7 +122,7 @@ impl RenderOnce for ParallelAgentsIllustration {
             .col_span(3)
             .bg(cx.theme().colors().elevated_surface_background)
             .child(agent(
-                "Fix branch label".into(),
+                fix_branch_label.clone(),
                 IconName::ZZZAgent,
                 true,
                 vec![
@@ -118,7 +137,7 @@ impl RenderOnce for ParallelAgentsIllustration {
             ))
             .child(Divider::horizontal())
             .child(agent(
-                "Improve thread id".into(),
+                improve_thread_id,
                 IconName::AiClaude,
                 false,
                 vec![
@@ -131,7 +150,7 @@ impl RenderOnce for ParallelAgentsIllustration {
             ))
             .child(Divider::horizontal())
             .child(agent(
-                "Refactor archive view".into(),
+                refactor_archive_view,
                 IconName::AiOpenAi,
                 false,
                 vec![
@@ -157,7 +176,7 @@ impl RenderOnce for ParallelAgentsIllustration {
                     .border_b_1()
                     .border_color(cx.theme().colors().border.opacity(0.5))
                     .child(
-                        Label::new("Fix branch label")
+                        Label::new(fix_branch_label.clone())
                             .size(LabelSize::XSmall)
                             .color(Color::Muted),
                     )

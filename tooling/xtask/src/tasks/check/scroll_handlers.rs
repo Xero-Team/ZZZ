@@ -44,6 +44,7 @@ const LIST_STATE_METHODS: &[&str] = &[
     "scrollbar_drag_started",
     "set_follow_mode",
     "set_offset_from_scrollbar",
+    "set_scroll_handler",
     "splice",
     "splice_focusable",
     "viewport_bounds",
@@ -213,6 +214,24 @@ mod tests {
         assert_eq!(
             findings(source),
             vec!["test.rs:4: synchronous .is_following_tail() inside a scroll handler"]
+        );
+    }
+
+    #[test]
+    fn rejects_a_nested_scroll_handler_registration() {
+        // `set_scroll_handler` calls `self.0.borrow_mut()` in list.rs, so
+        // re-registering a handler synchronously inside a running handler
+        // re-enters the same RefCell and panics just like any other borrow.
+        let source = r#"
+            fn install(state: ListState) {
+                state.set_scroll_handler(move |_, _, _| {
+                    state.set_scroll_handler(|_, _, _| {});
+                });
+            }
+        "#;
+        assert_eq!(
+            findings(source),
+            vec!["test.rs:4: synchronous .set_scroll_handler() inside a scroll handler"]
         );
     }
 

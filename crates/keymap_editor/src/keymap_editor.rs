@@ -1287,19 +1287,33 @@ impl KeymapEditor {
         }
     }
 
-    fn render_no_matches_hint(&self, _window: &mut Window, _cx: &App) -> AnyElement {
+    fn render_no_matches_hint(&self, _window: &mut Window, cx: &App) -> AnyElement {
         let hint = match (self.filter_state, &self.search_mode) {
             (FilterState::Conflicts, _) => {
                 if self.keybinding_conflict_state.any_user_binding_conflicts() {
-                    "No conflicting keybinds found that match the provided query"
+                    tr(
+                        cx,
+                        "keymap_editor.no_matches.conflicts_filtered",
+                        "No conflicting keybinds found that match the provided query",
+                    )
                 } else {
-                    "No conflicting keybinds found"
+                    tr(
+                        cx,
+                        "keymap_editor.no_matches.conflicts",
+                        "No conflicting keybinds found",
+                    )
                 }
             }
-            (FilterState::All, SearchMode::KeyStroke { .. }) => {
-                "No keybinds found matching the entered keystrokes"
-            }
-            (FilterState::All, SearchMode::Normal) => "No matches found for the provided query",
+            (FilterState::All, SearchMode::KeyStroke { .. }) => tr(
+                cx,
+                "keymap_editor.no_matches.keystrokes",
+                "No keybinds found matching the entered keystrokes",
+            ),
+            (FilterState::All, SearchMode::Normal) => tr(
+                cx,
+                "keymap_editor.no_matches.normal",
+                "No matches found for the provided query",
+            ),
         };
 
         Label::new(hint).color(Color::Muted).into_any_element()
@@ -1979,8 +1993,8 @@ fn muted_styled_text(text: SharedString, cx: &App) -> StyledText {
 impl Item for KeymapEditor {
     type Event = ();
 
-    fn tab_content_text(&self, _detail: usize, _cx: &App) -> ui::SharedString {
-        "Keymap Editor".into()
+    fn tab_content_text(&self, _detail: usize, cx: &App) -> ui::SharedString {
+        tr(cx, "keymap_editor.tab_title", "Keymap Editor").into()
     }
 }
 
@@ -1989,11 +2003,12 @@ impl Render for KeymapEditor {
         if let SearchMode::KeyStroke { exact_match } = self.search_mode {
             let button = IconButton::new("keystrokes-exact-match", IconName::CaseSensitive)
                 .tooltip(move |_window, cx| {
-                    Tooltip::for_action(
-                        "Toggle Exact Match Mode",
-                        &ToggleExactKeystrokeMatching,
+                    let title = tr(
                         cx,
-                    )
+                        "keymap_editor.tooltip.toggle_exact_match",
+                        "Toggle Exact Match Mode",
+                    );
+                    Tooltip::for_action(title, &ToggleExactKeystrokeMatching, cx)
                 })
                 .shape(IconButtonShape::Square)
                 .toggle_state(exact_match)

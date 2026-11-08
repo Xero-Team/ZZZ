@@ -1,10 +1,13 @@
-//! Verifies that every `i18n::tr` fallback in Rust sources equals its key's
-//! value in `assets/locales/en.json`.
+//! Verifies that every `i18n::tr` call site in Rust sources uses a key that
+//! exists in `assets/locales/en.json` and a fallback equal to its value.
 //!
 //! `i18n::tr` only uses the `fallback` argument when the key is missing from
 //! both catalogs, so a drifted fallback is invisible at runtime and silently
-//! rots. `check locale-keys` compares the en/zh *key sets* but never looks at
-//! the in-code fallback strings, leaving the `Z-I18N-FB` rule unenforced.
+//! rots. `check locale-keys` compares only the en/zh catalog *key sets*; it
+//! never reads Rust sources, so neither the `Z-I18N-FB` fallback rule nor the
+//! existence of in-code keys is enforced anywhere else. This gate parses the
+//! call sites with `syn` and asserts that every literal key exists in
+//! `en.json` and that its fallback equals the catalog value.
 //!
 //! A plain text search is not enough here: Rust string escapes and the
 //! line-continuation `\` syntax change a literal's value, and `tr(...)` text
@@ -61,14 +64,14 @@ pub fn check() -> Result<()> {
     }
     findings.sort();
     bail!(
-        "in-code i18n fallbacks drift from {EN_CATALOG} (keep each fallback identical to the en.json value):\n{}",
+        "in-code i18n calls disagree with {EN_CATALOG} (each key must exist in the catalog and each fallback must equal its value):\n{}",
         findings.join("\n")
     )
 }
 
-/// Returns `file:line: ...` for every `tr` call whose fallback differs from the
-/// catalog value. Unknown keys and non-literal arguments are skipped: missing
-/// keys are the `locale-keys` gate's concern, and a computed fallback cannot be
+/// Returns `file:line: ...` for every `tr` call whose literal key is absent
+/// from the catalog or whose literal fallback differs from the catalog value.
+/// Non-literal arguments are skipped: a computed key or fallback cannot be
 /// compared against a static catalog entry.
 fn scan_file(file: &File, entries: &HashMap<String, String>, file_label: &str) -> Vec<String> {
     let mut visitor = FallbackVisitor {
@@ -93,16 +96,25 @@ impl<'ast> Visit<'ast> for FallbackVisitor<'_> {
             // Every `tr` wrapper takes `(cx, key, fallback)`; tolerate a future
             // extra argument so the fallback check is not silently skipped.
             if arguments.len() >= 3
-                && let (Some(key), Some(fallback)) =
-                    (string_literal(arguments[1]), string_literal(arguments[2]))
-                && let Some(expected) = self.entries.get(&key)
-                && fallback != *expected
+                && let Some(key) = string_literal(arguments[1])
             {
-                self.findings.push(format!(
-                    "{}:{}: fallback for `{key}` is {fallback:?}, but {EN_CATALOG} has {expected:?}",
-                    self.file_label,
-                    call.span().start().line,
-                ));
+                let line = call.span().start().line;
+                match self.entries.get(&key) {
+                    None => self.findings.push(format!(
+                        "{}:{}: key `{key}` is not present in {EN_CATALOG}",
+                        self.file_label, line,
+                    )),
+                    Some(expected) => {
+                        if let Some(fallback) = string_literal(arguments[2])
+                            && fallback != *expected
+                        {
+                            self.findings.push(format!(
+                                "{}:{}: fallback for `{key}` is {fallback:?}, but {EN_CATALOG} has {expected:?}",
+                                self.file_label, line,
+                            ));
+                        }
+                    }
+                }
             }
         }
         visit::visit_expr_call(self, call);
@@ -185,19 +197,45 @@ mod tests {
     }
 
     #[test]
-    fn ignores_non_literal_and_unknown_key_calls() {
-        // A computed fallback cannot be compared statically.
+    fn reports_an_unknown_key() {
+        let result = findings(
+            r#"fn f(cx: &App) { tr(cx, "missing.key", "wrong"); }"#,
+            &[("k", "right")],
+        );
+        assert_eq!(
+            result.len(),
+            1,
+            "a key absent from en.json must be reported"
+        );
+        assert!(result[0].contains("test.rs:1:"), "{result:?}");
+        assert!(result[0].contains("missing.key"), "{result:?}");
+    }
+
+    #[test]
+    fn reports_an_unknown_key_even_with_a_computed_fallback() {
+        // The existence check does not depend on a literal fallback: a typo in
+        // the key must be caught even when the fallback is computed.
+        let result = findings(
+            r#"fn f(cx: &App) { tr(cx, "missing.key", DEFAULT_TITLE); }"#,
+            &[("k", "right")],
+        );
+        assert_eq!(result.len(), 1, "{result:?}");
+    }
+
+    #[test]
+    fn ignores_computed_keys_and_non_literal_fallbacks() {
+        // A computed key cannot be compared statically against the catalog.
         assert!(
             findings(
-                r#"fn f(cx: &App) { tr(cx, "k", DEFAULT_TITLE); }"#,
+                r#"fn f(cx: &App) { tr(cx, key, DEFAULT_TITLE); }"#,
                 &[("k", "right")],
             )
             .is_empty()
         );
-        // A key absent from the catalog is the locale-keys gate's concern.
+        // A key that exists but a computed fallback cannot be compared.
         assert!(
             findings(
-                r#"fn f(cx: &App) { tr(cx, "unknown", "wrong"); }"#,
+                r#"fn f(cx: &App) { tr(cx, "k", DEFAULT_TITLE); }"#,
                 &[("k", "right")],
             )
             .is_empty()

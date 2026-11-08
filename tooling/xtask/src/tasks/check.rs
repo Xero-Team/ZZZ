@@ -23,9 +23,15 @@ use std::process::Command;
 use anyhow::{Context as _, Result, bail};
 use clap::{Args, Subcommand, ValueEnum};
 
+mod ci_wiring;
 mod gpui_api;
 mod keymaps;
+mod lints_inheritance;
+mod locale_catalog;
 mod locale_fallbacks;
+mod locale_placeholders;
+mod module_layout;
+mod msrv;
 mod scroll_handlers;
 
 #[derive(Args)]
@@ -37,8 +43,9 @@ pub struct CheckArgs {
 #[derive(Subcommand)]
 enum CheckCommand {
     /// Every gate CI runs: markers, keymaps, scroll handlers, licenses,
-    /// locale catalog keys and in-code fallbacks, DCO, philosophy, ledger,
-    /// workflows, and the `gpui` public API snapshot.
+    /// module layout, MSRV consistency, lint inheritance, locale catalog
+    /// structure, keys, i18n call sites and catalog values, DCO, philosophy,
+    /// ledger, workflows, CI gate wiring, and the `gpui` public API snapshot.
     All,
     /// Reject leftover markers for unfinished work.
     Todos,
@@ -48,10 +55,20 @@ enum CheckCommand {
     ScrollHandlers,
     /// Require a `LICENSE-AGPL` symlink in every crate directory.
     Licenses,
+    /// Reject new `mod.rs` module files outside vendored sources.
+    ModuleLayout,
+    /// Require the pinned Rust toolchain version to agree across its sources.
+    Msrv,
+    /// Require every workspace member to opt into `[workspace.lints]`.
+    LintsInheritance,
+    /// Reject duplicate keys, malformed keys, and blank values in the catalogs.
+    LocaleCatalog,
     /// Require the locale catalogs to have identical key sets.
     LocaleKeys,
-    /// Require in-code `i18n::tr` fallbacks to match the English catalog.
+    /// Require in-code `i18n::tr` keys to exist and fallbacks to match the catalog.
     LocaleFallbacks,
+    /// Require en/zh catalog values to agree on format placeholders.
+    LocalePlaceholders,
     /// Require DCO sign-off on recent non-merge commits.
     Dco,
     /// Run ShellCheck over the scripts in the repository root's `script/`.
@@ -68,6 +85,8 @@ enum CheckCommand {
     UpstreamLedger,
     /// Validate the `run:` patterns in the GitHub workflow files.
     Workflows,
+    /// Require CI to keep invoking the repository gates.
+    CiWiring,
     /// Compare the `gpui` crate's public item signatures against a snapshot.
     GpuiApi(gpui_api::GpuiApiArgs),
     /// Check documentation links with `lychee` (needs it on `PATH`).
@@ -104,14 +123,20 @@ pub fn run_check(args: CheckArgs) -> Result<()> {
         CheckCommand::Keys => keymaps::check(),
         CheckCommand::ScrollHandlers => scroll_handlers::check(),
         CheckCommand::Licenses => check_licenses(),
+        CheckCommand::ModuleLayout => module_layout::check(),
+        CheckCommand::Msrv => msrv::check(),
+        CheckCommand::LintsInheritance => lints_inheritance::check(),
+        CheckCommand::LocaleCatalog => locale_catalog::check(),
         CheckCommand::LocaleKeys => check_locale_keys(),
         CheckCommand::LocaleFallbacks => locale_fallbacks::check(),
+        CheckCommand::LocalePlaceholders => locale_placeholders::check(),
         CheckCommand::Dco => check_dco(),
         CheckCommand::Shellcheck { severity } => check_shellcheck(severity),
         CheckCommand::Vendor => run_script(&["script/vendor-sync", "check"], "vendor check"),
         CheckCommand::Philosophy => check_philosophy(),
         CheckCommand::UpstreamLedger => check_upstream_ledger(),
         CheckCommand::Workflows => check_workflows(),
+        CheckCommand::CiWiring => ci_wiring::check(),
         CheckCommand::GpuiApi(args) => gpui_api::check(args),
         CheckCommand::Links { all } => check_links(all),
     }
@@ -126,12 +151,18 @@ fn run_all() -> Result<()> {
         ("keymaps", keymaps::check),
         ("scroll handlers", scroll_handlers::check),
         ("crate licenses", check_licenses),
+        ("module layout", module_layout::check),
+        ("MSRV consistency", msrv::check),
+        ("lint inheritance", lints_inheritance::check),
+        ("locale catalog structure", locale_catalog::check),
         ("locale catalog keys", check_locale_keys),
-        ("i18n fallbacks", locale_fallbacks::check),
+        ("i18n call sites", locale_fallbacks::check),
+        ("i18n catalog values", locale_placeholders::check),
         ("DCO sign-off", check_dco),
         ("philosophy boundary", check_philosophy),
         ("upstream rejection ledger", check_upstream_ledger),
         ("GitHub workflow files", check_workflows),
+        ("CI gate wiring", ci_wiring::check),
         ("gpui public API snapshot", gpui_api::check_snapshot),
     ];
 
@@ -388,6 +419,11 @@ fn git_grep(arguments: &[&str]) -> Result<String> {
 }
 
 /// Expands a `git ls-files` pathspec, so checks only look at tracked files.
+///
+/// `git ls-files` exits 0 with empty output when nothing matches, including
+/// when the pathspec is misspelled or the index is empty/unreadable. Every
+/// caller scans the returned files and treats "no findings" as success, so an
+/// empty result must fail closed instead of silently disabling the gate.
 fn tracked_files(pathspec: &str) -> Result<Vec<PathBuf>> {
     let output = Command::new("git")
         .args(["ls-files", pathspec])
@@ -400,8 +436,49 @@ fn tracked_files(pathspec: &str) -> Result<Vec<PathBuf>> {
         );
     }
 
-    Ok(String::from_utf8_lossy(&output.stdout)
+    parse_tracked_files(&String::from_utf8_lossy(&output.stdout), pathspec)
+}
+
+fn parse_tracked_files(stdout: &str, pathspec: &str) -> Result<Vec<PathBuf>> {
+    let files: Vec<PathBuf> = stdout
         .lines()
+        .filter(|line| !line.trim().is_empty())
         .map(PathBuf::from)
-        .collect())
+        .collect();
+    if files.is_empty() {
+        bail!(
+            "git ls-files {pathspec:?} matched no tracked files; the pathspec may be wrong, or the git index empty or unreadable"
+        );
+    }
+    Ok(files)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_tracked_files;
+    use std::path::PathBuf;
+
+    #[test]
+    fn empty_git_ls_files_output_fails_closed() {
+        let error = parse_tracked_files("", "*.rs").expect_err("empty output must fail");
+        assert!(
+            error.to_string().contains("matched no tracked files"),
+            "unexpected error: {error}"
+        );
+        assert!(
+            error.to_string().contains("*.rs"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn whitespace_only_output_fails_closed() {
+        assert!(parse_tracked_files("\n", "*.rs").is_err());
+    }
+
+    #[test]
+    fn collects_every_line_as_a_path() {
+        let files = parse_tracked_files("a.rs\nb/c.rs\n", "*.rs").expect("paths should parse");
+        assert_eq!(files, vec![PathBuf::from("a.rs"), PathBuf::from("b/c.rs")]);
+    }
 }

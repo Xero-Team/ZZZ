@@ -2560,6 +2560,7 @@ dependencies = [
  "fs",
  "gpui",
  "gpui_platform",
+ "i18n",
  "language",
  "log",
  "node_runtime",

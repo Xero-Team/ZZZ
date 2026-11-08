@@ -23,6 +23,7 @@ ui_component_registry.workspace = true
 db.workspace = true
 fs.workspace = true
 gpui.workspace = true
+i18n.workspace = true
 language.workspace = true
 log.workspace = true
 node_runtime.workspace = true

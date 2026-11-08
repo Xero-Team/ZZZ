@@ -49,6 +49,7 @@ fn main() {
         <dyn fs::Fs>::set_global(fs.clone(), cx);
 
         settings::init(cx);
+        i18n::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
 
         let languages = Arc::new(LanguageRegistry::new(cx.background_executor().clone()));

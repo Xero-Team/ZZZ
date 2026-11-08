@@ -18863,11 +18863,13 @@ impl Editor {
                         .color(ui::Color::Muted),
                     )
                     .child(
-                        Label::new(format!(
-                            "{} Comment{}",
-                            comment_count,
-                            if comment_count == 1 { "" } else { "s" }
-                        ))
+                        Label::new(if comment_count == 1 {
+                            tr(cx, "editor.git.review_comment.count_one", "{} Comment")
+                                .replacen("{}", &comment_count.to_string(), 1)
+                        } else {
+                            tr(cx, "editor.git.review_comment.count_many", "{} Comments")
+                                .replacen("{}", &comment_count.to_string(), 1)
+                        })
                         .size(LabelSize::Small)
                         .color(Color::Muted),
                     ),

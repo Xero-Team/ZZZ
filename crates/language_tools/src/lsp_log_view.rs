@@ -898,6 +898,14 @@ impl Render for LspLogToolbarItemView {
             return div();
         };
 
+        let no_server_selected = tr(
+            cx,
+            "language_tools.lsp_log.no_server_selected",
+            "No server selected",
+        );
+        let trace_level = tr(cx, "language_tools.lsp_log.trace_level", "Trace level");
+        let log_level = tr(cx, "language_tools.lsp_log.log_level", "Log level");
+
         let (menu_rows, current_server_id) = log_view.update(cx, |log_view, cx| {
             let menu_rows = log_view.menu_items(cx).unwrap_or_default();
             let current_server_id = log_view.current_server_id;
@@ -932,7 +940,7 @@ impl Render for LspLogToolbarItemView {
                 Button::new(
                     "language_server_menu_header",
                     current_server.as_ref().map_or_else(
-                        || "No server selected".into(),
+                        || Cow::Owned(no_server_selected.clone()),
                         |row| {
                             Cow::Owned(format!(
                                 "{} ({})",
@@ -1098,7 +1106,7 @@ impl Render for LspLogToolbarItemView {
                                         .trigger(
                                             Button::new(
                                                 "language_server_trace_level_selector",
-                                                "Trace level",
+                                                trace_level.clone(),
                                             )
                                             .end_icon(
                                                 Icon::new(IconName::ChevronDown)
@@ -1168,7 +1176,7 @@ impl Render for LspLogToolbarItemView {
                                         .trigger(
                                             Button::new(
                                                 "language_server_log_level_selector",
-                                                "Log level",
+                                                log_level.clone(),
                                             )
                                             .end_icon(
                                                 Icon::new(IconName::ChevronDown)

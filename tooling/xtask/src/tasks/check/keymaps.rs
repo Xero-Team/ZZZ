@@ -3,7 +3,8 @@
 //! Keymaps are JSONC, and a JSON parser silently keeps the last of two
 //! identical keys in one binding object. That makes a duplicated binding
 //! invisible in review and at runtime, so the only way to catch it is to parse
-//! the file while rejecting repeated keys.
+//! the file while rejecting repeated keys. The same parse catches binding keys
+//! whose modifiers GPUI cannot recognize.
 
 use std::collections::HashSet;
 use std::fmt;
@@ -14,7 +15,7 @@ use serde::{Deserialize, Deserializer};
 
 pub fn check() -> Result<()> {
     reject_macos_only_modifiers()?;
-    reject_placeholder_modifiers()?;
+    reject_unknown_modifiers()?;
     reject_duplicate_bindings()
 }
 
@@ -41,24 +42,102 @@ fn reject_macos_only_modifiers() -> Result<()> {
     bail!("found `cmd-` in non-macOS keymap files:\n{matches}");
 }
 
-/// Kept as a fixed-string search on purpose: the original check used `-F`, and
-/// `super-` and `fn-` are legitimately in use (`ctrl-alt-super-p`, `fn-f`), so
-/// treating this as an alternation would reject the shipped keymaps.
-fn reject_placeholder_modifiers() -> Result<()> {
-    let matches = super::git_grep(&[
-        "--no-color",
-        "--line-number",
-        "--fixed-strings",
-        "-e",
-        "super-|win-|fn-",
-        "--",
-        "assets/keymaps/",
-    ])?;
+/// The modifiers `Keystroke::parse` recognizes
+/// (`crates/gpui/src/platform/keystroke.rs`). Anything else to the left of a
+/// key is folded into the key name, so a typo like `ctrol-a` produces a binding
+/// that never fires. `secondary-` is platform-dependent but valid.
+const RECOGNIZED_MODIFIERS: &[&str] = &[
+    "ctrl",
+    "alt",
+    "shift",
+    "fn",
+    "secondary",
+    "cmd",
+    "super",
+    "win",
+];
 
-    if matches.is_empty() {
+/// Rejects binding keys whose modifiers GPUI cannot parse.
+///
+/// The old `reject_placeholder_modifiers` passed `super-|win-|fn-` as a single
+/// `--fixed-strings` pattern: `-F` treats `|` literally, so it matched nothing
+/// and the gate never fired. Turning it into an alternation would be wrong too,
+/// because `super-` and `fn-` are legitimate and already shipped. Checking the
+/// parsed binding keys against the parser's real modifier list is both live and
+/// free of false positives.
+fn reject_unknown_modifiers() -> Result<()> {
+    let mut failures = Vec::new();
+    for path in super::tracked_files("assets/keymaps/*.json")? {
+        let source = std::fs::read_to_string(&path)
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        let jsonc = strip_jsonc(&source);
+        let document: serde_json::Value = serde_json::from_str(&jsonc)
+            .with_context(|| format!("failed to parse {}", path.display()))?;
+        for key in binding_keys(&document) {
+            for modifier in unknown_modifiers(&key) {
+                failures.push(format!(
+                    "{}: `{key}` has an unrecognized modifier `{modifier}`",
+                    path.display(),
+                ));
+            }
+        }
+    }
+
+    if failures.is_empty() {
         return Ok(());
     }
-    bail!("found placeholder modifiers in keymap files:\n{matches}");
+    failures.sort();
+    failures.dedup();
+    bail!(
+        "keymap binding keys use modifiers GPUI cannot parse (the binding will never fire):\n{}",
+        failures.join("\n")
+    )
+}
+
+/// Returns the modifier components of a binding key that `Keystroke::parse`
+/// would not recognize. The last `-` component is the key itself; `>` introduces
+/// a key-char and `-` alone is a literal minus, so both are left alone.
+fn unknown_modifiers(key: &str) -> Vec<String> {
+    let mut findings = Vec::new();
+    for stroke in key.split_whitespace() {
+        let components: Vec<&str> = stroke.split('-').collect();
+        for component in &components[..components.len().saturating_sub(1)] {
+            if component.is_empty() || component.starts_with('>') {
+                continue;
+            }
+            if !RECOGNIZED_MODIFIERS.contains(&component.to_ascii_lowercase().as_str()) {
+                findings.push((*component).to_owned());
+            }
+        }
+    }
+    findings
+}
+
+fn binding_keys(value: &serde_json::Value) -> Vec<String> {
+    let mut keys = Vec::new();
+    collect_binding_keys(value, &mut keys);
+    keys
+}
+
+fn collect_binding_keys(value: &serde_json::Value, keys: &mut Vec<String>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, nested) in map {
+                if key == "bindings"
+                    && let serde_json::Value::Object(bindings) = nested
+                {
+                    keys.extend(bindings.keys().cloned());
+                }
+                collect_binding_keys(nested, keys);
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for nested in values {
+                collect_binding_keys(nested, keys);
+            }
+        }
+        _ => {}
+    }
 }
 
 fn reject_duplicate_bindings() -> Result<()> {
@@ -139,7 +218,7 @@ fn strip_jsonc(source: &str) -> String {
 }
 
 /// Deserializes any JSON shape, failing when one object repeats a key.
-struct NoDuplicateKeys;
+pub(super) struct NoDuplicateKeys;
 
 impl<'de> Deserialize<'de> for NoDuplicateKeys {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -166,7 +245,7 @@ impl<'de> Visitor<'de> for NoDuplicateKeysVisitor {
         let mut seen = HashSet::new();
         while let Some(key) = map.next_key::<String>()? {
             if !seen.insert(key.clone()) {
-                return Err(de::Error::custom(format!("duplicate binding {key:?}")));
+                return Err(de::Error::custom(format!("duplicate key {key:?}")));
             }
             map.next_value::<NoDuplicateKeys>()?;
         }
@@ -223,7 +302,7 @@ impl<'de> Visitor<'de> for NoDuplicateKeysVisitor {
 
 #[cfg(test)]
 mod tests {
-    use super::{NoDuplicateKeys, strip_jsonc};
+    use super::{NoDuplicateKeys, strip_jsonc, unknown_modifiers};
 
     fn parse(source: &str) -> Result<(), serde_json::Error> {
         serde_json::from_str::<NoDuplicateKeys>(&strip_jsonc(source)).map(|_| ())
@@ -249,7 +328,7 @@ mod tests {
         let error = parse(r#"{"bindings": {"ctrl-a": "a", "ctrl-a": "b"}}"#)
             .expect_err("a repeated key must fail");
         assert!(
-            error.to_string().contains("duplicate binding"),
+            error.to_string().contains("duplicate key"),
             "unexpected error: {error}"
         );
     }
@@ -264,5 +343,39 @@ mod tests {
     fn keeps_comment_markers_inside_strings() {
         parse(r#"{"url": "https://example.com/path"}"#)
             .expect("`//` inside a string is not a comment");
+    }
+
+    #[test]
+    fn accepts_recognized_modifiers() {
+        for key in [
+            "ctrl-a",
+            "cmd-shift-p",
+            "ctrl-alt-super-p",
+            "fn-f",
+            "secondary-k",
+            "cmd-k cmd-s",
+        ] {
+            assert!(
+                unknown_modifiers(key).is_empty(),
+                "{key} should be accepted: {:?}",
+                unknown_modifiers(key)
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_an_unknown_modifier() {
+        assert_eq!(unknown_modifiers("ctrol-a"), vec!["ctrol"]);
+        assert_eq!(unknown_modifiers("ctrl-hyper-a"), vec!["hyper"]);
+    }
+
+    #[test]
+    fn ignores_keys_without_modifiers_and_key_chars() {
+        // The last component is the key, `>` introduces a key-char, and a bare
+        // `-` is a literal minus; none of these are modifier typos.
+        assert!(unknown_modifiers("a").is_empty());
+        assert!(unknown_modifiers("g >").is_empty());
+        assert!(unknown_modifiers("-").is_empty());
+        assert!(unknown_modifiers("[ -").is_empty());
     }
 }

@@ -6,6 +6,7 @@ use gpui::{
     App, Entity, EventEmitter, FocusHandle, Focusable, Task, WeakEntity, Window, list, prelude::*,
 };
 use gpui::{ListState, ScrollStrategy, UniformListScrollHandle};
+use i18n::tr;
 use language::LanguageRegistry;
 use notifications::status_toast::StatusToast;
 use persistence::ComponentPreviewDb;
@@ -65,6 +66,7 @@ enum PreviewEntry {
     Separator,
     Component(ComponentMetadata, Option<Vec<usize>>),
     SectionHeader(SharedString),
+    UncategorizedHeader,
 }
 
 impl From<ComponentMetadata> for PreviewEntry {
@@ -120,8 +122,12 @@ impl ComponentPreview {
         let sorted_components = component_registry.sorted_components();
         let selected_index = selected_index.into().unwrap_or(0);
         let active_page = active_page.unwrap_or(PreviewPage::AllComponents);
-        let filter_editor =
-            cx.new(|cx| InputField::new(window, cx, "Find components or usages..."));
+        let filter_placeholder = tr(
+            cx,
+            "component_preview.filter_placeholder",
+            "Find components or usages...",
+        );
+        let filter_editor = cx.new(|cx| InputField::new(window, cx, &filter_placeholder));
 
         let component_list = ListState::new(
             sorted_components.len(),
@@ -304,7 +310,7 @@ impl ComponentPreview {
             && !components.is_empty()
         {
             entries.push(PreviewEntry::Separator);
-            entries.push(PreviewEntry::SectionHeader("Uncategorized".into()));
+            entries.push(PreviewEntry::UncategorizedHeader);
             let mut sorted_components = components.clone();
             sorted_components.sort_by_key(|(c, _)| c.sort_name());
 
@@ -381,11 +387,18 @@ impl ComponentPreview {
             PreviewEntry::SectionHeader(shared_string) => ListSubHeader::new(shared_string)
                 .inset(true)
                 .into_any_element(),
+            PreviewEntry::UncategorizedHeader => {
+                ListSubHeader::new(tr(cx, "component_preview.uncategorized", "Uncategorized"))
+                    .inset(true)
+                    .into_any_element()
+            }
             PreviewEntry::AllComponents => {
                 let selected = self.active_page == PreviewPage::AllComponents;
+                let all_components_label =
+                    tr(cx, "component_preview.all_components", "All Components");
 
                 ListItem::new(ix)
-                    .child(Label::new("All Components"))
+                    .child(Label::new(all_components_label))
                     .selectable(true)
                     .toggle_state(selected)
                     .inset(true)
@@ -481,7 +494,14 @@ impl ComponentPreview {
                         .items_center()
                         .justify_center()
                         .text_color(cx.theme().colors().text_muted)
-                        .child(format!("No components matching '{}'.", self.filter_text))
+                        .child(
+                            tr(
+                                cx,
+                                "component_preview.no_matching_components",
+                                "No components matching '{}'.",
+                            )
+                            .replacen("{}", &self.filter_text, 1),
+                        )
                         .into_any_element()
                 } else {
                     list(
@@ -500,6 +520,13 @@ impl ComponentPreview {
                                 PreviewEntry::SectionHeader(shared_string) => this
                                     .render_scope_header(ix, shared_string.clone(), window, cx)
                                     .into_any_element(),
+                                PreviewEntry::UncategorizedHeader => {
+                                    let title: SharedString =
+                                        tr(cx, "component_preview.uncategorized", "Uncategorized")
+                                            .into();
+                                    this.render_scope_header(ix, title, window, cx)
+                                        .into_any_element()
+                                }
                                 PreviewEntry::AllComponents => {
                                     div().w_full().h_0().into_any_element()
                                 }
@@ -518,7 +545,7 @@ impl ComponentPreview {
         &mut self,
         component_id: &ComponentId,
         _window: &mut Window,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let component = self.component_map.get(component_id);
 
@@ -533,25 +560,38 @@ impl ComponentPreview {
                 .size_full()
                 .items_center()
                 .justify_center()
-                .child("Component not found")
+                .child(tr(
+                    cx,
+                    "component_preview.component_not_found",
+                    "Component not found",
+                ))
                 .into_any_element()
         }
     }
 
     fn test_status_toast(&self, cx: &mut Context<Self>) {
+        let created_text = tr(
+            cx,
+            "component_preview.toast_demo_created",
+            "`zzz/new-notification-system` created!",
+        );
+        let open_pull_request_text = tr(
+            cx,
+            "component_preview.open_pull_request",
+            "Open Pull Request",
+        );
         if let Some(workspace) = self.workspace.upgrade() {
             workspace.update(cx, |workspace, cx| {
-                let status_toast =
-                    StatusToast::new("`zzz/new-notification-system` created!", cx, |this, _cx| {
-                        this.icon(
-                            Icon::new(IconName::GitBranch)
-                                .size(IconSize::Small)
-                                .color(Color::Muted),
-                        )
-                        .action("Open Pull Request", |_, cx| {
-                            cx.open_url("https://github.com/")
-                        })
-                    });
+                let status_toast = StatusToast::new(created_text, cx, move |this, _cx| {
+                    this.icon(
+                        Icon::new(IconName::GitBranch)
+                            .size(IconSize::Small)
+                            .color(Color::Muted),
+                    )
+                    .action(open_pull_request_text, |_, cx| {
+                        cx.open_url("https://github.com/")
+                    })
+                });
                 workspace.toggle_status_toast(status_toast, cx)
             });
         }
@@ -574,6 +614,7 @@ impl Render for ComponentPreview {
             self.update_component_list(cx);
         }
         let active_page = self.active_page.clone();
+        let launch_toast_label = tr(cx, "component_preview.launch_toast", "Launch Toast");
 
         h_flex()
             .id("component-preview")
@@ -614,7 +655,7 @@ impl Render for ComponentPreview {
                             .border_t_1()
                             .border_color(cx.theme().colors().border)
                             .child(
-                                Button::new("toast-test", "Launch Toast")
+                                Button::new("toast-test", launch_toast_label)
                                     .full_width()
                                     .on_click(cx.listener({
                                         move |this, _, _window, cx| {
@@ -679,8 +720,8 @@ impl From<ComponentId> for ActivePageId {
 impl Item for ComponentPreview {
     type Event = ItemEvent;
 
-    fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
-        "Component Preview".into()
+    fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
+        tr(cx, "component_preview.tab_title", "Component Preview").into()
     }
 
     fn show_toolbar(&self) -> bool {
@@ -933,15 +974,22 @@ impl ComponentPreviewPage {
     }
 
     fn render_preview(&self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let failed_to_load_text = tr(
+            cx,
+            "component_preview.failed_to_load_preview",
+            "Failed to load preview. This path should be unreachable",
+        );
+        let no_preview_text = tr(
+            cx,
+            "component_preview.no_preview_available",
+            "No preview available",
+        );
         let content = if let Some(preview) = self.component.preview() {
             // Fall back to component preview
-            preview(window, cx).unwrap_or_else(|| {
-                div()
-                    .child("Failed to load preview. This path should be unreachable")
-                    .into_any_element()
-            })
+            preview(window, cx)
+                .unwrap_or_else(move || div().child(failed_to_load_text).into_any_element())
         } else {
-            div().child("No preview available").into_any_element()
+            div().child(no_preview_text).into_any_element()
         };
 
         v_flex()

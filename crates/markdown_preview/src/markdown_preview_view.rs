@@ -1838,21 +1838,30 @@ impl Render for MarkdownPreviewView {
                                 {
                                     return None;
                                 }
+                                let copy = tr(cx, "markdown_preview.copy", "Copy");
+                                let copy_as_markdown =
+                                    tr(cx, "markdown_preview.copy_as_markdown", "Copy as Markdown");
                                 let copy_link = tr(cx, "markdown_preview.copy_link", "Copy Link");
                                 Some(ContextMenu::build(window, cx, move |menu, _, _cx| {
                                     menu.when_some(focus, |menu, focus| menu.context(focus))
                                         .when_some(selected_text, |menu, text| {
-                                            menu.entry("Copy", Some(Box::new(markdown::Copy)), {
-                                                move |_, cx| {
-                                                    cx.write_to_clipboard(
-                                                        ClipboardItem::new_string(text.to_string()),
-                                                    );
-                                                }
-                                            })
+                                            menu.entry(
+                                                copy.clone(),
+                                                Some(Box::new(markdown::Copy)),
+                                                {
+                                                    move |_, cx| {
+                                                        cx.write_to_clipboard(
+                                                            ClipboardItem::new_string(
+                                                                text.to_string(),
+                                                            ),
+                                                        );
+                                                    }
+                                                },
+                                            )
                                         })
                                         .when_some(selected_markdown, |menu, text| {
                                             menu.entry(
-                                                "Copy as Markdown",
+                                                copy_as_markdown.clone(),
                                                 Some(Box::new(markdown::CopyAsMarkdown)),
                                                 {
                                                     move |_, cx| {
