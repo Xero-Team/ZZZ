@@ -83,29 +83,38 @@ fn development_commit(commit: Option<&AppCommitSha>) -> Option<String> {
     (!commit.is_empty()).then(|| commit.to_owned())
 }
 
-fn expected_remote_server_reported_version(
-    release_channel: ReleaseChannel,
-    version: &Version,
-    commit: Option<&AppCommitSha>,
-) -> Option<String> {
-    match release_channel {
-        ReleaseChannel::Stable => {
-            let reported_version = version.to_string();
-            let reported_version = reported_version
-                .split_once('+')
-                .map_or(reported_version.as_str(), |(version, _)| version);
-            Some(reported_version.to_owned())
-        }
-        ReleaseChannel::Dev => development_commit(commit),
-    }
+/// The package version as a stable-compiled server prints it: the semantic
+/// version without the build metadata that `AppVersion::load` appends.
+fn stable_reported_version(version: &Version) -> String {
+    let version = version.to_string();
+    version
+        .split_once('+')
+        .map_or(version.as_str(), |(version, _)| version)
+        .to_owned()
+}
+
+/// Whether a dev-style version line names `commit`. Those servers print either
+/// `<sha>` or `<build-id>+<sha>`; the build id is not part of the identity.
+fn reported_commit_matches(actual: &str, commit: &str) -> bool {
+    actual == commit
+        || actual
+            .rsplit_once('+')
+            .is_some_and(|(_, reported_commit)| reported_commit == commit)
 }
 
 /// Checks that the output of a remote server's `version` command belongs to
 /// the client that is about to connect to it.
 ///
+/// The embedded remote-server archive is shared by every release channel and
+/// is built without a channel override, so its `version` command uses the dev
+/// format and prints the build's commit SHA. A dev client already expects that
+/// SHA (its cache filename is keyed by it), but a stable client keys the
+/// filename by the semantic version and must also accept the SHA to recognize
+/// the very binary it just installed. Both identities come from this client's
+/// build metadata, so a server from a different build is still rejected.
+///
 /// Shell startup files may write to stdout, so only the last non-empty line is
-/// considered. Dev servers print either `<sha>` or `<build-id>+<sha>`;
-/// stable servers print their semantic version.
+/// considered. Servers print `<semver>`, `<sha>`, or `<build-id>+<sha>`.
 pub(crate) fn remote_server_version_matches(
     release_channel: ReleaseChannel,
     version: &Version,
@@ -123,21 +132,17 @@ pub(crate) fn remote_server_version_matches(
 
     match release_channel {
         ReleaseChannel::Stable => {
-            expected_remote_server_reported_version(release_channel, version, commit)
-                .is_some_and(|expected| actual == expected)
+            actual == stable_reported_version(version)
+                || development_commit(commit)
+                    .is_some_and(|commit| reported_commit_matches(actual, &commit))
         }
         ReleaseChannel::Dev => {
-            let Some(expected) =
-                expected_remote_server_reported_version(release_channel, version, commit)
-            else {
+            let Some(commit) = development_commit(commit) else {
                 // Test and custom builds without a git revision cannot perform
                 // an identity check. Preserve the previous behavior for them.
                 return true;
             };
-            actual == expected
-                || actual
-                    .rsplit_once('+')
-                    .is_some_and(|(_, actual_commit)| actual_commit == expected)
+            reported_commit_matches(actual, &commit)
         }
     }
 }
@@ -148,8 +153,18 @@ pub(crate) fn ensure_remote_server_version_matches(
     commit: Option<&AppCommitSha>,
     output: &str,
 ) -> Result<()> {
-    let expected = expected_remote_server_reported_version(release_channel, version, commit)
-        .unwrap_or_else(|| "any non-empty development version".to_owned());
+    let expected = match release_channel {
+        ReleaseChannel::Stable => {
+            let mut expected = stable_reported_version(version);
+            if let Some(commit) = development_commit(commit) {
+                expected.push_str(" or commit ");
+                expected.push_str(&commit);
+            }
+            expected
+        }
+        ReleaseChannel::Dev => development_commit(commit)
+            .unwrap_or_else(|| "any non-empty development version".to_owned()),
+    };
     anyhow::ensure!(
         remote_server_version_matches(release_channel, version, commit, output),
         "remote server reported version {:?}, expected {:?}",
@@ -787,7 +802,9 @@ mod tests {
         let version = Version::new(1, 23, 0);
         let commit = AppCommitSha::new("53604c81da82a0e99c3ee3d6077ca152446403c7".to_owned());
         let empty_commit = AppCommitSha::new(String::new());
-        let stable_version = Version::parse("1.23.0+stable").expect("valid test version");
+        let stable_version =
+            Version::parse("1.23.0+stable.53604c81da82a0e99c3ee3d6077ca152446403c7")
+                .expect("valid test version");
 
         assert!(remote_server_version_matches(
             ReleaseChannel::Dev,
@@ -837,6 +854,46 @@ mod tests {
             None,
             "1.22.0\n"
         ));
+        // A stable-compiled server prints its semantic version.
+        assert!(remote_server_version_matches(
+            ReleaseChannel::Stable,
+            &stable_version,
+            None,
+            "1.23.0\n"
+        ));
+        // The embedded, channel-agnostic server prints this build's commit SHA.
+        assert!(remote_server_version_matches(
+            ReleaseChannel::Stable,
+            &stable_version,
+            Some(&commit),
+            "53604c81da82a0e99c3ee3d6077ca152446403c7\n"
+        ));
+        assert!(remote_server_version_matches(
+            ReleaseChannel::Stable,
+            &stable_version,
+            Some(&commit),
+            "12345+53604c81da82a0e99c3ee3d6077ca152446403c7\n"
+        ));
+        // A server from a different build is still rejected.
+        assert!(!remote_server_version_matches(
+            ReleaseChannel::Stable,
+            &stable_version,
+            Some(&commit),
+            "28d60b8f28a9448fea506fc18aeeaf4698d047e9\n"
+        ));
+        assert!(!remote_server_version_matches(
+            ReleaseChannel::Stable,
+            &stable_version,
+            Some(&commit),
+            "1.22.0\n"
+        ));
+        // Without commit metadata, only the semantic version is trusted.
+        assert!(!remote_server_version_matches(
+            ReleaseChannel::Stable,
+            &stable_version,
+            None,
+            "53604c81da82a0e99c3ee3d6077ca152446403c7\n"
+        ));
     }
 
     #[test]
@@ -861,5 +918,37 @@ mod tests {
         .expect_err("mismatched version should be rejected");
         assert!(error.to_string().contains("28d60b8f"));
         assert!(error.to_string().contains("53604c81"));
+    }
+
+    #[test]
+    fn stable_client_accepts_embedded_dev_channel_server() {
+        // Reproduces the reported failure: a stable client installs the
+        // channel-agnostic embedded server, which prints the build's commit
+        // SHA instead of the semantic version the client expected.
+        let version = Version::parse("1.29.0+stable.1a52331baa1ababdb3cdb0f039eb6f9f418948b4")
+            .expect("valid test version");
+        let commit = AppCommitSha::new("1a52331baa1ababdb3cdb0f039eb6f9f418948b4".to_owned());
+        let reported_version = "1a52331baa1ababdb3cdb0f039eb6f9f418948b4\n";
+
+        assert_eq!(
+            remote_server_binary_version(ReleaseChannel::Stable, &version, Some(&commit)),
+            version.to_string(),
+        );
+        ensure_remote_server_version_matches(
+            ReleaseChannel::Stable,
+            &version,
+            Some(&commit),
+            reported_version,
+        )
+        .expect("the embedded server from this build should be accepted");
+
+        let error = ensure_remote_server_version_matches(
+            ReleaseChannel::Stable,
+            &version,
+            Some(&commit),
+            "28d60b8f28a9448fea506fc18aeeaf4698d047e9\n",
+        )
+        .expect_err("a server from a different build should be rejected");
+        assert!(error.to_string().contains("1.29.0"));
     }
 }
