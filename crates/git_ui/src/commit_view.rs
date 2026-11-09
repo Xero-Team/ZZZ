@@ -22,7 +22,7 @@ use language::{
     Buffer, Capability, DiskState, File, LanguageRegistry, LineEnding, OffsetRangeExt as _,
     ReplicaId, Rope, TextBuffer,
 };
-use markdown::{Markdown, MarkdownElement};
+use markdown::{Markdown, MarkdownElement, MarkdownStyle};
 use multi_buffer::PathKey;
 use project::{Project, WorktreeId, git_store::Repository};
 use settings::Settings;
@@ -715,7 +715,10 @@ impl CommitView {
             return None;
         }
 
-        let markdown_style = hover_markdown_style(window, cx);
+        let markdown_style = MarkdownStyle {
+            soft_break_as_hard_break: true,
+            ..hover_markdown_style(window, cx)
+        };
         let collapsed = message.contains('\n') && !self.message_expanded;
         let collapsed_height = window.line_height();
 
