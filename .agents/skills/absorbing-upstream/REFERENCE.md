@@ -7,9 +7,9 @@ Normative rules for the `absorbing-upstream` skill.
 Override only when the user supplies a value.
 
 ```text
-LAST_REVIEWED_UPSTREAM=c7bea343838f42b4c14151393e41f0bbe033c95e
+LAST_REVIEWED_UPSTREAM=696003b1f6b806c03b9e83f2a448aab060736cf7
 LOCAL_BASE_BRANCH=main
-LOCAL_BASE_COMMIT=d1518d139ff6b509d08955579f5f22fd70595a63
+LOCAL_BASE_COMMIT=ced90e0c517bf368238225c4363614b7c2cb1376
 UPSTREAM_URL=https://github.com/zed-industries/zed.git
 UPSTREAM_REF=refs/heads/main
 WORK_BRANCH=sync/upstream-YYYY-MM-DD
@@ -20,11 +20,13 @@ CREATE_PR=no
 PUSH=no
 ```
 
-As of 2026-11-05, local `main` is `d1518d139f`. The last completed
-sync is `docs/src/development/upstream/upstream-sync-2026-11-04.md` on
-`sync/upstream-2026-11-04`; its addendum advances the reviewed baseline
-to `c7bea343838f` (the live upstream head at the second 2026-11-04
-query). The most recent full re-audit is
+As of 2026-11-10, local `main` is `ced90e0c51`. The last completed
+sync is `docs/src/development/upstream/upstream-sync-2026-11-10.md` on
+`sync/upstream-2026-11-10`; it advances the reviewed baseline to
+`696003b1f6` and leaves the twelve commits through the live head
+`f0d896f2c1` for the next run. The previous sync,
+`docs/src/development/upstream/upstream-sync-2026-11-08.md`, advanced
+the baseline to `db43f05e3980`. The most recent full re-audit is
 `docs/src/development/upstream/upstream-sync-audit-2026-11-03.md` (38
 non-audit reports, 1453 decision rows). Query live upstream again at
 run start; never trust these recorded values as the live head. The next

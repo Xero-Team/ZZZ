@@ -1975,9 +1975,9 @@ TabStopMap::begin_group method & mut self , tab_index : isize
 TabStopMap::clear method & mut self
 TabStopMap::end_group method & mut self
 TabStopMap::insert method & mut self , focus_handle : & FocusHandle
-TabStopMap::next method & self , focused_id : Option < & FocusId > -> Option < FocusHandle >
+TabStopMap::next method & mut self , focused_id : Option < & FocusId > -> Option < FocusHandle >
 TabStopMap::paint_index method & self -> usize
-TabStopMap::prev method & self , focused_id : Option < & FocusId > -> Option < FocusHandle >
+TabStopMap::prev method & mut self , focused_id : Option < & FocusId > -> Option < FocusHandle >
 TabStopMap::replay method & mut self , nodes : & [TabStopOperation]
 TabStopOperation enum Insert,Group,GroupEnd
 TaffyLayoutEngine struct 
@@ -2619,7 +2619,7 @@ WindowOptions struct window_bounds,titlebar,focus,show,kind,is_movable,app_owns_
 WindowParams struct bounds,titlebar,kind,is_movable,app_owns_titlebar_drag,is_resizable,is_minimizable,focus,show,icon,display_id,app_id,window_min_size,tabbing_identifier,use_display_p3
 WindowServiceCapabilities struct decorations,input_region,client_inset,app_id,document_metadata,character_palette,simple_fullscreen,system_tabs,titlebar_actions
 WindowTextSystem struct 
-WindowTextSystem::layout_line method & self , text : & str , font_size : Pixels , runs : & [TextRun] , force_width : Option < Pixels > , -> Arc < LineLayout >
+WindowTextSystem::layout_line method <Text> where Text : AsRef < str > , SharedString : From < Text > , & self , text : Text , font_size : Pixels , runs : & [TextRun] , force_width : Option < Pixels > , -> Arc < LineLayout >
 WindowTextSystem::new method text_system : Arc < TextSystem > -> Self
 WindowTextSystem::shape_line method & self , text : SharedString , font_size : Pixels , runs : & [TextRun] , force_width : Option < Pixels > , -> ShapedLine
 WindowTextSystem::shape_text method & self , text : SharedString , font_size : Pixels , runs : & [TextRun] , wrap_width : Option < Pixels > , line_clamp : Option < usize > , -> Result < SmallVec < [WrappedLine ; 1] > >
