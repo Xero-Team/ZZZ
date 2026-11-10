@@ -606,17 +606,28 @@ impl ConversationView {
             .pending_tool_call(&session_id, cx)
     }
 
-    pub fn root_thread_has_pending_tool_call(&self, cx: &App) -> bool {
+    pub fn root_thread_is_waiting_for_input(&self, cx: &App) -> bool {
         let Some(root_thread) = self.root_thread_view() else {
             return false;
         };
         let root_session_id = root_thread.read(cx).thread.read(cx).session_id().clone();
         self.as_connected().is_some_and(|connected| {
-            connected
-                .conversation
-                .read(cx)
+            let conversation = connected.conversation.read(cx);
+            conversation
                 .pending_tool_call(&root_session_id, cx)
                 .is_some()
+                || self.has_unanswered_elicitation(cx)
+        })
+    }
+
+    /// Whether any elicitation form is still waiting for the user to answer it.
+    fn has_unanswered_elicitation(&self, cx: &App) -> bool {
+        self.request_elicitation_store().is_some_and(|store| {
+            store
+                .read(cx)
+                .elicitations()
+                .iter()
+                .any(|elicitation| matches!(elicitation.status, ElicitationStatus::Pending { .. }))
         })
     }
 
