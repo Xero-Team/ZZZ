@@ -20,6 +20,8 @@ use onboarding::show_onboarding_view;
 use recent_projects::{RemoteSettings, navigate_to_positions, open_remote_project};
 use remote::{RemoteConnectionOptions, WslConnectionOptions};
 use settings::Settings;
+#[cfg(target_os = "windows")]
+use std::path::{Component, Prefix};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
@@ -158,9 +160,9 @@ impl OpenRequest {
                     index: action_index.parse()?,
                 });
             } else if let Some(file) = url.strip_prefix("file://") {
-                this.parse_file_path(file)
+                this.parse_local_file_path(file)
             } else if let Some(file) = url.strip_prefix("zzz://file") {
-                this.parse_file_path(file)
+                this.parse_local_file_path(file)
             } else if let Some(file) = url.strip_prefix("zzz://ssh") {
                 let ssh_url = "ssh:/".to_owned() + file;
                 this.parse_ssh_file_path(&ssh_url, cx)?
@@ -200,6 +202,23 @@ impl OpenRequest {
 
     fn parse_file_path(&mut self, file: &str) {
         if let Some(decoded) = urlencoding::decode(file).log_err() {
+            self.open_paths.push(decoded.into_owned())
+        }
+    }
+
+    fn parse_local_file_path(&mut self, file: &str) {
+        if let Some(decoded) = urlencoding::decode(file).log_err() {
+            // URL paths keep a `/` before a Windows drive letter (`/C:/x`), which Windows cannot open.
+            #[cfg(target_os = "windows")]
+            if let Some(path) = decoded.strip_prefix('/')
+                && matches!(
+                    Path::new(path).components().next(),
+                    Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::Disk(_))
+                )
+            {
+                self.open_paths.push(path.to_owned());
+                return;
+            }
             self.open_paths.push(decoded.into_owned())
         }
     }
