@@ -104,10 +104,7 @@ impl<'a> From<&'a str> for ArcCow<'a, [u8]> {
 
 impl<T: ?Sized + ToOwned> std::borrow::Borrow<T> for ArcCow<'_, T> {
     fn borrow(&self) -> &T {
-        match self {
-            ArcCow::Borrowed(borrowed) => borrowed,
-            ArcCow::Owned(owned) => owned.as_ref(),
-        }
+        self.as_ref()
     }
 }
 
@@ -115,10 +112,7 @@ impl<T: ?Sized> std::ops::Deref for ArcCow<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        match self {
-            ArcCow::Borrowed(s) => s,
-            ArcCow::Owned(s) => s.as_ref(),
-        }
+        self.as_ref()
     }
 }
 
@@ -170,5 +164,18 @@ mod tests {
         let values: ArcCow<'_, [u8]> = ArcCow::from(vec![1, 2, 3]);
 
         assert_eq!(values.as_ref(), &[1, 2, 3]);
+    }
+
+    #[test]
+    fn every_accessor_returns_the_same_value_for_both_variants() {
+        let borrowed: ArcCow<'_, str> = ArcCow::from("zzz");
+        let owned: ArcCow<'_, str> = ArcCow::from(String::from("zzz"));
+
+        for value in [&borrowed, &owned] {
+            let via_borrow: &str = <ArcCow<'_, str> as std::borrow::Borrow<str>>::borrow(value);
+            assert_eq!(value.as_ref(), "zzz");
+            assert_eq!(via_borrow, "zzz");
+            assert_eq!(&**value, "zzz");
+        }
     }
 }
