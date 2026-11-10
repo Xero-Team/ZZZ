@@ -103,6 +103,7 @@ sha	class	reason_code	note	source
 1ea16c1a	C	absent-api	Needs upstream global `GitDiffBaseSetting` toggle path absent in ZZZ.	upstream-sync-2026-08-27.md
 1f32ec0cea	C	absent-api	Adds explicit ACP v2 session close on top of the absent v2 state machine.	upstream-sync-2026-10-20.md
 1f7eae7f	C	upstream-infra	Benchmark/test-support and upstream skill scaffolding only.	upstream-sync-2026-08-27.md
+1fea6cbaf6	C	upstream-infra	Bumps `agent-client-protocol` from 5.0.0 to 5.1.0 in `Cargo.lock` with no code changes. ZZZ pins the SDK at `=5.0.0`; the repository rules reject lockfile-only dependency churn with no independent local behavior.	upstream-sync-2026-11-10-b.md
 200fb85c	C	untriaged	Depends on unabsorbed bracket-cache and boundary-query architecture.	upstream-sync-2026-08-07.md
 2040e0de	C	upstream-infra	`spawn_dedicated` / scheduler rewrite plus lockfile churn.	upstream-sync-2026-08-27.md
 204362325c	C	upstream-infra	Upstream release, Sentry, bundling, and `zed` package tooling are not a retained local pipeline.	upstream-sync-2026-10-09.md
@@ -221,7 +222,9 @@ sha	class	reason_code	note	source
 471fb15d7a	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 479bce0995	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 47b8ea58	C	absent-api	Reveal-in-panel needs `Item::active_project_path` and missing DiffMultibuffer.	upstream-sync-2026-09-18.md
+47c46191f4	C	absent-api	Handles unavailable macOS pasteboards by restoring the `nil` check. Upstream rewrote `gpui_macos/src/pasteboard.rs` onto `objc2` (`Message`, `Retained`, `msg_send`), while ZZZ's file is still the `cocoa`/objc1 implementation with `id`/`nil` and no `Retained` handling. The hunks have no local anchor and the backend is macOS-only, so nothing can be validated here.	upstream-sync-2026-11-10-b.md
 480d81bf	C	philosophy	ChatGPT Subscription setup/cancellation is an explicitly rejected account-bound surface.	upstream-sync-2026-09-02.md
+483b746b56	C	untriaged	Opens absolute paths from the file finder. Over 1200 lines across `file_finder`, `picker`, `workspace`, and `crates/picker_preview`, which ZZZ does not carry; the preview path is the feature's substrate.	upstream-sync-2026-11-10-b.md
 484bcbfea6	C	absent-api	Gates the Linux backend on `not(target_env = "ohos")`. ZZZ has no local ohos target or backend, so the change would only add dead configuration.	upstream-sync-2026-10-27.md
 4882254fae	C	absent-api	Batched SSH environment probe depends on the absent local `RemoteEnvironment`, `os_version`, and `home_dir` machinery.	upstream-sync-2026-10-10.md
 4905e67333	C	upstream-infra	Fixes a permission in a first-contribution GitHub workflow; community automation ZZZ does not ship.	upstream-sync-2026-10-13.md
@@ -298,6 +301,7 @@ sha	class	reason_code	note	source
 5d06fffd98	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 5ddc17645c	C	absent-api	Outline-panel chevron folding needs the absent `FolderIndicator`/`get_folder_indicators`/`multi_buffer_hide_symbols` surface.	upstream-sync-2026-09-24.md
 5e1fd392	C	untriaged	Depends on the unabsorbed diff-base protocol and broad editor/project graph changes.	upstream-sync-2026-08-07.md
+5e23b6e71d	C	unisolatable	Opens single files in the same window. Over 900 lines across `workspace`, `multi_workspace`, `recent_projects`, `project`, `open_path_prompt`, and `zzz/src/zzz.rs`, restructuring how windows are created and reused. That is a feature-level rewrite of window creation rather than an isolated behavior change.	upstream-sync-2026-11-10-b.md
 5e28272c	C	unisolatable	Touch-axis locking depends on the unabsorbed gesture physics rewrite.	upstream-sync-2026-09-02.md
 5e8998a2a7	C	unisolatable	Moves ZZZ to agent-client-protocol 3.6.0 with schema 1.13 and rewrites the `acp` bridge around the v2 schema. ZZZ's `acp_thread` and `agent_servers` use only `schema::v1`; there is no `acp_v2` module.	upstream-sync-2026-10-29.md
 5ed5bf95	C	absent-api	Stream-mapping rewrite spans deleted and conflicting provider APIs.	upstream-sync-2026-08-27.md
@@ -638,6 +642,7 @@ cdc537c6	C	unisolatable	csv_preview tabular rewrite.	upstream-sync-2026-08-18.md
 cdf33ac2	C	upstream-infra	Markdown table autosize needs unused gpui API + lockfile.	upstream-sync-2026-08-18.md
 cdf3ccd0	C	philosophy	Extension refactor introduces telemetry events.	upstream-sync-2026-08-07.md
 ce6f3af5	C	diverged	SCP/SFTP transport argument model diverges; safe port requires the larger remote rewrite.	upstream-sync-2026-08-07.md
+cebd5fc600	C	absent-api	Retries the POSIX environment probe without stdin. ZZZ's `crates/remote/src/transport/ssh.rs` has neither `environment_posix`, `environment_posix_command`, nor `command_output`, so there is no local probe to retry and no anchor for the fix.	upstream-sync-2026-11-10-b.md
 cef06d35	C	unisolatable	Depends on the rejected worktree streaming rewrite.	upstream-sync-2026-08-27.md
 cff4edce	C	untriaged	Nix/Corgi build-source plumbing with no independent ZZZ product behavior.	upstream-sync-2026-09-02.md
 d058ddbbc1	C	philosophy	Restyles the collaboration panel, which ZZZ does not ship.	upstream-sync-2026-10-10.md
@@ -752,6 +757,7 @@ efed1f245a	C	absent-api	FIM stop-sequence handling in the absent `edit_predictio
 f0685e0a	C	diverged	Parent-revision blame; git/proto conflict.	upstream-sync-2026-08-18.md
 f092e5e9	C	untriaged	Rescan diagnostics need upstream `OsWatcher`; ZZZ still uses `GlobalWatcher`.	upstream-sync-2026-09-18.md
 f0b38ac75e	C	upstream-infra	Lockfile-only dependency bump with no independent ZZZ behavior.	upstream-sync-2026-10-10.md
+f0d896f2c1	C	untriaged	Adds per-model capability entries for two Anthropic models. ZZZ has no `crates/anthropic`; commercial model providers are silent-manual configuration only, so there is no capability list to extend.	upstream-sync-2026-11-10-b.md
 f0d8b0b0	C	untriaged	New `HoverListenerMode` API with no current ZZZ caller once the which-key indicator is rejected.	upstream-sync-2026-09-04.md
 f0fb48c7	C	philosophy	ForegroundJournal sleep/visibility needs unabsorbed Window APIs and hang telemetry.	upstream-sync-2026-09-18.md
 f14592c4a5	C	release-metadata	Raises the macOS floor to 12 and replaces a deprecated icon API. The local window has no `iconForFileType` path, and the floor bump is release metadata.	upstream-sync-2026-10-27.md
