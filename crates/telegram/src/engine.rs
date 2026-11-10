@@ -1010,6 +1010,7 @@ impl EngineState {
                 monoforum_peer_id: None,
                 todo_item_id: None,
                 poll_option: None,
+                quote_rich: None,
             })
         });
         let request = tl::functions::messages::SaveDraft {
@@ -7283,6 +7284,7 @@ mod tests {
                 quote_offset: None,
                 todo_item_id: None,
                 poll_option: None,
+                quote_rich: None,
             },
         )
     }

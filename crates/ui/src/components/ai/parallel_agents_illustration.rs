@@ -176,7 +176,7 @@ impl RenderOnce for ParallelAgentsIllustration {
                     .border_b_1()
                     .border_color(cx.theme().colors().border.opacity(0.5))
                     .child(
-                        Label::new(fix_branch_label.clone())
+                        Label::new(fix_branch_label)
                             .size(LabelSize::XSmall)
                             .color(Color::Muted),
                     )

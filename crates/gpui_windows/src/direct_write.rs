@@ -2510,7 +2510,8 @@ mod tests {
     use anyhow::{Context as _, Result};
     use gpui::{
         DevicePixels, Font, FontWeight, GlyphRasterFormat, PlatformTextSystem, RasterizedGlyph,
-        RenderGlyphParams, Rgba, TextRun, TextSystem, WindowTextSystem, bounds, point, px, size,
+        RenderGlyphParams, Rgba, ShapedLine, TextRun, TextSystem, WindowTextSystem, bounds, point,
+        px, size,
     };
     use std::{borrow::Cow, ffi::c_void, path::PathBuf, sync::Arc};
     use windows::Win32::Graphics::Direct3D11::{
@@ -2521,9 +2522,40 @@ mod tests {
     use windows::Win32::Graphics::DirectWrite::{DWRITE_FONT_STRETCH_NORMAL, DWRITE_TEXT_METRICS};
     use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_SAMPLE_DESC};
 
+    /// Forward-only boundary cursor rebuilt from `ShapedLine::split_at`. ZZZ does
+    /// not absorb upstream's `ShapedLineCursor` public API
+    /// (upstream-rejected.tsv: f792c2d7), but these ported Windows regression
+    /// tests rely on its `cursor()` / `take_until()` semantics. `split_at`
+    /// produces the same `text`, `width`, and `len` for each forward slice.
+    struct LineCursor {
+        remainder: ShapedLine,
+        byte_index: usize,
+    }
+
+    impl LineCursor {
+        fn new(line: &ShapedLine) -> Self {
+            Self {
+                remainder: line.clone(),
+                byte_index: 0,
+            }
+        }
+
+        fn take_until(&mut self, byte_index: usize) -> ShapedLine {
+            assert!(
+                byte_index >= self.byte_index,
+                "split boundary moved backwards"
+            );
+            let (piece, rest) = self.remainder.split_at(byte_index - self.byte_index);
+            self.remainder = rest;
+            self.byte_index = byte_index;
+            piece
+        }
+    }
+
     #[test]
     fn tabs_preserve_native_advances_and_cursor() -> Result<()> {
-        let platform_text_system = Arc::new(DirectWriteTextSystem::new(None)?);
+        let devices = DirectXDevices::new()?;
+        let platform_text_system = Arc::new(DirectWriteTextSystem::new(&devices)?);
         let text_system =
             WindowTextSystem::new(Arc::new(TextSystem::new(platform_text_system.clone())));
         for family in ["Consolas", "Segoe UI"] {
@@ -2592,7 +2624,7 @@ mod tests {
                             }]
                         };
                         let shaped = text_system.shape_line(text.into(), font_size, &runs, None);
-                        let mut cursor = shaped.cursor();
+                        let mut cursor = LineCursor::new(&shaped);
                         let mut expected_x = px(0.0);
                         for (index, character) in text.char_indices() {
                             let end = index + character.len_utf8();
@@ -2658,7 +2690,8 @@ mod tests {
     }
 
     fn check_unicode_separator_cursor(separator: char) -> Result<()> {
-        let platform_text_system = Arc::new(DirectWriteTextSystem::new(None)?);
+        let devices = DirectXDevices::new()?;
+        let platform_text_system = Arc::new(DirectWriteTextSystem::new(&devices)?);
         let font = Font {
             family: "Segoe UI".into(),
             ..Default::default()
@@ -2740,7 +2773,7 @@ mod tests {
                     assert_eq!(reference_index, expected.index, "{text:?}");
                 }
 
-                let mut cursor = shaped.cursor();
+                let mut cursor = LineCursor::new(&shaped);
                 for (index, character) in text.char_indices() {
                     let piece = cursor.take_until(index + character.len_utf8());
                     assert_eq!(piece.text.as_ref(), character.to_string());

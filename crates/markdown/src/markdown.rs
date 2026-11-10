@@ -1596,12 +1596,11 @@ impl ParsedMarkdown {
             match event {
                 MarkdownEvent::RootStart | MarkdownEvent::RootEnd(_) => {}
                 MarkdownEvent::Start(MarkdownTag::HtmlBlock) => {
-                    in_empty_html_block = match self.html_blocks.get(&range.start) {
-                        Some(block) => block.children.is_empty(),
-                        None => {
-                            let html = self.source[range.clone()].trim();
-                            html.starts_with("<!--") && html.ends_with("-->")
-                        }
+                    in_empty_html_block = if let Some(block) = self.html_blocks.get(&range.start) {
+                        block.children.is_empty()
+                    } else {
+                        let html = self.source[range.clone()].trim();
+                        html.starts_with("<!--") && html.ends_with("-->")
                     };
                     if !in_empty_html_block {
                         return range.start;

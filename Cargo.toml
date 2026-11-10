@@ -575,9 +575,9 @@ futures-lite = "2.6"
 gh-workflow = { path = "vendor/gh-workflow/crates/gh-workflow" }
 git2 = { version = "0.21.0", default-features = false, features = ["vendored-libgit2", "unstable-sha256"] }
 globset = "0.4"
-grammers-client = { version = "0.11", default-features = false, features = ["fs", "markdown", "proxy"] }
-grammers-session = { version = "0.11", default-features = false, features = ["serde"] }
-grammers-tl-types = "0.11"
+grammers-client = { version = "0.12", default-features = false, features = ["fs", "markdown", "proxy"] }
+grammers-session = { version = "0.12", default-features = false, features = ["serde"] }
+grammers-tl-types = "0.12"
 heapless = "0.9.3"
 handlebars = "6.4"
 heck = "0.5"
@@ -615,7 +615,7 @@ indoc = "2"
 inventory = "0.3.25"
 itertools = "0.15.0"
 json_dotpath = "1.1"
-jsonschema = "0.60.2"
+jsonschema = "0.61.0"
 jsonwebtoken = "10"
 jupyter-protocol = "2.0.3"
 jupyter-websocket-client = "3.0.0"
