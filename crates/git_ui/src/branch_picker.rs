@@ -4,6 +4,7 @@ use fuzzy_nucleo::StringMatchCandidate;
 
 use collections::HashSet;
 use git::repository::{Branch, delete_branch_flag};
+use git::normalize_branch_name;
 use gpui::http_client::Url;
 use gpui::{
     Action, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Global,
@@ -786,12 +787,6 @@ fn delete_branch_command(is_remote: bool, branch_name: &str, force: bool) -> Str
         "branch {} {branch_name}",
         delete_branch_flag(is_remote, force)
     )
-}
-
-// Branch and remote names typed into the picker should not preserve surrounding
-// whitespace, otherwise normalization can produce invalid leading/trailing dashes.
-fn normalize_branch_name(query: &str) -> String {
-    query.trim().replace(' ', "-")
 }
 
 struct BranchDeleteForceDeletePrompt {
@@ -3202,12 +3197,6 @@ mod tests {
             &format!("refs/heads/{NEW_BRANCH}"),
             "branch ref_name should not have duplicate refs/heads/ prefix"
         );
-    }
-
-    #[test]
-    fn test_normalize_branch_name() {
-        assert_eq!(normalize_branch_name(" branch-name "), "branch-name");
-        assert_eq!(normalize_branch_name(" fix leak "), "fix-leak");
     }
 
     #[gpui::test]

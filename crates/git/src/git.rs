@@ -148,6 +148,13 @@ pub struct RenameBranch {
     pub branch: Option<String>,
 }
 
+/// Git branch names cannot contain whitespace, so spaces become dashes. The
+/// leading and trailing trim happens first because a branch name cannot start
+/// or end with a dash.
+pub fn normalize_branch_name(query: &str) -> String {
+    query.trim().replace(' ', "-")
+}
+
 /// Restores a file to its last committed state, discarding local changes.
 #[derive(Clone, Debug, Default, PartialEq, Deserialize, JsonSchema, Action)]
 #[action(namespace = git, deprecated_aliases = ["editor::RevertFile"])]
@@ -295,5 +302,18 @@ impl RunHook {
             0 => Some(Self::PreCommit),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_branch_name;
+
+    #[test]
+    fn test_normalize_branch_name() {
+        assert_eq!(normalize_branch_name(" branch-name "), "branch-name");
+        assert_eq!(normalize_branch_name("branch name"), "branch-name");
+        assert_eq!(normalize_branch_name("  branch  name  "), "branch--name");
+        assert_eq!(normalize_branch_name(" fix leak "), "fix-leak");
     }
 }
