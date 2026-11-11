@@ -38,7 +38,7 @@ impl Element for &'static str {
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
         let mut state = TextLayout::default();
-        let layout_id = state.layout(SharedString::from(*self), None, None, window, cx);
+        let layout_id = state.layout(SharedString::new_static(self), None, None, window, cx);
         (layout_id, state)
     }
 
