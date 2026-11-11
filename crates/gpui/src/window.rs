@@ -736,6 +736,7 @@ pub struct Window {
     display_id: Option<DisplayId>,
     is_resizable: bool,
     is_minimizable: bool,
+    last_window_bounds: WindowBounds,
     sprite_atlas: Arc<dyn PlatformAtlas>,
     text_system: Rc<WindowTextSystem>,
     text_rendering_mode: Rc<Cell<TextRenderingMode>>,
@@ -963,43 +964,18 @@ pub(crate) struct ElementStateBox {
     pub(crate) type_name: &'static str,
 }
 
-fn active_window_bounds(cx: &mut App) -> Option<WindowBounds> {
-    let window_update_stack = cx.window_update_stack.clone();
-    let window_stack = cx.window_stack().unwrap_or_default();
-
-    let active_window = window_stack
-        .into_iter()
-        .filter(|window| !window_update_stack.contains(&window.window_id()))
-        .find_map(|window| {
-            window
-                .update(cx, |_, window, _| window.window_bounds())
-                .ok()
-        });
-
-    active_window.or_else(|| {
-        cx.active_window()
-            .filter(|window| !window_update_stack.contains(&window.window_id()))
-            .and_then(|window| {
-                window
-                    .update(cx, |_, window, _| window.window_bounds())
-                    .ok()
-            })
-    })
-}
-
-fn default_bounds(display_id: Option<DisplayId>, cx: &mut App) -> WindowBounds {
-    let active_window_bounds = active_window_bounds(cx);
-
+fn default_bounds(
+    active_window_bounds: Option<WindowBounds>,
+    display: Option<&dyn PlatformDisplay>,
+) -> WindowBounds {
     const CASCADE_OFFSET: f32 = 25.0;
-
-    let display = display_id.map_or_else(|| cx.primary_display(), |id| cx.find_display(id));
 
     let default_placement = || Bounds::new(point(px(0.), px(0.)), DEFAULT_WINDOW_SIZE);
 
     // Use visible_bounds to exclude taskbar/dock areas
     let display_bounds = display
-        .as_ref()
-        .map_or_else(default_placement, |d| d.visible_bounds());
+        .map(|d| d.visible_bounds())
+        .unwrap_or_else(default_placement);
 
     let (
         Bounds {
@@ -1013,8 +989,8 @@ fn default_bounds(display_id: Option<DisplayId>, cx: &mut App) -> WindowBounds {
         Some(bounds) => (bounds.get_bounds(), WindowBounds::Windowed),
         None => (
             display
-                .as_ref()
-                .map_or_else(default_placement, |d| d.default_bounds()),
+                .map(|d| d.default_bounds())
+                .unwrap_or_else(default_placement),
             WindowBounds::Windowed,
         ),
     };
@@ -1723,6 +1699,50 @@ mod tests {
             ),
             None,
         );
+    }
+
+    #[gpui::test]
+    fn test_window_opened_from_bounds_observer_uses_new_bounds(cx: &mut TestAppContext) {
+        use std::{cell::Cell, rc::Rc};
+
+        use crate::{Empty, Subscription};
+
+        struct BoundsObserver {
+            _subscription: Subscription,
+        }
+
+        impl Render for BoundsObserver {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                Empty
+            }
+        }
+
+        let opened_window = Rc::new(Cell::new(None));
+        let window = cx.add_window({
+            let opened_window = opened_window.clone();
+            move |window, cx| BoundsObserver {
+                _subscription: cx.observe_window_bounds(window, move |_, _, cx| {
+                    let handle = cx
+                        .open_window(WindowOptions::default(), |_, cx| cx.new(|_| EmptyView))
+                        .unwrap();
+                    opened_window.set(Some(AnyWindowHandle::from(handle)));
+                }),
+            }
+        });
+        window
+            .update(cx, |_, window, _| window.activate_window())
+            .unwrap();
+
+        let new_size = size(px(400.), px(300.));
+        cx.simulate_window_resize(window.into(), new_size);
+
+        let opened_window = opened_window
+            .take()
+            .expect("bounds observer should have opened a window");
+        let opened_size = opened_window
+            .update(cx, |_, window, _| window.bounds().size)
+            .unwrap();
+        assert_eq!(opened_size, new_size);
     }
 
     #[test]

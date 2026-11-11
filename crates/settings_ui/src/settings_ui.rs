@@ -685,6 +685,7 @@ pub fn open_settings_editor(
         let default_rem_size = 16.0;
         let scale_factor = current_rem_size / default_rem_size;
         let scaled_bounds: gpui::Size<Pixels> = default_bounds.map(|axis| axis * scale_factor);
+        let display_id = cx.active_display().map(|display| display.id());
 
         let app_id = ReleaseChannel::global(cx).app_id();
         let window_decorations = match std::env::var("ZZZ_WINDOW_DECORATIONS") {
@@ -717,7 +718,8 @@ pub fn open_settings_editor(
                     width: px(900.0),
                     height: px(240.0),
                 }),
-                window_bounds: Some(WindowBounds::centered(scaled_bounds, cx)),
+                window_bounds: Some(WindowBounds::centered(display_id, scaled_bounds, cx)),
+                display_id,
                 ..Default::default()
             },
             |window, cx| {
