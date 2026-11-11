@@ -41,7 +41,9 @@ pub fn init(cx: &mut App) {
                     .await;
                 workspace_handle
                     .update_in(cx, |workspace, window, cx| {
-                        if workspace.active_modal::<WhichKeyModal>(cx).is_some() {
+                        // The modal layer holds one modal at a time, so showing which-key
+                        // would dismiss an open modal such as the commit editor or a picker.
+                        if workspace.has_active_modal(window, cx) {
                             return;
                         }
 
