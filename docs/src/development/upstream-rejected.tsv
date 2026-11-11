@@ -257,12 +257,14 @@ sha	class	reason_code	note	source
 4f6d97b9de	C	philosophy	Frame and hang telemetry measured against per-window refresh rates; needs the absent `hang_telemetry` crate and emits telemetry.	upstream-sync-2026-10-10.md
 4f70271800	C	absent-api	Adds v2 session resume and replay (901 lines in `acp/v2.rs`); absent ACP v2.	upstream-sync-2026-10-16.md
 4f862ffbc6	C	upstream-infra	Deletes upstream workflows, prompt files, and docs/CI scripts. Community and docs automation is out of scope.	upstream-sync-2026-10-24-c.md
+5014e5b302	C	absent-api	Updates the ACP SDK to 5.2.0 and adopts schema 1.17. ZZZ pins `agent-client-protocol = "=5.0.0"`, so the schema 1.17 types this commit is built on are absent locally; the 5.1.0 bump it depends on was already rejected, and its new session references and inline config defaults are `acp-beta`-gated.	upstream-sync-2026-11-11-b.md
 504abf602a	C	absent-api	Adds `edit_predictions.button` and a Settings Editor toggle for the edit prediction status button. ZZZ deleted the `edit_prediction_ui` crate and the `EditPredictionButton`; no status item or settings row exists to gate.	upstream-sync-2026-11-04.md
 506beb34de	C	upstream-infra	Release-build selector optimization depends on the rejected production `test-support` change and has no current ZZZ production path.	upstream-sync-2026-10-05.md
 50e6411571	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 51a3a0e971	C	absent-api	Rewrites `PathStyle::is_absolute`/`has_root` on the absent `crates/path` `Components` API; unisolatable refactor.	upstream-sync-2026-10-12.md
 5218009a	C	untriaged	Depends on the rejected Web IME implementation.	upstream-sync-2026-08-27.md
 5255bd7f	C	absent-api	Needs absent `PaymentRequired` completion-error API.	upstream-sync-2026-08-27.md
+5255d9c721	C	absent-api	Skips LM Studio and llama.cpp discovery when `disable_ai` is true. ZZZ has no `crates/language_models`, so neither provider exists locally; the crate that holds `restart_fetch_models_task` and the `ai_disabled` helper is absent.	upstream-sync-2026-11-11-b.md
 526c95d4	C	philosophy	Documentation link pass for removed account and native agent pages is not isolatable.	upstream-sync-2026-09-24.md
 52894d3f	C	absent-api	`filterText` completions; `editor/src/completions.rs` deleted.	upstream-sync-2026-08-18.md
 5299a14401	C	diverged	macOS Look Up needs the upstream markdown element refactor; local rendering has diverged.	upstream-sync-2026-09-24.md
