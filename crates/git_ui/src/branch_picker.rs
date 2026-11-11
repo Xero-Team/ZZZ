@@ -3,8 +3,8 @@ use editor::Editor;
 use fuzzy_nucleo::StringMatchCandidate;
 
 use collections::HashSet;
-use git::repository::{Branch, delete_branch_flag};
 use git::normalize_branch_name;
+use git::repository::{Branch, delete_branch_flag};
 use gpui::http_client::Url;
 use gpui::{
     Action, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Global,

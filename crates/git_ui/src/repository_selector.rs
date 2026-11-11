@@ -36,9 +36,8 @@ fn sort_by_display_name(
     display_names: &HashMap<RepositoryId, SharedString>,
     cx: &App,
 ) {
-    repositories.sort_by_key(|repository| {
-        display_name_of(display_names, repository, cx).to_lowercase()
-    });
+    repositories
+        .sort_by_key(|repository| display_name_of(display_names, repository, cx).to_lowercase());
 }
 
 /// Index of the active repository within `repositories`, falling back to the

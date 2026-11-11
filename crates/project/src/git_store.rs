@@ -10712,7 +10712,7 @@ mod tests {
                 .collect()
         }
         fn names(paths: &[&str]) -> Vec<String> {
-            names_in(PathStyle::Unix, paths)
+            names_in(PathStyle::Posix, paths)
         }
 
         // Distinct leaf names are left alone, however deeply they are nested.
