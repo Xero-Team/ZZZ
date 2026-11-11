@@ -173,7 +173,14 @@ impl<E: IntoElement + 'static> Element for AnimationElement<E> {
                     .animation_ix
                     .min(self.animations.len().saturating_sub(1));
                 state.animation_ix = animation_ix;
-                let duration = self.animations[animation_ix].duration;
+                let animation = &self.animations[animation_ix];
+                // One-shot transitions are decoration: they cost frames on a CPU adapter
+                // without telling the user anything the finished state does not.
+                let duration = if animation.oneshot && cx.is_software_rendering() {
+                    Duration::ZERO
+                } else {
+                    animation.duration
+                };
 
                 let elapsed = if self.animations[animation_ix].synced && !duration.is_zero() {
                     let elapsed = cx.background_executor().now() - cx.synced_animation_epoch;

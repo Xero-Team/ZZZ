@@ -211,6 +211,7 @@ App::get_menus method & self -> Option < Vec < OwnedMenu > >
 App::get_name method & self -> Option < & 'static str >
 App::global method <G : Global>  & self -> & G
 App::global_mut method <G : Global>  & mut self -> & mut G
+App::gpu_specs method & self -> Option < & GpuSpecs >
 App::has_active_drag method & self -> bool
 App::has_asset method <A : Asset>  & self , source : & A :: Source -> bool
 App::has_global method <G : Global>  & self -> bool
@@ -222,6 +223,7 @@ App::intercept_keystrokes method & mut self , mut f : impl FnMut (& KeystrokeEve
 App::is_action_available method & mut self , action : & dyn Action -> bool
 App::is_cursor_visible method & self -> bool
 App::is_screen_capture_supported method & self -> bool
+App::is_software_rendering method & self -> bool
 App::key_bindings method & self -> Rc < RefCell < Keymap > >
 App::keyboard_layout method & self -> & dyn PlatformKeyboardLayout
 App::keyboard_mapper method & self -> & Rc < dyn PlatformKeyboardMapper >
@@ -270,6 +272,7 @@ App::set_active_drag_cursor_style method & mut self , cursor_style : CursorStyle
 App::set_cursor_hide_mode method & mut self , mode : CursorHideMode
 App::set_dock_menu method & self , menus : Vec < MenuItem >
 App::set_global method <G : Global>  & mut self , global : G
+App::set_gpu_specs method & mut self , specs : GpuSpecs
 App::set_http_client method & mut self , new_client : Arc < dyn HttpClient >
 App::set_inspector_renderer method & mut self , f : crate :: InspectorRenderer
 App::set_menus method & self , menus : impl IntoIterator < Item = Menu >

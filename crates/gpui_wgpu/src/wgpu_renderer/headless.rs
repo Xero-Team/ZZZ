@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use gpui::{AtlasPolicy, DevicePixels, PlatformAtlas, PlatformHeadlessRenderer, Scene, Size};
 
-use crate::WgpuContext;
+use crate::{SoftwareAdapterPolicy, WgpuContext};
 
 use super::{ReadbackCopy, WgpuRenderer};
 
@@ -101,6 +101,11 @@ impl WgpuHeadlessRenderer {
     /// Returns the adapter selected for this renderer.
     pub fn gpu_specs(&self) -> gpui::GpuSpecs {
         self.renderer.gpu_specs()
+    }
+
+    /// Returns the adapter policy the renderer uses to recover from a device loss.
+    pub fn recovery_adapter_policy(&self) -> SoftwareAdapterPolicy {
+        self.renderer.recovery_adapter_policy()
     }
 
     fn ensure_target(&mut self, size: Size<DevicePixels>) -> anyhow::Result<()> {

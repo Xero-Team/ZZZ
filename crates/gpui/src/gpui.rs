@@ -367,3 +367,5 @@ pub struct GpuSpecs {
     /// Further information about the driver, as reported by Vulkan.
     pub driver_info: String,
 }
+
+impl Global for GpuSpecs {}

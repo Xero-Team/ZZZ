@@ -44,13 +44,13 @@ use crate::{
     Action, ActionBuildError, ActionRegistry, Any, AnyView, AnyWindowHandle, AppContext,
     AppLifecycleCapabilities, Arena, ArenaBox, Asset, AssetSource, BackgroundExecutor, Bounds,
     ClipboardCapabilities, ClipboardItem, CursorStyle, DispatchPhase, DisplayId, EventEmitter,
-    FocusHandle, FocusMap, ForegroundExecutor, Global, KeyBinding, KeyContext, Keymap, Keystroke,
-    LayoutId, Menu, MenuItem, OwnedMenu, PathPromptOptions, Pixels, Platform, PlatformDisplay,
-    PlatformKeyboardLayout, PlatformKeyboardMapper, Point, PowerMode, Priority, PromptBuilder,
-    PromptButton, PromptHandle, PromptLevel, Render, RenderImage, RenderablePromptHandle,
-    Reservation, ScreenCaptureSource, SharedString, SubscriberSet, Subscription, SvgRenderer, Task,
-    TextRenderingMode, TextSystem, ThermalState, Window, WindowAppearance, WindowButtonLayout,
-    WindowHandle, WindowId, WindowInvalidator,
+    FocusHandle, FocusMap, ForegroundExecutor, Global, GpuSpecs, KeyBinding, KeyContext, Keymap,
+    Keystroke, LayoutId, Menu, MenuItem, OwnedMenu, PathPromptOptions, Pixels, Platform,
+    PlatformDisplay, PlatformKeyboardLayout, PlatformKeyboardMapper, Point, PowerMode, Priority,
+    PromptBuilder, PromptButton, PromptHandle, PromptLevel, Render, RenderImage,
+    RenderablePromptHandle, Reservation, ScreenCaptureSource, SharedString, SubscriberSet,
+    Subscription, SvgRenderer, Task, TextRenderingMode, TextSystem, ThermalState, Window,
+    WindowAppearance, WindowButtonLayout, WindowHandle, WindowId, WindowInvalidator,
     colors::{Colors, GlobalColors},
     hash, init_app_menus,
 };
@@ -2080,6 +2080,28 @@ impl App {
         subscription
     }
 
+    /// Records the GPU information reported by the platform.
+    ///
+    /// The renderer of the first window exists before that window renders, so the value is
+    /// available to rendering decisions made during the first frame.
+    pub fn set_gpu_specs(&mut self, specs: GpuSpecs) {
+        self.set_global(specs);
+    }
+
+    /// Returns the GPU information most recently reported by the platform.
+    pub fn gpu_specs(&self) -> Option<&GpuSpecs> {
+        self.try_global()
+    }
+
+    /// Whether rendering runs on a CPU adapter, such as Mesa's llvmpipe.
+    ///
+    /// Without a GPU, fill and blur cost dominate every frame, so work that only exists to
+    /// decorate the UI is skipped while this returns true.
+    pub fn is_software_rendering(&self) -> bool {
+        self.gpu_specs()
+            .is_some_and(|specs| specs.is_software_emulated)
+    }
+
     /// Move the global of the given type to the stack.
     #[track_caller]
     pub(crate) fn lease_global<G: Global>(&mut self) -> GlobalLease<G> {
@@ -3053,10 +3075,32 @@ mod test {
     use std::os::unix::ffi::OsStringExt;
 
     use crate::{
-        AppContext, BackgroundExecutor, ForegroundExecutor, TestAppContext, TestDispatcher,
-        TestPlatform,
+        AppContext, BackgroundExecutor, ForegroundExecutor, GpuSpecs, TestAppContext,
+        TestDispatcher, TestPlatform,
     };
     use gpui_util::ResultExt as _;
+
+    #[gpui::test]
+    fn software_rendering_follows_the_reported_gpu_specs(cx: &mut TestAppContext) {
+        cx.update(|cx| assert!(!cx.is_software_rendering()));
+
+        cx.update(|cx| {
+            cx.set_gpu_specs(GpuSpecs {
+                is_software_emulated: true,
+                device_name: "llvmpipe".into(),
+                ..Default::default()
+            })
+        });
+        cx.update(|cx| assert!(cx.is_software_rendering()));
+
+        cx.update(|cx| {
+            cx.set_gpu_specs(GpuSpecs {
+                device_name: "hardware".into(),
+                ..Default::default()
+            })
+        });
+        cx.update(|cx| assert!(!cx.is_software_rendering()));
+    }
 
     #[gpui::test]
     fn app_borrow_diagnostics(cx: &mut TestAppContext) {

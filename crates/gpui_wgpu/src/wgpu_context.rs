@@ -24,6 +24,27 @@ pub struct CompositorGpuHint {
     pub device_id: u32,
 }
 
+/// Whether adapter selection may fall back to a CPU adapter, such as Mesa's llvmpipe.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SoftwareAdapterPolicy {
+    /// Prefer hardware adapters, but accept a CPU adapter when no hardware adapter can present.
+    Allow,
+    /// Skip CPU adapters entirely.
+    ///
+    /// Used when recreating a context after a device loss on a hardware adapter, so that a
+    /// driver reset cannot silently downgrade a working machine to software rendering.
+    Reject,
+}
+
+impl SoftwareAdapterPolicy {
+    fn accepts(self, device_type: wgpu::DeviceType) -> bool {
+        match self {
+            Self::Allow => true,
+            Self::Reject => device_type != wgpu::DeviceType::Cpu,
+        }
+    }
+}
+
 impl WgpuContext {
     /// Creates a native device without a presentation surface.
     #[cfg(not(target_family = "wasm"))]
@@ -64,33 +85,14 @@ impl WgpuContext {
         })
     }
 
+    /// Creates a context for a window surface, selecting an adapter according to `policy`.
     #[cfg(not(target_family = "wasm"))]
     pub fn new(
         instance: wgpu::Instance,
         surface: &wgpu::Surface<'_>,
         config: &WgpuSurfaceConfig,
         compositor_gpu: Option<CompositorGpuHint>,
-    ) -> anyhow::Result<Self> {
-        Self::new_with_options(instance, surface, config, compositor_gpu, false)
-    }
-
-    #[cfg(not(target_family = "wasm"))]
-    pub fn new_rejecting_software(
-        instance: wgpu::Instance,
-        surface: &wgpu::Surface<'_>,
-        config: &WgpuSurfaceConfig,
-        compositor_gpu: Option<CompositorGpuHint>,
-    ) -> anyhow::Result<Self> {
-        Self::new_with_options(instance, surface, config, compositor_gpu, true)
-    }
-
-    #[cfg(not(target_family = "wasm"))]
-    fn new_with_options(
-        instance: wgpu::Instance,
-        surface: &wgpu::Surface<'_>,
-        config: &WgpuSurfaceConfig,
-        compositor_gpu: Option<CompositorGpuHint>,
-        reject_software: bool,
+        policy: SoftwareAdapterPolicy,
     ) -> anyhow::Result<Self> {
         let device_id_filter = match std::env::var("ZZZ_DEVICE_ID") {
             Ok(val) => parse_pci_id(&val)
@@ -113,7 +115,7 @@ impl WgpuContext {
                 surface,
                 config,
                 compositor_gpu.as_ref(),
-                reject_software,
+                policy,
             ))?;
 
         let device_lost = Arc::new(AtomicBool::new(false));
@@ -263,7 +265,7 @@ impl WgpuContext {
         surface: &wgpu::Surface<'_>,
         config: &WgpuSurfaceConfig,
         compositor_gpu: Option<&CompositorGpuHint>,
-        reject_software: bool,
+        policy: SoftwareAdapterPolicy,
     ) -> anyhow::Result<(
         wgpu::Adapter,
         wgpu::Device,
@@ -354,9 +356,9 @@ impl WgpuContext {
         for adapter in adapters {
             let info = adapter.get_info();
 
-            if reject_software && info.device_type == wgpu::DeviceType::Cpu {
+            if !policy.accepts(info.device_type) {
                 log::info!(
-                    "Skipping software renderer: {} ({:?})",
+                    "Skipping CPU adapter (software rendering rejected by policy): {} ({:?})",
                     info.name,
                     info.backend
                 );
@@ -484,6 +486,23 @@ impl WgpuContext {
     pub(crate) fn device_lost_flag(&self) -> Arc<AtomicBool> {
         Arc::clone(&self.device_lost)
     }
+
+    /// Whether the selected adapter runs on the CPU, such as Mesa's llvmpipe or lavapipe.
+    pub fn uses_software_adapter(&self) -> bool {
+        self.adapter.get_info().device_type == wgpu::DeviceType::Cpu
+    }
+
+    /// The adapter policy that can recreate this context after a device loss.
+    ///
+    /// A context that already runs on a CPU adapter must be allowed to select a CPU adapter
+    /// again; rejecting software adapters there would leave the renderer with no adapter at all.
+    pub fn recovery_policy(&self) -> SoftwareAdapterPolicy {
+        if self.uses_software_adapter() {
+            SoftwareAdapterPolicy::Allow
+        } else {
+            SoftwareAdapterPolicy::Reject
+        }
+    }
 }
 
 #[cfg(not(target_family = "wasm"))]
@@ -505,7 +524,25 @@ fn parse_pci_id(id: &str) -> anyhow::Result<u32> {
 
 #[cfg(test)]
 mod tests {
+    use super::SoftwareAdapterPolicy;
     use super::parse_pci_id;
+    use wgpu::DeviceType;
+
+    #[test]
+    fn software_adapter_policy_only_skips_cpu_adapters() {
+        for device_type in [
+            DeviceType::DiscreteGpu,
+            DeviceType::IntegratedGpu,
+            DeviceType::VirtualGpu,
+            DeviceType::Other,
+        ] {
+            assert!(SoftwareAdapterPolicy::Allow.accepts(device_type));
+            assert!(SoftwareAdapterPolicy::Reject.accepts(device_type));
+        }
+
+        assert!(SoftwareAdapterPolicy::Allow.accepts(DeviceType::Cpu));
+        assert!(!SoftwareAdapterPolicy::Reject.accepts(DeviceType::Cpu));
+    }
 
     #[test]
     fn test_parse_device_id() {

@@ -89,6 +89,13 @@ impl Window {
             platform_window
                 .request_decorations(window_decorations.unwrap_or(WindowDecorations::Server));
         }
+        // A CPU adapter cannot cheaply blend a transparent or blurred window against the
+        // desktop, and has no compositor blur to match, so software rendering stays opaque.
+        let window_background = if cx.is_software_rendering() {
+            WindowBackgroundAppearance::Opaque
+        } else {
+            window_background
+        };
         platform_window.set_background_appearance(window_background);
 
         match window_bounds {

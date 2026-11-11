@@ -12,7 +12,7 @@ use gpui::{
     Size, Styled as _, SubpixelSprite, SyntheticBold, SyntheticItalic, TextSystem,
     TransformationMatrix, Underline, Window, canvas, font, point, px, radians, size,
 };
-use gpui_wgpu::{CosmicTextSystem, WgpuHeadlessRenderer};
+use gpui_wgpu::{CosmicTextSystem, SoftwareAdapterPolicy, WgpuHeadlessRenderer};
 use std::{borrow::Cow, collections::HashSet, path::Path, sync::Arc, time::Instant};
 
 const RUNS: usize = 100;
@@ -2048,6 +2048,31 @@ fn hardware_adapter_renders_primitive_corpus() {
                 save_output(&image, "hardware", scale);
             }
         }
+    }
+}
+
+#[test]
+fn recovery_policy_allows_exactly_the_selected_adapter_kind() {
+    let software =
+        WgpuHeadlessRenderer::new_with_fallback(true).expect("fallback headless renderer");
+    assert!(
+        software.gpu_specs().is_software_emulated,
+        "fallback corpus selected non-software adapter: {}",
+        software.gpu_specs().device_name
+    );
+    assert_eq!(
+        software.recovery_adapter_policy(),
+        SoftwareAdapterPolicy::Allow,
+        "a CPU adapter must be able to recreate its own context"
+    );
+
+    let hardware = WgpuHeadlessRenderer::new_with_fallback(false).expect("headless renderer");
+    if !hardware.gpu_specs().is_software_emulated {
+        assert_eq!(
+            hardware.recovery_adapter_policy(),
+            SoftwareAdapterPolicy::Reject,
+            "a hardware adapter must not recover into software rendering"
+        );
     }
 }
 

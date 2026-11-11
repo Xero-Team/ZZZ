@@ -1,4 +1,4 @@
-use crate::{CompositorGpuHint, WgpuAtlas, WgpuContext};
+use crate::{CompositorGpuHint, SoftwareAdapterPolicy, WgpuAtlas, WgpuContext};
 #[cfg(all(feature = "test-support", not(target_family = "wasm")))]
 use gpui::AtlasPolicy;
 use gpui::{
@@ -67,6 +67,12 @@ pub struct WgpuRenderer {
     device_lost: std::sync::Arc<std::sync::atomic::AtomicBool>,
     surface_configured: bool,
     needs_redraw: bool,
+    /// Adapter policy for recreating the context after a device loss (unused on Web).
+    #[cfg_attr(
+        target_family = "wasm",
+        allow(dead_code, reason = "native device recovery is unavailable on Web")
+    )]
+    recovery_adapter_policy: SoftwareAdapterPolicy,
     #[cfg(test)]
     fail_after_surface_acquire: bool,
 }
@@ -163,6 +169,7 @@ impl WgpuRenderer {
                 &surface,
                 &config,
                 compositor_gpu,
+                SoftwareAdapterPolicy::Allow,
             )?),
         };
 
@@ -497,6 +504,7 @@ impl WgpuRenderer {
             device_lost: context.device_lost_flag(),
             surface_configured: true,
             needs_redraw: false,
+            recovery_adapter_policy: context.recovery_policy(),
             #[cfg(test)]
             fail_after_surface_acquire: false,
         })
@@ -1001,6 +1009,11 @@ impl WgpuRenderer {
         self.dual_source_blending
     }
 
+    /// The adapter policy this renderer uses when recreating its context after a device loss.
+    pub fn recovery_adapter_policy(&self) -> SoftwareAdapterPolicy {
+        self.recovery_adapter_policy
+    }
+
     pub fn gpu_specs(&self) -> GpuSpecs {
         let mut specs = GpuSpecs::default();
         specs.is_software_emulated = self.adapter_info.device_type == wgpu::DeviceType::Cpu;
@@ -1486,19 +1499,22 @@ impl WgpuRenderer {
             self.resources = None;
             *gpu_context.borrow_mut() = None;
 
-            // Wait briefly for the GPU driver to stabilize, then try to
-            // recreate the context without software renderers. If this fails
-            // the caller should request another frame and retry — the real GPU
-            // may need more time to come back (e.g. after suspend/resume).
+            // Wait briefly for the GPU driver to stabilize, then recreate the context with
+            // the policy that matches the adapter this renderer was using: a hardware adapter
+            // must not silently fall back to software rendering, while a context that already
+            // runs on a CPU adapter has to be allowed to select one again. If this fails the
+            // caller should request another frame and retry — the real GPU may need more time
+            // to come back (e.g. after suspend/resume).
             std::thread::sleep(std::time::Duration::from_millis(350));
 
             let instance = WgpuContext::instance(Box::new(window.clone()));
             let surface = create_surface(&instance, window_handle.as_raw())?;
-            let new_context = WgpuContext::new_rejecting_software(
+            let new_context = WgpuContext::new(
                 instance,
                 &surface,
                 &config,
                 self.compositor_gpu,
+                self.recovery_adapter_policy,
             )?;
             *gpu_context.borrow_mut() = Some(new_context);
             surface

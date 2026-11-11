@@ -529,7 +529,9 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
 
         if let Some(specs) = window.gpu_specs() {
             log::info!("Using GPU: {:?}", specs);
-            show_software_emulation_warning_if_needed(specs.clone(), window, cx);
+            // Rendering decisions made later in this frame read the specs from the app.
+            cx.set_gpu_specs(specs.clone());
+            apply_software_rendering_profile(&specs, window, workspace, cx);
             crashes::set_gpu_info(specs);
         }
 
@@ -670,55 +672,52 @@ fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
     }
 }
 
-fn show_software_emulation_warning_if_needed(
-    specs: gpui::GpuSpecs,
+/// Applies the rendering profile for a CPU adapter and tells the user about it.
+///
+/// Windows opened after this point inherit the opaque background through [`Window::new`];
+/// the window that reported these specs gets it applied directly.
+fn apply_software_rendering_profile(
+    specs: &gpui::GpuSpecs,
     window: &mut Window,
+    workspace: &mut Workspace,
     cx: &mut Context<Workspace>,
 ) {
-    if specs.is_software_emulated && std::env::var("ZZZ_ALLOW_EMULATED_GPU").is_err() {
-        let (graphics_api, docs_url) = if cfg!(target_os = "windows") {
-            (
-                tr(cx, "zzz.gpu.graphics_api.directx", "DirectX"),
-                "local Windows troubleshooting documentation",
-            )
-        } else {
-            (
-                tr(cx, "zzz.gpu.graphics_api.vulkan", "Vulkan"),
-                "local Linux troubleshooting documentation",
-            )
-        };
-        let message = tr(
-            cx,
-            "zzz.gpu.unsupported_detail",
-            "ZZZ uses {} for rendering and requires a compatible GPU.\n\nCurrently you are using a software emulated GPU ({}) which\nwill result in awful performance.\n\nFor troubleshooting see: {}\nSet ZZZ_ALLOW_EMULATED_GPU=1 env var to permanently override.",
-        )
-        .replacen("{}", &graphics_api, 1)
-        .replacen("{}", &specs.device_name, 1)
-        .replacen("{}", docs_url, 1);
-        let prompt = window.prompt(
-            PromptLevel::Critical,
-            &tr(cx, "zzz.gpu.unsupported", "Unsupported GPU"),
-            Some(&message),
-            &[
-                tr(cx, "zzz.gpu.skip", "Skip").as_str(),
-                tr(
-                    cx,
-                    "zzz.file_watcher.troubleshoot_and_quit",
-                    "Troubleshoot and Quit",
-                )
-                .as_str(),
-            ],
-            cx,
-        );
-        cx.spawn(async move |_, cx| {
-            if prompt.await == Ok(1) {
-                cx.update(|cx| {
-                    cx.quit().log_err();
-                });
-            }
-        })
-        .detach()
+    if !specs.is_software_emulated {
+        return;
     }
+
+    window.set_background_appearance(gpui::WindowBackgroundAppearance::Opaque);
+
+    if std::env::var_os("ZZZ_ALLOW_EMULATED_GPU").is_some() {
+        return;
+    }
+
+    let (graphics_api, docs_url) = if cfg!(target_os = "windows") {
+        (
+            tr(cx, "zzz.gpu.graphics_api.directx", "DirectX"),
+            "local Windows troubleshooting documentation",
+        )
+    } else {
+        (
+            tr(cx, "zzz.gpu.graphics_api.vulkan", "Vulkan"),
+            "local Linux troubleshooting documentation",
+        )
+    };
+    let message = tr(
+        cx,
+        "zzz.gpu.unsupported_detail",
+        "ZZZ is rendering with a software emulated GPU ({}) because it renders through {} and found no compatible GPU.\n\nExpect reduced performance. For troubleshooting see: {}\nSet ZZZ_ALLOW_EMULATED_GPU=1 to hide this notice.",
+    )
+    .replacen("{}", &specs.device_name, 1)
+    .replacen("{}", &graphics_api, 1)
+    .replacen("{}", docs_url, 1);
+
+    // A notification rather than a prompt: a startup dialog that swallows the first
+    // keystrokes is worse than a slow window, and this stays readable while the user works.
+    workspace.show_toast(
+        Toast::new(NotificationId::named("software-adapter".into()), message),
+        cx,
+    );
 }
 
 fn initialize_panels(window: &mut Window, cx: &mut Context<Workspace>) -> Task<anyhow::Result<()>> {

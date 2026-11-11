@@ -520,11 +520,11 @@ geometries, and quits with the quit command.
 The script uses `--user-data-dir` and opens the folder rather than the file
 itself, so the session always covers a scanned worktree and the file finder
 instead of a one-file workspace. It also sets `ZZZ_ALLOW_EMULATED_GPU=1`:
-without a GPU ZZZ shows an "Unsupported GPU" prompt, and that prompt eats the
-keystrokes that follow. The trainer does not trust the input either: it saves
-the typed text, greps the file for a marker, and retries or fails when the
-editor dropped a line. A session that types into a start screen still writes a
-profile, just a useless one.
+without a GPU ZZZ shows a notice about the software adapter it renders on, and
+that notice does not belong in a profile of the editor's own work. The trainer
+does not trust the input either: it saves the typed text, greps the file for a
+marker, and retries or fails when the editor dropped a line. A session that
+types into a start screen still writes a profile, just a useless one.
 
 The shutdown is part of the workload. LLVM flushes the profile from an exit
 handler, so the editor has to exit through its own quit action; a killed process
