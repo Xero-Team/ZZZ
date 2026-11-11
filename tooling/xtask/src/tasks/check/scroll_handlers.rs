@@ -10,6 +10,14 @@
 //! A plain text search cannot distinguish a deferred closure from a synchronous
 //! one, so this gate parses the Rust source with `syn` and inspects only the
 //! calls that run synchronously in the handler body.
+//!
+//! The `ListState` method list below is maintained by hand, so an upstream
+//! change that adds or removes a method could leave it stale while the gate
+//! still reports success. `check_method_list` re-derives the method names from
+//! the `impl ListState` block in the gpui source and fails on any drift.
+
+use std::collections::BTreeSet;
+use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
 use proc_macro2::Span;
@@ -73,7 +81,107 @@ fn is_deferred_body(argument: &Expr) -> bool {
     matches!(argument, Expr::Closure(_) | Expr::Async(_))
 }
 
+/// The source that defines `ListState`. Its method list is the authority the
+/// hardcoded `LIST_STATE_METHODS` must be kept in sync with.
+const LIST_STATE_SOURCE: &str = "crates/gpui/src/elements/list.rs";
+
+/// Collects the inherent `impl ListState` instance-method names from a parsed
+/// file. Returns `None` when no such impl block exists, so a refactor that
+/// moves or removes it cannot leave the method-list check silently disabled.
+fn impl_list_state_methods(file: &syn::File) -> Option<BTreeSet<String>> {
+    let mut collector = ListStateMethodCollector {
+        found_impl: false,
+        methods: BTreeSet::new(),
+    };
+    collector.visit_file(file);
+    collector.found_impl.then_some(collector.methods)
+}
+
+struct ListStateMethodCollector {
+    found_impl: bool,
+    methods: BTreeSet<String>,
+}
+
+impl<'ast> Visit<'ast> for ListStateMethodCollector {
+    fn visit_item_impl(&mut self, item_impl: &'ast syn::ItemImpl) {
+        if is_inherent_list_state_impl(item_impl) {
+            self.found_impl = true;
+            for member in &item_impl.items {
+                if let syn::ImplItem::Fn(method) = member
+                    // Associated functions such as `new` take no `self`: they
+                    // construct a fresh state and cannot re-enter an existing
+                    // handler's borrow, so they are deliberately not gated.
+                    && method.sig.receiver().is_some()
+                {
+                    self.methods.insert(method.sig.ident.to_string());
+                }
+            }
+        }
+        visit::visit_item_impl(self, item_impl);
+    }
+}
+
+fn is_inherent_list_state_impl(item_impl: &syn::ItemImpl) -> bool {
+    if item_impl.trait_.is_some() {
+        return false;
+    }
+    matches!(
+        item_impl.self_ty.as_ref(),
+        syn::Type::Path(type_path)
+            if type_path.qself.is_none() && type_path.path.is_ident("ListState")
+    )
+}
+
+/// Fails when `LIST_STATE_METHODS` drifts from the real `ListState` API. An
+/// upstream change that adds an instance method and forgets to register it
+/// would otherwise let a re-entrant call through while this gate still passes.
+fn check_method_list() -> Result<()> {
+    let source = std::fs::read_to_string(Path::new(LIST_STATE_SOURCE))
+        .with_context(|| format!("failed to read {LIST_STATE_SOURCE}"))?;
+    let file: syn::File =
+        syn::parse_file(&source).with_context(|| format!("failed to parse {LIST_STATE_SOURCE}"))?;
+    let derived = impl_list_state_methods(&file).with_context(|| {
+        format!(
+            "{LIST_STATE_SOURCE} has no inherent `impl ListState` block; the scroll-handler method list cannot be verified"
+        )
+    })?;
+
+    let failures = method_list_drift(&derived);
+    if failures.is_empty() {
+        return Ok(());
+    }
+    bail!(
+        "LIST_STATE_METHODS is out of sync with {LIST_STATE_SOURCE}:\n{}",
+        failures.join("\n")
+    )
+}
+
+/// Returns one finding for every method the gate list is missing (a real
+/// `ListState` instance method whose re-entrant call would go unchecked) and
+/// every stale entry (a method that no longer exists).
+fn method_list_drift(derived: &BTreeSet<String>) -> Vec<String> {
+    let gate: BTreeSet<String> = LIST_STATE_METHODS
+        .iter()
+        .map(|method| (*method).to_owned())
+        .collect();
+
+    let mut failures = Vec::new();
+    for method in derived.difference(&gate) {
+        failures.push(format!(
+            "  - `{method}` is a ListState instance method but is missing from LIST_STATE_METHODS"
+        ));
+    }
+    for method in gate.difference(derived) {
+        failures.push(format!(
+            "  - `{method}` is in LIST_STATE_METHODS but is no longer a ListState instance method"
+        ));
+    }
+    failures
+}
+
 pub fn check() -> Result<()> {
+    check_method_list()?;
+
     let files = super::tracked_files("*.rs")?;
     let mut findings = Vec::new();
 
@@ -180,7 +288,8 @@ impl<'ast> Visit<'ast> for BorrowFinder {
 
 #[cfg(test)]
 mod tests {
-    use super::scan_file;
+    use super::{LIST_STATE_METHODS, impl_list_state_methods, method_list_drift, scan_file};
+    use std::collections::BTreeSet;
 
     fn findings(source: &str) -> Vec<String> {
         let file = syn::parse_file(source).expect("test source should parse");
@@ -313,6 +422,84 @@ mod tests {
         assert_eq!(
             findings(source),
             vec!["test.rs:4: synchronous .is_following_tail() inside a scroll handler"]
+        );
+    }
+
+    #[test]
+    fn derives_inherent_instance_methods_only() {
+        let source = r#"
+            impl ListState {
+                pub fn new() -> Self { Self }
+                pub fn scroll_to(&self) {}
+                fn private_helper(&self) {}
+            }
+            impl SomeTrait for ListState {
+                fn trait_method(&self) {}
+            }
+            impl OtherType {
+                pub fn unrelated(&self) {}
+            }
+        "#;
+        let file = syn::parse_file(source).expect("test source should parse");
+        let derived = impl_list_state_methods(&file).expect("an impl ListState block exists");
+        // `new` takes no `self`, `SomeTrait for ListState` is a trait impl, and
+        // `OtherType` is a different self type. Private inherent methods with a
+        // receiver still count: they borrow state too.
+        let expected: BTreeSet<String> = ["private_helper", "scroll_to"]
+            .iter()
+            .map(|name| (*name).to_owned())
+            .collect();
+        assert_eq!(derived, expected, "{derived:?}");
+    }
+
+    #[test]
+    fn missing_impl_block_is_not_silently_accepted() {
+        let source = "struct ListState;";
+        let file = syn::parse_file(source).expect("test source should parse");
+        assert!(impl_list_state_methods(&file).is_none());
+    }
+
+    #[test]
+    fn reports_both_directions_of_method_list_drift() {
+        let derived: BTreeSet<String> = ["item_count", "brand_new_method"]
+            .iter()
+            .map(|name| (*name).to_owned())
+            .collect();
+        let failures = method_list_drift(&derived);
+        // `brand_new_method` exists in the API but not the gate list.
+        assert!(
+            failures
+                .iter()
+                .any(|failure| failure.contains("brand_new_method") && failure.contains("missing")),
+            "{failures:?}"
+        );
+        // Every gate entry except `item_count` is now stale.
+        assert!(
+            failures
+                .iter()
+                .any(|failure| failure.contains("is_scrollbar_dragging")
+                    && failure.contains("no longer")),
+            "{failures:?}"
+        );
+        // The one method present on both sides is not reported at all.
+        assert!(
+            !failures
+                .iter()
+                .any(|failure| failure.contains("`item_count`")),
+            "{failures:?}"
+        );
+    }
+
+    #[test]
+    fn accepts_an_exact_method_list_match() {
+        let derived: BTreeSet<String> = LIST_STATE_METHODS
+            .iter()
+            .map(|method| (*method).to_owned())
+            .collect();
+        assert!(
+            method_list_drift(&derived).is_empty(),
+            "{:?}",
+            method_list_drift(&derived)
         );
     }
 }

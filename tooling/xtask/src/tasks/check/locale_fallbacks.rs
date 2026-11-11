@@ -47,9 +47,7 @@ pub fn check() -> Result<()> {
         }
         let source = fs::read_to_string(path)
             .with_context(|| format!("failed to read {}", path.display()))?;
-        // `tr (` (with a space) and `tr(` both occur; either spelling may
-        // contain a real call, so don't skip a file on a narrow text match.
-        if !source.contains("tr(") && !source.contains("tr (") {
+        if !might_contain_tr_call(&source) {
             continue;
         }
         // A parse failure must fail the gate, never silently skip a file.
@@ -121,6 +119,15 @@ impl<'ast> Visit<'ast> for FallbackVisitor<'_> {
     }
 }
 
+/// A necessary-condition prefilter: a file can only contain a `tr(...)` call
+/// if the identifier text `tr` occurs in it. Narrower spellings such as
+/// `tr(` or `tr (` are not sound, because Rust allows whitespace, newlines,
+/// and comments between `tr` and `(`; a file skipped on one of those would
+/// silently escape the fallback check even though it contains a real call.
+fn might_contain_tr_call(source: &str) -> bool {
+    source.contains("tr")
+}
+
 /// Matches `tr(...)`, `i18n::tr(...)`, `app_i18n::tr(...)`, and any other path
 /// whose final segment is `tr`. All of these are the i18n wrappers or thin
 /// re-exports of `i18n::tr`.
@@ -140,7 +147,7 @@ fn string_literal(expr: &Expr) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{HashMap, scan_file};
+    use super::{HashMap, might_contain_tr_call, scan_file};
 
     fn entries(values: &[(&str, &str)]) -> HashMap<String, String> {
         values
@@ -152,6 +159,24 @@ mod tests {
     fn findings(source: &str, values: &[(&str, &str)]) -> Vec<String> {
         let file = syn::parse_file(source).expect("test source should parse");
         scan_file(&file, &entries(values), "test.rs")
+    }
+
+    #[test]
+    fn prefilter_admits_every_call_spelling() {
+        for source in [
+            r#"fn f(cx: &App) { tr(cx, "k", "wrong"); }"#,
+            r#"fn f(cx: &App) { tr (cx, "k", "wrong"); }"#,
+            "fn f(cx: &App) { tr\n    (cx, \"k\", \"wrong\"); }",
+            r#"fn f(cx: &App) { tr /* note */ (cx, "k", "wrong"); }"#,
+        ] {
+            assert!(might_contain_tr_call(source), "{source}");
+            assert_eq!(
+                findings(source, &[("k", "right")]).len(),
+                1,
+                "a drifted fallback must still be caught for {source}"
+            );
+        }
+        assert!(!might_contain_tr_call("fn f() {}"));
     }
 
     #[test]
