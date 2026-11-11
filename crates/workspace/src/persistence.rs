@@ -40,7 +40,7 @@ use sqlez::{
 };
 
 use ui::{App, SharedString, px};
-use util::{ResultExt, maybe, rel_path::RelPath};
+use util::{ResultExt, maybe, paths::PathStyle, rel_path::RelPath};
 use uuid::Uuid;
 
 use crate::{
@@ -544,6 +544,25 @@ impl sqlez::bindable::Bind for SerializedPixels {
     ) -> anyhow::Result<i32> {
         let this: i32 = u32::from(self.0) as _;
         this.bind(statement, start_index)
+    }
+}
+
+struct PathListColumns(SerializedPathList);
+
+impl StaticColumnCount for PathListColumns {
+    fn column_count() -> usize {
+        2
+    }
+}
+
+impl Column for PathListColumns {
+    fn column(statement: &mut Statement, start_index: i32) -> anyhow::Result<(Self, i32)> {
+        let (paths, next_index) = String::column(statement, start_index)?;
+        let (order, next_index) = String::column(statement, next_index)?;
+        Ok((
+            PathListColumns(SerializedPathList { paths, order }),
+            next_index,
+        ))
     }
 }
 
@@ -1127,6 +1146,9 @@ impl Domain for WorkspaceDb {
             DROP TABLE user_toolchains;
             ALTER TABLE user_toolchains_v3 RENAME TO user_toolchains;
         ),
+        sql!(
+            ALTER TABLE workspaces ADD COLUMN path_style TEXT;
+        ),
     ];
 
     // Allow recovering from bad migration that was initially shipped to nightly
@@ -1177,26 +1199,24 @@ impl WorkspaceDb {
         // and we've grabbed the most recent workspace
         let (
             workspace_id,
-            paths,
-            paths_order,
-            identity_paths,
-            identity_paths_order,
+            paths_list,
+            identity_paths_list,
             window_bounds,
             display,
             centered_layout,
             docks,
             window_id,
+            path_style,
         ): (
             WorkspaceId,
-            String,
-            String,
-            Option<String>,
-            Option<String>,
+            PathListColumns,
+            Option<PathListColumns>,
             Option<SerializedWindowBounds>,
             Option<Uuid>,
             Option<bool>,
             DockStructure,
             Option<u64>,
+            Option<String>,
         ) = self
             .select_row_bound(sql! {
                 SELECT
@@ -1221,7 +1241,8 @@ impl WorkspaceDb {
                     bottom_dock_visible,
                     bottom_dock_active_panel,
                     bottom_dock_zoom,
-                    window_id
+                    window_id,
+                    path_style
                 FROM workspaces
                 WHERE
                     paths IS ? AND
@@ -1238,16 +1259,8 @@ impl WorkspaceDb {
             .warn_on_err()
             .flatten()?;
 
-        let paths = PathList::deserialize(&SerializedPathList {
-            paths,
-            order: paths_order,
-        });
-        let identity_paths = identity_paths.map(|paths| {
-            PathList::deserialize(&SerializedPathList {
-                paths,
-                order: identity_paths_order.unwrap_or_default(),
-            })
-        });
+        let paths = PathList::deserialize(&paths_list.0);
+        let identity_paths = identity_paths_list.map(|paths| PathList::deserialize(&paths.0));
 
         let remote_connection_options = if let Some(remote_connection_id) = remote_connection_id {
             self.remote_connection(remote_connection_id)
@@ -1256,6 +1269,10 @@ impl WorkspaceDb {
         } else {
             None
         };
+
+        let path_style = path_style
+            .and_then(deserialize_path_style)
+            .unwrap_or(PathStyle::local());
 
         Some(SerializedWorkspace {
             id: workspace_id,
@@ -1279,6 +1296,7 @@ impl WorkspaceDb {
             window_id,
             user_toolchains: self.user_toolchains(workspace_id, remote_connection_id),
             recent_navigation_history: self.recent_navigation_history(workspace_id),
+            path_style,
         })
     }
 
@@ -1288,27 +1306,25 @@ impl WorkspaceDb {
         workspace_id: WorkspaceId,
     ) -> Option<SerializedWorkspace> {
         let (
-            paths,
-            paths_order,
-            identity_paths,
-            identity_paths_order,
+            paths_list,
+            identity_paths_list,
             window_bounds,
             display,
             centered_layout,
             docks,
             window_id,
             remote_connection_id,
+            path_style,
         ): (
-            String,
-            String,
-            Option<String>,
-            Option<String>,
+            PathListColumns,
+            Option<PathListColumns>,
             Option<SerializedWindowBounds>,
             Option<Uuid>,
             Option<bool>,
             DockStructure,
             Option<u64>,
             Option<i32>,
+            Option<String>,
         ) = self
             .select_row_bound(sql! {
                 SELECT
@@ -1333,7 +1349,8 @@ impl WorkspaceDb {
                     bottom_dock_active_panel,
                     bottom_dock_zoom,
                     window_id,
-                    remote_connection_id
+                    remote_connection_id,
+                    path_style
                 FROM workspaces
                 WHERE workspace_id = ?
             })
@@ -1342,16 +1359,8 @@ impl WorkspaceDb {
             .warn_on_err()
             .flatten()?;
 
-        let paths = PathList::deserialize(&SerializedPathList {
-            paths,
-            order: paths_order,
-        });
-        let identity_paths = identity_paths.map(|paths| {
-            PathList::deserialize(&SerializedPathList {
-                paths,
-                order: identity_paths_order.unwrap_or_default(),
-            })
-        });
+        let paths = PathList::deserialize(&paths_list.0);
+        let identity_paths = identity_paths_list.map(|paths| PathList::deserialize(&paths.0));
 
         let remote_connection_id = remote_connection_id.map(|id| RemoteConnectionId(id as u64));
         let remote_connection_options = if let Some(remote_connection_id) = remote_connection_id {
@@ -1361,6 +1370,10 @@ impl WorkspaceDb {
         } else {
             None
         };
+
+        let path_style = path_style
+            .and_then(deserialize_path_style)
+            .unwrap_or(PathStyle::local());
 
         Some(SerializedWorkspace {
             id: workspace_id,
@@ -1384,6 +1397,7 @@ impl WorkspaceDb {
             window_id,
             user_toolchains: self.user_toolchains(workspace_id, remote_connection_id),
             recent_navigation_history: self.recent_navigation_history(workspace_id),
+            path_style,
         })
     }
 
@@ -1563,6 +1577,7 @@ impl WorkspaceDb {
     pub(crate) async fn save_workspace(&self, workspace: SerializedWorkspace) {
         let paths = workspace.paths.serialize();
         let identity_paths = workspace.identity_paths.map(|paths| paths.serialize());
+        let path_style = serialize_path_style(workspace.path_style);
         log::debug!("Saving workspace at location: {:?}", workspace.location);
         self.write(move |conn| {
             conn.with_savepoint("update_worktrees", || {
@@ -1697,9 +1712,10 @@ impl WorkspaceDb {
                         bottom_dock_zoom,
                         session_id,
                         window_id,
+                        path_style,
                         timestamp
                     )
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, CURRENT_TIMESTAMP)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, CURRENT_TIMESTAMP)
                     ON CONFLICT DO
                     UPDATE SET
                         paths = ?2,
@@ -1718,6 +1734,7 @@ impl WorkspaceDb {
                         bottom_dock_zoom = ?15,
                         session_id = ?16,
                         window_id = ?17,
+                        path_style = ?18,
                         timestamp = CURRENT_TIMESTAMP
                 );
                 let mut prepared_query = conn.exec_bound(query)?;
@@ -1731,6 +1748,7 @@ impl WorkspaceDb {
                     workspace.docks,
                     workspace.session_id,
                     workspace.window_id,
+                    path_style
                 );
 
                 prepared_query(args).context("Updating workspace")?;
@@ -1928,6 +1946,7 @@ impl WorkspaceDb {
             Option<PathList>,
             Option<RemoteConnectionId>,
             Option<String>,
+            Option<PathStyle>,
             DateTime<Utc>,
         )>,
     > {
@@ -1937,25 +1956,20 @@ impl WorkspaceDb {
             .map(
                 |(
                     id,
-                    paths,
-                    order,
-                    identity_paths,
-                    identity_paths_order,
+                    paths_list,
+                    identity_paths_list,
                     remote_connection_id,
                     session_id,
+                    path_style,
                     timestamp,
                 )| {
                     (
                         id,
-                        PathList::deserialize(&SerializedPathList { paths, order }),
-                        identity_paths.map(|paths| {
-                            PathList::deserialize(&SerializedPathList {
-                                paths,
-                                order: identity_paths_order.unwrap_or_default(),
-                            })
-                        }),
+                        PathList::deserialize(&paths_list.0),
+                        identity_paths_list.map(|paths| PathList::deserialize(&paths.0)),
                         remote_connection_id.map(RemoteConnectionId),
                         session_id,
+                        path_style.and_then(deserialize_path_style),
                         parse_timestamp(&timestamp),
                     )
                 },
@@ -1964,8 +1978,8 @@ impl WorkspaceDb {
     }
 
     query! {
-        fn recent_workspaces_query() -> Result<Vec<(WorkspaceId, String, String, Option<String>, Option<String>, Option<u64>, Option<String>, String)>> {
-            SELECT workspace_id, paths, paths_order, identity_paths, identity_paths_order, remote_connection_id, session_id, timestamp
+        fn recent_workspaces_query() -> Result<Vec<(WorkspaceId, PathListColumns, Option<PathListColumns>, Option<u64>, Option<String>, Option<String>, String)>> {
+            SELECT workspace_id, paths, paths_order, identity_paths, identity_paths_order, remote_connection_id, session_id, path_style, timestamp
             FROM workspaces
             WHERE
                 paths IS NOT NULL OR
@@ -1989,10 +2003,10 @@ impl WorkspaceDb {
             .session_workspaces_query(session_id)?
             .into_iter()
             .map(
-                |(workspace_id, paths, order, window_id, remote_connection_id)| {
+                |(workspace_id, paths_list, window_id, remote_connection_id)| {
                     (
                         WorkspaceId(workspace_id),
-                        PathList::deserialize(&SerializedPathList { paths, order }),
+                        PathList::deserialize(&paths_list.0),
                         window_id,
                         remote_connection_id.map(RemoteConnectionId),
                     )
@@ -2002,7 +2016,7 @@ impl WorkspaceDb {
     }
 
     query! {
-        fn session_workspaces_query(session_id: String) -> Result<Vec<(i64, String, String, Option<u64>, Option<u64>)>> {
+        fn session_workspaces_query(session_id: String) -> Result<Vec<(i64, PathListColumns, Option<u64>, Option<u64>)>> {
             SELECT workspace_id, paths, paths_order, window_id, remote_connection_id
             FROM workspaces
             WHERE session_id = ?1
@@ -2171,8 +2185,15 @@ impl WorkspaceDb {
     ) -> Result<Vec<RecentWorkspace>> {
         let remote_connections = self.remote_connections()?;
         let mut result = Vec::new();
-        for (id, paths, identity_paths_hint, remote_connection_id, _session_id, timestamp) in
-            self.recent_workspaces()?
+        for (
+            id,
+            paths,
+            identity_paths_hint,
+            remote_connection_id,
+            _session_id,
+            path_style,
+            timestamp,
+        ) in self.recent_workspaces()?
         {
             if let Some(remote_connection_id) = remote_connection_id {
                 if let Some(connection_options) = remote_connections.get(&remote_connection_id) {
@@ -2181,6 +2202,7 @@ impl WorkspaceDb {
                         location: SerializedWorkspaceLocation::Remote(connection_options.clone()),
                         paths: paths.clone(),
                         identity_paths: identity_paths_hint.unwrap_or(paths),
+                        path_style,
                         timestamp,
                     });
                 }
@@ -2201,6 +2223,7 @@ impl WorkspaceDb {
                     location: SerializedWorkspaceLocation::Local,
                     paths,
                     identity_paths,
+                    path_style,
                     timestamp,
                 });
             }
@@ -2233,7 +2256,7 @@ impl WorkspaceDb {
         let remote_connections = self.remote_connections()?;
 
         let mut workspace_ids = Vec::new();
-        for (workspace_id, paths, identity_paths, remote_connection_id, _, _) in
+        for (workspace_id, paths, identity_paths, remote_connection_id, _, _, _) in
             self.recent_workspaces()?
         {
             let remote_connection = if let Some(id) = remote_connection_id {
@@ -2276,7 +2299,7 @@ impl WorkspaceDb {
         let remote_connections = self.remote_connections()?;
         let now = Utc::now();
         let mut workspaces_to_delete = Vec::new();
-        for (id, paths, _identity_paths_hint, remote_connection_id, session_id, timestamp) in
+        for (id, paths, _identity_paths_hint, remote_connection_id, session_id, _, timestamp) in
             self.recent_workspaces()?
         {
             if let Some(session_id) = session_id.as_deref() {
@@ -2811,6 +2834,7 @@ pub struct RecentWorkspace {
     pub location: SerializedWorkspaceLocation,
     pub paths: PathList,
     pub identity_paths: PathList,
+    pub path_style: Option<PathStyle>,
     pub timestamp: DateTime<Utc>,
 }
 
@@ -2821,6 +2845,16 @@ impl RecentWorkspace {
             SerializedWorkspaceLocation::Remote(options) => Some(options.clone()),
         };
         ProjectGroupKey::new(host, self.identity_paths.clone())
+    }
+
+    /// Local workspaces always use this machine's path style, so the persisted value is only
+    /// consulted for remote workspaces. Remote rows saved before `path_style` was persisted
+    /// have no value and fall back to the local style.
+    pub fn effective_path_style(&self) -> PathStyle {
+        match &self.location {
+            SerializedWorkspaceLocation::Local => PathStyle::local(),
+            SerializedWorkspaceLocation::Remote(_) => self.path_style.unwrap_or(PathStyle::local()),
+        }
     }
 }
 
@@ -2902,6 +2936,21 @@ pub fn delete_unloaded_items(
         })
         .await
     })
+}
+
+fn serialize_path_style(path_style: PathStyle) -> String {
+    match path_style {
+        PathStyle::Windows => "windows".to_string(),
+        PathStyle::Posix => "unix".to_string(),
+    }
+}
+
+fn deserialize_path_style(path_style: String) -> Option<PathStyle> {
+    match path_style.as_str() {
+        "windows" => Some(PathStyle::Windows),
+        "unix" => Some(PathStyle::Posix),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -3093,6 +3142,7 @@ mod tests {
                 IndexSet::from_iter([expected.clone()]),
             )]),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         };
 
         db.save_workspace(workspace).await;
@@ -3214,6 +3264,7 @@ mod tests {
             window_id: None,
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         };
 
         db.save_workspace(workspace.clone()).await;
@@ -3338,6 +3389,7 @@ mod tests {
             window_id: None,
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         };
 
         db.save_workspace(workspace.clone()).await;
@@ -3375,6 +3427,7 @@ mod tests {
             window_id: None,
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         };
 
         db.save_workspace(workspace_without_breakpoint.clone())
@@ -3476,6 +3529,7 @@ mod tests {
             window_id: None,
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         };
 
         let workspace_2 = SerializedWorkspace {
@@ -3494,6 +3548,7 @@ mod tests {
             window_id: None,
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         };
 
         db.save_workspace(workspace_1.clone()).await;
@@ -3606,6 +3661,7 @@ mod tests {
             recent_navigation_history: (0..20)
                 .map(|index| PathBuf::from(format!("/tmp2/src/{index}.rs")))
                 .collect(),
+            path_style: non_local_path_style(),
         };
 
         db.save_workspace(workspace.clone()).await;
@@ -3622,6 +3678,142 @@ mod tests {
 
         assert!(db.delete_workspace_by_id(workspace.id).await.is_ok());
         assert!(db.recent_navigation_history(workspace.id).is_empty());
+    }
+
+    fn non_local_path_style() -> PathStyle {
+        match PathStyle::local() {
+            PathStyle::Posix => PathStyle::Windows,
+            PathStyle::Windows => PathStyle::Posix,
+        }
+    }
+
+    #[gpui::test]
+    async fn test_path_style_round_trip(cx: &mut gpui::TestAppContext) {
+        let fs = fs::FakeFs::new(cx.executor());
+        let db = WorkspaceDb::open_test_db("test_path_style_round_trip").await;
+
+        // The recent-workspaces list only includes local workspaces whose paths exist.
+        fs.insert_tree("/path-style/local", json!({})).await;
+        fs.insert_tree("/path-style/remote", json!({})).await;
+
+        let local_paths = [Path::new("/path-style/local")];
+        let remote_paths = [Path::new("/path-style/remote")];
+
+        let mut local_workspace = workspace_with(1, &local_paths, empty_pane_group(), None);
+        local_workspace.path_style = non_local_path_style();
+        db.save_workspace(local_workspace.clone()).await;
+
+        let remote_connection_id = db
+            .get_or_create_remote_connection(RemoteConnectionOptions::Ssh(SshConnectionOptions {
+                host: "path-style-host".into(),
+                ..Default::default()
+            }))
+            .await
+            .unwrap();
+        let mut remote_workspace = remote_workspace_with(2, "path-style-host", &remote_paths);
+        remote_workspace.path_style = non_local_path_style();
+        db.save_workspace(remote_workspace).await;
+
+        assert_eq!(
+            db.workspace_for_id(WorkspaceId(1)).unwrap().path_style,
+            local_workspace.path_style
+        );
+        assert_eq!(
+            db.workspace_for_roots(&local_paths).unwrap().path_style,
+            local_workspace.path_style
+        );
+        assert_eq!(
+            db.remote_workspace_for_roots(&remote_paths, remote_connection_id)
+                .unwrap()
+                .path_style,
+            non_local_path_style()
+        );
+
+        let recent_workspaces = db.recent_project_workspaces(fs.as_ref()).await.unwrap();
+        let recent_local_workspace = recent_workspaces
+            .iter()
+            .find(|workspace| workspace.workspace_id == WorkspaceId(1))
+            .expect("local workspace should be listed as a recent workspace");
+        assert_eq!(
+            recent_local_workspace.path_style,
+            Some(non_local_path_style())
+        );
+
+        let mut updated_workspace = local_workspace;
+        updated_workspace.path_style = PathStyle::local();
+        db.save_workspace(updated_workspace).await;
+        assert_eq!(
+            db.workspace_for_id(WorkspaceId(1)).unwrap().path_style,
+            PathStyle::local()
+        );
+    }
+
+    #[gpui::test]
+    async fn test_missing_or_unknown_path_style(cx: &mut gpui::TestAppContext) {
+        let fs = fs::FakeFs::new(cx.executor());
+        let db = WorkspaceDb::open_test_db("test_missing_or_unknown_path_style").await;
+        let workspace_id = WorkspaceId(1);
+
+        // The recent-workspaces list only includes local workspaces whose paths exist.
+        fs.insert_tree("/legacy/path-style", json!({})).await;
+
+        let mut workspace = workspace_with(
+            1,
+            &[Path::new("/legacy/path-style")],
+            empty_pane_group(),
+            None,
+        );
+        workspace.path_style = non_local_path_style();
+        db.save_workspace(workspace).await;
+
+        // The NULL case
+        db.write(move |conn| {
+            conn.exec_bound(sql!(
+                UPDATE workspaces SET path_style = NULL WHERE workspace_id = ?1
+            ))?(workspace_id)
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(
+            db.workspace_for_id(workspace_id).unwrap().path_style,
+            PathStyle::local()
+        );
+        assert_eq!(
+            recent_workspace_path_style(&db, fs.as_ref(), workspace_id).await,
+            None
+        );
+
+        // The invalid case
+        db.write(move |conn| {
+            conn.exec_bound(sql!(
+                UPDATE workspaces SET path_style = ?2 WHERE workspace_id = ?1
+            ))?((workspace_id, "plan9"))
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            db.workspace_for_id(workspace_id).unwrap().path_style,
+            PathStyle::local()
+        );
+        assert_eq!(
+            recent_workspace_path_style(&db, fs.as_ref(), workspace_id).await,
+            None
+        );
+    }
+
+    async fn recent_workspace_path_style(
+        db: &WorkspaceDb,
+        fs: &dyn Fs,
+        workspace_id: WorkspaceId,
+    ) -> Option<PathStyle> {
+        db.recent_project_workspaces(fs)
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|workspace| workspace.workspace_id == workspace_id)
+            .expect("workspace should be listed as a recent workspace")
+            .path_style
     }
 
     #[gpui::test]
@@ -3646,6 +3838,7 @@ mod tests {
             window_id: Some(1),
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         };
 
         let mut workspace_2 = SerializedWorkspace {
@@ -3664,6 +3857,7 @@ mod tests {
             window_id: Some(2),
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         };
 
         db.save_workspace(workspace_1.clone()).await;
@@ -3709,6 +3903,7 @@ mod tests {
             window_id: Some(3),
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         };
 
         db.save_workspace(workspace_3.clone()).await;
@@ -3750,6 +3945,7 @@ mod tests {
             window_id: Some(10),
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         };
 
         let workspace_2 = SerializedWorkspace {
@@ -3768,6 +3964,7 @@ mod tests {
             window_id: Some(20),
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         };
 
         let workspace_3 = SerializedWorkspace {
@@ -3786,6 +3983,7 @@ mod tests {
             window_id: Some(30),
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         };
 
         let workspace_4 = SerializedWorkspace {
@@ -3804,6 +4002,7 @@ mod tests {
             window_id: None,
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         };
 
         let connection_id = db
@@ -3833,6 +4032,7 @@ mod tests {
             window_id: Some(50),
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         };
 
         let workspace_6 = SerializedWorkspace {
@@ -3851,6 +4051,7 @@ mod tests {
             window_id: Some(60),
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         };
 
         db.save_workspace(workspace_1.clone()).await;
@@ -3911,6 +4112,7 @@ mod tests {
             window_id: None,
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         }
     }
 
@@ -3955,6 +4157,7 @@ mod tests {
             window_id: Some(window_id),
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         })
         .collect::<Vec<_>>();
 
@@ -4055,6 +4258,7 @@ mod tests {
             window_id: Some(id),
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         }
     }
 
@@ -4080,6 +4284,7 @@ mod tests {
             window_id: Some(id),
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         }
     }
 
@@ -4097,6 +4302,7 @@ mod tests {
             location: SerializedWorkspaceLocation::Local,
             paths,
             identity_paths,
+            path_style: Some(PathStyle::local()),
             timestamp,
         }
     }
@@ -4339,6 +4545,7 @@ mod tests {
             window_id: Some(window_id),
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         })
         .collect::<Vec<_>>();
 
@@ -4703,6 +4910,7 @@ mod tests {
             window_id: None,
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         };
 
         // Save the workspace (this creates the record with empty paths)
@@ -4782,6 +4990,7 @@ mod tests {
                 window_id: Some(*window_id),
                 user_toolchains: Default::default(),
                 recent_navigation_history: Default::default(),
+                path_style: PathStyle::local(),
             })
             .await;
         }
@@ -5078,6 +5287,7 @@ mod tests {
             window_id: Some(99),
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         })
         .await;
 
@@ -5176,6 +5386,7 @@ mod tests {
             window_id: Some(window_id_val),
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         })
         .await;
 
@@ -5195,6 +5406,7 @@ mod tests {
             window_id: Some(window_id_val),
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         })
         .await;
 
@@ -5276,6 +5488,7 @@ mod tests {
             window_id: Some(88),
             user_toolchains: Default::default(),
             recent_navigation_history: Default::default(),
+            path_style: PathStyle::local(),
         })
         .await;
         cx.run_until_parked();
