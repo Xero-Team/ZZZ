@@ -1,4 +1,3 @@
-use anyhow::Context as _;
 use editor::Editor;
 use fuzzy_nucleo::StringMatchCandidate;
 
@@ -178,6 +177,7 @@ pub struct BranchList {
     pub picker: Entity<Picker<BranchListDelegate>>,
     picker_focus_handle: FocusHandle,
     _subscriptions: Vec<Subscription>,
+    _load_default_branch: Option<Task<()>>,
     embedded: bool,
 }
 
@@ -331,32 +331,33 @@ impl BranchList {
             ));
         }
 
-        // Fetch default branch asynchronously since it requires a git operation
-        cx.spawn_in(window, async move |this, cx| {
-            let default_branch = default_branch_request
-                .context("No active repository")?
-                .await
-                .map(Result::ok)
-                .ok()
-                .flatten()
-                .flatten();
+        // Fetch default branch asynchronously since it requires a git operation.
+        // The task is owned by the list, so closing the picker before it finishes
+        // drops it instead of logging that the entity was released.
+        let load_default_branch = default_branch_request.map(|default_branch_request| {
+            cx.spawn_in(window, async move |this, cx| {
+                let default_branch = default_branch_request
+                    .await
+                    .map(Result::ok)
+                    .ok()
+                    .flatten()
+                    .flatten();
 
-            let branch_list_update_result = this.update_in(cx, |this, _window, cx| {
-                this.picker.update(cx, |picker, _cx| {
-                    picker.delegate.default_branch = default_branch;
-                });
-            });
-            branch_list_update_result.log_err();
-
-            anyhow::Ok(())
-        })
-        .detach_and_log_err(cx);
+                this.update_in(cx, |this, _window, cx| {
+                    this.picker.update(cx, |picker, _cx| {
+                        picker.delegate.default_branch = default_branch;
+                    });
+                })
+                .log_err();
+            })
+        });
 
         Self {
             picker,
             picker_focus_handle,
             width,
             _subscriptions: subscriptions,
+            _load_default_branch: load_default_branch,
             embedded,
         }
     }
@@ -2374,6 +2375,7 @@ mod tests {
                         picker_focus_handle,
                         width: rems(34.),
                         _subscriptions: vec![_subscription],
+                        _load_default_branch: None,
                         embedded: false,
                     }
                 })
