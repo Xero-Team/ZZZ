@@ -54,6 +54,7 @@ if [[ -n $apt ]]; then
     jq
     git
     curl
+    shellcheck
     gettext-base
     elfutils
     libsqlite3-dev

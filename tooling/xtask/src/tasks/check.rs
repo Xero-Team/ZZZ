@@ -45,7 +45,8 @@ enum CheckCommand {
     /// Every gate CI runs: markers, keymaps, scroll handlers, licenses,
     /// module layout, MSRV consistency, lint inheritance, locale catalog
     /// structure, keys, i18n call sites and catalog values, DCO, philosophy,
-    /// ledger, workflows, CI gate wiring, and the `gpui` public API snapshot.
+    /// ledger, workflows, CI gate wiring, the `gpui` public API snapshot,
+    /// documentation formatting, and shell scripts.
     All,
     /// Reject leftover markers for unfinished work.
     Todos,
@@ -74,9 +75,11 @@ enum CheckCommand {
     /// Run ShellCheck over the scripts in the repository root's `script/`.
     Shellcheck {
         /// Minimum severity that fails the check.
-        #[arg(long, value_enum, default_value = "error")]
+        #[arg(long, value_enum, default_value = "warning")]
         severity: Severity,
     },
+    /// Require `docs/` and the default settings file to match Prettier.
+    Docs,
     /// Check that vendored third-party sources match their manifests.
     Vendor,
     /// Assert that rejected commercial and network surfaces stay absent.
@@ -132,6 +135,7 @@ pub fn run_check(args: CheckArgs) -> Result<()> {
         CheckCommand::LocalePlaceholders => locale_placeholders::check(),
         CheckCommand::Dco => check_dco(),
         CheckCommand::Shellcheck { severity } => check_shellcheck(severity),
+        CheckCommand::Docs => check_docs(),
         CheckCommand::Vendor => run_script(&["script/vendor-sync", "check"], "vendor check"),
         CheckCommand::Philosophy => check_philosophy(),
         CheckCommand::UpstreamLedger => check_upstream_ledger(),
@@ -142,32 +146,35 @@ pub fn run_check(args: CheckArgs) -> Result<()> {
     }
 }
 
-/// Runs the gates CI enforces. `shellcheck` and `vendor` are left out: they
-/// need tools the default runner does not install, and neither has a failure
-/// mode that a clean Linux checkout can hide.
-fn run_all() -> Result<()> {
-    let checks: &[(&str, fn() -> Result<()>)] = &[
-        ("unfinished-work markers", check_todos),
-        ("keymaps", keymaps::check),
-        ("scroll handlers", scroll_handlers::check),
-        ("crate licenses", check_licenses),
-        ("module layout", module_layout::check),
-        ("MSRV consistency", msrv::check),
-        ("lint inheritance", lints_inheritance::check),
-        ("locale catalog structure", locale_catalog::check),
-        ("locale catalog keys", check_locale_keys),
-        ("i18n call sites", locale_fallbacks::check),
-        ("i18n catalog values", locale_placeholders::check),
-        ("DCO sign-off", check_dco),
-        ("philosophy boundary", check_philosophy),
-        ("upstream rejection ledger", check_upstream_ledger),
-        ("GitHub workflow files", check_workflows),
-        ("CI gate wiring", ci_wiring::check),
-        ("gpui public API snapshot", gpui_api::check_snapshot),
-    ];
+/// Every gate `check all` runs, in reporting order.
+///
+/// `vendor` and `links` stay out: they need tooling the CI runner does not
+/// install, and neither has a failure mode a clean Linux checkout can hide.
+const GATES: &[(&str, fn() -> Result<()>)] = &[
+    ("unfinished-work markers", check_todos),
+    ("keymaps", keymaps::check),
+    ("scroll handlers", scroll_handlers::check),
+    ("crate licenses", check_licenses),
+    ("module layout", module_layout::check),
+    ("MSRV consistency", msrv::check),
+    ("lint inheritance", lints_inheritance::check),
+    ("locale catalog structure", locale_catalog::check),
+    ("locale catalog keys", check_locale_keys),
+    ("i18n call sites", locale_fallbacks::check),
+    ("i18n catalog values", locale_placeholders::check),
+    ("DCO sign-off", check_dco),
+    ("philosophy boundary", check_philosophy),
+    ("upstream rejection ledger", check_upstream_ledger),
+    ("GitHub workflow files", check_workflows),
+    ("CI gate wiring", ci_wiring::check),
+    ("gpui public API snapshot", gpui_api::check_snapshot),
+    ("documentation formatting", check_docs),
+    ("shell scripts", check_shellcheck_default),
+];
 
+fn run_all() -> Result<()> {
     let mut failures = Vec::new();
-    for (name, check) in checks {
+    for (name, check) in GATES {
         println!("checking {name}");
         if let Err(error) = check() {
             eprintln!("error: {name}: {error:#}");
@@ -176,14 +183,14 @@ fn run_all() -> Result<()> {
     }
 
     if failures.is_empty() {
-        println!("all {} repository checks passed", checks.len());
+        println!("all {} repository checks passed", GATES.len());
         return Ok(());
     }
 
     bail!(
         "{} of {} checks failed: {}",
         failures.len(),
-        checks.len(),
+        GATES.len(),
         failures.join(", ")
     )
 }
@@ -335,6 +342,16 @@ fn check_philosophy() -> Result<()> {
     run_script(&["script/check-philosophy"], "philosophy check")
 }
 
+fn check_docs() -> Result<()> {
+    run_script(&["script/prettier"], "documentation formatting check")
+}
+
+/// The severity `check all` enforces. Warnings are clean today, so the gate
+/// holds that bar instead of only rejecting errors.
+fn check_shellcheck_default() -> Result<()> {
+    check_shellcheck(Severity::Warning)
+}
+
 fn check_locale_keys() -> Result<()> {
     run_script(&["script/check-locale-keys"], "locale catalog key check")
 }
@@ -457,6 +474,28 @@ fn parse_tracked_files(stdout: &str, pathspec: &str) -> Result<Vec<PathBuf>> {
 mod tests {
     use super::parse_tracked_files;
     use std::path::PathBuf;
+
+    /// Deleting a line from `GATES` silently disables a gate for both local
+    /// runs and CI, so the list length is pinned; adding a gate bumps it.
+    const GATE_COUNT: usize = 19;
+
+    #[test]
+    fn gate_list_keeps_every_gate() {
+        assert_eq!(
+            super::GATES.len(),
+            GATE_COUNT,
+            "the gate list changed; bump GATE_COUNT when adding, restore the entry when removing"
+        );
+    }
+
+    #[test]
+    fn gate_names_are_unique() {
+        let mut names: Vec<&str> = super::GATES.iter().map(|(name, _)| *name).collect();
+        names.sort_unstable();
+        let unique = names.len();
+        names.dedup();
+        assert_eq!(names.len(), unique, "duplicate gate names: {names:?}");
+    }
 
     #[test]
     fn empty_git_ls_files_output_fails_closed() {

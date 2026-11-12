@@ -15,7 +15,13 @@
 - Lint: `cargo xtask clippy` (not `cargo clippy`); it runs the philosophy preflight, the workspace/manifest clippy passes, the `future_not_send` pass, and local-only auxiliary checks (`typos`, `cargo-machete`, `buf`). `script/clippy` is a forwarding shim to this gate.
 - Repository gates without a compiler: `cargo xtask check` (defaults to `check all`). CI runs it, plus `cargo fmt --all -- --check` and a separate MSRV/stable `cargo check` on core crates.
 - `check all` enforces these gates in Rust (`tooling/xtask/src/tasks/check.rs`): todos, keymaps, scroll handlers, crate licenses, locale catalog keys, DCO sign-off, philosophy, upstream rejection ledger, and workflow files. The policy engines `script/check-philosophy` and `script/check-upstream-ledger` stay as scripts; `cargo xtask check` invokes them.
-- `check shellcheck`, `check links` (needs `lychee`), and `check vendor` are local-optional and are not part of `check all`; run them individually. `check keys`, `check locale-keys`, `check dco`, `check todos`, `check licenses`, `check philosophy`, `check upstream-ledger`, `check workflows`, and `check scroll-handlers` are also available on their own.
+- `check links` (needs `lychee`) and `check vendor` are local-optional and are
+  not part of `check all`; run them individually. `check all` also formats the
+  docs and runs ShellCheck, so a local run needs Node (Prettier) and
+  `shellcheck`; `check keys`, `check locale-keys`, `check dco`, `check todos`,
+  `check licenses`, `check philosophy`, `check upstream-ledger`,
+  `check workflows`, `check scroll-handlers`, `check docs`, and
+  `check shellcheck` are also available on their own.
 - Release artifacts: `cargo xtask build` (containerized by default) and `cargo xtask dist --all`; check a host with `cargo xtask doctor`
 - Linux install/build quirk: `cargo xtask install local` builds and installs a
   local tarball; `REMOTE_SERVER_TARGET=x86_64-unknown-linux-gnu` still selects

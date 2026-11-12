@@ -16,7 +16,14 @@ fi
 
 CONTAINER_ID="$(${ENGINE} run -d --rm -it -v ~/.mitmproxy:/home/mitmproxy/.mitmproxy -p 9876:8080 mitmproxy/mitmproxy mitmdump)"
 
-trap "${ENGINE} stop \"$CONTAINER_ID\" 1> /dev/null || true; exit 1" SIGINT
+# The engine and container names must be read when the signal arrives, not
+# when the trap is installed, so the work lives in a function.
+cleanup_on_interrupt() {
+    "${ENGINE}" stop "${CONTAINER_ID}" 1> /dev/null || true
+    exit 1
+}
+
+trap cleanup_on_interrupt SIGINT
 
 echo "Add the root certificate created in ~/.mitmproxy to your certificate chain for HTTP"
 echo "on macOS:"

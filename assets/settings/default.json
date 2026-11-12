@@ -2793,6 +2793,6 @@
     // Command typed into each newly opened session terminal.
     "session_starting_command": null,
     // Working directory for newly opened session terminals.
-    "session_working_directory": null
+    "session_working_directory": null,
   },
 }
