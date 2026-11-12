@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+"""Validate the structured fields of a pull request.
+
+`CONTRIBUTING.md` requires an AI review on every change, `.rules` pins down
+the `Release Notes:` line, and the pull request template asks for a human
+review decision on anything that is not upstream absorption. All three live
+in a textarea that nothing reads, so the requirement has been a reviewer's
+memory rather than a check result.
+
+This script reads the pull request event GitHub already handed the workflow
+and reports what is missing. It never talks to the API: the event payload
+carries the body and the labels.
+
+Usage:
+    script/check-pr-metadata <event.json>
+    script/check-pr-metadata --self-test
+"""
+
+import json
+import re
+import sys
+from pathlib import Path
+
+AI_REVIEW_LABEL = "ai-reviewed"
+HUMAN_REVIEW_LABEL = "human-reviewed"
+UPSTREAM_LABEL = "upstream"
+
+RELEASE_NOTES_PREFIX = "Release Notes:"
+RELEASE_NOTES_ITEMS = ("- N/A", "- Added", "- Fixed", "- Improved")
+RELEASE_NOTES_RE = re.compile(
+    r"^-\s+(N/A|Added|Fixed|Improved)\b", re.MULTILINE | re.IGNORECASE
+)
+
+HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+
+failures = []
+
+
+def fail(message):
+    failures.append(message)
+
+
+def labels_of(event):
+    labels = event.get("pull_request", {}).get("labels") or []
+    return {label.get("name", "").lower() for label in labels}
+
+
+def body_of(event):
+    return event.get("pull_request", {}).get("body") or ""
+
+
+def sections(body):
+    """Maps each `## Heading` to the text under it, with template comments gone."""
+    body = HTML_COMMENT_RE.sub("", body)
+    found = {}
+    current = None
+    for line in body.splitlines():
+        if line.startswith("## "):
+            current = line[3:].strip().lower()
+            found.setdefault(current, "")
+            continue
+        if current is not None:
+            found[current] += line + "\n"
+    return found
+
+
+def check_ai_review(body, labels):
+    if AI_REVIEW_LABEL in labels:
+        return
+    section = sections(body).get("ai review (required)", "")
+    fields = [
+        line.split(":", 1)[1].strip()
+        for line in section.splitlines()
+        if line.lower().startswith(("review:", "- review:", "follow-up"))
+    ]
+    # The template ships empty `- Review:` and `- Follow-up` fields; any text
+    # the author adds is the signal, and a link counts as text.
+    if any(fields):
+        return
+    fail(
+        "missing the required AI review: paste a review or link one under "
+        "\"## AI review (required)\", or add the "
+        f"`{AI_REVIEW_LABEL}` label once a review exists"
+    )
+
+
+def check_release_notes(body):
+    lines = body.splitlines()
+    index = None
+    for position, line in enumerate(lines):
+        if line.strip().lower().startswith(RELEASE_NOTES_PREFIX.lower()):
+            index = position
+            break
+    if index is None:
+        fail(
+            "missing a `Release Notes:` line; use `- N/A` for docs, tests, and "
+            "internal changes (see docs/src/development/release-notes.md)"
+        )
+        return
+
+    item = next((line.strip() for line in lines[index + 1 :] if line.strip()), "")
+    if not item.startswith(RELEASE_NOTES_ITEMS):
+        fail(
+            "the `Release Notes:` line must be followed by one bullet that "
+            f"starts with {', '.join(RELEASE_NOTES_ITEMS)}; found {item!r}"
+        )
+    elif not RELEASE_NOTES_RE.match(item):
+        fail(
+            "the `Release Notes:` bullet has an unknown prefix; use "
+            f"{', '.join(RELEASE_NOTES_ITEMS)} (found {item!r})"
+        )
+
+
+def check_human_review(body, labels):
+    if HUMAN_REVIEW_LABEL in labels or UPSTREAM_LABEL in labels:
+        return
+    section = sections(body).get("human review", "")
+    checked = [
+        line.lower()
+        for line in section.splitlines()
+        if line.strip().lower().startswith("- [x]")
+    ]
+    if checked:
+        return
+    fail(
+        "tick \"Human review requested\" or \"Not required (upstream "
+        "absorption)\" under \"## Human review\", or add the "
+        f"`{HUMAN_REVIEW_LABEL}` or `{UPSTREAM_LABEL}` label"
+    )
+
+
+def check_event(event):
+    global failures
+    failures = []
+    body = body_of(event)
+    labels = labels_of(event)
+    check_ai_review(body, labels)
+    check_release_notes(body)
+    check_human_review(body, labels)
+    return failures
+
+
+def load_event(path):
+    with Path(path).open(encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def self_test():
+    reviewed = (
+        "## AI review (required)\n\n- Review: https://example.invalid/review\n\n"
+        "## Human review\n\n- [x] Not required (upstream absorption)\n\n"
+        "## Release Notes\n\nRelease Notes:\n\n- N/A\n"
+    )
+    cases = [
+        (
+            "a fully filled template passes",
+            {"body": reviewed, "labels": []},
+            [],
+        ),
+        (
+            "labels can stand in for the fields",
+            {"body": "", "labels": [{"name": "ai-reviewed"}, {"name": "upstream"}]},
+            ["Release Notes"],
+        ),
+        (
+            "an empty template fails every field",
+            {
+                "body": (
+                    "## AI review (required)\n\n- Review:\n- Follow-up:\n\n"
+                    "## Human review\n\n- [ ] Human review requested\n"
+                    "- [ ] Not required (upstream absorption)\n\n"
+                    "## Release Notes\n\nRelease Notes:\n\n- N/A\n"
+                ),
+                "labels": [],
+            },
+            ["AI review", "Human review"],
+        ),
+        (
+            "an unknown release notes prefix fails",
+            {
+                "body": reviewed.replace("- N/A", "- Changed things"),
+                "labels": [],
+            },
+            ["must be followed by one bullet"],
+        ),
+        (
+            "a missing release notes line fails",
+            {"body": reviewed.replace("Release Notes:\n\n- N/A\n", ""), "labels": []},
+            ["Release Notes"],
+        ),
+    ]
+    failed = 0
+    for description, pull_request, expected in cases:
+        reported = check_event({"pull_request": pull_request})
+        matched = all(
+            any(fragment in failure for failure in reported) for fragment in expected
+        ) and len(reported) == len(expected)
+        if matched:
+            print(f"ok: {description}")
+            continue
+        failed += 1
+        print(f"FAIL: {description}\n  expected {expected}\n  got {reported}", file=sys.stderr)
+    return failed
+
+
+def main(argv):
+    arguments = argv[1:]
+    if arguments == ["--self-test"]:
+        return 1 if self_test() else 0
+    if len(arguments) != 1:
+        print(__doc__.strip().splitlines()[-2].strip(), file=sys.stderr)
+        return 2
+
+    reported = check_event(load_event(arguments[0]))
+    if not reported:
+        print("pull request metadata is complete")
+        return 0
+    for failure in reported:
+        print(f"FAIL: {failure}", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

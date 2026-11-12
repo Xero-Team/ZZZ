@@ -1,0 +1,32 @@
+# Validates the required pull request fields.
+#
+# CONTRIBUTING.md requires an AI review and docs/src/development/release-notes.md
+# pins the `Release Notes:` line, but both live in a template textarea that
+# nothing read. `script/check-pr-metadata` turns them into a check result.
+# `cargo xtask check ci-wiring` fails if this workflow stops calling it.
+
+name: PR metadata
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, labeled, unlabeled, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  metadata:
+    name: Required fields
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Check pull request fields
+        run: ./script/check-pr-metadata "$GITHUB_EVENT_PATH"

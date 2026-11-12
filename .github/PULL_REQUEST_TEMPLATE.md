@@ -17,7 +17,8 @@
 ## AI review (required)
 
 ZZZ requires every change to be reviewed by AI at least once. Paste the
-review, or link to it, and note anything it flagged.
+review, or link to it, and note anything it flagged. `PR metadata` fails
+while this section is empty, unless the `ai-reviewed` label is set.
 
 - Review:
 - Follow-up from the review:
@@ -26,7 +27,8 @@ review, or link to it, and note anything it flagged.
 
 Required for original features and fixes authored in this repository.
 Not required for commits absorbed from upstream Zed, which need only the
-AI review.
+AI review. `PR metadata` fails while neither box is ticked, unless the
+`human-reviewed` or `upstream` label is set.
 
 - [ ] Human review requested
 - [ ] Not required (upstream absorption)

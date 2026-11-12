@@ -6,6 +6,9 @@
 //! later edit from deleting one of those steps: the Rust gate would still pass
 //! locally while CI silently stopped running it. This gate parses ci.yaml and
 //! fails when a required command disappears from every `run:` value.
+//!
+//! Gates that live in their own workflow (`REQUIRED_STEPS`) are checked by
+//! reading that file, because the `run:` scan only covers ci.yaml.
 
 use std::fs;
 use std::path::Path;
@@ -14,6 +17,17 @@ use anyhow::{Context as _, Result, bail};
 use serde_yaml::Value;
 
 const CI_WORKFLOW: &str = ".github/workflows/ci.yaml";
+
+/// Workflow files that must keep calling a repository script, and the command
+/// each one must keep running.
+///
+/// These live outside `ci.yaml`, so the `run:` scan below cannot see them.
+/// A deleted workflow, or a deleted step inside one, disables the gate the
+/// same way a deleted CI step does.
+const REQUIRED_STEPS: &[(&str, &str)] = &[(
+    ".github/workflows/pr-metadata.yml",
+    "script/check-pr-metadata",
+)];
 
 /// Stable command signatures the CI pipeline must keep invoking. They are
 /// matched as substrings of `run:` values so unrelated flag changes do not
@@ -41,18 +55,37 @@ pub fn check() -> Result<()> {
         bail!("{CI_WORKFLOW} has no `run:` commands; the CI gate wiring may be missing");
     }
 
-    let missing = missing_commands(&runs);
-    if missing.is_empty() {
+    let mut failures: Vec<String> = missing_commands(&runs)
+        .into_iter()
+        .map(|command| {
+            format!("{CI_WORKFLOW} no longer runs `{command}` (a step may have been deleted)")
+        })
+        .collect();
+    failures.extend(missing_steps(|path| fs::read_to_string(path).ok()));
+
+    if failures.is_empty() {
         return Ok(());
     }
     bail!(
-        "{CI_WORKFLOW} no longer runs required gates (a step may have been deleted):\n{}",
-        missing
+        "CI no longer invokes required gates:\n{}",
+        failures
             .iter()
-            .map(|command| format!("  - {command}"))
+            .map(|failure| format!("  - {failure}"))
             .collect::<Vec<_>>()
             .join("\n")
     )
+}
+
+/// Returns one message per required step whose workflow or command is gone.
+fn missing_steps(read: impl Fn(&str) -> Option<String>) -> Vec<String> {
+    REQUIRED_STEPS
+        .iter()
+        .filter_map(|(path, command)| match read(path) {
+            Some(source) if source.contains(command) => None,
+            Some(_) => Some(format!("{path} no longer runs `{command}`")),
+            None => Some(format!("{path} is missing; `{command}` has no caller")),
+        })
+        .collect()
 }
 
 /// Returns the required commands that appear in none of the `run:` values.
@@ -88,7 +121,9 @@ fn collect_run_commands(value: &Value, commands: &mut Vec<String>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{REQUIRED_RUNS, collect_run_commands, missing_commands};
+    use super::{
+        REQUIRED_RUNS, REQUIRED_STEPS, collect_run_commands, missing_commands, missing_steps,
+    };
     use serde_yaml::Value;
 
     fn all_runs() -> Vec<String> {
@@ -139,5 +174,25 @@ mod tests {
         collect_run_commands(&value, &mut runs);
         assert_eq!(runs.len(), 1, "{runs:?}");
         assert!(runs[0].contains("cargo xtask clippy"), "{runs:?}");
+    }
+
+    #[test]
+    fn a_present_step_satisfies_the_requirement() {
+        let missing = missing_steps(|_| Some("run: ./script/check-pr-metadata\n".to_owned()));
+        assert!(missing.is_empty(), "{missing:?}");
+    }
+
+    #[test]
+    fn a_deleted_step_is_reported() {
+        let missing = missing_steps(|_| Some("run: echo hello\n".to_owned()));
+        assert_eq!(missing.len(), REQUIRED_STEPS.len(), "{missing:?}");
+        assert!(missing[0].contains("no longer runs"), "{missing:?}");
+    }
+
+    #[test]
+    fn a_deleted_workflow_is_reported() {
+        let missing = missing_steps(|_| None);
+        assert_eq!(missing.len(), REQUIRED_STEPS.len(), "{missing:?}");
+        assert!(missing[0].contains("is missing"), "{missing:?}");
     }
 }
