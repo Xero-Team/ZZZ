@@ -1490,8 +1490,8 @@
     "include_ignored": "smart",
     // Whether to pre-fill the file finder's query with text selected in the focused item.
     //
-    // Default: true
-    "prefill_query_from_selection": true,
+    // Default: false
+    "prefill_query_from_selection": false,
   },
   // Whether or not to remove any trailing whitespace from lines of a buffer
   // before saving it.
