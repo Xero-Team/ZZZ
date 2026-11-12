@@ -76,6 +76,7 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "20"
+          package-manager-cache: false
 
       - name: Check repository gates
         run: cargo xtask check
@@ -134,6 +135,14 @@ jobs:
 
       - name: Run clippy gate
         run: CARGO_NET_OFFLINE=true cargo xtask clippy
+
+      # `gpui` is the crate downstream code documents against, so its rustdoc
+      # must build warning-free: a broken intra-doc link is an API doc defect
+      # that no compiler gate sees.
+      - name: Check gpui documentation
+        run: >-
+          CARGO_NET_OFFLINE=true RUSTDOCFLAGS="-D warnings"
+          cargo doc --no-deps -p gpui
 
   gpui-platform-checks:
     name: GPUI platform checks

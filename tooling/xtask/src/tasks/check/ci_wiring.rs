@@ -40,6 +40,7 @@ const REQUIRED_RUNS: &[&str] = &[
     "cargo xtask check",
     "cargo fmt --all -- --check",
     "cargo xtask clippy",
+    "cargo doc --no-deps",
     "cargo nextest run",
 ];
 
