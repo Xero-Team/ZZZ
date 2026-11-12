@@ -197,6 +197,7 @@
   - [Debugging Crashes](./development/debugging-crashes.md)
   - [Performance](./performance.md)
   - [Build and Optimization Pipeline](./development/build-pipeline.md)
+  - [Releasing ZZZ](./development/releasing.md)
   - [Glossary](./development/glossary.md)
   - [Keeping ZZZ Lean](./development/bloat.md)
   - [GPUI: Ownership and Data Flow](./development/ownership-and-data-flow.md)

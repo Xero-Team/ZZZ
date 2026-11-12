@@ -32,6 +32,7 @@ mod locale_fallbacks;
 mod locale_placeholders;
 mod module_layout;
 mod msrv;
+mod release;
 mod scroll_handlers;
 
 #[derive(Args)]
@@ -43,10 +44,10 @@ pub struct CheckArgs {
 #[derive(Subcommand)]
 enum CheckCommand {
     /// Every gate CI runs: markers, keymaps, scroll handlers, licenses,
-    /// module layout, MSRV consistency, lint inheritance, locale catalog
-    /// structure, keys, i18n call sites and catalog values, DCO, philosophy,
-    /// ledger, workflows, CI gate wiring, the `gpui` public API snapshot,
-    /// documentation formatting, and shell scripts.
+    /// module layout, MSRV consistency, release metadata, lint inheritance,
+    /// locale catalog structure, keys, i18n call sites and catalog values,
+    /// DCO, philosophy, ledger, workflows, CI gate wiring, the `gpui` public
+    /// API snapshot, documentation formatting, and shell scripts.
     All,
     /// Reject leftover markers for unfinished work.
     Todos,
@@ -60,6 +61,8 @@ enum CheckCommand {
     ModuleLayout,
     /// Require the pinned Rust toolchain version to agree across its sources.
     Msrv,
+    /// Require the manifest, lockfile, and changelog to agree on one version.
+    Release,
     /// Require every workspace member to opt into `[workspace.lints]`.
     LintsInheritance,
     /// Reject duplicate keys, malformed keys, and blank values in the catalogs.
@@ -128,6 +131,7 @@ pub fn run_check(args: CheckArgs) -> Result<()> {
         CheckCommand::Licenses => check_licenses(),
         CheckCommand::ModuleLayout => module_layout::check(),
         CheckCommand::Msrv => msrv::check(),
+        CheckCommand::Release => release::check(),
         CheckCommand::LintsInheritance => lints_inheritance::check(),
         CheckCommand::LocaleCatalog => locale_catalog::check(),
         CheckCommand::LocaleKeys => check_locale_keys(),
@@ -157,6 +161,7 @@ const GATES: &[(&str, fn() -> Result<()>)] = &[
     ("crate licenses", check_licenses),
     ("module layout", module_layout::check),
     ("MSRV consistency", msrv::check),
+    ("release metadata", release::check),
     ("lint inheritance", lints_inheritance::check),
     ("locale catalog structure", locale_catalog::check),
     ("locale catalog keys", check_locale_keys),
@@ -477,7 +482,7 @@ mod tests {
 
     /// Deleting a line from `GATES` silently disables a gate for both local
     /// runs and CI, so the list length is pinned; adding a gate bumps it.
-    const GATE_COUNT: usize = 19;
+    const GATE_COUNT: usize = 20;
 
     #[test]
     fn gate_list_keeps_every_gate() {
