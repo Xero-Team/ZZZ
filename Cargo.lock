@@ -8891,6 +8891,7 @@ dependencies = [
  "gpui",
  "grammars",
  "http_client",
+ "indoc",
  "itertools 0.15.0",
  "json_schema_store",
  "language",
