@@ -178,6 +178,7 @@ App::action_documentation method & self -> & HashMap < & 'static str , & 'static
 App::action_schema_by_name method & self , name : & str , generator : & mut schemars :: SchemaGenerator , -> Option < Option < schemars :: Schema > >
 App::action_schemas method & self , generator : & mut schemars :: SchemaGenerator , -> Vec < (& 'static str , Option < schemars :: Schema >) >
 App::activate method & self , ignoring_other_apps : bool -> Result < () >
+App::active_display method & self -> Option < Rc < dyn PlatformDisplay > >
 App::active_drag_cursor_style method & self -> Option < CursorStyle >
 App::active_window method & self -> Option < AnyWindowHandle >
 App::add_recent_document method & self , path : & Path
@@ -2548,7 +2549,7 @@ Window::zoom_window method & self -> Result < () >
 WindowAppearance enum Light,VibrantLight,Dark,VibrantDark
 WindowBackgroundAppearance enum Opaque,Transparent,Blurred,MicaBackdrop,MicaAltBackdrop
 WindowBounds enum Windowed,Maximized,Fullscreen
-WindowBounds::centered method size : Size < Pixels > , cx : & App -> Self
+WindowBounds::centered method display_id : Option < DisplayId > , size : Size < Pixels > , cx : & App -> Self
 WindowBounds::get_bounds method & self -> Bounds < Pixels >
 WindowButton enum Minimize,Maximize,Close
 WindowButton::id method & self -> & 'static str
