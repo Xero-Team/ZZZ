@@ -27,6 +27,19 @@
   });
   ```
 
+# External baseline rules
+
+Adopted from the Google Rust Style Guide and the Microsoft Pragmatic Rust
+Guidelines. The links, the fetch date, and every item rejected on the way are
+recorded in `docs/src/development/coding-standards.md`. They bind new and
+changed code; existing sites are not rewritten in bulk.
+
+* Suppress a lint with `#[expect(lint, reason = "...")]` rather than `#[allow]`, so a suppression that stops matching fails the build. `#[allow]` stays correct in generated code and in macros that expand into other crates.
+* No glob imports and no new prelude modules: `use foo::*;` and `pub use foo::*;` hide where a name comes from and break codebase-wide refactors. Exceptions: `use super::*;` in a `#[cfg(test)]` module, a non-leaf module forwarding its own submodules, and the existing `gpui::prelude` / `ui::prelude`.
+* Every `unsafe` block and `unsafe fn` carries a `// SAFETY:` comment naming the invariant it relies on, plus a plain-text reason the safe equivalent is not viable. New `unsafe` reachable from a test needs `cargo +nightly miri test -p <crate>` before merge; Miri is not a gate, so name the crate you ran it on.
+* An enum or all-public-field struct that another crate matches or constructs gets `#[non_exhaustive]`, and any type another crate can name implements `Debug`. A `Debug` impl for a type holding a secret is hand-written and covered by a test that the secret does not render.
+* A literal whose meaning is not evident from its line becomes a named `const` whose doc comment records why that value, what breaks if it changes, and which external system depends on it.
+
 # Timers in tests
 
 * In GPUI tests, prefer GPUI executor timers over `smol::Timer::after(...)` when you need timeouts, delays, or to drive `run_until_parked()`:
