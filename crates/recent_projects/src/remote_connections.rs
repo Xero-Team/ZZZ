@@ -983,7 +983,7 @@ mod tests {
                 reuses_expected_workspace,
                 "a local file opens in the active local workspace: {path}, wait: {wait}"
             );
-            expected_workspace = result.workspace.clone();
+            expected_workspace = result.workspace;
             assert_eq!(cx.update(|cx| cx.windows().len()), 1);
             window
                 .read_with(cx, |multi_workspace, _| {

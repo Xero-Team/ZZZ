@@ -203,10 +203,7 @@ impl ComponentPreview {
             .filter(|component| {
                 let component_name = component.name().to_lowercase();
                 let scope_name = component.scope().to_string().to_lowercase();
-                let description = component
-                    .description()
-                    .map(|d| d.to_lowercase())
-                    .unwrap_or_default();
+                let description = component.description().map_or_default(|d| d.to_lowercase());
 
                 component_name.contains(&filter)
                     || scope_name.contains(&filter)

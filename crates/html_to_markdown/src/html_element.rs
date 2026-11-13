@@ -52,14 +52,12 @@ impl HtmlElement {
 
     /// Returns the list of classes on this [`HtmlElement`].
     pub fn classes(&self) -> Vec<String> {
-        self.attr("class")
-            .map(|classes| {
-                classes
-                    .split_whitespace()
-                    .map(|class| class.to_owned())
-                    .collect()
-            })
-            .unwrap_or_default()
+        self.attr("class").map_or_default(|classes| {
+            classes
+                .split_whitespace()
+                .map(|class| class.to_owned())
+                .collect()
+        })
     }
 
     /// Returns whether this [`HtmlElement`] has the specified class.

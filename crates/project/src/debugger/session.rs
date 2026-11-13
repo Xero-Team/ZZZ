@@ -2063,7 +2063,7 @@ impl Session {
 
     pub fn toggle_data_breakpoint(&mut self, id: &str, cx: &mut Context<'_, Session>) {
         if let Some(state) = self.data_breakpoints.get_mut(id) {
-            state.is_enabled = !state.is_enabled;
+            state.is_enabled.toggle();
             self.send_exception_breakpoints(cx);
         }
     }
@@ -2624,8 +2624,7 @@ impl Session {
         self.session_state()
             .stack_frames
             .get(&stack_frame_id)
-            .map(|frame| frame.scopes.as_slice())
-            .unwrap_or_default()
+            .map_or_default(|frame| frame.scopes.as_slice())
     }
 
     pub fn variables_by_stack_frame_id(
@@ -2690,8 +2689,7 @@ impl Session {
     pub fn refresh_watchers(&mut self, frame_id: u64, cx: &mut Context<Self>) {
         let watches = self.watchers.clone();
         for (_, watch) in watches.into_iter() {
-            self.add_watcher(watch.expression.clone(), frame_id, cx)
-                .detach();
+            self.add_watcher(watch.expression, frame_id, cx).detach();
         }
     }
 

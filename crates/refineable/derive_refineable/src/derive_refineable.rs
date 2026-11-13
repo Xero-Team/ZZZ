@@ -233,7 +233,7 @@ fn expand(input: &DeriveInput) -> syn::Result<TokenStream> {
                 }
             } else {
                 quote! {
-                    #name: value.#name.map(|v| v.into()).unwrap_or_default(),
+                    #name: value.#name.map_or_default(|v| v.into()),
                 }
             }
         })

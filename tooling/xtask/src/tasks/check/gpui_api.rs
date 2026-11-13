@@ -435,8 +435,7 @@ fn split_generics(sig: &syn::Signature) -> Option<String> {
         .generics
         .where_clause
         .as_ref()
-        .map(|clause| clause.to_token_stream().to_string())
-        .unwrap_or_default();
+        .map_or_default(|clause| clause.to_token_stream().to_string());
     Some(format!("<{params}> {where_clause}"))
 }
 

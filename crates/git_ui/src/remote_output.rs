@@ -330,6 +330,7 @@ pub fn format_output_localized(
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use indoc::indoc;
 

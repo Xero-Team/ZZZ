@@ -8686,7 +8686,7 @@ async fn test_terminal_toolchain_lookup_is_scoped_to_terminal_worktree(
     assert!(active_toolchain_for_b.is_none());
 
     let detect_venv = cx.update(|cx| TerminalSettings::get_global(cx).detect_venv.clone());
-    assert!(matches!(detect_venv, settings::VenvSettings::On { .. }));
+    assert_matches!(detect_venv, settings::VenvSettings::On { .. });
 }
 
 #[gpui::test]
@@ -12109,10 +12109,10 @@ async fn test_staging_hunks(cx: &mut gpui::TestAppContext) {
     });
 
     // The diff emits a change event for the range of the staged hunk.
-    assert!(matches!(
+    assert_matches!(
         diff_events.next().await.unwrap(),
         BufferDiffEvent::HunksStagedOrUnstaged(_)
-    ));
+    );
     let event = diff_events.next().await.unwrap();
     if let BufferDiffEvent::DiffChanged(DiffChanged {
         changed_range: Some(changed_range),
@@ -12212,10 +12212,10 @@ async fn test_staging_hunks(cx: &mut gpui::TestAppContext) {
             ],
         );
     });
-    assert!(matches!(
+    assert_matches!(
         diff_events.next().await.unwrap(),
         BufferDiffEvent::HunksStagedOrUnstaged(_)
-    ));
+    );
     let event = diff_events.next().await.unwrap();
     if let BufferDiffEvent::DiffChanged(DiffChanged {
         changed_range: Some(changed_range),

@@ -335,7 +335,7 @@ impl ConflictState {
                 .context
                 .and_then(|ctx| gpui::KeyBindingContextPredicate::parse(&ctx).ok());
             let entry = action_keybind_mapping
-                .entry(mapping.keystrokes.clone())
+                .entry(mapping.keystrokes)
                 .or_default();
             let origin = ConflictOrigin::new(binding.source, index);
             if let Some((_, origins)) =
@@ -1544,22 +1544,22 @@ impl KeymapEditor {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.show_no_action_bindings = !self.show_no_action_bindings;
+        self.show_no_action_bindings.toggle();
         self.on_query_changed(cx);
     }
 
     fn toggle_user_bindings_filter(&mut self, cx: &mut Context<Self>) {
-        self.source_filters.user = !self.source_filters.user;
+        self.source_filters.user.toggle();
         self.on_query_changed(cx);
     }
 
     fn toggle_zzz_defaults_filter(&mut self, cx: &mut Context<Self>) {
-        self.source_filters.zzz_defaults = !self.source_filters.zzz_defaults;
+        self.source_filters.zzz_defaults.toggle();
         self.on_query_changed(cx);
     }
 
     fn toggle_vim_defaults_filter(&mut self, cx: &mut Context<Self>) {
-        self.source_filters.vim_defaults = !self.source_filters.vim_defaults;
+        self.source_filters.vim_defaults.toggle();
         self.on_query_changed(cx);
     }
 
@@ -1619,10 +1619,7 @@ impl KeymapEditor {
             return;
         };
 
-        let keystrokes = selected_binding
-            .keystrokes()
-            .map(Vec::from)
-            .unwrap_or_default();
+        let keystrokes = selected_binding.keystrokes().map_or_default(Vec::from);
 
         self.filter_state = FilterState::All;
         self.search_mode = SearchMode::KeyStroke { exact_match: true };
@@ -2309,8 +2306,7 @@ impl Render for KeymapEditor {
 
                                     let source = binding
                                         .keybind_source()
-                                        .map(|source| source.name())
-                                        .unwrap_or_default()
+                                        .map_or_default(|source| source.name())
                                         .into_any_element();
 
                                     Some(vec![

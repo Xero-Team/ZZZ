@@ -357,8 +357,7 @@ pub fn worktree_info_from_thread_paths<S: std::hash::BuildHasher>(
                 .unwrap_or_default();
             let project_name = main_path
                 .file_name()
-                .map(|n| SharedString::from(n.to_string_lossy().to_string()))
-                .unwrap_or_default();
+                .map_or_default(|n| SharedString::from(n.to_string_lossy().to_string()));
             linked_short_names.push((short_name.clone(), project_name));
             infos.push(ThreadItemWorktreeInfo {
                 worktree_name: Some(short_name),
@@ -1352,11 +1351,7 @@ impl ThreadMetadataDb {
         } else {
             Some(row.agent_id.to_string())
         };
-        let title = row
-            .title
-            .as_ref()
-            .map(|t| t.to_string())
-            .unwrap_or_default();
+        let title = row.title.as_ref().map_or_default(|t| t.to_string());
         let updated_at = row.updated_at.to_rfc3339();
         let created_at = row.created_at.map(|dt| dt.to_rfc3339());
         let interacted_at = row.interacted_at.map(|dt| dt.to_rfc3339());
@@ -1584,23 +1579,19 @@ impl Column for ThreadMetadata {
             .transpose()?
             .map(|dt| dt.with_timezone(&Utc));
 
-        let folder_paths = folder_paths_str
-            .map(|paths| {
-                PathList::deserialize(&util::path_list::SerializedPathList {
-                    paths,
-                    order: folder_paths_order_str.unwrap_or_default(),
-                })
+        let folder_paths = folder_paths_str.map_or_default(|paths| {
+            PathList::deserialize(&util::path_list::SerializedPathList {
+                paths,
+                order: folder_paths_order_str.unwrap_or_default(),
             })
-            .unwrap_or_default();
+        });
 
-        let main_worktree_paths = main_worktree_paths_str
-            .map(|paths| {
-                PathList::deserialize(&util::path_list::SerializedPathList {
-                    paths,
-                    order: main_worktree_paths_order_str.unwrap_or_default(),
-                })
+        let main_worktree_paths = main_worktree_paths_str.map_or_default(|paths| {
+            PathList::deserialize(&util::path_list::SerializedPathList {
+                paths,
+                order: main_worktree_paths_order_str.unwrap_or_default(),
             })
-            .unwrap_or_default();
+        });
 
         let remote_connection = remote_connection_json
             .as_deref()

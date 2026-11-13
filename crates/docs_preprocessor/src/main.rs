@@ -826,7 +826,7 @@ fn handle_postprocessing() -> Result<()> {
         path: &'a std::path::PathBuf,
         root: &'a std::path::PathBuf,
     ) -> &'a std::path::Path {
-        path.strip_prefix(&root).unwrap_or(path)
+        path.trim_prefix(&root)
     }
     fn extract_title_from_page(contents: &str, pretty_path: &std::path::Path) -> Result<String> {
         let captures = title_regex()
@@ -839,8 +839,7 @@ fn handle_postprocessing() -> Result<()> {
 
         Ok(title_tag_contents
             .trim()
-            .strip_suffix("- ZZZ")
-            .unwrap_or(title_tag_contents)
+            .trim_suffix("- ZZZ")
             .trim()
             .to_owned())
     }

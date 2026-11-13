@@ -291,7 +291,7 @@ impl Render for RemoteConnectionPrompt {
                                             .icon_size(IconSize::Small)
                                             .tooltip(Tooltip::text(masked_password_tooltip))
                                             .on_click(cx.listener(|this, _, window, cx| {
-                                                this.is_masked = !this.is_masked;
+                                                this.is_masked.toggle();
                                                 this.editor.set_masked(this.is_masked, window, cx);
                                                 window.focus(&this.editor.focus_handle(cx), cx);
                                                 cx.notify();

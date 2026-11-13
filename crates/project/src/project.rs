@@ -1885,8 +1885,7 @@ impl Project {
 
         let root_name = std::path::Path::new(abs_path)
             .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
+            .map_or_default(|n| n.to_string_lossy().to_string());
 
         let client = AnyProtoClient::new(NoopProtoClient::new());
         let native_abs_path = vfs::NativePath::from_unix_bytes(abs_path.as_bytes());

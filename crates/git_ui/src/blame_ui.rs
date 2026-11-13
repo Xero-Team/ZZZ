@@ -251,8 +251,7 @@ impl BlameRenderer for GitBlameRenderer {
             subject: details
                 .as_ref()
                 .and_then(|details| details.message.lines().next())
-                .map(str::trim_end)
-                .unwrap_or_default()
+                .map_or_default(str::trim_end)
                 .into(),
             commit_timestamp: commit_time.unix_timestamp(),
             author_name: author.clone(),

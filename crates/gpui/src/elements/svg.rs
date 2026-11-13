@@ -117,13 +117,12 @@ impl Element for Svg {
             cx,
             |style, window, cx| {
                 if let Some((path, color)) = self.path.as_ref().zip(style.text.color) {
-                    let transformation = self
-                        .transformation
-                        .as_ref()
-                        .map(|transformation| {
-                            transformation.into_matrix(bounds.center(), window.scale_factor())
-                        })
-                        .unwrap_or_default();
+                    let transformation =
+                        self.transformation
+                            .as_ref()
+                            .map_or_default(|transformation| {
+                                transformation.into_matrix(bounds.center(), window.scale_factor())
+                            });
 
                     window
                         .paint_svg(bounds, path.clone(), None, transformation, color, cx)
@@ -138,13 +137,12 @@ impl Element for Svg {
                         return;
                     };
 
-                    let transformation = self
-                        .transformation
-                        .as_ref()
-                        .map(|transformation| {
-                            transformation.into_matrix(bounds.center(), window.scale_factor())
-                        })
-                        .unwrap_or_default();
+                    let transformation =
+                        self.transformation
+                            .as_ref()
+                            .map_or_default(|transformation| {
+                                transformation.into_matrix(bounds.center(), window.scale_factor())
+                            });
 
                     window
                         .paint_svg(
@@ -257,6 +255,7 @@ impl Transformation {
     }
 }
 
+#[allow(clippy::empty_enums)] // Distinct marker type: `!` would collide with the other Asset markers.
 enum SvgAsset {}
 
 impl Asset for SvgAsset {

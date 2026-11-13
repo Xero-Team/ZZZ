@@ -12,7 +12,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use base64::Engine as _;
 use grammers_client::client::{GlobalSearchIter, LoginToken, PasswordToken, SearchIter};
-use grammers_client::media::{InputMedia, Media, PhotoSize};
+use grammers_client::media::{Downloadable, InputMedia, Media, PhotoSize};
 use grammers_client::message::{InputMessage, Message};
 use grammers_client::peer::{Dialog, Peer};
 use grammers_client::sender::{ConnectionParams, SenderPool, UpdatesConfiguration};
@@ -66,7 +66,9 @@ const MEDIA_CACHE_MAX_BYTES: u64 = 512 * 1024 * 1024;
 /// Maximum age for on-disk media before it is evicted.
 const MEDIA_CACHE_MAX_AGE: Duration = Duration::from_hours(30 * 24);
 /// How many times a media download is retried after Telegram reports an
-/// expired file reference. One refetch is enough to mint a fresh reference.
+/// expired file reference. One refetch is enough to mint a fresh reference;
+/// a refetch that returns the same reference is not retried at all, because
+/// the next request would be rejected identically.
 /// <https://core.telegram.org/api/file-references>
 const MEDIA_FILE_REFERENCE_RETRIES: usize = 1;
 /// How many data-center migrations a QR login token may trigger before the
@@ -2937,8 +2939,7 @@ impl EngineState {
                     .iter()
                     .filter(|message| message.chat_id == chat_id && message.id != 0)
                     .max_by_key(|message| message.id)
-                    .map(snapshot_preview)
-                    .unwrap_or_default();
+                    .map_or_default(snapshot_preview);
                 let timestamp = self
                     .view
                     .history
@@ -4983,9 +4984,7 @@ fn dialog_to_snapshot(dialog: &Dialog) -> Option<ChatSnapshot> {
     let title = dialog.peer.name().unwrap_or("Unknown").to_owned();
     let last_message = dialog.last_message.as_ref();
     let (preview, preview_media) = last_message.map_or_else(|| (String::new(), None), chat_preview);
-    let timestamp_unix = last_message
-        .map(|message| message.date().as_second())
-        .unwrap_or_default();
+    let timestamp_unix = last_message.map_or_default(|message| message.date().as_second());
 
     let (unread_count, unread_mentions, pinned, muted, read_inbox, read_outbox, folder_id, draft) =
         match &dialog.raw {
@@ -5215,8 +5214,7 @@ fn message_to_snapshot(message: &Message, chat_id: i64) -> MessageSnapshot {
     let reactions = raw
         .and_then(|raw| raw.reactions.as_ref())
         .or_else(|| service.and_then(|service| service.reactions.as_ref()))
-        .map(message_reactions)
-        .unwrap_or_default();
+        .map_or_default(message_reactions);
 
     MessageSnapshot {
         id: message.id(),
@@ -5295,11 +5293,7 @@ fn message_action(action: &tl::enums::MessageAction, actor: &str) -> Option<Mess
     Some(match action {
         tl::enums::MessageAction::ChatAddUser(raw) => MessageAction::MemberAdded {
             actor,
-            member: raw
-                .users
-                .first()
-                .map(ToString::to_string)
-                .unwrap_or_default(),
+            member: raw.users.first().map_or_default(ToString::to_string),
         },
         tl::enums::MessageAction::ChatJoinedByLink(_)
         | tl::enums::MessageAction::ChatJoinedByRequest => MessageAction::MemberJoined { actor },
@@ -5989,16 +5983,14 @@ fn peer_ref_from_raw(
                 }
                 _ => None,
             })
-            .map(PeerAuth::from_hash)
-            .unwrap_or_default(),
+            .map_or_default(PeerAuth::from_hash),
         tl::enums::Peer::Channel(peer) => chats
             .iter()
             .find_map(|chat| match chat {
                 tl::enums::Chat::Channel(chat) if chat.id == peer.channel_id => chat.access_hash,
                 _ => None,
             })
-            .map(PeerAuth::from_hash)
-            .unwrap_or_default(),
+            .map_or_default(PeerAuth::from_hash),
         tl::enums::Peer::Chat(_) => PeerAuth::default(),
     };
     Some(PeerRef { id, auth })
@@ -6399,6 +6391,28 @@ fn remove_partial_download(path: &Path) {
     }
 }
 
+/// The `file_reference` bytes a media location carries, so a refetch that mints
+/// a new reference can be told apart from one that returns the same one.
+fn location_file_reference(location: Option<tl::enums::InputFileLocation>) -> Option<Vec<u8>> {
+    match location? {
+        tl::enums::InputFileLocation::InputPhotoFileLocation(location) => {
+            Some(location.file_reference)
+        }
+        tl::enums::InputFileLocation::InputDocumentFileLocation(location) => {
+            Some(location.file_reference)
+        }
+        _ => None,
+    }
+}
+
+/// Whether the refetched location carries the reference that just failed.
+/// Telegram Desktop stops at this point instead of repeating the request, and
+/// so does the engine: a second attempt with identical bytes is rejected the
+/// same way.
+fn kept_the_same_reference(reference: Option<&[u8]>, rejected: Option<&[u8]>) -> bool {
+    reference.is_some() && reference == rejected
+}
+
 /// Downloads a message's original media to `path`, creating parent directories.
 async fn download_media_file(
     client: &Client,
@@ -6413,6 +6427,7 @@ async fn download_media_file(
         }
     }
     let mut attempt = 0;
+    let mut rejected_reference: Option<Vec<u8>> = None;
     loop {
         // `get_messages_by_id` always hits the network, so each attempt starts
         // with a freshly minted file reference for the media.
@@ -6428,19 +6443,34 @@ async fn download_media_file(
         let Some(message) = message else {
             return Ok(None);
         };
+        let reference = location_file_reference(
+            message
+                .media()
+                .as_ref()
+                .and_then(|media| media.to_raw_input_location()),
+        );
+        if kept_the_same_reference(reference.as_deref(), rejected_reference.as_deref()) {
+            log::warn!(
+                "Telegram kept rejecting the same file reference for message {message_id}; the media is unavailable"
+            );
+            return Err(EngineError::MediaUnavailable);
+        }
         match message.download_media(&path).await {
             Ok(true) => {
                 evict_cache_async(path.parent().and_then(Path::parent)).await;
                 return Ok(Some(path));
             }
             Ok(false) => return Ok(None),
-            Err(error)
-                if is_expired_file_reference(&error) && attempt < MEDIA_FILE_REFERENCE_RETRIES =>
-            {
-                log::debug!(
-                    "Telegram file reference expired for {message_id}, refetching the message"
-                );
+            Err(error) if is_expired_file_reference(&error) => {
                 remove_partial_download(&path);
+                if attempt >= MEDIA_FILE_REFERENCE_RETRIES {
+                    log::warn!("failed to download Telegram media: {error}");
+                    return Err(EngineError::MediaUnavailable);
+                }
+                log::info!(
+                    "Telegram file reference expired for message {message_id}, refetching the message"
+                );
+                rejected_reference = reference;
                 attempt += 1;
             }
             Err(error) => {
@@ -6494,6 +6524,7 @@ async fn fetch_thumbnail_bytes(
     message_id: i32,
 ) -> Result<Option<Vec<u8>>, EngineError> {
     let mut attempt = 0;
+    let mut rejected_reference: Option<Vec<u8>> = None;
     loop {
         // `get_messages_by_id` always hits the network, so each attempt starts
         // with a freshly minted file reference for the thumbnail.
@@ -6515,6 +6546,13 @@ async fn fetch_thumbnail_bytes(
         let Some(thumbnail) = select_thumbnail(&media) else {
             return Ok(None);
         };
+        let reference = location_file_reference(thumbnail.to_raw_input_location());
+        if kept_the_same_reference(reference.as_deref(), rejected_reference.as_deref()) {
+            log::warn!(
+                "Telegram kept rejecting the same thumbnail file reference for message {message_id}; the thumbnail is unavailable"
+            );
+            return Err(EngineError::MediaUnavailable);
+        }
 
         let mut download = client.iter_download(&thumbnail);
         let mut bytes = Vec::new();
@@ -6527,12 +6565,15 @@ async fn fetch_thumbnail_bytes(
         };
         match result {
             Ok(()) => return Ok((!bytes.is_empty()).then_some(bytes)),
-            Err(error)
-                if is_expired_file_reference(&error) && attempt < MEDIA_FILE_REFERENCE_RETRIES =>
-            {
-                log::debug!(
-                    "Telegram thumbnail file reference expired for {message_id}, refetching the message"
+            Err(error) if is_expired_file_reference(&error) => {
+                if attempt >= MEDIA_FILE_REFERENCE_RETRIES {
+                    log::warn!("failed to download a Telegram thumbnail: {error}");
+                    return Err(EngineError::MediaUnavailable);
+                }
+                log::info!(
+                    "Telegram thumbnail file reference expired for message {message_id}, refetching the message"
                 );
+                rejected_reference = reference;
                 attempt += 1;
             }
             Err(error) => {
@@ -6752,8 +6793,7 @@ fn normalize_phone(raw: &str) -> Option<String> {
 fn current_unix_timestamp() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_secs() as i64)
-        .unwrap_or_default()
+        .map_or_default(|duration| duration.as_secs() as i64)
 }
 
 #[cfg(test)]
@@ -6762,9 +6802,10 @@ mod tests {
         DownloadState, DownloadTarget, EngineConfig, EngineState, HistoryCursor, LoadedDialog,
         MediaKind, MediaSnapshot, MessageSnapshot, SendState, ViewModel, apply_poll_results,
         avatar_initials, current_unix_timestamp, evict_cache_with, is_expired_file_reference,
-        media_extension, media_file_path, merge_history, next_history_page,
-        normalize_loaded_dialogs, normalize_phone, remove_partial_download, replace_sent_messages,
-        reply_header_snapshot, thumbnail_extension, thumbnail_file_path, upload_failure,
+        kept_the_same_reference, location_file_reference, media_extension, media_file_path,
+        merge_history, next_history_page, normalize_loaded_dialogs, normalize_phone,
+        remove_partial_download, replace_sent_messages, reply_header_snapshot, thumbnail_extension,
+        thumbnail_file_path, upload_failure,
     };
     use crate::error::EngineError;
     use crate::model::{PollOptionSnapshot, PollSnapshot};
@@ -7249,6 +7290,54 @@ mod tests {
         assert!(!is_expired_file_reference(&InvocationError::Io(
             std::io::Error::other("connection reset")
         )));
+    }
+
+    fn photo_file_location(reference: &[u8]) -> tl::enums::InputFileLocation {
+        tl::types::InputPhotoFileLocation {
+            id: 1,
+            access_hash: 2,
+            file_reference: reference.to_vec(),
+            thumb_size: "w".to_owned(),
+        }
+        .into()
+    }
+
+    #[test]
+    fn location_file_reference_reads_photos_and_documents() {
+        assert_eq!(
+            location_file_reference(Some(photo_file_location(b"photo"))),
+            Some(b"photo".to_vec())
+        );
+        let document = tl::types::InputDocumentFileLocation {
+            id: 3,
+            access_hash: 4,
+            file_reference: b"document".to_vec(),
+            thumb_size: String::new(),
+        };
+        assert_eq!(
+            location_file_reference(Some(document.into())),
+            Some(b"document".to_vec())
+        );
+        // A location without a reference cannot show whether a refetch helped,
+        // so it keeps the retry instead of reporting the media as unavailable.
+        assert_eq!(location_file_reference(None), None);
+        assert_eq!(
+            location_file_reference(Some(tl::enums::InputFileLocation::InputTakeoutFileLocation)),
+            None
+        );
+    }
+
+    #[test]
+    fn only_a_changed_reference_is_retried() {
+        // The same bytes the failed request used cannot succeed on a retry, so
+        // the download stops and reports the media as unavailable.
+        assert!(kept_the_same_reference(Some(b"stale"), Some(b"stale")));
+        assert!(!kept_the_same_reference(Some(b"fresh"), Some(b"stale")));
+        // Without a known rejected reference, or without a reference at all,
+        // the retry budget decides.
+        assert!(!kept_the_same_reference(Some(b"fresh"), None));
+        assert!(!kept_the_same_reference(None, Some(b"stale")));
+        assert!(!kept_the_same_reference(None, None));
     }
 
     #[test]

@@ -111,7 +111,7 @@ pub fn document_link_target_to_hover_link(target: &str, server_id: LanguageServe
 /// language server attach this fragment to `file://` document link
 /// targets to point at a specific row/column inside the file.
 fn parse_uri_fragment_position(fragment: &str) -> Option<lsp::Position> {
-    let stripped = fragment.strip_prefix('L').unwrap_or(fragment);
+    let stripped = fragment.trim_prefix('L');
     let (line_str, column_str) = match stripped.split_once([',', ':']) {
         Some((line, column)) => (line, Some(column)),
         None => (stripped, None),
@@ -2017,8 +2017,7 @@ mod tests {
                 let snapshot = editor.snapshot(window, cx);
                 let actual_ranges = snapshot
                     .text_highlight_ranges(HighlightKey::HoveredLinkState)
-                    .map(|ranges| ranges.as_ref().clone().1)
-                    .unwrap_or_default();
+                    .map_or_default(|ranges| ranges.as_ref().clone().1);
 
                 assert!(actual_ranges.is_empty(), "When no cmd is pressed, should have no hint label selected, but got: {actual_ranges:?}");
             });

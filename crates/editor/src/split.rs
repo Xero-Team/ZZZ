@@ -4357,7 +4357,7 @@ mod tests {
         let (editor, cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
 
         let long_line = "x".repeat(200);
-        let mut lines: Vec<String> = (0..50).map(|i| format!("line {i}")).collect();
+        let mut lines: Vec<String> = Vec::from_fn(50, |i| format!("line {i}"));
         lines[25] = long_line;
         let content = lines.join("\n");
 

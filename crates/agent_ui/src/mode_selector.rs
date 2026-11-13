@@ -122,7 +122,7 @@ impl ModeSelector {
                 };
 
                 menu.push_item(entry.handler({
-                    let mode_id = mode.id.clone();
+                    let mode_id = mode.id;
                     let weak_self = weak_self.clone();
                     move |window, cx| {
                         let Some(this) = weak_self.upgrade() else {

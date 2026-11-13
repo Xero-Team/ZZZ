@@ -81,7 +81,7 @@ impl std::error::Error for ImportError {}
 /// inside quoted fields, and a UTF-8 BOM. A trailing newline does not produce an
 /// empty row.
 pub fn parse_csv(text: &str) -> Result<CsvTable, ImportError> {
-    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let text = text.trim_prefix('\u{feff}');
     let mut records: Vec<Vec<String>> = Vec::new();
     let mut record: Vec<String> = Vec::new();
     let mut field = String::new();
@@ -237,6 +237,8 @@ pub fn insert_statement(table: &str, columns: &[String]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use crate::model::{Column, ColumnType, ObjectKind, TableRef};
 
@@ -329,7 +331,7 @@ mod tests {
 
         let csv = parse_csv("id,name,score\nx,Alice,1\n").expect("parse");
         let error = prepare_import(&schema(), &csv).expect_err("bad integer");
-        assert!(matches!(error, ImportError::Value { row: 2, .. }));
+        assert_matches!(error, ImportError::Value { row: 2, .. });
     }
 
     #[test]

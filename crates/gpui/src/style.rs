@@ -573,7 +573,7 @@ impl Hash for HighlightStyle {
         self.underline.hash(state);
         self.strikethrough.hash(state);
         state.write_u32(u32::from_be_bytes(
-            self.fade_out.map(|f| f.to_be_bytes()).unwrap_or_default(),
+            self.fade_out.map_or_default(|f| f.to_be_bytes()),
         ));
     }
 }
@@ -683,11 +683,9 @@ impl Style {
                     | BackgroundTag::PatternSlash
                     | BackgroundTag::Checkerboard => color.solid,
 
-                    BackgroundTag::LinearGradient => color
-                        .colors
-                        .first()
-                        .map(|stop| stop.color)
-                        .unwrap_or_default(),
+                    BackgroundTag::LinearGradient => {
+                        color.colors.first().map_or_default(|stop| stop.color)
+                    }
                 },
                 None => Hsla::default(),
             };

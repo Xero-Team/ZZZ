@@ -26,6 +26,7 @@ use std::{
 use task::TaskTemplate;
 use text::{BufferId, PointUtf16, ToPointUtf16};
 
+#[allow(clippy::empty_enums)] // uninhabited marker; each LSP request needs a distinct type
 pub enum LspExtExpandMacro {}
 
 impl lsp::request::Request for LspExtExpandMacro {
@@ -93,12 +94,10 @@ impl LspCommand for ExpandMacro {
         _: LanguageServerId,
         _: AsyncApp,
     ) -> anyhow::Result<ExpandedMacro> {
-        Ok(message
-            .map(|message| ExpandedMacro {
-                name: message.name,
-                expansion: message.expansion,
-            })
-            .unwrap_or_default())
+        Ok(message.map_or_default(|message| ExpandedMacro {
+            name: message.name,
+            expansion: message.expansion,
+        }))
     }
 
     fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::LspExtExpandMacro {
@@ -157,6 +156,7 @@ impl LspCommand for ExpandMacro {
     }
 }
 
+#[allow(clippy::empty_enums)] // uninhabited marker; each LSP request needs a distinct type
 pub enum LspOpenDocs {}
 
 impl lsp::request::Request for LspOpenDocs {
@@ -227,12 +227,10 @@ impl LspCommand for OpenDocs {
         _: LanguageServerId,
         _: AsyncApp,
     ) -> anyhow::Result<DocsUrls> {
-        Ok(message
-            .map(|message| DocsUrls {
-                web: message.web,
-                local: message.local,
-            })
-            .unwrap_or_default())
+        Ok(message.map_or_default(|message| DocsUrls {
+            web: message.web,
+            local: message.local,
+        }))
     }
 
     fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::LspExtOpenDocs {
@@ -291,6 +289,7 @@ impl LspCommand for OpenDocs {
     }
 }
 
+#[allow(clippy::empty_enums)] // uninhabited marker; each LSP request needs a distinct type
 pub enum LspSwitchSourceHeader {}
 
 impl lsp::request::Request for LspSwitchSourceHeader {
@@ -358,9 +357,7 @@ impl LspCommand for SwitchSourceHeader {
         _: LanguageServerId,
         _: AsyncApp,
     ) -> anyhow::Result<SwitchSourceHeaderResult> {
-        Ok(message
-            .map(|message| SwitchSourceHeaderResult(message.0))
-            .unwrap_or_default())
+        Ok(message.map_or_default(|message| SwitchSourceHeaderResult(message.0)))
     }
 
     fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::LspExtSwitchSourceHeader {
@@ -537,6 +534,7 @@ impl LspCommand for GoToParentModule {
 // that, the Shell and Cargo variants are similar enough that serde(untagged)
 // deserialization has been observed to confuse one for the other. So we rely on
 // RunnableKind to determine which variant to deserialize.
+#[allow(clippy::empty_enums)] // uninhabited marker; each LSP request needs a distinct type
 pub enum Runnables {}
 
 impl lsp::request::Request for Runnables {

@@ -1103,9 +1103,8 @@ impl GitPanel {
         let initial_commit_message = active_draft
             .and_then(|draft| draft.message.clone())
             .unwrap_or_default();
-        let pending_commit_message_restores = serialized_panel
-            .map(|panel| panel.commit_messages)
-            .unwrap_or_default();
+        let pending_commit_message_restores =
+            serialized_panel.map_or_default(|panel| panel.commit_messages);
         let workspace_entity = cx.entity();
 
         cx.new(|cx| {
@@ -2347,8 +2346,7 @@ impl GitPanel {
                     .repo_path
                     .as_ref()
                     .file_name()
-                    .map(|filename| filename.to_owned())
-                    .unwrap_or_default()
+                    .map_or_default(|filename| filename.to_owned())
             }),
             to_delete.len(),
             cx,
@@ -3793,7 +3791,7 @@ impl GitPanel {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.add_coauthors = !self.add_coauthors;
+        self.add_coauthors.toggle();
         cx.notify();
     }
 
@@ -4026,8 +4024,7 @@ impl GitPanel {
                         let template_text = git_panel
                             .commit_template
                             .as_ref()
-                            .map(|t| t.template.clone())
-                            .unwrap_or_default();
+                            .map_or_default(|t| t.template.clone());
                         if !template_text.is_empty() {
                             buffer.update(cx, |buffer, cx| {
                                 let start = buffer.anchor_before(0);
@@ -4739,7 +4736,7 @@ impl GitPanel {
                         Tooltip::simple(title, cx)
                     })
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.add_coauthors = !this.add_coauthors;
+                        this.add_coauthors.toggle();
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -4886,7 +4883,7 @@ impl GitPanel {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.commit_editor_expanded = !self.commit_editor_expanded;
+        self.commit_editor_expanded.toggle();
         self.commit_editor.update(cx, |editor, _cx| {
             if self.commit_editor_expanded {
                 editor.set_mode(EditorMode::Full {
@@ -4911,7 +4908,7 @@ impl GitPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.commit_editor_collapsed = !self.commit_editor_collapsed;
+        self.commit_editor_collapsed.toggle();
         self.commit_editor_toggled = true;
         if self.commit_editor_collapsed && self.commit_editor_expanded {
             self.toggle_fill_commit_editor(&Default::default(), window, cx);
@@ -8486,6 +8483,8 @@ pub(crate) fn commit_title_exceeds_limit(title: &str, max_length: usize) -> bool
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use git::{
         repository::repo_path,
         status::{StatusCode, UnmergedStatus, UnmergedStatusCode},
@@ -9164,7 +9163,7 @@ mod tests {
 
         wait_for_commit_history_to_settle(&panel, cx).await;
         panel.read_with(cx, |panel, _| {
-            assert!(matches!(panel.commit_history, CommitHistory::Error(_)));
+            assert_matches!(panel.commit_history, CommitHistory::Error(_));
         });
     }
 
@@ -10869,12 +10868,12 @@ mod tests {
                 .position(|&index| index == foo_idx)
                 .expect("foo directory should be visible");
             let next_logical_idx = state.logical_indices[foo_logical_idx + 1];
-            assert!(matches!(
+            assert_matches!(
                 panel.entries.get(next_logical_idx),
                 Some(GitListEntry::Header(GitHeaderEntry {
                     header: Section::New
                 }))
-            ));
+            );
 
             foo_idx
         });
@@ -11383,24 +11382,24 @@ mod tests {
 
         panel.update_in(cx, |panel, window, cx| {
             assert!(!panel.commit_editor_expanded);
-            assert!(matches!(
+            assert_matches!(
                 panel.commit_editor.read(cx).mode().clone(),
                 EditorMode::AutoHeight { .. }
-            ));
+            );
 
             panel.toggle_fill_commit_editor(&ToggleFillCommitEditor, window, cx);
             assert!(panel.commit_editor_expanded);
-            assert!(matches!(
+            assert_matches!(
                 panel.commit_editor.read(cx).mode().clone(),
                 EditorMode::Full { .. }
-            ));
+            );
 
             panel.toggle_fill_commit_editor(&ToggleFillCommitEditor, window, cx);
             assert!(!panel.commit_editor_expanded);
-            assert!(matches!(
+            assert_matches!(
                 panel.commit_editor.read(cx).mode().clone(),
                 EditorMode::AutoHeight { .. }
-            ));
+            );
         });
     }
 
@@ -11440,10 +11439,10 @@ mod tests {
             panel.toggle_commit_editor(&ToggleCommitEditor, window, cx);
             assert!(panel.commit_editor_collapsed);
             assert!(!panel.commit_editor_expanded);
-            assert!(matches!(
+            assert_matches!(
                 panel.commit_editor.read(cx).mode().clone(),
                 EditorMode::AutoHeight { .. }
-            ));
+            );
         });
     }
 

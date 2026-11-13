@@ -577,7 +577,7 @@ impl Render for ProfilerWindow {
                                 .style(ButtonStyle::Filled)
                                 .on_click(cx.listener(
                                     |this, _, _window, cx| {
-                                        this.paused = !this.paused;
+                                        this.paused.toggle();
                                         if !this.paused && this.source.is_remote() {
                                             this.start_remote_polling(cx);
                                         } else if this.paused && this.source.is_remote() {

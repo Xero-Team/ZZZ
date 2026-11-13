@@ -263,15 +263,12 @@ impl BranchList {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let all_branches = repository
-            .as_ref()
-            .map(|repo| {
-                process_branches(
-                    &repo.read(cx).branch_list,
-                    !branch_selection_behavior.is_select_only(),
-                )
-            })
-            .unwrap_or_default();
+        let all_branches = repository.as_ref().map_or_default(|repo| {
+            process_branches(
+                &repo.read(cx).branch_list,
+                !branch_selection_behavior.is_select_only(),
+            )
+        });
         let branch_list_error = repository
             .as_ref()
             .and_then(|repo| repo.read(cx).branch_list_error.clone());
@@ -2185,6 +2182,8 @@ impl PickerDelegate for BranchListDelegate {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use std::collections::HashSet;
 
     use super::*;
@@ -3168,7 +3167,7 @@ mod tests {
                 assert!(last_match.is_new_branch());
                 assert_eq!(last_match.name(), NEW_BRANCH);
                 // State is NewBranch because no existing branches fuzzy-match the query
-                assert!(matches!(picker.delegate.state, PickerState::NewBranch));
+                assert_matches!(picker.delegate.state, PickerState::NewBranch);
                 picker.delegate.confirm(false, window, cx);
             })
         });
@@ -3226,7 +3225,7 @@ mod tests {
                 branch_list.picker.update(cx, |picker, cx| {
                     let last_match = picker.delegate.matches.last().unwrap();
                     assert!(last_match.is_new_url());
-                    assert!(matches!(picker.delegate.state, PickerState::NewRemote));
+                    assert_matches!(picker.delegate.state, PickerState::NewRemote);
                     picker.delegate.confirm(false, window, cx);
                     assert_eq!(picker.delegate.matches.len(), 0);
                     if let PickerState::CreateRemote(remote_url) = &picker.delegate.state
@@ -3247,11 +3246,11 @@ mod tests {
         branch_list.update_in(cx, |branch_list, window, cx| {
             branch_list.picker.update(cx, |picker, cx| {
                 assert_eq!(picker.delegate.matches.len(), 1);
-                assert!(matches!(
+                assert_matches!(
                     picker.delegate.matches.first(),
                     Some(Entry::NewRemoteName { name, url })
                         if name == "my_new_remote" && url.as_ref() == "https://github.com/user/repo.git"
-                ));
+                );
                 picker.delegate.confirm(false, window, cx);
             })
         });
@@ -3305,16 +3304,13 @@ mod tests {
                     picker.delegate.selected_index = picker.delegate.matches.len() - 1;
                     picker.delegate.confirm(false, window, cx);
 
-                    assert!(matches!(
-                        picker.delegate.state,
-                        PickerState::CreateRemote(_)
-                    ));
+                    assert_matches!(picker.delegate.state, PickerState::CreateRemote(_));
                     if let PickerState::CreateRemote(ref url) = picker.delegate.state {
                         assert_eq!(url.as_ref(), "https://github.com/user/repo.git");
                     }
                     assert_eq!(picker.delegate.matches.len(), 0);
                     picker.delegate.dismissed(window, cx);
-                    assert!(matches!(picker.delegate.state, PickerState::List));
+                    assert_matches!(picker.delegate.state, PickerState::List);
                     let query = "main".to_string();
                     picker.delegate.update_matches(query, window, cx)
                 })
@@ -3382,12 +3378,11 @@ mod tests {
             branch_list.picker.update(cx, |picker, cx| {
                 let last_match = picker.delegate.matches.last().unwrap();
                 assert!(last_match.is_new_url());
-                assert!(matches!(picker.delegate.state, PickerState::NewRemote));
+                assert_matches!(picker.delegate.state, PickerState::NewRemote);
 
                 picker.delegate.confirm(false, window, cx);
 
-                assert!(
-                    matches!(picker.delegate.state, PickerState::CreateRemote(ref url) if url.as_ref() == REMOTE_URL),
+                assert_matches!(picker.delegate.state, PickerState::CreateRemote(ref url) if url.as_ref() == REMOTE_URL,
                     "State should transition to CreateRemote with the URL"
                 );
             });

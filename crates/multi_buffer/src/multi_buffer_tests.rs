@@ -4213,7 +4213,7 @@ fn check_multibuffer_edits(
             .text_for_range(edit.new.start..edit.new.end)
             .collect();
         text.replace_range(
-            (edit.new.start.0..edit.new.start.0 + (edit.old.end.0 - edit.old.start.0)).clone(),
+            edit.new.start.0..edit.new.start.0 + (edit.old.end.0 - edit.old.start.0),
             &new_text,
         );
         pretty_assertions::assert_eq!(
@@ -4706,12 +4706,11 @@ fn format_diff(
             let expand = info
                 .expand_info
                 .as_ref()
-                .map(|expand_info| match expand_info.direction {
+                .map_or_default(|expand_info| match expand_info.direction {
                     ExpandExcerptDirection::Up => " [↑]",
                     ExpandExcerptDirection::Down => " [↓]",
                     ExpandExcerptDirection::UpAndDown => " [↕]",
-                })
-                .unwrap_or_default();
+                });
 
             format!("{boundary_row}{marker}{line}{expand}")
         })

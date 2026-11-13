@@ -359,6 +359,7 @@ pub(crate) fn init_app_menus(platform: &dyn Platform, cx: &App) {
 
 #[cfg(test)]
 mod tests {
+
     use crate::Menu;
 
     #[test]

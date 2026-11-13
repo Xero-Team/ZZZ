@@ -760,8 +760,7 @@ fn register_workspace_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
                         .buffer()
                         .read(cx)
                         .as_singleton()
-                        .map(|buffer| buffer.read(cx).text())
-                        .unwrap_or_default(),
+                        .map_or_default(|buffer| buffer.read(cx).text()),
                 );
             } else if let Some(project) = editor.project().cloned() {
                 project.update(cx, |project, cx| {
@@ -786,8 +785,7 @@ fn register_workspace_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
                         &task
                             .await
                             .log_err()
-                            .map(|loaded_file| loaded_file.text)
-                            .unwrap_or_default(),
+                            .map_or_default(|loaded_file| loaded_file.text),
                     );
                 }
 

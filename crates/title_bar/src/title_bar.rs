@@ -824,8 +824,7 @@ impl TitleBar {
             .multi_workspace
             .as_ref()
             .and_then(|mw| mw.upgrade())
-            .map(|mw| mw.read(cx).project_group_keys())
-            .unwrap_or_default();
+            .map_or_default(|mw| mw.read(cx).project_group_keys());
 
         PopoverMenu::new("recent-projects-menu")
             .menu(move |window, cx| {
@@ -882,8 +881,7 @@ impl TitleBar {
             .multi_workspace
             .as_ref()
             .and_then(|mw| mw.upgrade())
-            .map(|mw| mw.read(cx).project_group_keys())
-            .unwrap_or_default();
+            .map_or_default(|mw| mw.read(cx).project_group_keys());
 
         PopoverMenu::new("sidebar-title-recent-projects-menu")
             .menu(move |window, cx| {

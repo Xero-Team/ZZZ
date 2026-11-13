@@ -300,6 +300,7 @@ mod sys {
     };
 
     #[derive(Debug)]
+    #[allow(clippy::empty_enums)] // opaque CoreVideo type declared by `foreign_type!`
     pub enum CVDisplayLink {}
 
     foreign_type! {

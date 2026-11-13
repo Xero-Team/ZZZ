@@ -96,8 +96,7 @@ impl ConnectionDialog {
         let name_editor = single_line_editor(
             original
                 .as_ref()
-                .map(|config| config.display_name.as_str())
-                .unwrap_or_default(),
+                .map_or_default(|config| config.display_name.as_str()),
             false,
             window,
             cx,
@@ -125,8 +124,7 @@ impl ConnectionDialog {
             &original
                 .as_ref()
                 .and_then(|config| config.port)
-                .map(|port| port.to_string())
-                .unwrap_or_default(),
+                .map_or_default(|port| port.to_string()),
             false,
             window,
             cx,

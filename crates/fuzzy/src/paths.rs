@@ -177,9 +177,7 @@ pub async fn match_path_sets<'a, Set: PathMatchCandidateSet<'a>>(
 
     let worker_count = executor.num_cpus().min(path_count);
     let segment_size = path_count.div_ceil(worker_count);
-    let mut segment_results = (0..worker_count)
-        .map(|_| Vec::with_capacity(max_results))
-        .collect::<Vec<_>>();
+    let mut segment_results = Vec::from_fn(worker_count, |_| Vec::with_capacity(max_results));
 
     executor
         .scoped(|scope| {

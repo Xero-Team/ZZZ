@@ -973,9 +973,7 @@ fn default_bounds(
     let default_placement = || Bounds::new(point(px(0.), px(0.)), DEFAULT_WINDOW_SIZE);
 
     // Use visible_bounds to exclude taskbar/dock areas
-    let display_bounds = display
-        .map(|d| d.visible_bounds())
-        .unwrap_or_else(default_placement);
+    let display_bounds = display.map_or_else(default_placement, |d| d.visible_bounds());
 
     let (
         Bounds {
@@ -988,9 +986,7 @@ fn default_bounds(
         // but they should always open as regular windowed windows.
         Some(bounds) => (bounds.get_bounds(), WindowBounds::Windowed),
         None => (
-            display
-                .map(|d| d.default_bounds())
-                .unwrap_or_else(default_placement),
+            display.map_or_else(default_placement, |d| d.default_bounds()),
             WindowBounds::Windowed,
         ),
     };
@@ -1018,6 +1014,8 @@ fn default_bounds(
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     #[cfg(feature = "accessibility")]
     use crate::AccessibilityUpdate;
     #[cfg(feature = "frame-diagnostics")]
@@ -2746,14 +2744,8 @@ mod tests {
         let window = cx.add_window(|_, _| EmptyView);
         window
             .update(cx, |_, window, _| {
-                assert!(matches!(
-                    window.window_handle(),
-                    Err(HandleError::NotSupported)
-                ));
-                assert!(matches!(
-                    window.display_handle(),
-                    Err(HandleError::NotSupported)
-                ));
+                assert_matches!(window.window_handle(), Err(HandleError::NotSupported));
+                assert_matches!(window.display_handle(), Err(HandleError::NotSupported));
             })
             .unwrap();
     }

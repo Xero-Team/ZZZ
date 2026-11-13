@@ -1153,8 +1153,7 @@ impl BufferStore {
             .collect();
         let incomplete_buffer_ids = self
             .as_remote()
-            .map(|remote| remote.incomplete_buffer_ids())
-            .unwrap_or_default();
+            .map_or_default(|remote| remote.incomplete_buffer_ids());
         (buffers, incomplete_buffer_ids)
     }
 

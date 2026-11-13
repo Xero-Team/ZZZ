@@ -22,8 +22,7 @@ pub(crate) fn render_database_connections_page(
     let connections = merged
         .database
         .as_ref()
-        .map(|database| database.connections.as_slice())
-        .unwrap_or_default();
+        .map_or_default(|database| database.connections.as_slice());
 
     let mut list = v_flex().gap_2();
     if connections.is_empty() {

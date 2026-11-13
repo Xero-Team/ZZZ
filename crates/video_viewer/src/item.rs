@@ -41,8 +41,7 @@ impl Item for VideoView {
                 .project
                 .read(cx)
                 .project_path_git_status(&project_path, cx)
-                .map(|status| status.summary())
-                .unwrap_or_default();
+                .map_or_default(|status| status.summary());
             self.project
                 .read(cx)
                 .entry_for_path(&project_path, cx)

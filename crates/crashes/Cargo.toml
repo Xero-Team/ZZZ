@@ -13,7 +13,6 @@ path = "src/crashes.rs"
 
 [dependencies]
 async-process.workspace = true
-cfg-if.workspace = true
 futures.workspace = true
 log.workspace = true
 parking_lot.workspace = true

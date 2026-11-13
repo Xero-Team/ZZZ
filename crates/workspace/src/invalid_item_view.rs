@@ -61,7 +61,7 @@ impl Item for InvalidItemView {
         let path = if detail > 0 {
             path
         } else {
-            path.strip_prefix(prefix).unwrap_or(path)
+            path.trim_prefix(prefix)
         };
 
         SharedString::new(path.to_string_lossy())

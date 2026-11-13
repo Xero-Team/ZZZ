@@ -1440,8 +1440,7 @@ mod tests {
                 entry
                     .path
                     .file_name()
-                    .map(|name| String::from_utf8_lossy(name.as_bytes()).into_owned())
-                    .unwrap_or_default()
+                    .map_or_default(|name| String::from_utf8_lossy(name.as_bytes()).into_owned())
             })
             .collect())
     }

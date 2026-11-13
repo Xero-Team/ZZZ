@@ -368,7 +368,7 @@ impl Editor {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.inline_value_cache.enabled = !self.inline_value_cache.enabled;
+        self.inline_value_cache.enabled.toggle();
 
         self.refresh_inline_values(cx);
     }
@@ -1260,6 +1260,8 @@ fn spawn_editor_hints_refresh(
 
 #[cfg(test)]
 pub mod tests {
+    use std::assert_matches;
+
     use super::{
         HoveredInlayHintCommand, InlayHintRefreshReason, LspInlayHintData, normalize_hint_biases,
     };
@@ -1428,14 +1430,14 @@ pub mod tests {
             toggle_on_modifiers_press: None,
         });
 
-        assert!(matches!(
+        assert_matches!(
             inlay_hints.refresh_reason_for_server_registration(buffer_id, server_a),
             InlayHintRefreshReason::NewLinesShown
-        ));
-        assert!(matches!(
+        );
+        assert_matches!(
             inlay_hints.refresh_reason_for_server_registration(buffer_id, server_a),
             InlayHintRefreshReason::NewLinesShown
-        ));
+        );
 
         inlay_hints
             .hint_chunk_fetching
@@ -1446,13 +1448,13 @@ pub mod tests {
 
         let refresh_reason =
             inlay_hints.refresh_reason_for_server_registration(buffer_id, server_b);
-        assert!(matches!(
+        assert_matches!(
             refresh_reason,
             InlayHintRefreshReason::RefreshRequested {
                 server_id,
                 request_id: None,
             } if server_id == server_b
-        ));
+        );
 
         inlay_hints.clear_for_buffers(
             &HashSet::from_iter([buffer_id]),
@@ -1467,32 +1469,29 @@ pub mod tests {
             .insert(0..50);
         let refresh_reason =
             inlay_hints.refresh_reason_for_server_registration(buffer_id, LanguageServerId(3));
-        assert!(matches!(
+        assert_matches!(
             refresh_reason,
             InlayHintRefreshReason::RefreshRequested {
                 server_id: LanguageServerId(3),
                 ..
             }
-        ));
+        );
 
         inlay_hints.remove_server(server_b);
         let refresh_reason =
             inlay_hints.refresh_reason_for_server_registration(buffer_id, server_b);
-        assert!(matches!(
+        assert_matches!(
             refresh_reason,
             InlayHintRefreshReason::RefreshRequested {
                 server_id,
                 request_id: None,
             } if server_id == server_b
-        ));
+        );
 
         inlay_hints.clear_registered_servers(buffer_id);
         let refresh_reason =
             inlay_hints.refresh_reason_for_server_registration(buffer_id, server_a);
-        assert!(matches!(
-            refresh_reason,
-            InlayHintRefreshReason::NewLinesShown
-        ));
+        assert_matches!(refresh_reason, InlayHintRefreshReason::NewLinesShown);
     }
 
     #[gpui::test]

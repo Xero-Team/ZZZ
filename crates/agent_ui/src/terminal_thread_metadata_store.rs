@@ -603,23 +603,19 @@ impl Column for TerminalThreadMetadata {
         let (remote_connection_json, next): (Option<String>, i32) =
             Column::column(statement, next)?;
 
-        let folder_paths = folder_paths_str
-            .map(|paths| {
-                PathList::deserialize(&util::path_list::SerializedPathList {
-                    paths,
-                    order: folder_paths_order_str.unwrap_or_default(),
-                })
+        let folder_paths = folder_paths_str.map_or_default(|paths| {
+            PathList::deserialize(&util::path_list::SerializedPathList {
+                paths,
+                order: folder_paths_order_str.unwrap_or_default(),
             })
-            .unwrap_or_default();
+        });
 
-        let main_worktree_paths = main_worktree_paths_str
-            .map(|paths| {
-                PathList::deserialize(&util::path_list::SerializedPathList {
-                    paths,
-                    order: main_worktree_paths_order_str.unwrap_or_default(),
-                })
+        let main_worktree_paths = main_worktree_paths_str.map_or_default(|paths| {
+            PathList::deserialize(&util::path_list::SerializedPathList {
+                paths,
+                order: main_worktree_paths_order_str.unwrap_or_default(),
             })
-            .unwrap_or_default();
+        });
 
         let remote_connection = remote_connection_json
             .as_deref()

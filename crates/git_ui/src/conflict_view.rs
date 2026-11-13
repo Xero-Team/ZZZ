@@ -221,7 +221,7 @@ fn conflicts_updated(
             let Some(range) = snapshot.buffer_anchor_range_to_anchor_range(conflict_range) else {
                 continue;
             };
-            removed_highlighted_ranges.push(range.clone());
+            removed_highlighted_ranges.push(range);
             removed_block_ids.insert(block_id);
         }
 
@@ -431,8 +431,7 @@ fn render_conflict_buttons(
                             let file_path = buffer_read
                                 .file()
                                 .and_then(|file| file.as_local())
-                                .map(|f| f.abs_path(cx).to_string_lossy().to_string())
-                                .unwrap_or_default();
+                                .map_or_default(|f| f.abs_path(cx).to_string_lossy().to_string());
                             Some(ConflictContent {
                                 file_path,
                                 conflict_text,

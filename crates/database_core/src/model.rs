@@ -675,6 +675,8 @@ pub enum ConnectionStatus {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
 
     #[test]
@@ -690,10 +692,10 @@ mod tests {
         );
         assert_eq!(ColumnType::from_declared("TIMESTAMP"), ColumnType::DateTime);
         assert_eq!(ColumnType::from_declared(""), ColumnType::Blob);
-        assert!(matches!(
+        assert_matches!(
             ColumnType::from_declared("GEOMETRY"),
             ColumnType::Other { .. }
-        ));
+        );
     }
 
     #[test]

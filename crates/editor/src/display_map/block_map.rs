@@ -2554,7 +2554,7 @@ impl BlockSnapshot {
                 return self.max_point();
             } else {
                 reversed = true;
-                search_left = !search_left;
+                search_left.toggle();
                 cursor.seek(&BlockRow(point.row), Bias::Right);
             }
         }

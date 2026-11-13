@@ -127,11 +127,12 @@ impl AcpTools {
     }
 
     fn refresh_connections(&mut self, cx: &mut Context<Self>) {
-        let active_connections = self
-            .connection_store
-            .as_ref()
-            .map(|connection_store| connection_store.read(cx).active_acp_connections(cx))
-            .unwrap_or_default();
+        let active_connections =
+            self.connection_store
+                .as_ref()
+                .map_or_default(|connection_store| {
+                    connection_store.read(cx).active_acp_connections(cx)
+                });
 
         self.watched_connections
             .retain(|agent_id, watched_connection| {
@@ -176,7 +177,7 @@ impl AcpTools {
                 agent_id: agent_id.clone(),
                 messages: Vec::new(),
                 list_state: ListState::new(0, ListAlignment::Bottom, px(2048.)),
-                connection: active_connection.connection.clone(),
+                connection: active_connection.connection,
                 incoming_request_methods: HashMap::default(),
                 outgoing_request_methods: HashMap::default(),
                 _task: task,
@@ -700,6 +701,7 @@ impl MessageType {
     }
 }
 
+#[allow(clippy::empty_enums)] // uninhabited marker; the event type must stay distinct
 enum AcpToolsEvent {}
 
 impl EventEmitter<AcpToolsEvent> for AcpTools {}

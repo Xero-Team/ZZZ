@@ -121,7 +121,7 @@ pub(crate) fn show_dialog<T: Send + 'static>(
                             if cancellation.is_requested() {
                                 return Err(anyhow!("dialog cancelled"));
                             }
-                            let result = dialog(hwnd.map(|hwnd| hwnd.as_raw()).unwrap_or_default());
+                            let result = dialog(hwnd.map_or_default(|hwnd| hwnd.as_raw()));
                             if cancellation.is_requested() {
                                 return Err(anyhow!("dialog cancelled"));
                             }

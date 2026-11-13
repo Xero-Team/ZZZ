@@ -437,6 +437,8 @@ impl FaultInjectingTransport {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use serde::Deserialize;
 
@@ -543,7 +545,7 @@ mod tests {
         );
 
         transport.reconnect();
-        assert!(matches!(
+        assert_matches!(
             transport
                 .transmit(TransportDirection::ServerToClient, Vec::new())
                 .as_slice(),
@@ -553,7 +555,7 @@ mod tests {
                 bytes,
                 ..
             }] if bytes.is_empty()
-        ));
+        );
         assert_eq!(transport.remaining_fault_count(), 0);
     }
 

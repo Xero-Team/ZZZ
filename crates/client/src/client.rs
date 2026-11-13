@@ -1375,6 +1375,7 @@ pub const ZZZ_URL_SCHEME: &str = "zzz";
 
 /// A parsed ZZZ link that can be handled internally by the application.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::empty_enums)] // uninhabited marker; the fork handles no internal link targets
 pub enum ZZZLink {}
 
 /// Parses the given link into a ZZZ link.
@@ -1386,6 +1387,8 @@ pub fn parse_zzz_link(_link: &str, _cx: &App) -> Option<ZZZLink> {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use crate::test::FakeServer;
 
@@ -1483,10 +1486,7 @@ mod tests {
         });
         let server = FakeServer::for_client(user_id, &client, cx).await;
         let mut status = client.status();
-        assert!(matches!(
-            status.next().await,
-            Some(Status::Connected { .. })
-        ));
+        assert_matches!(status.next().await, Some(Status::Connected { .. }));
         assert_eq!(server.auth_count(), 1);
 
         server.forbid_connections();
@@ -1523,10 +1523,7 @@ mod tests {
         });
         let server = FakeServer::for_client(5, &client, cx).await;
         let mut status = client.status();
-        assert!(matches!(
-            status.next().await,
-            Some(Status::Connected { .. })
-        ));
+        assert_matches!(status.next().await, Some(Status::Connected { .. }));
 
         server.forbid_connections();
         server.disconnect();
@@ -1570,18 +1567,15 @@ mod tests {
             |cx| async move { client.connect(false, &cx).await }
         });
         executor.run_until_parked();
-        assert!(matches!(status.next().await, Some(Status::Connecting)));
+        assert_matches!(status.next().await, Some(Status::Connecting));
 
         executor.advance_clock(CONNECTION_TIMEOUT);
-        assert!(matches!(status.next().await, Some(Status::ConnectionError)));
+        assert_matches!(status.next().await, Some(Status::ConnectionError));
         auth_and_connect.await.into_response().unwrap_err();
 
         // Allow the connection to be established.
         let server = FakeServer::for_client(user_id, &client, cx).await;
-        assert!(matches!(
-            status.next().await,
-            Some(Status::Connected { .. })
-        ));
+        assert_matches!(status.next().await, Some(Status::Connected { .. }));
 
         // Disconnect client.
         server.forbid_connections();
@@ -1597,13 +1591,10 @@ mod tests {
             })
         });
         executor.advance_clock(2 * INITIAL_RECONNECTION_DELAY);
-        assert!(matches!(status.next().await, Some(Status::Reconnecting)));
+        assert_matches!(status.next().await, Some(Status::Reconnecting));
 
         executor.advance_clock(CONNECTION_TIMEOUT);
-        assert!(matches!(
-            status.next().await,
-            Some(Status::ReconnectionError { .. })
-        ));
+        assert_matches!(status.next().await, Some(Status::ReconnectionError { .. }));
     }
 
     #[gpui::test(iterations = 10)]

@@ -204,16 +204,13 @@ where
                 else {
                     return Task::ready(Vec::new());
                 };
-                let (language, buffer) = task_contexts
-                    .location()
-                    .map(|location| {
-                        let buffer = location.buffer.clone();
-                        (
-                            buffer.read(cx).language_at(location.range.start),
-                            Some(buffer),
-                        )
-                    })
-                    .unwrap_or_default();
+                let (language, buffer) = task_contexts.location().map_or_default(|location| {
+                    let buffer = location.buffer.clone();
+                    (
+                        buffer.read(cx).language_at(location.range.start),
+                        Some(buffer),
+                    )
+                });
                 task_inventory
                     .read(cx)
                     .list_tasks(buffer, language, task_contexts.worktree(), cx)
@@ -325,10 +322,9 @@ pub fn task_contexts(
 
     let lsp_task_sources = active_project_editor
         .as_ref()
-        .map(|active_editor| {
+        .map_or_default(|active_editor| {
             active_editor.update(cx, |editor, cx| editor.lsp_task_sources(false, false, cx))
-        })
-        .unwrap_or_default();
+        });
 
     let latest_selection = active_project_editor.as_ref().and_then(|active_editor| {
         let snapshot = active_editor.read(cx).buffer().read(cx).snapshot(cx);

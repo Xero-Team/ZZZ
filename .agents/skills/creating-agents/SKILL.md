@@ -64,8 +64,8 @@ Chinese. Prioritize the following gaps:
 1. What exact job should this agent do?
 2. Should it be a main working mode or a specialized helper?
 3. Which capabilities are required: reading, searching, editing, writing,
-   patching, shell commands, web fetch, web search, asking questions, or task
-   tracking?
+   patching, shell commands, web fetch, web search, asking questions, loading
+   skills, or launching subagents?
 4. Which capabilities must be avoided?
 5. Should the agent be conservative by default?
 
@@ -89,23 +89,24 @@ fields.
 Default to minimal capabilities:
 
 - Reviewer / analyzer: prefer read-only behavior, usually `read`, `grep`,
-  `glob`, and sometimes `webfetch`. Usually deny `edit` and `bash`.
+  `glob`, and sometimes `webfetch`. Usually deny `edit` and `shell`.
 - Planner: prefer read-only behavior with optional `question`. Usually deny
-  `edit` and `bash`.
+  `edit` and `shell`.
 - Docs writer: may allow `edit` when the job includes writing docs. Do not add
-  `bash` unless the user explicitly wants command execution.
-- Debugger: may need `bash`, `read`, `grep`, and `glob`. Only allow `edit` when
+  `shell` unless the user explicitly wants command execution.
+- Debugger: may need `shell`, `read`, `grep`, and `glob`. Only allow `edit` when
   the user expects fixes, not diagnosis only.
-- Builder / implementer: allow `edit` and possibly `bash` only when actual code
+- Builder / implementer: allow `edit` and possibly `shell` only when actual code
   changes or command execution are part of the job.
 
 Important rules to preserve:
 
-- `write` and `patch` are governed by `edit` permission.
+- `write` and `patch` are governed by the `edit` permission action.
 - `websearch` is for discovery; `webfetch` is for a known URL.
-- `todowrite` is disabled for subagents by default unless explicitly enabled.
-- If the user wants shell access but with guardrails, prefer `permission.bash`
-  rules over broad unrestricted access.
+- Restrict capability with `permissions` rules, not with a `tools` map; V2
+  deprecated `tools` and `permission`.
+- If the user wants shell access but with guardrails, prefer command-specific
+  `shell` permission rules over broad unrestricted access.
 
 ## Draft The Agent File
 
@@ -121,12 +122,11 @@ The frontmatter must be valid YAML. Include at least:
 
 Add other fields only when they improve the agent materially, for example:
 
-- `tools`
-- `permission`
+- `permissions`: ordered `{ action, resource, effect }` rules
 - `model`
-- `temperature`
 - `steps`
 - `hidden` for internal-only subagents
+- `color`
 
 The body prompt should:
 

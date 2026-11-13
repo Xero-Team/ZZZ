@@ -304,8 +304,7 @@ fn possible_open_target_internal(
                 PathWithPosition {
                     path: path_with_position
                         .path
-                        .strip_prefix(&worktree_root)
-                        .unwrap_or(&path_with_position.path)
+                        .trim_prefix(&worktree_root)
                         .to_owned(),
                     row: path_with_position.row,
                     column: path_with_position.column,

@@ -710,6 +710,8 @@ pub fn column_label(column: &Column) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use crate::error::DatabaseErrorKind;
     use crate::export::{ExportFormat, export_csv, export_result_set};
@@ -1444,10 +1446,10 @@ mod tests {
             let failure = session
                 .import_csv(&TableRef::new("users"), "id,email\n3,carol@example.com\n")
                 .await;
-            assert!(matches!(
+            assert_matches!(
                 failure,
                 Err(ImportFailure::Parse(ImportError::UnknownColumn(column))) if column == "email"
-            ));
+            );
             assert!(!session.has_open_transaction());
         });
     }

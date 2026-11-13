@@ -727,8 +727,7 @@ fn convert_request(
     let body = extension_request
         .body
         .clone()
-        .map(AsyncBody::from)
-        .unwrap_or_default();
+        .map_or_default(AsyncBody::from);
     request.body(body).map_err(anyhow::Error::from)
 }
 

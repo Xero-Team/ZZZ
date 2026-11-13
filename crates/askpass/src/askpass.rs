@@ -260,7 +260,7 @@ impl PasswordProxy {
                         log::warn!("Failed to read askpass prompt: {error:#}");
                         continue;
                     }
-                    let prompt = String::from_utf8_lossy(&buffer).into_owned();
+                    let prompt = String::from_utf8_lossy_owned(buffer);
                     let password = get_password(prompt).await;
                     match password {
                         ControlFlow::Continue(password) => {

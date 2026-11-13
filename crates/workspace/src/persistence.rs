@@ -370,9 +370,8 @@ pub fn read_serialized_multi_workspaces(
         .into_iter()
         .filter_map(|group| {
             let window_id = group.first().and_then(|sw| sw.window_id);
-            let state = window_id
-                .map(|wid| read_multi_workspace_state(wid, session_id, cx))
-                .unwrap_or_default();
+            let state =
+                window_id.map_or_default(|wid| read_multi_workspace_state(wid, session_id, cx));
             let active_workspace = state
                 .active_workspace_id
                 .and_then(|id| group.iter().position(|ws| ws.workspace_id == id))
@@ -1434,12 +1433,10 @@ impl WorkspaceDb {
 
                 for (path, bookmark) in bookmarks {
                     let path: Arc<Path> = path.into();
-                    map.entry(path.clone())
-                        .or_default()
-                        .push(SerializedBookmark {
-                            row: bookmark.row,
-                            label: bookmark.label,
-                        })
+                    map.entry(path).or_default().push(SerializedBookmark {
+                        row: bookmark.row,
+                        label: bookmark.label,
+                    })
                 }
 
                 map

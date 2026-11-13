@@ -221,8 +221,7 @@ impl Editor {
                         && target_top == *last_target_top
                         && target_bottom == *last_target_bottom
                 })
-                .map(|(_, _, _, strategy)| strategy.next())
-                .unwrap_or_default(),
+                .map_or_default(|(_, _, _, strategy)| strategy.next()),
         };
         if let Autoscroll::Strategy(_, Some(anchor)) = autoscroll {
             target_point = anchor.to_display_point(&display_map);

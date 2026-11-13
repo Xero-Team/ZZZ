@@ -781,12 +781,12 @@ impl AudioView {
     }
 
     pub(crate) fn toggle_repeat(&mut self, cx: &mut Context<Self>) {
-        self.repeat = !self.repeat;
+        self.repeat.toggle();
         cx.notify();
     }
 
     pub(crate) fn toggle_lyrics(&mut self, cx: &mut Context<Self>) {
-        self.lyrics_visible = !self.lyrics_visible;
+        self.lyrics_visible.toggle();
         cx.notify();
     }
 

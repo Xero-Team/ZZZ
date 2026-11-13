@@ -1,3 +1,4 @@
+use std::assert_matches;
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
 use collections::HashSet;
@@ -780,10 +781,7 @@ async fn test_trust_restrict_trust_cycle(cx: &mut TestAppContext) {
     });
     assert!(can_trust, "should be trusted after trust()");
     assert_eq!(events.borrow().len(), 1);
-    assert!(matches!(
-        &events.borrow()[0],
-        TrustedWorktreesEvent::Trusted(..)
-    ));
+    assert_matches!(&events.borrow()[0], TrustedWorktreesEvent::Trusted(..));
     events.borrow_mut().clear();
 
     trusted_worktrees.update(cx, |store, cx| {
@@ -798,10 +796,7 @@ async fn test_trust_restrict_trust_cycle(cx: &mut TestAppContext) {
     });
     assert!(!can_trust, "should be restricted after restrict()");
     assert_eq!(events.borrow().len(), 1);
-    assert!(matches!(
-        &events.borrow()[0],
-        TrustedWorktreesEvent::Restricted(..)
-    ));
+    assert_matches!(&events.borrow()[0], TrustedWorktreesEvent::Restricted(..));
 
     let has_restricted = trusted_worktrees.read_with(cx, |store, cx| {
         store.has_restricted_worktrees(&worktree_store, cx)
@@ -821,10 +816,7 @@ async fn test_trust_restrict_trust_cycle(cx: &mut TestAppContext) {
     });
     assert!(can_trust, "should be trusted again after second trust()");
     assert_eq!(events.borrow().len(), 1);
-    assert!(matches!(
-        &events.borrow()[0],
-        TrustedWorktreesEvent::Trusted(..)
-    ));
+    assert_matches!(&events.borrow()[0], TrustedWorktreesEvent::Trusted(..));
 
     let has_restricted = trusted_worktrees.read_with(cx, |store, cx| {
         store.has_restricted_worktrees(&worktree_store, cx)

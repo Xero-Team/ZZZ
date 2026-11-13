@@ -692,8 +692,7 @@ impl Dock {
                         .panel_entries
                         .iter()
                         .find(|entry| entry.panel.panel_id() == panel_id)
-                        .map(|entry| entry.size_state)
-                        .unwrap_or_default();
+                        .map_or_default(|entry| entry.size_state);
 
                     let previous_axis = this.position.axis();
                     let next_axis = new_position.axis();

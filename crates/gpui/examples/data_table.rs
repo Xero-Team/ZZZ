@@ -273,7 +273,7 @@ impl DataTable {
     }
 
     fn generate(&mut self) {
-        self.quotes = (0..TOTAL_ITEMS).map(|_| Rc::new(Quote::random())).collect();
+        self.quotes = Vec::from_fn(TOTAL_ITEMS, |_| Rc::new(Quote::random()));
     }
 
     fn table_bounds(&self) -> Bounds<Pixels> {

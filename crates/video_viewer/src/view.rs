@@ -972,7 +972,7 @@ impl VideoView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.looping = !self.looping;
+        self.looping.toggle();
         cx.notify();
     }
 

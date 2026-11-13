@@ -84,7 +84,7 @@ impl SidebarStatus {
         multi_workspace
             .as_ref()
             .and_then(|mw| mw.upgrade())
-            .map(|mw| {
+            .map_or_default(|mw| {
                 let mw = mw.read(cx);
                 let enabled = mw.multi_workspace_enabled(cx);
                 Self {
@@ -94,7 +94,6 @@ impl SidebarStatus {
                     show_toggle: enabled,
                 }
             })
-            .unwrap_or_default()
     }
 }
 

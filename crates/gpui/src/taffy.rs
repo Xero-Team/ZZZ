@@ -418,7 +418,7 @@ impl ToTaffy<taffy::style::Style> for Style {
         fn to_grid_repeat<T: taffy::style::CheapCloneStr>(
             unit: &Option<GridTemplate>,
         ) -> Vec<taffy::GridTemplateComponent<T>> {
-            unit.map(|template| {
+            unit.map_or_default(|template| {
                 // A template that repeats zero times describes an explicit grid with no tracks at
                 // all, which the grid placement algorithm is not required to handle. The grid style
                 // helpers clamp this at the authoring site, but styles can also be built by hand or
@@ -449,7 +449,6 @@ impl ToTaffy<taffy::style::Style> for Style {
                     }
                 }
             })
-            .unwrap_or_default()
         }
 
         taffy::style::Style {
@@ -486,13 +485,11 @@ impl ToTaffy<taffy::style::Style> for Style {
             grid_row: self
                 .grid_location
                 .as_ref()
-                .map(|location| to_grid_line(&location.row))
-                .unwrap_or_default(),
+                .map_or_default(|location| to_grid_line(&location.row)),
             grid_column: self
                 .grid_location
                 .as_ref()
-                .map(|location| to_grid_line(&location.column))
-                .unwrap_or_default(),
+                .map_or_default(|location| to_grid_line(&location.column)),
             ..Default::default()
         }
     }

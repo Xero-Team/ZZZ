@@ -689,8 +689,7 @@ impl EditorTestContext {
             editor
                 .background_highlights
                 .get(&key)
-                .map(|h| h.1.clone())
-                .unwrap_or_default()
+                .map_or_default(|h| h.1.clone())
                 .iter()
                 .map(|range| range.to_offset(&snapshot.buffer_snapshot()))
                 .map(|range| range.start.0..range.end.0)
@@ -705,8 +704,7 @@ impl EditorTestContext {
         let snapshot = self.update_editor(|editor, window, cx| editor.snapshot(window, cx));
         let actual_ranges: Vec<Range<usize>> = snapshot
             .text_highlight_ranges(key)
-            .map(|ranges| ranges.as_ref().clone().1)
-            .unwrap_or_default()
+            .map_or_default(|ranges| ranges.as_ref().clone().1)
             .into_iter()
             .map(|range| range.to_offset(&snapshot.buffer_snapshot()))
             .map(|range| range.start.0..range.end.0)

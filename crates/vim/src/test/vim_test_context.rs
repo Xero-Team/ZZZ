@@ -276,8 +276,7 @@ impl VimTestContext {
         VimClipboard {
             editor: self
                 .read_from_clipboard()
-                .map(|item| item.text().expect("text should be present"))
-                .unwrap_or_default(),
+                .map_or_default(|item| item.text().expect("text should be present")),
         }
     }
 }

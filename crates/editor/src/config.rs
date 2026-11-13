@@ -77,7 +77,7 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         let mut editor_settings = EditorSettings::get_global(cx).clone();
-        editor_settings.gutter.line_numbers = !editor_settings.gutter.line_numbers;
+        editor_settings.gutter.line_numbers.toggle();
         EditorSettings::override_global(editor_settings, cx);
     }
 

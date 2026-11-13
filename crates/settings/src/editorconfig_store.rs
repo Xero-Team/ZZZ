@@ -424,7 +424,6 @@ impl EditorconfigStore {
     pub fn external_config_paths_for_worktree(&self, worktree_id: WorktreeId) -> Vec<Arc<Path>> {
         self.worktree_state
             .get(&worktree_id)
-            .map(|state| state.external_config_paths.iter().cloned().collect())
-            .unwrap_or_default()
+            .map_or_default(|state| state.external_config_paths.iter().cloned().collect())
     }
 }

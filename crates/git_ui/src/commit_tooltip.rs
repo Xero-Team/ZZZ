@@ -117,8 +117,7 @@ impl<'a> CommitAvatar<'a> {
         let avatar_style = self
             .author_email
             .as_deref()
-            .map(AvatarStyle::new)
-            .unwrap_or_default();
+            .map_or_default(AvatarStyle::new);
 
         match self.avatar(window, cx) {
             None => {
@@ -269,8 +268,7 @@ impl CommitTooltip {
                 commit
                     .message
                     .as_ref()
-                    .map(|message| message.message.clone())
-                    .unwrap_or_default(),
+                    .map_or_default(|message| message.message.clone()),
                 None,
                 None,
                 cx,
@@ -343,8 +341,7 @@ impl Render for CommitTooltip {
                 .message
                 .as_ref()
                 .and_then(|message| message.message.lines().next())
-                .map(str::trim_end)
-                .unwrap_or_default()
+                .map_or_default(str::trim_end)
                 .into(),
             commit_timestamp: self.commit.commit_time.unix_timestamp(),
             author_name: self.commit.author_name.clone(),

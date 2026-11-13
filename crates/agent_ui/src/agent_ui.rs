@@ -807,6 +807,7 @@ fn update_command_palette_filter(cx: &mut App) {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use agent_settings::{AgentProfileId, AgentSettings};
     use command_palette_hooks::CommandPaletteFilter;

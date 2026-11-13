@@ -129,8 +129,7 @@ fn format_history_time(executed_at: i64) -> String {
     chrono::Local
         .timestamp_opt(executed_at, 0)
         .single()
-        .map(|time| time.format("%Y-%m-%d %H:%M").to_string())
-        .unwrap_or_default()
+        .map_or_default(|time| time.format("%Y-%m-%d %H:%M").to_string())
 }
 
 fn import_failure_message(cx: &App, failure: &ImportFailure) -> String {

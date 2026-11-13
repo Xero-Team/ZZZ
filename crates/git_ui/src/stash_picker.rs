@@ -111,9 +111,8 @@ impl StashList {
         }
 
         cx.spawn_in(window, async move |this, cx| {
-            let stash_entries = stash_request
-                .map(|git_stash| git_stash.entries.to_vec())
-                .unwrap_or_default();
+            let stash_entries =
+                stash_request.map_or_default(|git_stash| git_stash.entries.to_vec());
 
             this.update_in(cx, |this, window, cx| {
                 this.picker.update(cx, |picker, cx| {

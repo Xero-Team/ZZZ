@@ -330,7 +330,7 @@ impl RenameBranchModal {
             editor
         });
         let editor_subscription = cx.subscribe(&editor, |_, _, event, cx| {
-            if let editor::EditorEvent::BufferEdited = event {
+            if matches!(event, editor::EditorEvent::BufferEdited) {
                 cx.notify();
             }
         });

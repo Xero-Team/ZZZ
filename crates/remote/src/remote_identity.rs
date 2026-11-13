@@ -37,7 +37,7 @@ impl RemoteConnectionIdentity {
                 "ssh:{}@{}:{}",
                 username.as_deref().unwrap_or_default(),
                 host,
-                port.map(|port| port.to_string()).unwrap_or_default()
+                port.map_or_default(|port| port.to_string())
             ),
             Self::Wsl { distro_name, user } => format!(
                 "wsl:{}@{}",

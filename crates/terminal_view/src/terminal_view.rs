@@ -691,8 +691,7 @@ impl TerminalView {
             .terminal
             .read(cx)
             .task()
-            .map(|task| terminal_rerun_override(&task.spawned_task.id))
-            .unwrap_or_default();
+            .map_or_default(|task| terminal_rerun_override(&task.spawned_task.id));
         window.dispatch_action(Box::new(task), cx);
     }
 

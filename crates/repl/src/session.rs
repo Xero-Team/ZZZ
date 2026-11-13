@@ -25,6 +25,7 @@ use editor::{
 use project::InlayId;
 
 /// Marker types
+#[allow(clippy::empty_enums)] // uninhabited marker; each range needs a distinct type
 enum ReplExecutedRange {}
 
 use futures::FutureExt as _;

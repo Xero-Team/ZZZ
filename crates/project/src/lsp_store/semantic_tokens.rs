@@ -262,8 +262,7 @@ impl LspStore {
                         .await
                         .log_err()
                         .flatten()
-                        .map(|response| response.payload)
-                        .unwrap_or_default()
+                        .map_or_default(|response| response.payload)
                         .into_iter()
                         .map(|response| {
                             let server_id = LanguageServerId::from_proto(response.server_id);
@@ -994,12 +993,11 @@ mod tests {
                         data: e
                             .get("data")
                             .and_then(|d| d.as_array())
-                            .map(|arr| {
+                            .map_or_default(|arr| {
                                 arr.iter()
                                     .filter_map(|v| v.as_u64().map(|n| n as u32))
                                     .collect()
-                            })
-                            .unwrap_or_default(),
+                            }),
                     })
                 })
                 .collect();

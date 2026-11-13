@@ -1656,8 +1656,7 @@ impl MessageEditor {
                                 cx,
                                 "agent_ui.mention_set.default_image_name",
                                 "Image",
-                            )
-                            .clone(),
+                            ),
                         })
                     };
                     let Some(mention_uri) = mention_uri.log_err() else {
@@ -2148,6 +2147,8 @@ fn find_matching_bracket(text: &str, open: char, close: char) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use std::{ops::Range, path::Path, path::PathBuf, sync::Arc};
 
     use acp_thread::MentionUri;
@@ -2189,7 +2190,7 @@ mod tests {
         let mentions = parse_mention_links(text, PathStyle::local());
         assert_eq!(mentions.len(), 1);
         assert_eq!(mentions[0].0, 0..text.len());
-        assert!(matches!(mentions[0].1, MentionUri::File { .. }));
+        assert_matches!(mentions[0].1, MentionUri::File { .. });
 
         // Multiple mentions
         let text = "Check [@file1](file:///path/to/file1) and [@file2](file:///path/to/file2)!";
@@ -2216,21 +2217,21 @@ mod tests {
         let text = "Check out [@docs](https://example.com/docs) for more info";
         let mentions = parse_mention_links(text, PathStyle::local());
         assert_eq!(mentions.len(), 1);
-        assert!(matches!(mentions[0].1, MentionUri::Fetch { .. }));
+        assert_matches!(mentions[0].1, MentionUri::Fetch { .. });
 
         // Directory mention (trailing slash)
         let text = "[@src](file:///path/to/src/)";
         let mentions = parse_mention_links(text, PathStyle::local());
         assert_eq!(mentions.len(), 1);
-        assert!(matches!(mentions[0].1, MentionUri::Directory { .. }));
+        assert_matches!(mentions[0].1, MentionUri::Directory { .. });
 
         // Multiple different mention types
         let text = "File [@f](file:///a) and URL [@u](https://b.com) and dir [@d](file:///c/)";
         let mentions = parse_mention_links(text, PathStyle::local());
         assert_eq!(mentions.len(), 3);
-        assert!(matches!(mentions[0].1, MentionUri::File { .. }));
-        assert!(matches!(mentions[1].1, MentionUri::Fetch { .. }));
-        assert!(matches!(mentions[2].1, MentionUri::Directory { .. }));
+        assert_matches!(mentions[0].1, MentionUri::File { .. });
+        assert_matches!(mentions[1].1, MentionUri::Fetch { .. });
+        assert_matches!(mentions[2].1, MentionUri::Directory { .. });
 
         // Adjacent mentions without separator
         let text = "[@a](file:///a)[@b](file:///b)";
@@ -3233,8 +3234,7 @@ mod tests {
                     completion.label.text,
                     completion
                         .documentation
-                        .map(|d| d.text().to_string())
-                        .unwrap_or_default(),
+                        .map_or_default(|d| d.text().to_string()),
                 )
             })
             .collect::<Vec<_>>()

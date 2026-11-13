@@ -902,10 +902,9 @@ pub fn all_open_workspaces(cx: &App) -> Vec<Entity<Workspace>> {
         .into_iter()
         .filter_map(|window| window.downcast::<MultiWorkspace>())
         .flat_map(|multi_workspace| {
-            multi_workspace
-                .read(cx)
-                .map(|multi_workspace| multi_workspace.workspaces().cloned().collect::<Vec<_>>())
-                .unwrap_or_default()
+            multi_workspace.read(cx).map_or_default(|multi_workspace| {
+                multi_workspace.workspaces().cloned().collect::<Vec<_>>()
+            })
         })
         .collect()
 }

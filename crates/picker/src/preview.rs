@@ -238,16 +238,13 @@ impl EditorPreview {
             (window.viewport_size().height / MIN_LINE_HEIGHT_PX).ceil() as u32 + MARGIN;
 
         self.preview_editor.update(cx, |editor, cx| {
-            let focus_row = highlight
-                .as_ref()
-                .map(|location| {
-                    location
-                        .anchor_range
-                        .start
-                        .to_point(&buffer.read(cx).text_snapshot())
-                        .row
-                })
-                .unwrap_or_default();
+            let focus_row = highlight.as_ref().map_or_default(|location| {
+                location
+                    .anchor_range
+                    .start
+                    .to_point(&buffer.read(cx).text_snapshot())
+                    .row
+            });
 
             let multi_buffer = editor.buffer().clone();
             multi_buffer.update(cx, |multi_buffer, cx| {

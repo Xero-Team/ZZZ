@@ -89,7 +89,9 @@ pub fn init<F: Future<Output = ()> + Send + Sync + 'static>(
 
             // Only request a minidump once.
             let res = if REQUESTED_MINIDUMP
-                .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+                .try_update(Ordering::Acquire, Ordering::Relaxed, |requested| {
+                    (!requested).then_some(true)
+                })
                 .is_ok()
             {
                 #[cfg(target_os = "macos")]
@@ -430,8 +432,7 @@ pub fn panic_hook(info: &PanicHookInfo) {
 
     let span = info
         .location()
-        .map(|loc| format!("{}:{}", loc.file(), loc.line()))
-        .unwrap_or_default();
+        .map_or_default(|loc| format!("{}:{}", loc.file(), loc.line()));
 
     let current_thread = std::thread::current();
     let thread_name = current_thread.name().unwrap_or("<unnamed>");
@@ -459,11 +460,12 @@ pub fn panic_hook(info: &PanicHookInfo) {
         Ordering::SeqCst,
     );
 
-    cfg_if::cfg_if! {
-        if #[cfg(target_os = "windows")] {
+    cfg_select! {
+        target_os = "windows" => {
             // https://learn.microsoft.com/en-us/windows/win32/debug/system-error-codes--0-499-
             CrashHandler.simulate_exception(Some(234)); // (MORE_DATA_AVAILABLE)
-        } else {
+        }
+        _ => {
             std::process::abort();
         }
     }

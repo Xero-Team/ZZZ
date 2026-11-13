@@ -996,6 +996,7 @@ pub enum IndentGuideBackgroundColoring {
 
 #[cfg(test)]
 mod test {
+    use std::assert_matches;
 
     use crate::{ParseStatus, fallible_options, merge_from::MergeFrom};
 
@@ -1072,7 +1073,7 @@ mod test {
     fn test_formatter_deserialization_invalid() {
         let raw_auto = "{\"formatter\": {}}";
         let (_, result) = fallible_options::parse_json::<LanguageSettingsContent>(raw_auto);
-        assert!(matches!(result, ParseStatus::Failed { .. }));
+        assert_matches!(result, ParseStatus::Failed { .. });
     }
 
     #[test]

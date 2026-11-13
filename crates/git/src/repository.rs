@@ -134,7 +134,7 @@ impl InitialGraphCommitData {
                 let ref_name = ref_name.as_ref();
                 // `git log --decorate` renders the checked-out branch as
                 // `HEAD -> <branch>`.
-                let ref_name = ref_name.strip_prefix("HEAD -> ").unwrap_or(ref_name);
+                let ref_name = ref_name.trim_prefix("HEAD -> ");
 
                 if ref_name == "HEAD"
                     || ref_name.starts_with("tag: ")
@@ -3085,8 +3085,8 @@ impl GitRepository for RealGitRepository {
 
                     if !output.status.success() {
                         return Err(GitBinaryCommandError {
-                            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-                            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+                            stdout: String::from_utf8_lossy_owned(output.stdout),
+                            stderr: String::from_utf8_lossy_owned(output.stderr),
                             status: output.status,
                         }
                         .into());

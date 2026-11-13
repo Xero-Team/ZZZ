@@ -45,7 +45,7 @@ If you're thinking about proposing or building a larger feature, read the [ZZZ F
 
 ## Rust toolchain
 
-ZZZ pins Rust 1.99.1 in `rust-toolchain.toml`; that is the minimum supported
+ZZZ pins Rust 1.100.0 in `rust-toolchain.toml`; that is the minimum supported
 Rust version (MSRV) recorded in `Cargo.toml` and `clippy.toml`. Run
 `rustc --version` to confirm the active toolchain matches the pin.
 

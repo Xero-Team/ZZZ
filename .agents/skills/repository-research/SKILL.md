@@ -2,10 +2,10 @@
 name: repository-research
 description: "Investigates GitHub and local repositories from source code, history, metadata, and primary documentation, then produces evidence-backed architecture analyses and competitor comparisons. Use for repository due diligence, multi-repo technology selection, codebase RAG assessment, maintenance or health reviews, and deep implementation comparisons; skip for superficial README summaries or ordinary code edits."
 license: CC-BY-4.0
+compatibility: opencode
 metadata:
   prompt-language: English
   user-language: Simplified Chinese
-  output-target: .agents/skills
 ---
 
 # Repository Research

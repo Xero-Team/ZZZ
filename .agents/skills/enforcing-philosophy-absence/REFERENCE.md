@@ -20,7 +20,7 @@ ZZZ is local-first, no-account, ACP-only. AI stays when it points at
 infrastructure the user owns. Commercial APIs are silent and manual.
 There are no pre-built hosted binaries.
 
-`script/check-philosophy` is the regression net: 67+ assertions in bash +
+`script/check-philosophy` is the regression net: 76 assertions in bash +
 `rg`, invoked by `cargo xtask check` (`check all`) and by the
 `cargo xtask clippy` preflight. It passes on a clean `main`. Keep new
 checks in the same style and never weaken an existing assertion.
@@ -92,7 +92,10 @@ Docs (`docs/AGENTS.md`):
 - Keybindings use `{#kb ...}` / `{#action ...}`, never hardcoded.
 - Settings: Settings Editor first, then complete JSON.
 - Prettier `printWidth` 80. Format only files this session touched:
-  `cd docs && npx prettier --write src/<touched.md>`
+  `cd docs && npx --yes prettier@3.9.10 --write src/<touched.md>`. `3.9.10`
+  is the version pinned in `script/prettier`, which `cargo xtask check docs`
+  runs over all of `docs/`; a scoped write must use the same version or the
+  check will disagree.
 - Do not run Prettier across all of `docs/src/`.
 - Do not add speculative docs for unreleased features.
 - Product docs must not claim hosted downloads, auto-update-on, Zeta as
@@ -188,7 +191,7 @@ absent, and no telemetry crate or directory was reintroduced.
 
 ### Regression net
 
-`script/check-philosophy` asserts, among 67+ checks: auto-update is off,
+`script/check-philosophy` asserts, among 76 checks: auto-update is off,
 edit prediction does not default to `"zed"` or Copilot, Zeta is not called
 the default provider, `install.sh` has no hosted binaries, the privacy
 policy has no Zed Industries telemetry opt-out, `default.json` has no
@@ -218,8 +221,8 @@ cargo test --locked -p <crate> <test_filter>
 Docs, only touched files:
 
 ```sh
-cd docs && npx prettier --write src/<file.md>
-cd docs && npx prettier --check src/<file.md>
+cd docs && npx --yes prettier@3.9.10 --write src/<file.md>
+cd docs && npx --yes prettier@3.9.10 --check src/<file.md>
 ```
 
 Do not run `cargo test --workspace`, `cargo fmt --all`, or Prettier on

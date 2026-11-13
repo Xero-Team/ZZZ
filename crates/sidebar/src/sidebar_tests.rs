@@ -9627,8 +9627,7 @@ mod property_test {
 
             let group_workspaces = workspaces_by_group
                 .get(&group_key)
-                .map(|ws| ws.as_slice())
-                .unwrap_or_default();
+                .map_or_default(|ws| ws.as_slice());
 
             // Main code path queries (run for all groups, even without workspaces).
             // Skip drafts (session_id: None) — they are not shown in the

@@ -565,6 +565,9 @@ pub mod agent {
 }
 
 pub mod assistant {
+    // serde's derive emits an empty `__Field` enum when every field is skipped.
+    #![allow(clippy::empty_enums)]
+
     use gpui::{Action, actions};
     use schemars::JsonSchema;
     use serde::Deserialize;

@@ -2433,8 +2433,7 @@ impl ConversationView {
 
     fn queued_messages_len(&self, cx: &App) -> usize {
         self.root_thread_view()
-            .map(|thread| thread.read(cx).local_queued_messages.len())
-            .unwrap_or_default()
+            .map_or_default(|thread| thread.read(cx).local_queued_messages.len())
     }
 
     fn update_queued_message(
@@ -3552,17 +3551,13 @@ impl AgentCodeSpanResolver {
     /// Absolute paths of every current worktree.
     /// Used by the markdown image resolver, which needs the same set of roots.
     fn worktree_roots(&self, cx: &App) -> Vec<PathBuf> {
-        self.inner
-            .project
-            .upgrade()
-            .map(|project| {
-                project
-                    .read(cx)
-                    .visible_worktrees(cx)
-                    .map(|worktree| worktree.read(cx).abs_path().to_path_buf())
-                    .collect()
-            })
-            .unwrap_or_default()
+        self.inner.project.upgrade().map_or_default(|project| {
+            project
+                .read(cx)
+                .visible_worktrees(cx)
+                .map(|worktree| worktree.read(cx).abs_path().to_path_buf())
+                .collect()
+        })
     }
 
     fn try_resolve(&self, text: &str, cx: &App) -> Option<SharedString> {
@@ -3711,6 +3706,8 @@ fn plan_label_markdown_style(
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use std::assert_matches;
+
     use acp_thread::StubAgentConnection;
     use action_log::ActionLog;
     use agent::{TerminalTool, ToolPermissionContext};
@@ -3947,10 +3944,10 @@ pub(crate) mod tests {
                     assert_eq!(view.thread.read(cx).status(), ThreadStatus::Idle);
                 } else {
                     assert_eq!(view.thread.read(cx).status(), ThreadStatus::Generating);
-                    assert!(matches!(
+                    assert_matches!(
                         view.in_flight_prompt.as_deref(),
                         Some([acp::ContentBlock::Text(text)]) if text.text == "second"
-                    ));
+                    );
                 }
                 assert!(view.thread_error.is_none());
             });
@@ -3974,10 +3971,10 @@ pub(crate) mod tests {
             thread_view.read_with(cx, |view, cx| {
                 assert_eq!(view.thread.read(cx).status(), ThreadStatus::Generating);
                 assert!(view.turn_fields.turn_started_at.is_some());
-                assert!(matches!(
+                assert_matches!(
                     view.in_flight_prompt.as_deref(),
                     Some([acp::ContentBlock::Text(text)]) if text.text == "second"
-                ));
+                );
                 assert!(view.thread_error.is_none());
             });
 
@@ -3994,14 +3991,14 @@ pub(crate) mod tests {
                 assert_eq!(view.thread.read(cx).status(), ThreadStatus::Idle);
                 assert!(view.turn_fields.turn_started_at.is_none());
                 if responses_are_errors {
-                    assert!(matches!(
+                    assert_matches!(
                         &view.thread_error,
                         Some(ThreadError::Other { message, .. }) if message.as_ref() == "current prompt failed"
-                    ));
-                    assert!(matches!(
+                    );
+                    assert_matches!(
                         view.in_flight_prompt.as_deref(),
                         Some([acp::ContentBlock::Text(text)]) if text.text == "second"
-                    ));
+                    );
                 } else {
                     assert!(view.thread_error.is_none());
                     assert!(view.in_flight_prompt.is_none());
@@ -4414,8 +4411,9 @@ pub(crate) mod tests {
         // Check that the refusal error is set
         conversation_view.read_with(cx, |thread_view, cx| {
             let state = thread_view.active_thread().unwrap();
-            assert!(
-                matches!(state.read(cx).thread_error, Some(ThreadError::Refusal)),
+            assert_matches!(
+                state.read(cx).thread_error,
+                Some(ThreadError::Refusal),
                 "Expected refusal error to be set"
             );
         });
@@ -7337,11 +7335,9 @@ pub(crate) mod tests {
             let tool_call = tool_call.unwrap();
 
             // Verify it's waiting for confirmation
-            assert!(
-                matches!(
-                    tool_call.status,
-                    acp_thread::ToolCallStatus::WaitingForConfirmation { .. }
-                ),
+            assert_matches!(
+                tool_call.status,
+                acp_thread::ToolCallStatus::WaitingForConfirmation { .. },
                 "Expected WaitingForConfirmation status, got {:?}",
                 tool_call.status
             );
@@ -8313,10 +8309,7 @@ pub(crate) mod tests {
             vec!["cargo test 2>&1 | tail".to_string()],
         )
         .build_permission_options();
-        assert!(matches!(
-            options,
-            PermissionOptions::DropdownWithPatterns { .. }
-        ));
+        assert_matches!(options, PermissionOptions::DropdownWithPatterns { .. });
         // Pattern mode with zero checked patterns: `build_outcome_for_checked_patterns`
         // returns None, so we fall through to `choice_index()` (which is None for
         // `SelectedPatterns`) and default to `choices.last()`.
@@ -8336,10 +8329,7 @@ pub(crate) mod tests {
             vec!["cargo test 2>&1 | tail".to_string()],
         )
         .build_permission_options();
-        assert!(matches!(
-            options,
-            PermissionOptions::DropdownWithPatterns { .. }
-        ));
+        assert_matches!(options, PermissionOptions::DropdownWithPatterns { .. });
         let selection = thread_view::PermissionSelection::SelectedPatterns(vec![0]);
 
         let outcome =
@@ -8439,8 +8429,9 @@ pub(crate) mod tests {
         conversation_view.read_with(cx, |conversation_view, cx| {
             let state = conversation_view.active_thread().unwrap();
             let error = &state.read(cx).thread_error;
-            assert!(
-                matches!(error, Some(ThreadError::MaxOutputTokens)),
+            assert_matches!(
+                error,
+                Some(ThreadError::MaxOutputTokens),
                 "Expected ThreadError::MaxOutputTokens, got: {:?}",
                 error.is_some()
             );

@@ -1095,8 +1095,7 @@ impl ContextServerStore {
             env: command
                 .env
                 .clone()
-                .map(|env| env.into_iter().collect())
-                .unwrap_or_default(),
+                .map_or_default(|env| env.into_iter().collect()),
             path_v2: Some(proto::NativePathV2::from_native_path(&command_path)),
         })
     }

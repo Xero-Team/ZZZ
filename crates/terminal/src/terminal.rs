@@ -1263,7 +1263,7 @@ impl Terminal {
             }
             InternalEvent::ToggleViMode => {
                 trace!("Toggling vi mode");
-                self.vi_mode_enabled = !self.vi_mode_enabled;
+                self.vi_mode_enabled.toggle();
                 term.toggle_vi_mode();
             }
             InternalEvent::ViMotion(motion) => {
@@ -2417,8 +2417,7 @@ impl Terminal {
                             let process_file = fpi
                                 .cwd
                                 .file_name()
-                                .map(|name| name.to_string_lossy().into_owned())
-                                .unwrap_or_default();
+                                .map_or_default(|name| name.to_string_lossy().into_owned());
 
                             let argv = fpi.argv.as_slice();
                             let process_name = format!(
@@ -2801,6 +2800,7 @@ pub fn rgba_color(r: u8, g: u8, b: u8) -> Hsla {
 
 #[cfg(test)]
 mod tests {
+
     use std::time::Duration;
 
     use super::*;

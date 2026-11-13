@@ -809,7 +809,7 @@ impl<D: PickerDelegate> Picker<D> {
             cx.propagate();
             return;
         }
-        self.select_instead_of_open = !self.select_instead_of_open;
+        self.select_instead_of_open.toggle();
         if !self.select_instead_of_open {
             self.delegate.clear_selection(cx);
         }

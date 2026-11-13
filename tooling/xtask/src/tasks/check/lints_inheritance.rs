@@ -8,7 +8,6 @@
 //! to compile under `unsafe_code = "deny"`, while the same crate without the
 //! opt-in compiles cleanly. Nothing enforced the opt-in before this gate.
 
-
 use anyhow::{Context as _, Result, bail};
 use toml::Value;
 
@@ -31,8 +30,8 @@ pub fn check_at(repo: &super::Repo) -> Result<()> {
     for member in &members {
         let manifest_path = format!("{member}/Cargo.toml");
         let source = repo.read(&manifest_path)?;
-        let parsed: Value = toml::from_str(&source)
-            .with_context(|| format!("failed to parse {manifest_path}"))?;
+        let parsed: Value =
+            toml::from_str(&source).with_context(|| format!("failed to parse {manifest_path}"))?;
         inheritance.push((member.clone(), opts_in(&parsed)));
     }
 

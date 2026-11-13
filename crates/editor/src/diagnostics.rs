@@ -284,7 +284,7 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Editor>,
     ) {
-        self.show_inline_diagnostics = !self.show_inline_diagnostics;
+        self.show_inline_diagnostics.toggle();
         self.refresh_inline_diagnostics(false, window, cx);
     }
 

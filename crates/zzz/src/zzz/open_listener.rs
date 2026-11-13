@@ -225,7 +225,7 @@ impl OpenRequest {
 
     fn parse_agent_url(&mut self, agent_path: &str) {
         // Format: "" or "?prompt=<text>".
-        let agent_path = agent_path.strip_prefix('/').unwrap_or(agent_path);
+        let agent_path = agent_path.trim_prefix('/');
         let external_source_prompt = agent_path.strip_prefix('?').and_then(|query| {
             url::form_urlencoded::parse(query.as_bytes())
                 .find_map(|(key, value)| (key == "prompt").then_some(value))
@@ -240,7 +240,7 @@ impl OpenRequest {
         let skill_path = url
             .strip_prefix(SKILL_URL_PREFIX)
             .context("invalid skill url: unsupported prefix")?;
-        let skill_path = skill_path.strip_prefix('/').unwrap_or(skill_path);
+        let skill_path = skill_path.trim_prefix('/');
 
         let encoded = if let Some(query) = skill_path.strip_prefix('?') {
             url::form_urlencoded::parse(query.as_bytes())
@@ -265,7 +265,7 @@ impl OpenRequest {
 
     fn parse_git_clone_url(&mut self, clone_path: &str) -> Result<()> {
         // Format: /?repo=<url> or ?repo=<url>
-        let clone_path = clone_path.strip_prefix('/').unwrap_or(clone_path);
+        let clone_path = clone_path.trim_prefix('/');
 
         let query = clone_path
             .strip_prefix('?')
@@ -1051,6 +1051,8 @@ fn looks_like_parenthesized_position_suffix(path: &Path) -> bool {
 // than aborting on the first foreign call.
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use crate::zzz::{open_listener::open_local_workspace, tests::init_test};
     use cli::CliResponse;
@@ -1581,8 +1583,9 @@ mod tests {
                 )
                 .unwrap()
             });
-            assert!(
-                matches!(request.kind, Some(OpenRequestKind::FocusApp)),
+            assert_matches!(
+                request.kind,
+                Some(OpenRequestKind::FocusApp),
                 "expected FocusApp for {url}, got {:?}",
                 request.kind
             );
@@ -1813,7 +1816,7 @@ mod tests {
 
         cx.background_executor.run_until_parked();
         assert_eq!(cx.windows().len(), 1);
-        assert!(matches!(poll!(&mut done_rx), Poll::Pending));
+        assert_matches!(poll!(&mut done_rx), Poll::Pending);
 
         let window = cx.windows()[0];
         cx.update_window(window, |_, window, _| window.remove_window())

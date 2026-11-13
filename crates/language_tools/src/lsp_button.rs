@@ -392,13 +392,11 @@ impl LanguageServerState {
             let submenu_server_info = server_info.clone();
 
             menu = menu.submenu_with_colored_icon(
-                server_info.name.0.clone(),
+                server_info.name.0,
                 IconName::Circle,
                 status_color,
                 {
                     let lsp_logs = lsp_logs.clone();
-                    let message = message.clone();
-                    let server_selector = server_selector.clone();
                     let workspace = self.workspace.clone();
                     let lsp_store = self.lsp_store.clone();
                     let state = cx.entity().downgrade();
@@ -1268,7 +1266,7 @@ impl LspButton {
                 };
                 if let Some(worktree_name) = worktree_name {
                     servers_per_worktree
-                        .entry(worktree_name.clone())
+                        .entry(worktree_name)
                         .or_default()
                         .push(server_data);
                 }
@@ -1314,14 +1312,13 @@ impl LspButton {
                         .or_else(|| worktrees_for_name.iter().next())
                 {
                     let worktree_name = SharedString::new(worktree.read(cx).root_name_str());
-                    servers_per_worktree
-                        .entry(worktree_name.clone())
-                        .or_default()
-                        .push(ServerData::WithBinaryStatus {
+                    servers_per_worktree.entry(worktree_name).or_default().push(
+                        ServerData::WithBinaryStatus {
                             server_name,
                             binary_status,
                             server_id: *server_id,
-                        });
+                        },
+                    );
                 }
             }
 

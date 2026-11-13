@@ -222,14 +222,12 @@ fn nested_shell_payloads(command: &str) -> Vec<String> {
         if lower == "-c" || lower == "--command" || lower == "/c" {
             return parts
                 .get(index + 1)
-                .map(|_| shell_payloads(parts[index + 1..].join(" ")))
-                .unwrap_or_default();
+                .map_or_default(|_| shell_payloads(parts[index + 1..].join(" ")));
         }
         if lower.starts_with('-') && !lower.starts_with("--") && lower[1..].contains('c') {
             return parts
                 .get(index + 1)
-                .map(|_| shell_payloads(parts[index + 1..].join(" ")))
-                .unwrap_or_default();
+                .map_or_default(|_| shell_payloads(parts[index + 1..].join(" ")));
         }
         if let Some(payload) = lower
             .strip_prefix("--command=")
@@ -858,6 +856,8 @@ pub fn most_restrictive(
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use crate::pattern_extraction::extract_terminal_pattern;
     use crate::tools::TerminalTool;
@@ -973,8 +973,9 @@ mod tests {
             );
         }
         fn is_deny(self) {
-            assert!(
-                matches!(self.run(), ToolPermissionDecision::Deny(_)),
+            assert_matches!(
+                self.run(),
+                ToolPermissionDecision::Deny(_),
                 "expected Deny for '{}'",
                 self.input
             );
@@ -1249,10 +1250,10 @@ mod tests {
             no_rules("x", ToolPermissionMode::Allow),
             ToolPermissionDecision::Allow
         );
-        assert!(matches!(
+        assert_matches!(
             no_rules("x", ToolPermissionMode::Deny),
             ToolPermissionDecision::Deny(_)
-        ));
+        );
     }
 
     #[test]
@@ -1314,7 +1315,7 @@ mod tests {
             default: ToolPermissionMode::Confirm,
             tools,
         };
-        assert!(matches!(
+        assert_matches!(
             ToolPermissionDecision::from_input(
                 TerminalTool::NAME,
                 &["x".to_string()],
@@ -1322,7 +1323,7 @@ mod tests {
                 ShellKind::Posix
             ),
             ToolPermissionDecision::Deny(_)
-        ));
+        );
         assert_eq!(
             ToolPermissionDecision::from_input(
                 "edit_file",
@@ -1386,7 +1387,7 @@ mod tests {
             tools,
         };
         // Invalid patterns block the tool regardless of other settings
-        assert!(matches!(
+        assert_matches!(
             ToolPermissionDecision::from_input(
                 TerminalTool::NAME,
                 &["echo hi".to_string()],
@@ -1394,19 +1395,19 @@ mod tests {
                 ShellKind::Posix
             ),
             ToolPermissionDecision::Deny(_)
-        ));
+        );
     }
 
     #[test]
     fn invalid_substitution_bearing_command_denies_by_default() {
         let decision = no_rules("echo $HOME", ToolPermissionMode::Deny);
-        assert!(matches!(decision, ToolPermissionDecision::Deny(_)));
+        assert_matches!(decision, ToolPermissionDecision::Deny(_));
     }
 
     #[test]
     fn invalid_substitution_bearing_command_denies_in_confirm_mode() {
         let decision = no_rules("echo $(whoami)", ToolPermissionMode::Confirm);
-        assert!(matches!(decision, ToolPermissionDecision::Deny(_)));
+        assert_matches!(decision, ToolPermissionDecision::Deny(_));
     }
 
     #[test]
@@ -1759,7 +1760,7 @@ mod tests {
             default: ToolPermissionMode::Confirm,
             tools,
         };
-        assert!(matches!(
+        assert_matches!(
             ToolPermissionDecision::from_input(
                 TerminalTool::NAME,
                 &["x".to_string()],
@@ -1767,7 +1768,7 @@ mod tests {
                 ShellKind::Posix
             ),
             ToolPermissionDecision::Deny(_)
-        ));
+        );
         assert_eq!(
             ToolPermissionDecision::from_input(
                 "mcp:srv:terminal",
@@ -2487,57 +2488,57 @@ mod tests {
 
     #[test]
     fn most_restrictive_deny_vs_allow() {
-        assert!(matches!(
+        assert_matches!(
             most_restrictive(
                 ToolPermissionDecision::Deny("x".into()),
                 ToolPermissionDecision::Allow
             ),
             ToolPermissionDecision::Deny(_)
-        ));
+        );
     }
 
     #[test]
     fn most_restrictive_allow_vs_deny() {
-        assert!(matches!(
+        assert_matches!(
             most_restrictive(
                 ToolPermissionDecision::Allow,
                 ToolPermissionDecision::Deny("x".into())
             ),
             ToolPermissionDecision::Deny(_)
-        ));
+        );
     }
 
     #[test]
     fn most_restrictive_deny_vs_confirm() {
-        assert!(matches!(
+        assert_matches!(
             most_restrictive(
                 ToolPermissionDecision::Deny("x".into()),
                 ToolPermissionDecision::Confirm
             ),
             ToolPermissionDecision::Deny(_)
-        ));
+        );
     }
 
     #[test]
     fn most_restrictive_confirm_vs_deny() {
-        assert!(matches!(
+        assert_matches!(
             most_restrictive(
                 ToolPermissionDecision::Confirm,
                 ToolPermissionDecision::Deny("x".into())
             ),
             ToolPermissionDecision::Deny(_)
-        ));
+        );
     }
 
     #[test]
     fn most_restrictive_deny_vs_deny() {
-        assert!(matches!(
+        assert_matches!(
             most_restrictive(
                 ToolPermissionDecision::Deny("a".into()),
                 ToolPermissionDecision::Deny("b".into())
             ),
             ToolPermissionDecision::Deny(_)
-        ));
+        );
     }
 
     #[test]
@@ -2602,8 +2603,9 @@ mod tests {
         });
 
         let decision = decide_permission_for_path("edit_file", "/tmp/../etc/passwd", &settings);
-        assert!(
-            matches!(decision, ToolPermissionDecision::Deny(_)),
+        assert_matches!(
+            decision,
+            ToolPermissionDecision::Deny(_),
             "expected Deny for traversal to /etc/passwd, got {:?}",
             decision
         );
@@ -2695,7 +2697,7 @@ mod tests {
             &[],
             &[],
         );
-        assert!(matches!(decision, ToolPermissionDecision::Deny(_)));
+        assert_matches!(decision, ToolPermissionDecision::Deny(_));
     }
 
     #[test]
@@ -2707,13 +2709,13 @@ mod tests {
             &[],
             &["^\\.ZZZ/"],
         );
-        assert!(matches!(decision, ToolPermissionDecision::Confirm));
+        assert_matches!(decision, ToolPermissionDecision::Confirm);
     }
 
     #[test]
     fn decide_permission_for_path_allows_when_no_traversal_issue() {
         let decision = path_perm("copy_path", "src/main.rs", &[], &["^src/"], &[]);
-        assert!(matches!(decision, ToolPermissionDecision::Allow));
+        assert_matches!(decision, ToolPermissionDecision::Allow);
     }
 
     #[test]
@@ -2725,7 +2727,7 @@ mod tests {
             &["^allowed/"],
             &[],
         );
-        assert!(matches!(decision, ToolPermissionDecision::Deny(_)));
+        assert_matches!(decision, ToolPermissionDecision::Deny(_));
     }
 
     #[test]
@@ -2737,26 +2739,26 @@ mod tests {
             &[],
             &[],
         );
-        assert!(matches!(decision, ToolPermissionDecision::Deny(_)));
+        assert_matches!(decision, ToolPermissionDecision::Deny(_));
     }
 
     #[test]
     fn decide_permission_for_path_no_change_when_already_simple() {
         // When path has no `.` or `..` segments, behavior matches decide_permission_from_settings
         let decision = path_perm("copy_path", ".ZZZ/settings.json", &["^\\.ZZZ/"], &[], &[]);
-        assert!(matches!(decision, ToolPermissionDecision::Deny(_)));
+        assert_matches!(decision, ToolPermissionDecision::Deny(_));
     }
 
     #[test]
     fn decide_permission_for_path_raw_deny_still_works() {
         // Even without traversal, if the raw path itself matches deny, it's denied
         let decision = path_perm("copy_path", "secret/file.txt", &["^secret/"], &[], &[]);
-        assert!(matches!(decision, ToolPermissionDecision::Deny(_)));
+        assert_matches!(decision, ToolPermissionDecision::Deny(_));
     }
 
     #[test]
     fn decide_permission_for_path_denies_edit_file_traversal_to_dotenv() {
         let decision = path_perm("edit_file", "src/../.env", &["^\\.env"], &[], &[]);
-        assert!(matches!(decision, ToolPermissionDecision::Deny(_)));
+        assert_matches!(decision, ToolPermissionDecision::Deny(_));
     }
 }

@@ -156,7 +156,7 @@ impl EntryViewState {
                             let element = create_terminal(
                                 self.workspace.clone(),
                                 self.project.clone(),
-                                terminal.clone(),
+                                terminal,
                                 window,
                                 cx,
                             )
@@ -724,14 +724,8 @@ mod tests {
         });
 
         view_state.read_with(cx, |view_state, _cx| {
-            assert!(matches!(
-                view_state.entry(0),
-                Some(Entry::Elicitation { .. })
-            ));
-            assert!(matches!(
-                view_state.entry(1),
-                Some(Entry::AssistantMessage(_))
-            ));
+            assert_matches!(view_state.entry(0), Some(Entry::Elicitation { .. }));
+            assert_matches!(view_state.entry(1), Some(Entry::AssistantMessage(_)));
         });
     }
 

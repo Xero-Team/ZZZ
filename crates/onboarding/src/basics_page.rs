@@ -544,9 +544,8 @@ fn render_zzz_agent_button(_user_store: &Entity<UserStore>, cx: &mut App) -> imp
 }
 
 fn render_ai_section(user_store: &Entity<UserStore>, cx: &mut App) -> impl IntoElement {
-    let registry_agents = AgentRegistryStore::try_global(cx)
-        .map(|store| store.read(cx).agents().to_vec())
-        .unwrap_or_default();
+    let registry_agents =
+        AgentRegistryStore::try_global(cx).map_or_default(|store| store.read(cx).agents().to_vec());
 
     let installed_agents = cx
         .global::<SettingsStore>()

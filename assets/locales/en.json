@@ -3713,6 +3713,7 @@
     "telegram_panel.error.edit_failed": "Failed to edit the message.",
     "telegram_panel.error.leave_failed": "Failed to leave the chat.",
     "telegram_panel.error.mark_unread_failed": "Failed to mark the chat as unread.",
+    "telegram_panel.error.media_unavailable": "This media can no longer be downloaded.",
     "telegram_panel.error.mute_failed": "Failed to update the notification settings.",
     "telegram_panel.error.pin_message_failed": "Failed to update the pinned message.",
     "telegram_panel.error.reaction_failed": "Failed to update the reaction.",

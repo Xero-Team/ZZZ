@@ -233,7 +233,7 @@ fn default_delimiter_for_extension(extension: &str) -> Option<char> {
 fn has_separator_directive(text: &str) -> bool {
     text.lines().next().is_some_and(|line| {
         let line = line.trim_start();
-        let line = line.strip_prefix('\u{feff}').unwrap_or(line);
+        let line = line.trim_prefix('\u{feff}');
         let bytes = line.as_bytes();
         bytes.len() >= 5
             && line[..4].eq_ignore_ascii_case("sep=")
@@ -246,7 +246,7 @@ fn has_separator_directive(text: &str) -> bool {
 
 fn separator_directive(text: &str) -> Option<char> {
     let first_line = text.lines().next()?.trim_start();
-    let first_line = first_line.strip_prefix('\u{feff}').unwrap_or(first_line);
+    let first_line = first_line.trim_prefix('\u{feff}');
     if first_line.len() < 5 || !first_line[..4].eq_ignore_ascii_case("sep=") {
         return None;
     }

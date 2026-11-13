@@ -456,7 +456,7 @@ impl DriverConnection for SqliteConnection {
         for row in rows {
             let id = as_i64(row.get(0));
             let parent = as_i64(row.get(1));
-            let detail = row.get(3).map(Value::display).unwrap_or_default();
+            let detail = row.get(3).map_or_default(Value::display);
             nodes.push(ExplainNode { id, parent, detail });
         }
         Ok(ExplainPlan { nodes })
@@ -540,7 +540,7 @@ impl SqliteConnection {
         )?;
         let mut tables = Vec::with_capacity(rows.len());
         for row in rows {
-            let name = row.get(0).map(Value::display).unwrap_or_default();
+            let name = row.get(0).map_or_default(Value::display);
             let kind = match row.get(1).map(Value::display).as_deref() {
                 Some("view") => ObjectKind::View,
                 _ => ObjectKind::Table,
@@ -573,8 +573,8 @@ impl SqliteConnection {
         let mut columns = Vec::with_capacity(column_rows.len());
         let mut primary_key_columns = Vec::new();
         for row in &column_rows {
-            let column_name = row.get(1).map(Value::display).unwrap_or_default();
-            let declared = row.get(2).map(Value::display).unwrap_or_default();
+            let column_name = row.get(1).map_or_default(Value::display);
+            let declared = row.get(2).map_or_default(Value::display);
             let not_null = as_i64(row.get(3)) != 0;
             let primary_key_position = as_i64(row.get(5));
             let mut column = Column::new(column_name.clone(), ColumnType::from_declared(&declared));
@@ -609,7 +609,7 @@ impl SqliteConnection {
             std::collections::BTreeMap::new();
         for row in &foreign_key_rows {
             let id = as_i64(row.get(0));
-            let referenced_table = row.get(2).map(Value::display).unwrap_or_default();
+            let referenced_table = row.get(2).map_or_default(Value::display);
             grouped.entry((id, referenced_table)).or_default().push(row);
         }
         for ((_, referenced_table), rows) in grouped {
@@ -618,8 +618,8 @@ impl SqliteConnection {
             let mut on_delete = None;
             let mut on_update = None;
             for row in rows {
-                columns.push(row.get(3).map(Value::display).unwrap_or_default());
-                let referenced_column = row.get(4).map(Value::display).unwrap_or_default();
+                columns.push(row.get(3).map_or_default(Value::display));
+                let referenced_column = row.get(4).map_or_default(Value::display);
                 referenced_columns.push(if referenced_column.is_empty() {
                     // SQLite leaves the referenced column empty when it is the
                     // primary key of the referenced table.
@@ -627,8 +627,8 @@ impl SqliteConnection {
                 } else {
                     referenced_column
                 });
-                on_delete = Some(row.get(5).map(Value::display).unwrap_or_default());
-                on_update = Some(row.get(6).map(Value::display).unwrap_or_default());
+                on_delete = Some(row.get(5).map_or_default(Value::display));
+                on_update = Some(row.get(6).map_or_default(Value::display));
             }
             foreign_keys.push(ForeignKey {
                 name: None,
@@ -647,7 +647,7 @@ impl SqliteConnection {
         )?;
         let mut indexes = Vec::new();
         for row in &index_list_rows {
-            let index_name = row.get(1).map(Value::display).unwrap_or_default();
+            let index_name = row.get(1).map_or_default(Value::display);
             let unique = as_i64(row.get(2)) != 0;
             if index_name.starts_with("sqlite_autoindex_") {
                 continue;
@@ -657,7 +657,7 @@ impl SqliteConnection {
                 self.collect_rows(&format!("PRAGMA index_info({quoted_index})"), &[], 3)?;
             let mut index_columns = Vec::new();
             for info in &info_rows {
-                index_columns.push(info.get(2).map(Value::display).unwrap_or_default());
+                index_columns.push(info.get(2).map_or_default(Value::display));
             }
             indexes.push(Index {
                 name: index_name,

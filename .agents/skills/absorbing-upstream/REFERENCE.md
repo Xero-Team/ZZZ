@@ -7,9 +7,9 @@ Normative rules for the `absorbing-upstream` skill.
 Override only when the user supplies a value.
 
 ```text
-LAST_REVIEWED_UPSTREAM=696003b1f6b806c03b9e83f2a448aab060736cf7
+LAST_REVIEWED_UPSTREAM=6ceb6fee8738274589b59139df27efc191ec2231
 LOCAL_BASE_BRANCH=main
-LOCAL_BASE_COMMIT=ced90e0c517bf368238225c4363614b7c2cb1376
+LOCAL_BASE_COMMIT=1201ff99c017d154b750c89c063e76efc82ebfd8
 UPSTREAM_URL=https://github.com/zed-industries/zed.git
 UPSTREAM_REF=refs/heads/main
 WORK_BRANCH=sync/upstream-YYYY-MM-DD
@@ -20,13 +20,14 @@ CREATE_PR=no
 PUSH=no
 ```
 
-As of 2026-11-10, local `main` is `ced90e0c51`. The last completed
-sync is `docs/src/development/upstream/upstream-sync-2026-11-10.md` on
-`sync/upstream-2026-11-10`; it advances the reviewed baseline to
-`696003b1f6` and leaves the twelve commits through the live head
-`f0d896f2c1` for the next run. The previous sync,
-`docs/src/development/upstream/upstream-sync-2026-11-08.md`, advanced
-the baseline to `db43f05e3980`. The most recent full re-audit is
+As of 2026-11-13, local `main` is `1201ff99c0`. The last completed
+sync is `docs/src/development/upstream/upstream-sync-2026-11-12.md` on
+`sync/upstream-2026-11-12`; it reviews
+`43bd5d3cac..6ceb6fee87` and advances the reviewed baseline to
+`6ceb6fee87`, leaving zero commits before the live head. The
+preceding chain is `2026-11-10`, `2026-11-10-b`, `2026-11-11`,
+`2026-11-11-b`, and `2026-11-11-c`, which ended at `43bd5d3cac`. The
+most recent full re-audit is
 `docs/src/development/upstream/upstream-sync-audit-2026-11-03.md` (38
 non-audit reports, 1453 decision rows). Query live upstream again at
 run start; never trust these recorded values as the live head. The next
@@ -235,12 +236,16 @@ Create or append `REPORT` using the 2026-08-07 shape:
    `CONFLICT`.
 
 ```sh
-cd docs && npx prettier --write src/development/upstream/<report>.md
-cd docs && npx prettier --check src/development/upstream/<report>.md
+cd docs && npx --yes prettier@3.9.10 --write src/development/upstream/<report>.md
+cd docs && npx --yes prettier@3.9.10 --check src/development/upstream/<report>.md
 ```
 
-Do not run Prettier across all of `docs/src/`. Advance the reviewed
-baseline only through commits you classified.
+`3.9.10` is the version pinned in `script/prettier`, which
+`cargo xtask check docs` runs over all of `docs/`; a scoped write must use
+the same version or the check will disagree. Read `PRETTIER_VERSION` from
+`script/prettier` if the pin moves. Do not run Prettier across all of
+`docs/src/`. Advance the reviewed baseline only through commits you
+classified.
 
 ## Rejection Ledger
 

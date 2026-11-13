@@ -171,6 +171,7 @@ where
 
 #[cfg(test)]
 mod tests {
+
     use url::Url;
 
     use super::{HttpProxyAuthorization, HttpProxyType, make_request, parse_http_proxy};

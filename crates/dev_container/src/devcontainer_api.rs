@@ -191,11 +191,7 @@ pub fn find_configs_in_snapshot(snapshot: &Snapshot) -> Vec<DevContainerConfig> 
                     log::debug!("find_configs_in_snapshot: Found default devcontainer.json");
                     configs.push(DevContainerConfig::default_config());
                 } else if entry.is_dir() {
-                    let subfolder_name = entry
-                        .path
-                        .file_name()
-                        .map(|n| n.to_owned())
-                        .unwrap_or_default();
+                    let subfolder_name = entry.path.file_name().map_or_default(|n| n.to_owned());
 
                     let config_json_path =
                         format!("{}/devcontainer.json", entry.path.as_unix_str());

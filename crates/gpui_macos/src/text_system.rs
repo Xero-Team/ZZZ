@@ -626,7 +626,7 @@ impl MacTextSystemState {
                     );
                 }
                 if length > 0 {
-                    break_ligature = !break_ligature;
+                    break_ligature.toggle();
                 }
             }
 

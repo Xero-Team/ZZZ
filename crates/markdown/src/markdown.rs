@@ -818,7 +818,7 @@ impl Markdown {
 
     pub(crate) fn toggle_mermaid_tab(&mut self, source_offset: usize) {
         let view = self.mermaid_views.entry(source_offset).or_default();
-        view.showing_code = !view.showing_code;
+        view.showing_code.toggle();
     }
 
     pub(crate) fn mermaid_zoom_level(&self, source_offset: usize) -> f32 {
@@ -3108,7 +3108,7 @@ impl Element for MarkdownElement {
 
                             let checkbox = if let Some(on_toggle) = self.on_checkbox_toggle.clone()
                             {
-                                let task_source_range = task_range.clone();
+                                let task_source_range = task_range;
                                 checkbox.on_click(move |_state, window, cx| {
                                     on_toggle(task_source_range.clone(), !checked, window, cx);
                                 })

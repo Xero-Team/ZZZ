@@ -1270,6 +1270,8 @@ mod tests {
 
     #[cfg(unix)]
     mod unix {
+        use std::assert_matches;
+
         use super::*;
         use gpui::TestAppContext;
         use proto::EnvelopedMessage as _;
@@ -1325,7 +1327,7 @@ mod tests {
                             .expect("read server message");
 
                         if response.responding_to == Some(1) {
-                            assert!(matches!(response.payload, Some(proto::envelope::Payload::Ack(_))));
+                            assert_matches!(response.payload, Some(proto::envelope::Payload::Ack(_)));
                             break;
                         }
                     }

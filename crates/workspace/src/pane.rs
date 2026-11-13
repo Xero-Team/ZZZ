@@ -1,3 +1,6 @@
+// serde's derive emits an empty `__Field` enum for actions whose fields are all skipped.
+#![allow(clippy::empty_enums)]
+
 use crate::{
     CloseWindow, NewCenterTerminal, NewFile, NewTerminal, OpenInTerminal, OpenOptions,
     OpenTerminal, OpenVisible, SplitDirection, ToggleFileFinder, ToggleProjectSymbols, ToggleZoom,

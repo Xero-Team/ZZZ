@@ -309,18 +309,15 @@ impl AgentServerStore {
             registry.update(cx, |registry, cx| registry.refresh_if_stale(cx));
         }
 
-        let registry_agents_by_id = registry_store
-            .as_ref()
-            .map(|store| {
-                store
-                    .read(cx)
-                    .agents()
-                    .iter()
-                    .cloned()
-                    .map(|agent| (agent.id().to_string(), agent))
-                    .collect::<HashMap<_, _>>()
-            })
-            .unwrap_or_default();
+        let registry_agents_by_id = registry_store.as_ref().map_or_default(|store| {
+            store
+                .read(cx)
+                .agents()
+                .iter()
+                .cloned()
+                .map(|agent| (agent.id().to_string(), agent))
+                .collect::<HashMap<_, _>>()
+        });
 
         // Drain the existing versioned agents, extracting reconnect state
         // from any active connection so we can preserve it or trigger a
@@ -342,7 +339,7 @@ impl AgentServerStore {
                 CustomAgentServerSettings::Custom { command, .. } => {
                     let agent_name = AgentId(name.clone().into());
                     self.external_agents.insert(
-                        agent_name.clone(),
+                        agent_name,
                         ExternalAgentEntry::new(
                             Box::new(LocalCustomAgent {
                                 command: command.clone(),
@@ -374,7 +371,7 @@ impl AgentServerStore {
                             }
 
                             self.external_agents.insert(
-                                agent_name.clone(),
+                                agent_name,
                                 ExternalAgentEntry::new(
                                     Box::new(LocalRegistryArchiveAgent {
                                         fs: fs.clone(),
@@ -396,7 +393,7 @@ impl AgentServerStore {
                         }
                         RegistryAgent::Npx(agent) => {
                             self.external_agents.insert(
-                                agent_name.clone(),
+                                agent_name,
                                 ExternalAgentEntry::new(
                                     Box::new(LocalRegistryNpxAgent {
                                         fs: fs.clone(),
@@ -641,10 +638,7 @@ impl AgentServerStore {
             .context("agent server command has an invalid native path")?;
         Ok(proto::AgentServerCommand {
             args: command.args,
-            env: command
-                .env
-                .map(|env| env.into_iter().collect())
-                .unwrap_or_default(),
+            env: command.env.map_or_default(|env| env.into_iter().collect()),
             login: None,
             path_v2: Some(proto::NativePathV2::from_native_path(&command_path)),
         })
@@ -1533,6 +1527,8 @@ impl settings::Settings for AllAgentServersSettings {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use crate::agent_registry_store::{
         AgentRegistryStore, RegistryAgent, RegistryAgentMetadata, RegistryNpxAgent,
@@ -1646,50 +1642,50 @@ mod tests {
 
     #[test]
     fn detects_supported_archive_suffixes() {
-        assert!(matches!(
+        assert_matches!(
             registry_archive_kind_for_url("https://example.com/agent.zip"),
             Ok(RegistryArchiveKind::Archive(AssetKind::Zip))
-        ));
-        assert!(matches!(
+        );
+        assert_matches!(
             registry_archive_kind_for_url("https://example.com/agent.zip?download=1"),
             Ok(RegistryArchiveKind::Archive(AssetKind::Zip))
-        ));
-        assert!(matches!(
+        );
+        assert_matches!(
             registry_archive_kind_for_url("https://example.com/agent.tar.gz"),
             Ok(RegistryArchiveKind::Archive(AssetKind::TarGz))
-        ));
-        assert!(matches!(
+        );
+        assert_matches!(
             registry_archive_kind_for_url("https://example.com/agent.tar.gz?download=1#latest"),
             Ok(RegistryArchiveKind::Archive(AssetKind::TarGz))
-        ));
-        assert!(matches!(
+        );
+        assert_matches!(
             registry_archive_kind_for_url("https://example.com/agent.tgz"),
             Ok(RegistryArchiveKind::Archive(AssetKind::TarGz))
-        ));
-        assert!(matches!(
+        );
+        assert_matches!(
             registry_archive_kind_for_url("https://example.com/agent.tgz#download"),
             Ok(RegistryArchiveKind::Archive(AssetKind::TarGz))
-        ));
-        assert!(matches!(
+        );
+        assert_matches!(
             registry_archive_kind_for_url("https://example.com/agent.tar.bz2"),
             Ok(RegistryArchiveKind::Archive(AssetKind::TarBz2))
-        ));
-        assert!(matches!(
+        );
+        assert_matches!(
             registry_archive_kind_for_url("https://example.com/agent.tar.bz2?download=1"),
             Ok(RegistryArchiveKind::Archive(AssetKind::TarBz2))
-        ));
-        assert!(matches!(
+        );
+        assert_matches!(
             registry_archive_kind_for_url("https://example.com/agent.tbz2"),
             Ok(RegistryArchiveKind::Archive(AssetKind::TarBz2))
-        ));
-        assert!(matches!(
+        );
+        assert_matches!(
             registry_archive_kind_for_url("https://example.com/agent.tbz2#download"),
             Ok(RegistryArchiveKind::Archive(AssetKind::TarBz2))
-        ));
-        assert!(matches!(
+        );
+        assert_matches!(
             registry_archive_kind_for_url("https://example.com/agent.ZIP"),
             Ok(RegistryArchiveKind::Archive(AssetKind::Zip))
-        ));
+        );
     }
 
     #[test]

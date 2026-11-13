@@ -278,8 +278,7 @@ impl SettingsStore {
                 crate::parse_json_with_comments::<SemanticTokenRules>(
                     &crate::default_semantic_token_rules(),
                 )
-                .map(DefaultSemanticTokenRules)
-                .unwrap_or_default(),
+                .map_or_default(DefaultSemanticTokenRules),
             );
         }
         let default_settings: Rc<SettingsContent> = default_settings.into();

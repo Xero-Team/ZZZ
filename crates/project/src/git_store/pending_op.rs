@@ -100,7 +100,7 @@ impl PendingOps {
     }
 
     pub fn max_id(&self) -> PendingOpId {
-        self.ops.last().map(|op| op.id).unwrap_or_default()
+        self.ops.last().map_or_default(|op| op.id)
     }
 
     pub fn op_by_id(&self, id: PendingOpId) -> Option<&PendingOp> {

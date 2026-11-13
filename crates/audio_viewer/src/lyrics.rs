@@ -48,7 +48,7 @@ pub(crate) fn read_lyrics(path: &Path) -> Option<Arc<Lyrics>> {
 }
 
 pub(crate) fn parse_lrc(contents: &str) -> Vec<LyricLine> {
-    let contents = contents.strip_prefix('\u{feff}').unwrap_or(contents);
+    let contents = contents.trim_prefix('\u{feff}');
     let mut lines = Vec::new();
 
     for raw_line in contents.lines() {

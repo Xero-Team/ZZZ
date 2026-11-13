@@ -888,7 +888,7 @@ impl ProjectSearchView {
     }
 
     fn toggle_filters(&mut self, cx: &mut Context<Self>) {
-        self.filters_enabled = !self.filters_enabled;
+        self.filters_enabled.toggle();
         ActiveSettings::update_global(cx, |settings, cx| {
             settings.0.insert(
                 self.entity.read(cx).project.downgrade(),
@@ -927,7 +927,7 @@ impl ProjectSearchView {
     }
 
     fn toggle_replace(&mut self, _: &ToggleReplace, window: &mut Window, cx: &mut Context<Self>) {
-        self.replace_enabled = !self.replace_enabled;
+        self.replace_enabled.toggle();
         let editor_to_focus = if self.replace_enabled {
             self.replacement_editor.focus_handle(cx)
         } else {
@@ -956,7 +956,7 @@ impl ProjectSearchView {
     }
 
     fn toggle_opened_only(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
-        self.included_opened_only = !self.included_opened_only;
+        self.included_opened_only.toggle();
     }
 
     fn update_locale(&mut self, window: &mut Window, cx: &mut Context<Self>) {

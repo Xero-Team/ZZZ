@@ -42,7 +42,7 @@ pub struct RemoteBranchName {
 
 impl RemoteBranchName {
     pub fn parse(name: &str) -> Option<Self> {
-        let name = name.strip_prefix("refs/remotes/").unwrap_or(name);
+        let name = name.trim_prefix("refs/remotes/");
         let (remote_name, branch_name) = name.split_once('/')?;
         if remote_name.is_empty() || branch_name.is_empty() {
             return None;
@@ -738,21 +738,19 @@ fn handle_create_worktree_inner(
     let worktree_name = action.worktree_name.clone();
     let branch_target = action.branch_target.clone();
     let fetch_askpass_delegates = if remote_branch_fetch_mode.should_fetch() {
-        remote_branch_to_fetch(&branch_target)
-            .map(|(remote_name, _branch_name)| {
-                git_repos
-                    .iter()
-                    .map(|_| {
-                        create_worktree_askpass_delegate(
-                            workspace_handle.clone(),
-                            format!("git fetch {remote_name}"),
-                            window,
-                            cx,
-                        )
-                    })
-                    .collect()
-            })
-            .unwrap_or_default()
+        remote_branch_to_fetch(&branch_target).map_or_default(|(remote_name, _branch_name)| {
+            git_repos
+                .iter()
+                .map(|_| {
+                    create_worktree_askpass_delegate(
+                        workspace_handle.clone(),
+                        format!("git fetch {remote_name}"),
+                        window,
+                        cx,
+                    )
+                })
+                .collect()
+        })
     } else {
         Vec::new()
     };
@@ -915,7 +913,7 @@ async fn do_create_worktree(
                     {
                         existing_worktree_names.push(name.to_owned());
                     }
-                    existing_worktree_paths.insert(worktree.path.clone());
+                    existing_worktree_paths.insert(worktree.path);
                 }
             }
             Ok(Err(err)) => {

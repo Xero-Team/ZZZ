@@ -17,7 +17,7 @@ metadata:
 
 Follow `REFERENCE.md` in this skill first. The absence pass is complete:
 the rejected crates and UX are gone, and `script/check-philosophy` now
-carries 67+ regression assertions that pass on a clean tree. If philosophy
+carries 76 regression assertions that pass on a clean tree. If philosophy
 and a clean compile conflict, delete the surface; never import rejected
 account, billing, telemetry, or hosted-Zed machinery to keep the trees
 matching.
@@ -68,7 +68,7 @@ Do not use this skill for absorbing Zed `main` (use
   download. `crates/context_server/src/oauth.rs` `CIMD_URL` is loopback.
 - `telemetry::event!` and `Item::telemetry_event_text` are gone. Do not
   reintroduce a telemetry crate, trait method, or event sender.
-- `script/check-philosophy` is the regression net: it has 67+ assertions
+- `script/check-philosophy` is the regression net: it has 76 assertions
   and is invoked by both `cargo xtask check` (`check all`) and the
   `cargo xtask clippy` preflight. Do not weaken a check to make a change
   pass; fix the change or add a targeted assertion.

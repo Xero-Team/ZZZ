@@ -2305,9 +2305,9 @@ impl SettingsWindow {
             .pages
             .iter()
             .map(|page| {
-                std::iter::repeat_with(|| NonFocusableHandle::new(0, false, window, cx))
-                    .take(page.items.len())
-                    .collect()
+                Vec::from_fn(page.items.len(), |_| {
+                    NonFocusableHandle::new(0, false, window, cx)
+                })
             })
             .collect::<Vec<_>>();
     }
@@ -2410,7 +2410,7 @@ impl SettingsWindow {
                     continue;
                 };
 
-                missing_worktrees.push((worktree_id, directory_name.clone()));
+                missing_worktrees.push((worktree_id, directory_name));
                 let path = RelPath::empty().to_owned().into_arc();
 
                 let settings_ui_file = SettingsUiFile::Project((worktree_id, path));

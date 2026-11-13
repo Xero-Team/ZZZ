@@ -1337,6 +1337,8 @@ fn npm_command_env(node_binary: Option<&Path>) -> HashMap<String, String> {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use std::{
         env, fs,
         path::{Path, PathBuf},
@@ -1520,9 +1522,8 @@ mod tests {
         for version in ["21.7.3", "22.0.0-rc.1"] {
             let error = check_node_version(path, node_output(&format!("v{version}\n")))
                 .expect_err("unsupported version");
-            assert!(
-                matches!(&error, NodeDiscoveryError::TooOld { path: actual_path, version: actual_version }
-                    if actual_path == path && actual_version == &Version::parse(version)?)
+            assert_matches!(&error, NodeDiscoveryError::TooOld { path: actual_path, version: actual_version }
+                    if actual_path == path && actual_version == &Version::parse(version)?
             );
             assert!(
                 error
@@ -1531,11 +1532,11 @@ mod tests {
             );
         }
         let stdout = "not node\n";
-        assert!(matches!(
+        assert_matches!(
             check_node_version(path, node_output(stdout)),
             Err(NodeDiscoveryError::InvalidVersion { path: actual_path, output, .. })
                 if actual_path == path && output == stdout
-        ));
+        );
         Ok(())
     }
 

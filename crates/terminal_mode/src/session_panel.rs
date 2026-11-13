@@ -154,7 +154,7 @@ impl SshSessionPanel {
             let name = options.display_name();
             entries.push(ConnectionEntry {
                 name: name.into(),
-                detail: connection.host.clone().into(),
+                detail: connection.host.into(),
                 options,
             });
         }

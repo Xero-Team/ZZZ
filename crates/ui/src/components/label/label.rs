@@ -314,7 +314,7 @@ fn parse_backtick_spans(text: &str) -> Option<(SharedString, Vec<Range<usize>>)>
             } else {
                 code_start = stripped.len();
             }
-            in_code = !in_code;
+            in_code.toggle();
         } else {
             stripped.push(ch);
         }

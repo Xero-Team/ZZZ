@@ -494,13 +494,12 @@ impl ThreadsArchiveView {
             .read(cx)
             .multi_workspace()
             .and_then(|mw| mw.upgrade())
-            .map(|mw| {
+            .map_or_default(|mw| {
                 mw.read(cx)
                     .workspaces()
                     .filter_map(|ws| ws.read(cx).database_id())
                     .collect()
-            })
-            .unwrap_or_default();
+            });
 
         workspace.update(cx, |workspace, cx| {
             workspace.toggle_modal(window, cx, |window, cx| {
@@ -660,12 +659,11 @@ impl ThreadsArchiveView {
                 let branch_names_for_thread: HashMap<PathBuf, SharedString> = self
                     .archived_branch_names
                     .get(&thread.thread_id)
-                    .map(|map| {
+                    .map_or_default(|map| {
                         map.iter()
                             .map(|(k, v)| (k.clone(), SharedString::from(v.clone())))
                             .collect()
-                    })
-                    .unwrap_or_default();
+                    });
 
                 let worktrees = worktree_info_from_thread_paths(
                     &thread.worktree_paths,

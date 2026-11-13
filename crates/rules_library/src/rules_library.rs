@@ -1320,6 +1320,7 @@ impl Render for RulesLibrary {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use prompt_store::{BuiltInPrompt, UserPromptId};
 

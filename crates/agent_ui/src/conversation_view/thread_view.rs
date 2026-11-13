@@ -287,8 +287,8 @@ fn parse_cat_numbered_code(code: &str) -> Option<ParsedCatNumberedCode> {
 }
 
 fn strip_line_ending(line: &str) -> &str {
-    let without_lf = line.strip_suffix('\n').unwrap_or(line);
-    without_lf.strip_suffix('\r').unwrap_or(without_lf)
+    let without_lf = line.trim_suffix('\n');
+    without_lf.trim_suffix('\r')
 }
 
 fn parse_cat_numbered_line(line: &str) -> Option<(u32, &str)> {
@@ -3045,7 +3045,7 @@ impl ThreadView {
                     .child(Disclosure::new("queue_disclosure", self.queue_expanded))
                     .child(Label::new(title).size(LabelSize::Small).color(Color::Muted))
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.queue_expanded = !this.queue_expanded;
+                        this.queue_expanded.toggle();
                         cx.notify();
                     })),
             )
@@ -3193,7 +3193,7 @@ impl ThreadView {
                     })),
             )
             .on_click(cx.listener(|this, _, _, cx| {
-                this.plan_expanded = !this.plan_expanded;
+                this.plan_expanded.toggle();
                 cx.notify();
             }))
             .into_any_element()
@@ -3479,7 +3479,7 @@ impl ThreadView {
                         }
                     })
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.edits_expanded = !this.edits_expanded;
+                        this.edits_expanded.toggle();
                         cx.notify();
                     })),
             )
@@ -8524,9 +8524,7 @@ impl ThreadView {
             .as_ref()
             .map(|thread| thread.read(cx).session_id().clone());
         let action_log = thread.as_ref().map(|thread| thread.read(cx).action_log());
-        let changed_buffers = action_log
-            .map(|log| log.read(cx).changed_buffers(cx))
-            .unwrap_or_default();
+        let changed_buffers = action_log.map_or_default(|log| log.read(cx).changed_buffers(cx));
 
         let is_pending_tool_call = thread_view
             .as_ref()

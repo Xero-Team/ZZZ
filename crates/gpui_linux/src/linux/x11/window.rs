@@ -1497,8 +1497,7 @@ impl gpui::InputSource for X11Window {
             .client
             .0
             .upgrade()
-            .map(|ref_cell| ref_cell.borrow().modifiers)
-            .unwrap_or_default()
+            .map_or_default(|ref_cell| ref_cell.borrow().modifiers)
     }
 
     fn capslock(&self) -> gpui::Capslock {
@@ -1508,8 +1507,7 @@ impl gpui::InputSource for X11Window {
             .client
             .0
             .upgrade()
-            .map(|ref_cell| ref_cell.borrow().capslock)
-            .unwrap_or_default()
+            .map_or_default(|ref_cell| ref_cell.borrow().capslock)
     }
 
     fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> gpui::DispatchEventResult>) {

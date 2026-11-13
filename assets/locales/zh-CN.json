@@ -3713,6 +3713,7 @@
     "telegram_panel.error.edit_failed": "编辑消息失败。",
     "telegram_panel.error.leave_failed": "退出会话失败。",
     "telegram_panel.error.mark_unread_failed": "将会话标记为未读失败。",
+    "telegram_panel.error.media_unavailable": "该媒体已无法下载。",
     "telegram_panel.error.mute_failed": "更新通知设置失败。",
     "telegram_panel.error.pin_message_failed": "更新置顶消息失败。",
     "telegram_panel.error.reaction_failed": "更新表情回应失败。",

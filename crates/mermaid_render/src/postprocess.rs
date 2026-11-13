@@ -61,8 +61,7 @@ fn extract_svg_id(svg: &str) -> String {
                 .ok()
                 .flatten()
                 .and_then(|a| a.normalized_value(XmlVersion::Implicit1_0).ok())
-                .map(|v| v.into_owned())
-                .unwrap_or_default();
+                .map_or_default(|v| v.into_owned());
         }
     }
     String::new()

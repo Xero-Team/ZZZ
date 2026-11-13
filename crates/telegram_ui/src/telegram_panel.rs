@@ -1624,7 +1624,7 @@ impl TelegramPanel {
     }
 
     fn toggle_composer_expanded(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.composer_expanded = !self.composer_expanded;
+        self.composer_expanded.toggle();
         let min_lines = TelegramPanelSettings::get_global(cx)
             .composer_min_lines
             .max(1);
@@ -1975,7 +1975,7 @@ impl TelegramPanel {
                         "Search messages",
                     )))
                     .on_click(cx.listener(|this, _, window, cx| {
-                        this.search_open = !this.search_open;
+                        this.search_open.toggle();
                         if this.search_open {
                             window.focus(&this.search_editor.focus_handle(cx), cx);
                             let query = this.search_editor.read(cx).text(cx);
@@ -2820,8 +2820,7 @@ impl TelegramPanel {
                 .find(|message| {
                     message.chat_id == target_chat_id && message.id == target_message_id
                 })
-                .map(|message| message.preview_text())
-                .unwrap_or_default();
+                .map_or_default(|message| message.preview_text());
             banner = banner.child(
                 h_flex()
                     .w_full()
@@ -5757,8 +5756,7 @@ fn unique_suffix() -> String {
     let count = COUNTER.fetch_add(1, Ordering::Relaxed);
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or_default();
+        .map_or_default(|duration| duration.as_nanos());
     format!("{nanos}-{count}")
 }
 
@@ -6282,8 +6280,7 @@ fn chat_preview_text(chat: &ChatSnapshot, cx: &App) -> String {
         return chat.preview.clone();
     }
     chat.preview_media
-        .map(|kind| media_kind_label(kind, cx))
-        .unwrap_or_default()
+        .map_or_default(|kind| media_kind_label(kind, cx))
 }
 
 /// Cycles the search filter in the order shown in the search bar.
@@ -6529,6 +6526,11 @@ fn error_text(error: &EngineError, flood_wait_seconds: Option<u64>, cx: &App) ->
             )
             .replacen("{}", &seconds.to_string(), 1)
         }
+        EngineError::MediaUnavailable => tr(
+            cx,
+            "telegram_panel.error.media_unavailable",
+            "This media can no longer be downloaded.",
+        ),
         EngineError::Other => tr(cx, "telegram_panel.error.other", "Something went wrong."),
     }
 }

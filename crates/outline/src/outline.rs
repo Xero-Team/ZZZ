@@ -197,6 +197,7 @@ struct OutlineViewDelegate {
     matches: Vec<StringMatch>,
 }
 
+#[allow(clippy::empty_enums)] // uninhabited marker; each highlight needs a distinct type
 enum OutlineRowHighlights {}
 
 impl OutlineViewDelegate {

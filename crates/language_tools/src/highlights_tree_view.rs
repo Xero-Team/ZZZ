@@ -1048,7 +1048,7 @@ impl HighlightsTreeToolbarItemView {
                                     tree_view.as_ref().and_then(|view| view.upgrade())
                                 {
                                     view.update(cx, |view, cx| {
-                                        view.show_text_highlights = !view.show_text_highlights;
+                                        view.show_text_highlights.toggle();
                                         let snapshot = view.editor.as_ref().map(|s| {
                                             s.editor.read(cx).buffer().read(cx).snapshot(cx)
                                         });
@@ -1077,7 +1077,7 @@ impl HighlightsTreeToolbarItemView {
                                     tree_view.as_ref().and_then(|view| view.upgrade())
                                 {
                                     view.update(cx, |view, cx| {
-                                        view.show_syntax_tokens = !view.show_syntax_tokens;
+                                        view.show_syntax_tokens.toggle();
                                         let snapshot = view.editor.as_ref().map(|s| {
                                             s.editor.read(cx).buffer().read(cx).snapshot(cx)
                                         });
@@ -1106,7 +1106,7 @@ impl HighlightsTreeToolbarItemView {
                                     .and_then(|view| view.upgrade())
                                 {
                                     view.update(cx, |view, cx| {
-                                        view.show_semantic_tokens = !view.show_semantic_tokens;
+                                        view.show_semantic_tokens.toggle();
                                         let snapshot = view.editor.as_ref().map(|s| {
                                             s.editor.read(cx).buffer().read(cx).snapshot(cx)
                                         });

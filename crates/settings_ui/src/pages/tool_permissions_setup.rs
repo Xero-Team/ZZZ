@@ -189,7 +189,7 @@ fn render_inline_code_markdown(text: &str, cx: &App) -> StyledText {
             } else {
                 code_start = plain.len();
             }
-            in_code = !in_code;
+            in_code.toggle();
         } else {
             plain.push(ch);
         }

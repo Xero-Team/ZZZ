@@ -156,8 +156,7 @@ fn changelog_failures(changelog: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        CHANGELOG, LOCKFILE, PACKAGE_MANIFEST, collect_failures, lockfile_version,
-        manifest_version,
+        CHANGELOG, LOCKFILE, PACKAGE_MANIFEST, collect_failures, lockfile_version, manifest_version,
     };
 
     fn manifest(version: &str) -> String {

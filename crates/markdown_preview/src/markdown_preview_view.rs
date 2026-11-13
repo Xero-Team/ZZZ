@@ -1110,7 +1110,7 @@ fn split_preview_url(url: &str) -> (&str, Option<&str>) {
 }
 
 fn source_position_from_fragment(fragment: &str) -> Option<(u32, u32)> {
-    let fragment = fragment.strip_prefix('L').unwrap_or(fragment);
+    let fragment = fragment.trim_prefix('L');
     let fragment = fragment
         .split_once('-')
         .map_or(fragment, |(start, _)| start);
@@ -2233,6 +2233,7 @@ mod persistence {
 
 #[cfg(test)]
 mod tests {
+
     use crate::CloseAndReturnToEditor;
     use base64::Engine as _;
     use buffer_diff::BufferDiff;

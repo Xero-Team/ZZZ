@@ -492,6 +492,8 @@ impl ReasoningEffort {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
 
     #[test]
@@ -503,10 +505,10 @@ mod tests {
             None,
         );
 
-        assert!(matches!(
+        assert_matches!(
             error,
             LanguageModelCompletionError::PromptTooLarge { tokens: None }
-        ));
+        );
 
         let error = LanguageModelCompletionError::from_http_status(
             String::from("OpenAI").into(),
@@ -515,10 +517,7 @@ mod tests {
             None,
         );
 
-        assert!(matches!(
-            error,
-            LanguageModelCompletionError::BadRequestFormat { .. }
-        ));
+        assert_matches!(error, LanguageModelCompletionError::BadRequestFormat { .. });
     }
 
     #[test]

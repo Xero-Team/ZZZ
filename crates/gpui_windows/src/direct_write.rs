@@ -689,7 +689,7 @@ impl DirectWriteState {
                 text_layout.SetTypography(&font_info.features, text_range)?;
                 font_run_end_utf16.push((utf16_offset as usize, run.font_style, run.font_weight));
 
-                break_ligatures = !break_ligatures;
+                break_ligatures.toggle();
             }
 
             let mut runs = Vec::new();

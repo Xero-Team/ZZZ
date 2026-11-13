@@ -213,14 +213,12 @@ impl ChangedFileEntry {
         let file_name: SharedString = file
             .path
             .file_name()
-            .map(|n| n.to_owned())
-            .unwrap_or_default()
+            .map_or_default(|n| n.to_owned())
             .into();
         let dir_path: SharedString = file
             .path
             .parent()
-            .map(|p| p.as_unix_str().to_owned())
-            .unwrap_or_default()
+            .map_or_default(|p| p.as_unix_str().to_owned())
             .into();
 
         let status_code = match (&file.old_text, &file.new_text) {
@@ -2499,8 +2497,7 @@ impl GitGraph {
         let mut next_selection = self
             .search_state
             .selected_index
-            .map(|index| index + 1)
-            .unwrap_or_default();
+            .map_or_default(|index| index + 1);
 
         if next_selection >= self.search_state.matches.len() {
             next_selection = 0;
@@ -2758,8 +2755,7 @@ impl GitGraph {
                 let ref_name = Self::ref_name_from_decoration(&name);
                 let git_tasks = self
                     .git_task_context(commit.data.sha, ref_name.as_deref(), cx)
-                    .map(|task_context| self.git_context_menu_tasks(&task_context, cx))
-                    .unwrap_or_default();
+                    .map_or_default(|task_context| self.git_context_menu_tasks(&task_context, cx));
                 (name, ref_name, git_tasks)
             })
             .collect::<Vec<_>>();
@@ -2836,8 +2832,7 @@ impl GitGraph {
         let copy_tag_disabled = tag_names.is_empty();
         let git_tasks = self
             .git_task_context(sha, ref_name.as_deref(), cx)
-            .map(|task_context| self.git_context_menu_tasks(&task_context, cx))
-            .unwrap_or_default();
+            .map_or_default(|task_context| self.git_context_menu_tasks(&task_context, cx));
 
         let header = match &ref_name {
             Some(ref_name) => format!("Ref {ref_name}"),
@@ -3154,7 +3149,7 @@ impl GitGraph {
             CommitDataState::Loading(_) => ("Loading...".into(), "".into(), None),
         };
 
-        let date_string = commit_timestamp.map(format_timestamp).unwrap_or_default();
+        let date_string = commit_timestamp.map_or_default(format_timestamp);
 
         let remote = repository.update(cx, |repo, cx| self.get_remote(repo, window, cx));
 
@@ -3178,10 +3173,8 @@ impl GitGraph {
         let (total_lines_added, total_lines_removed) =
             self.selected_commit_diff_stats.unwrap_or((0, 0));
 
-        let changed_file_entries: Vec<ChangedFileEntry> = self
-            .selected_commit_diff
-            .as_ref()
-            .map(|diff| {
+        let changed_file_entries: Vec<ChangedFileEntry> =
+            self.selected_commit_diff.as_ref().map_or_default(|diff| {
                 let mut files = diff.files.iter().collect::<Vec<_>>();
                 if !self.changed_files_view_mode.is_tree() {
                     files.sort_by_key(|file| file.status());
@@ -3190,8 +3183,7 @@ impl GitGraph {
                     .into_iter()
                     .map(|file| ChangedFileEntry::from_commit_file(file, cx))
                     .collect()
-            })
-            .unwrap_or_default();
+            });
         let changed_file_entries = Rc::new(changed_file_entries);
         let tree_entries: Rc<Vec<ChangedFileTreeEntry>> = if self.changed_files_view_mode.is_tree()
         {
@@ -4374,7 +4366,7 @@ pub fn generate_random_commit_dag(
     }
 
     let mut commits: Vec<Arc<InitialGraphCommitData>> = Vec::with_capacity(num_commits);
-    let oids: Vec<Oid> = (0..num_commits).map(|_| Oid::random(rng)).collect();
+    let oids: Vec<Oid> = Vec::from_fn(num_commits, |_| Oid::random(rng));
 
     for i in 0..num_commits {
         let sha = oids[i];
@@ -4773,7 +4765,7 @@ impl Render for GitGraph {
                 this.select_previous_match(cx);
             }))
             .on_action(cx.listener(|this, _: &ToggleCaseSensitive, _window, cx| {
-                this.search_state.case_sensitive = !this.search_state.case_sensitive;
+                this.search_state.case_sensitive.toggle();
                 this.search_state.state.next_state();
                 cx.emit(ItemEvent::Edit);
                 cx.notify();
@@ -5150,20 +5142,17 @@ mod persistence {
             Some(LOG_SOURCE_BRANCH) => state
                 .log_source_value
                 .as_ref()
-                .map(|v| LogSource::Branch(v.clone().into()))
-                .unwrap_or_default(),
+                .map_or_default(|v| LogSource::Branch(v.clone().into())),
             Some(LOG_SOURCE_SHA) => state
                 .log_source_value
                 .as_ref()
                 .and_then(|v| Oid::from_str(v).ok())
-                .map(LogSource::Sha)
-                .unwrap_or_default(),
+                .map_or_default(LogSource::Sha),
             Some(LOG_SOURCE_PATH) => state
                 .log_source_value
                 .as_ref()
                 .and_then(|v| RepoPath::new(v).ok())
-                .map(LogSource::Path)
-                .unwrap_or_default(),
+                .map_or_default(LogSource::Path),
             None | Some(_) => LogSource::default(),
         }
     }
@@ -5252,6 +5241,8 @@ impl GitGraph {
 }
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use anyhow::{Context, Result, bail};
     use collections::{HashMap, HashSet};
@@ -5300,7 +5291,7 @@ mod tests {
         }
 
         let mut commits: Vec<Arc<InitialGraphCommitData>> = Vec::with_capacity(num_commits);
-        let oids: Vec<Oid> = (0..num_commits).map(|_| Oid::random(rng)).collect();
+        let oids: Vec<Oid> = Vec::from_fn(num_commits, |_| Oid::random(rng));
 
         for i in 0..num_commits {
             let sha = oids[i];
@@ -6528,10 +6519,10 @@ mod tests {
             persistence::deserialize_log_source(&state),
             LogSource::Path(path)
         );
-        assert!(matches!(
+        assert_matches!(
             persistence::deserialize_log_order(&state),
             LogOrder::TopoOrder
-        ));
+        );
         assert_eq!(
             state.selected_sha.as_deref(),
             Some(sha.to_string()).as_deref()
@@ -6551,10 +6542,10 @@ mod tests {
             persistence::deserialize_log_source(&all_state),
             LogSource::All
         );
-        assert!(matches!(
+        assert_matches!(
             persistence::deserialize_log_order(&all_state),
             LogOrder::DateOrder
-        ));
+        );
 
         let branch_state = SerializedGitGraphState {
             log_source_type: Some(persistence::LOG_SOURCE_BRANCH),
@@ -6581,10 +6572,10 @@ mod tests {
             persistence::deserialize_log_source(&empty_state),
             LogSource::All
         );
-        assert!(matches!(
+        assert_matches!(
             persistence::deserialize_log_order(&empty_state),
             LogOrder::DateOrder
-        ));
+        );
     }
 
     #[gpui::test]
@@ -8170,8 +8161,9 @@ mod tests {
                 .expect("custom Git task should be scheduled")
         });
 
-        assert!(
-            matches!(task_source_kind, TaskSourceKind::AbsPath { .. }),
+        assert_matches!(
+            task_source_kind,
+            TaskSourceKind::AbsPath { .. },
             "scheduled task should come from global tasks"
         );
         assert_eq!(resolved_task.resolved_label, "Git Show abcdef1");

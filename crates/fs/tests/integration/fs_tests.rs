@@ -1,5 +1,6 @@
 mod fake_git_repo_tests;
 
+use std::assert_matches;
 use std::{
     collections::BTreeSet,
     ffi::OsString,
@@ -446,7 +447,7 @@ async fn test_local_provider_concurrent_positioned_io(
     }))
     .await;
     for (block_index, result, bytes) in reads {
-        assert!(matches!(result, Ok(BLOCK_SIZE)));
+        assert_matches!(result, Ok(BLOCK_SIZE));
         assert!(
             bytes.iter().all(|byte| *byte == block_index as u8),
             "positioned read returned bytes from another offset"
@@ -841,7 +842,7 @@ async fn test_local_provider_preserves_non_utf8_directory_names(
     let read = file
         .read_at(0, &mut bytes, OperationContext::default())
         .await;
-    assert!(matches!(read, Ok(5)));
+    assert_matches!(read, Ok(5));
     assert_eq!(&bytes, b"bytes");
 }
 
@@ -1742,7 +1743,7 @@ async fn test_fake_fs_restore(executor: BackgroundExecutor) {
         original_parent,
     };
     let result = fs.restore(trashed_entry).await;
-    assert!(matches!(result, Err(TrashRestoreError::NotFound { .. })));
+    assert_matches!(result, Err(TrashRestoreError::NotFound { .. }));
 
     // Attempt deleting a file, asserting that the filesystem no longer reports
     // it as part of its list of files, restore it and verify that the list of

@@ -4094,11 +4094,7 @@ impl ProjectPanel {
 
             if entry.is_file() {
                 // Single file: use just the filename
-                let filename = entry
-                    .path
-                    .file_name()
-                    .map(str::to_owned)
-                    .unwrap_or_default();
+                let filename = entry.path.file_name().map_or_default(str::to_owned);
                 files_to_download.push((
                     selected.worktree_id,
                     entry.path.clone(),
@@ -4106,11 +4102,7 @@ impl ProjectPanel {
                 ));
             } else if entry.is_dir() {
                 // Directory: collect all files recursively, preserving relative paths
-                let dir_name = entry
-                    .path
-                    .file_name()
-                    .map(str::to_owned)
-                    .unwrap_or_default();
+                let dir_name = entry.path.file_name().map_or_default(str::to_owned);
                 let base_path = entry.path.clone();
 
                 // Use traverse_from_path to iterate all entries under this directory
@@ -4126,11 +4118,7 @@ impl ProjectPanel {
                         let relative_path = child_entry.path.strip_prefix(&base_path).map_or_else(
                             |_| {
                                 PathBuf::from(
-                                    child_entry
-                                        .path
-                                        .file_name()
-                                        .map(str::to_owned)
-                                        .unwrap_or_default(),
+                                    child_entry.path.file_name().map_or_default(str::to_owned),
                                 )
                             },
                             |p| PathBuf::from(dir_name.clone()).join(p.as_unix_str()),
@@ -4923,10 +4911,9 @@ impl ProjectPanel {
                                         }
                                     })
                                     .unwrap_or_else(|| {
-                                        old_ancestors
-                                            .get(&entry.id)
-                                            .map(|ancestor| ancestor.current_ancestor_depth)
-                                            .unwrap_or_default()
+                                        old_ancestors.get(&entry.id).map_or_default(|ancestor| {
+                                            ancestor.current_ancestor_depth
+                                        })
                                     })
                                     .min(auto_folded_ancestors.len());
                                 if let Some(edit_state) = &mut new_state.edit_state

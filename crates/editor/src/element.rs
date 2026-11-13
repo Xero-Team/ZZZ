@@ -10672,9 +10672,8 @@ impl Element for EditorElement {
                             cx,
                         );
 
-                    let mut highlighted_ranges = self
-                        .editor_with_selections(cx)
-                        .map(|editor| {
+                    let mut highlighted_ranges =
+                        self.editor_with_selections(cx).map_or_default(|editor| {
                             if editor == self.editor {
                                 editor.read(cx).background_highlights_in_range(
                                     start_anchor..end_anchor,
@@ -10708,8 +10707,7 @@ impl Element for EditorElement {
                                     )
                                 })
                             }
-                        })
-                        .unwrap_or_default();
+                        });
 
                     self.add_diff_hunk_highlights(
                         &row_infos,
@@ -13389,6 +13387,7 @@ mod tests {
         );
     }
 
+    #[allow(clippy::empty_enums)] // uninhabited marker; the overlay key must stay distinct
     enum PrimaryNavigationOverlay {}
 
     const PRIMARY_NAVIGATION_OVERLAY_KEY: NavigationOverlayKey =

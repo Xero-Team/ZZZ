@@ -53,7 +53,7 @@ impl CsvPreviewView {
                 .contents
                 .headers
                 .get(AnyColumn(i))
-                .map(|header| {
+                .map_or_default(|header| {
                     header.synthetic_column().map_or_else(
                         || header.display_value().cloned().unwrap_or_default(),
                         |column| {
@@ -62,8 +62,7 @@ impl CsvPreviewView {
                                 .into()
                         },
                     )
-                })
-                .unwrap_or_default();
+                });
 
             headers.push(self.create_header_element_with_sort_button(
                 header_text,

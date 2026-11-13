@@ -623,7 +623,7 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
             allocator: etagere::BucketedAtlasAllocator::new(device_size_to_etagere(page_size)),
             entry_ids: FxHashSet::default(),
             active_entry_count: 0,
-            last_used_frame: self.active_frame.map(|frame| frame.id).unwrap_or_default(),
+            last_used_frame: self.active_frame.map_or_default(|frame| frame.id),
         };
         let Some(allocation) = page
             .allocator
@@ -768,7 +768,7 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
                 .pages
                 .iter()
                 .find(|page| page.texture_id == texture_id)
-                .map(|page| {
+                .map_or_default(|page| {
                     page.entry_ids
                         .iter()
                         .filter_map(|tile_id| {
@@ -778,8 +778,7 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
                                 .then_some(*tile_id)
                         })
                         .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
+                });
             for tile_id in active_entries {
                 changed |= self.retire_entry(tile_id, AtlasRetirement::Compaction);
             }
@@ -836,7 +835,7 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
                 .pages
                 .iter()
                 .find(|page| page.texture_id == texture_id)
-                .map(|page| {
+                .map_or_default(|page| {
                     page.entry_ids
                         .iter()
                         .filter_map(|tile_id| {
@@ -847,8 +846,7 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
                             })
                         })
                         .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
+                });
             for tile_id in cold_entries {
                 changed |= self.retire_entry(tile_id, AtlasRetirement::Eviction);
             }

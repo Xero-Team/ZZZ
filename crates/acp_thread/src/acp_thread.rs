@@ -4377,6 +4377,8 @@ fn markdown_for_raw_output(
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use anyhow::anyhow;
     use futures::stream::StreamExt as _;
@@ -5580,25 +5582,25 @@ mod tests {
         run_until_first_tool_call(&thread, cx).await;
 
         thread.read_with(cx, |thread, _| {
-            assert!(matches!(
+            assert_matches!(
                 thread.entries[1],
                 AgentThreadEntry::ToolCall(ToolCall {
                     status: ToolCallStatus::InProgress,
                     ..
                 })
-            ));
+            );
         });
 
         thread.update(cx, |thread, cx| thread.cancel(cx)).await;
 
         thread.read_with(cx, |thread, _| {
-            assert!(matches!(
+            assert_matches!(
                 &thread.entries[1],
                 AgentThreadEntry::ToolCall(ToolCall {
                     status: ToolCallStatus::Canceled,
                     ..
                 })
-            ));
+            );
         });
 
         thread
@@ -5616,13 +5618,13 @@ mod tests {
         request.await.unwrap();
 
         thread.read_with(cx, |thread, _| {
-            assert!(matches!(
+            assert_matches!(
                 thread.entries[1],
                 AgentThreadEntry::ToolCall(ToolCall {
                     status: ToolCallStatus::Completed,
                     ..
                 })
-            ));
+            );
         });
     }
 
@@ -6374,8 +6376,9 @@ mod tests {
             assert!(entries.len() >= 2, "Should have user message and tool call");
 
             // Verify user message is still there
-            assert!(
-                matches!(entries[0], AgentThreadEntry::UserMessage(_)),
+            assert_matches!(
+                entries[0],
+                AgentThreadEntry::UserMessage(_),
                 "User message should not be truncated"
             );
 
@@ -6775,7 +6778,7 @@ mod tests {
             // The entry should be a failed tool call
             if let AgentThreadEntry::ToolCall(tool_call) = &thread.entries[0] {
                 assert_eq!(tool_call.id, nonexistent_id);
-                assert!(matches!(tool_call.status, ToolCallStatus::Failed));
+                assert_matches!(tool_call.status, ToolCallStatus::Failed);
                 assert_eq!(tool_call.kind, acp::ToolKind::Fetch);
 
                 // Check that the content contains the error message
@@ -6861,10 +6864,10 @@ mod tests {
                 .tool_call(&tool_call_id)
                 .expect("tool call should exist");
             assert_eq!(tool_call.label.read(cx).source(), "Updated title");
-            assert!(matches!(
+            assert_matches!(
                 tool_call.status,
                 ToolCallStatus::WaitingForConfirmation { .. }
-            ));
+            );
             assert_eq!(tool_call.content.len(), 1);
             assert_eq!(tool_call.content[0].to_markdown(cx), "updated content");
         });
@@ -6889,10 +6892,10 @@ mod tests {
                 .tool_call(&tool_call_id)
                 .expect("tool call should exist");
             assert_eq!(tool_call.label.read(cx).source(), "Updated again");
-            assert!(matches!(
+            assert_matches!(
                 tool_call.status,
                 ToolCallStatus::WaitingForConfirmation { .. }
-            ));
+            );
             assert_eq!(tool_call.content.len(), 1);
             assert_eq!(tool_call.content[0].to_markdown(cx), "updated again");
         });
@@ -6912,7 +6915,7 @@ mod tests {
             let (_, tool_call) = thread
                 .tool_call(&tool_call_id)
                 .expect("tool call should exist");
-            assert!(matches!(tool_call.status, ToolCallStatus::InProgress));
+            assert_matches!(tool_call.status, ToolCallStatus::InProgress);
         });
 
         match permission_task.await {
@@ -6968,10 +6971,7 @@ mod tests {
             })
             .unwrap();
 
-        assert!(matches!(
-            old_task.await,
-            RequestPermissionOutcome::Cancelled
-        ));
+        assert_matches!(old_task.await, RequestPermissionOutcome::Cancelled);
 
         thread.update(cx, |thread, cx| {
             thread.cancel_permission_request(old_id, cx);
@@ -7056,13 +7056,13 @@ mod tests {
             let (_, tool_call) = thread
                 .tool_call(&tool_call_id)
                 .expect("tool call should exist");
-            assert!(matches!(
+            assert_matches!(
                 tool_call.status,
                 ToolCallStatus::WaitingForConfirmation {
                     current_status: acp::ToolCallStatus::InProgress,
                     ..
                 }
-            ));
+            );
         });
 
         thread.update(cx, |thread, cx| {
@@ -7080,7 +7080,7 @@ mod tests {
             let (_, tool_call) = thread
                 .tool_call(&tool_call_id)
                 .expect("tool call should exist");
-            assert!(matches!(tool_call.status, ToolCallStatus::InProgress));
+            assert_matches!(tool_call.status, ToolCallStatus::InProgress);
         });
 
         match permission_task.await {
@@ -7739,8 +7739,9 @@ mod tests {
                 })
                 .expect("should have tool call entry");
 
-            assert!(
-                matches!(tool_entry.status, ToolCallStatus::Canceled),
+            assert_matches!(
+                tool_entry.status,
+                ToolCallStatus::Canceled,
                 "tool should be marked as Canceled when response is Cancelled, got {:?}",
                 tool_entry.status
             );
@@ -8097,8 +8098,9 @@ mod tests {
         });
 
         let result = request.await;
-        assert!(
-            matches!(result, Ok(None)),
+        assert_matches!(
+            result,
+            Ok(None),
             "outer task should resolve to Ok(None) on dropped tx, got {result:?}"
         );
 

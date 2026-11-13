@@ -115,7 +115,7 @@ impl Specimen {
     }
 
     pub fn invert(mut self) -> Self {
-        self.invert = !self.invert;
+        self.invert.toggle();
         self
     }
 

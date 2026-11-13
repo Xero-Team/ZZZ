@@ -673,10 +673,8 @@ impl Render for SessionFilePanel {
         });
         let monitor_enabled = crate::TerminalModeSettings::get_global(cx).monitor_enabled;
 
-        let other_sessions: Vec<(SessionId, SharedString)> = self
-            .store
-            .upgrade()
-            .map(|store| {
+        let other_sessions: Vec<(SessionId, SharedString)> =
+            self.store.upgrade().map_or_default(|store| {
                 let store = store.read(cx);
                 store
                     .sessions
@@ -689,8 +687,7 @@ impl Render for SessionFilePanel {
                         )
                     })
                     .collect()
-            })
-            .unwrap_or_default();
+            });
 
         let mut toolbar = h_flex().flex_wrap().p_1().gap_1();
         let mut has_toolbar = false;

@@ -1972,7 +1972,7 @@ impl LocalWorktree {
                                 repository_dir_abs_path: Some(
                                     new_repo.repository_dir_abs_path.clone(),
                                 ),
-                                common_dir_abs_path: Some(new_repo.common_dir_abs_path.clone()),
+                                common_dir_abs_path: Some(new_repo.common_dir_abs_path),
                             });
                             new_repos.next();
                         }
@@ -1996,7 +1996,7 @@ impl LocalWorktree {
                                 changes.push(UpdatedGitRepository {
                                     work_directory_id: new_entry_id,
                                     old_work_directory_abs_path: Some(
-                                        old_repo.work_directory_abs_path.clone(),
+                                        old_repo.work_directory_abs_path,
                                     ),
                                     new_work_directory_abs_path: Some(
                                         new_repo.work_directory_abs_path.clone(),
@@ -2005,7 +2005,7 @@ impl LocalWorktree {
                                     repository_dir_abs_path: Some(
                                         new_repo.repository_dir_abs_path.clone(),
                                     ),
-                                    common_dir_abs_path: Some(new_repo.common_dir_abs_path.clone()),
+                                    common_dir_abs_path: Some(new_repo.common_dir_abs_path),
                                 });
                             }
                             new_repos.next();
@@ -2014,9 +2014,7 @@ impl LocalWorktree {
                         Ordering::Greater => {
                             changes.push(UpdatedGitRepository {
                                 work_directory_id: old_entry_id,
-                                old_work_directory_abs_path: Some(
-                                    old_repo.work_directory_abs_path.clone(),
-                                ),
+                                old_work_directory_abs_path: Some(old_repo.work_directory_abs_path),
                                 new_work_directory_abs_path: None,
                                 dot_git_abs_path: None,
                                 repository_dir_abs_path: None,
@@ -2033,7 +2031,7 @@ impl LocalWorktree {
                         new_work_directory_abs_path: Some(repo.work_directory_abs_path.clone()),
                         dot_git_abs_path: Some(repo.dot_git_abs_path.clone()),
                         repository_dir_abs_path: Some(repo.repository_dir_abs_path.clone()),
-                        common_dir_abs_path: Some(repo.common_dir_abs_path.clone()),
+                        common_dir_abs_path: Some(repo.common_dir_abs_path),
                     });
                     new_repos.next();
                 }
@@ -2044,7 +2042,7 @@ impl LocalWorktree {
                         new_work_directory_abs_path: None,
                         dot_git_abs_path: Some(repo.dot_git_abs_path.clone()),
                         repository_dir_abs_path: Some(repo.repository_dir_abs_path.clone()),
-                        common_dir_abs_path: Some(repo.common_dir_abs_path.clone()),
+                        common_dir_abs_path: Some(repo.common_dir_abs_path),
                     });
                     old_repos.next();
                 }
@@ -6154,14 +6152,16 @@ impl BackgroundScanner {
                                 // to ensure that only one of the workers sends a progress update after
                                 // the update interval elapses.
                                 _ = progress_update_timer => {
-                                    match progress_update_count.compare_exchange(
-                                        last_progress_update_count,
-                                        last_progress_update_count + 1,
+                                    match progress_update_count.try_update(
                                         SeqCst,
-                                        SeqCst
+                                        SeqCst,
+                                        |current| {
+                                            (current == last_progress_update_count)
+                                                .then_some(last_progress_update_count + 1)
+                                        },
                                     ) {
-                                        Ok(_) => {
-                                            last_progress_update_count += 1;
+                                        Ok(previous) => {
+                                            last_progress_update_count = previous + 1;
                                             self.send_status_update(true, SmallVec::new(), &[])
                                                 .await;
                                         }

@@ -91,7 +91,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        toolchain: ["1.99.1", "stable"]
+        toolchain: ["1.100.0", "stable"]
     env:
       TOOLCHAIN: ${{ matrix.toolchain }}
     steps:

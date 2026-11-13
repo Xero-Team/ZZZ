@@ -1706,8 +1706,7 @@ impl<'a> EnvironmentApi<'a> {
     pub fn from_env(project_env: &'a HashMap<String, String>) -> Self {
         let paths = project_env
             .get("PATH")
-            .map(|p| std::env::split_paths(p).collect())
-            .unwrap_or_default();
+            .map_or_default(|p| std::env::split_paths(p).collect());
 
         EnvironmentApi {
             global_search_locations: Arc::new(Mutex::new(paths)),

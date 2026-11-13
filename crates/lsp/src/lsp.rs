@@ -621,8 +621,7 @@ impl LanguageServer {
             process_name: binary
                 .path
                 .file_name()
-                .map(|name| Arc::from(name.to_string_lossy()))
-                .unwrap_or_default(),
+                .map_or_default(|name| Arc::from(name.to_string_lossy())),
             binary,
             capabilities: Default::default(),
             configuration,
@@ -2409,6 +2408,7 @@ mod tests {
             &mut cx.to_async(),
         );
 
+        #[allow(clippy::empty_enums)] // uninhabited marker; each test needs a distinct type
         enum DiagnosticRefreshWithRawParams {}
 
         impl request::Request for DiagnosticRefreshWithRawParams {
@@ -2454,6 +2454,7 @@ mod tests {
             &mut cx.to_async(),
         );
 
+        #[allow(clippy::empty_enums)] // uninhabited marker; each test needs a distinct type
         enum ShutdownWithRawResult {}
 
         impl request::Request for ShutdownWithRawResult {

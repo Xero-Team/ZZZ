@@ -63,6 +63,7 @@ use crate::{
     state::ReplayableAction,
 };
 
+#[allow(clippy::empty_enums)] // uninhabited marker; the overlay key must stay distinct
 enum HelixJumpNavigationOverlay {}
 
 pub(crate) const HELIX_JUMP_OVERLAY_KEY: NavigationOverlayKey =

@@ -85,7 +85,7 @@ impl LspInstaller for GoLspAdapter {
 
         if delegate.which("go".as_ref()).await.is_none() {
             if DID_SHOW_NOTIFICATION
-                .compare_exchange(false, true, SeqCst, SeqCst)
+                .try_update(SeqCst, SeqCst, |shown| (!shown).then_some(true))
                 .is_ok()
             {
                 cx.update(|cx| {
@@ -476,12 +476,11 @@ fn json_string_array(value: &serde_json::Value, key: &str) -> Vec<String> {
     value
         .get(key)
         .and_then(|v| v.as_array())
-        .map(|arr| {
+        .map_or_default(|arr| {
             arr.iter()
                 .filter_map(|v| v.as_str().map(String::from))
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 fn parent_for_path_style(path: &Path, path_style: PathStyle) -> Option<PathBuf> {

@@ -424,14 +424,12 @@ impl ThreadsDatabase {
                 created_at,
             ) in rows
             {
-                let folder_paths = folder_paths
-                    .map(|paths| {
-                        PathList::deserialize(&util::path_list::SerializedPathList {
-                            paths,
-                            order: folder_paths_order.unwrap_or_default(),
-                        })
+                let folder_paths = folder_paths.map_or_default(|paths| {
+                    PathList::deserialize(&util::path_list::SerializedPathList {
+                        paths,
+                        order: folder_paths_order.unwrap_or_default(),
                     })
-                    .unwrap_or_default();
+                });
                 let created_at = created_at
                     .as_deref()
                     .map(DateTime::parse_from_rfc3339)

@@ -294,13 +294,21 @@ pub type RenderDiffHunkControlsFn = Arc<
     ) -> AnyElement,
 >;
 
+// Uninhabited marker types; each must stay distinct, so `!` cannot substitute.
+#[allow(clippy::empty_enums)]
 pub enum ActiveDebugLine {}
+#[allow(clippy::empty_enums)]
 pub enum DebugStackFrameLine {}
 
+#[allow(clippy::empty_enums)]
 pub enum ConflictsOuter {}
+#[allow(clippy::empty_enums)]
 pub enum ConflictsOurs {}
+#[allow(clippy::empty_enums)]
 pub enum ConflictsTheirs {}
+#[allow(clippy::empty_enums)]
 pub enum ConflictsOursMarker {}
+#[allow(clippy::empty_enums)]
 pub enum ConflictsTheirsMarker {}
 
 pub struct HunkAddedColor;
@@ -4277,7 +4285,7 @@ impl Editor {
                                 let apply_syntax_indent =
                                     auto_indent_mode == language::AutoIndentMode::SyntaxAware;
                                 let capacity_for_delimiter =
-                                    delimiter.as_deref().map(str::len).unwrap_or_default();
+                                    delimiter.as_deref().map_or_default(str::len);
                                 let existing_indent_len = if preserve_indent {
                                     existing_indent.len as usize
                                 } else {
@@ -6517,8 +6525,7 @@ impl Editor {
                             Markdown::new(
                                 details
                                     .as_ref()
-                                    .map(|message| message.message.clone())
-                                    .unwrap_or_default(),
+                                    .map_or_default(|message| message.message.clone()),
                                 None,
                                 None,
                                 cx,
@@ -7714,10 +7721,7 @@ impl Editor {
         // Fill in the environmental variables from the tree-sitter captures
         let mut captured_task_variables = TaskVariables::default();
         for (capture_name, value) in tasks.extra_variables.clone() {
-            captured_task_variables.insert(
-                task::VariableName::Custom(capture_name.into()),
-                value.clone(),
-            );
+            captured_task_variables.insert(task::VariableName::Custom(capture_name.into()), value);
         }
         project.update(cx, |project, cx| {
             project.task_store().update(cx, |task_store, cx| {
@@ -9176,8 +9180,7 @@ impl Editor {
             BreakpointPromptEditAction::Condition => breakpoint.condition.as_ref(),
             BreakpointPromptEditAction::HitCondition => breakpoint.hit_condition.as_ref(),
         }
-        .map(|msg| msg.as_ref())
-        .unwrap_or_default();
+        .map_or_default(|msg| msg.as_ref());
 
         let placeholder_text = match edit_action {
             BreakpointPromptEditAction::Log => {
@@ -18379,7 +18382,7 @@ impl Editor {
         // Find the overlay that currently has focus, or use the first one
         let overlay_info = self.diff_review_overlays.iter_mut().find_map(|overlay| {
             if overlay.prompt_editor.focus_handle(cx).is_focused(window) {
-                overlay.comments_expanded = !overlay.comments_expanded;
+                overlay.comments_expanded.toggle();
                 Some(overlay.hunk_key.clone())
             } else {
                 None
@@ -18389,7 +18392,7 @@ impl Editor {
         // If no focused overlay found, toggle the first one
         let hunk_key = overlay_info.or_else(|| {
             self.diff_review_overlays.first_mut().map(|overlay| {
-                overlay.comments_expanded = !overlay.comments_expanded;
+                overlay.comments_expanded.toggle();
                 overlay.hunk_key.clone()
             })
         });
@@ -18441,8 +18444,7 @@ impl Editor {
                         .iter()
                         .flat_map(|(_, comments)| comments)
                         .find(|c| c.id == comment_id)
-                        .map(|c| c.comment.clone())
-                        .unwrap_or_default();
+                        .map_or_default(|c| c.comment.clone());
 
                     // Create inline editor
                     let parent_editor = cx.entity().downgrade();
@@ -19177,7 +19179,7 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.show_git_blame_gutter = !self.show_git_blame_gutter;
+        self.show_git_blame_gutter.toggle();
 
         if self.show_git_blame_gutter && !self.has_blame_entries(cx) {
             self.start_git_blame(true, window, cx);
@@ -19946,8 +19948,7 @@ impl Editor {
         let mut highlights = self
             .gutter_highlights
             .remove(&TypeId::of::<T>())
-            .map(|(_, highlights)| highlights)
-            .unwrap_or_default();
+            .map_or_default(|(_, highlights)| highlights);
         let ix = highlights.binary_search_by(|highlight| {
             Ordering::Equal
                 .then_with(|| highlight.start.cmp(&range.start, &snapshot))
@@ -22796,7 +22797,7 @@ fn update_uncommitted_diff_for_buffer(
     project.update(cx, |project, cx| {
         for buffer in buffers {
             if project::File::from_dyn(buffer.read(cx).file()).is_some() {
-                tasks.push(project.open_uncommitted_diff(buffer.clone(), cx))
+                tasks.push(project.open_uncommitted_diff(buffer, cx))
             }
         }
     });
@@ -23134,8 +23135,7 @@ fn snippet_completions(
                 .take(
                     sorted_snippet_candidates
                         .first()
-                        .map(|(_, _, word_count)| *word_count)
-                        .unwrap_or_default(),
+                        .map_or_default(|(_, _, word_count)| *word_count),
                 )
                 .collect_vec();
 

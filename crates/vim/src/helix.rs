@@ -1931,6 +1931,8 @@ struct HelixJumpUiData {
 
 #[cfg(test)]
 mod test {
+    use std::assert_matches;
+
     use futures::StreamExt;
     use std::{fmt::Write, time::Duration};
 
@@ -2062,8 +2064,7 @@ mod test {
             let snapshot = editor.snapshot(window, cx);
             snapshot
                 .text_highlight_ranges(HighlightKey::NavigationOverlay(HELIX_JUMP_OVERLAY_KEY))
-                .map(|ranges| ranges.as_ref().clone().1.len())
-                .unwrap_or_default()
+                .map_or_default(|ranges| ranges.as_ref().clone().1.len())
         });
         let label_count = match cx.active_operator() {
             Some(Operator::HelixJump { labels, .. }) => labels.len(),
@@ -3790,8 +3791,9 @@ mod test {
 
         cx.simulate_keystrokes("g w");
 
-        assert!(
-            matches!(cx.active_operator(), Some(Operator::HelixJump { .. })),
+        assert_matches!(
+            cx.active_operator(),
+            Some(Operator::HelixJump { .. }),
             "expected HelixJump operator to be active"
         )
     }
@@ -3870,14 +3872,13 @@ mod test {
             active_helix_jump_overlay_counts(&mut cx),
             initial_overlay_counts
         );
-        assert!(
-            matches!(
+        assert_matches!(
                 cx.active_operator(),
                 Some(Operator::HelixJump {
                     first_char: Some(ch),
                     ..
                 }) if ch == next_group
-            ),
+            ,
             "expected HelixJump operator to keep the first typed label character"
         );
     }
@@ -3991,13 +3992,13 @@ mod test {
 
         let result = dispatch_native_printable_key(&mut cx, first);
         assert!(!result.propagate, "jump label keystroke should be consumed");
-        assert!(matches!(
+        assert_matches!(
             cx.active_operator(),
             Some(Operator::HelixJump {
                 first_char: Some(input),
                 ..
             }) if input == first.to_ascii_lowercase()
-        ));
+        );
         assert_helix_jump_bypasses_text_input(&mut cx);
 
         let result = dispatch_native_printable_key(&mut cx, second);
@@ -4026,8 +4027,9 @@ mod test {
 
         cx.simulate_keystrokes("g z");
 
-        assert!(
-            matches!(cx.active_operator(), Some(Operator::HelixJump { .. })),
+        assert_matches!(
+            cx.active_operator(),
+            Some(Operator::HelixJump { .. }),
             "expected HelixJump operator to be active"
         );
         cx.update_editor(|editor, _, _| {

@@ -510,6 +510,7 @@ async fn fuzzy_search(
 
 #[cfg(test)]
 mod tests {
+
     use gpui::{App, TestAppContext, VisualTestContext};
     use std::cell::RefCell;
 

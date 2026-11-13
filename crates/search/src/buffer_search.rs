@@ -1153,8 +1153,7 @@ impl BufferSearchBar {
     fn supported_options(&self, cx: &mut Context<Self>) -> workspace::searchable::SearchOptions {
         self.active_searchable_item
             .as_ref()
-            .map(|item| item.supported_options(cx))
-            .unwrap_or_default()
+            .map_or_default(|item| item.supported_options(cx))
     }
 
     // We provide an expand/collapse button if we are in a multibuffer
@@ -1904,7 +1903,7 @@ impl BufferSearchBar {
 
     fn toggle_replace(&mut self, _: &ToggleReplace, window: &mut Window, cx: &mut Context<Self>) {
         if self.active_searchable_item.is_some() {
-            self.replace_enabled = !self.replace_enabled;
+            self.replace_enabled.toggle();
             let handle = if self.replace_enabled {
                 self.replacement_editor.focus_handle(cx)
             } else {

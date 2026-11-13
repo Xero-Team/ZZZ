@@ -1588,7 +1588,7 @@ pub mod test {
         }
 
         pub fn with_child_focus_handles(mut self, count: usize, cx: &mut Context<Self>) -> Self {
-            self.child_focus_handles = (0..count).map(|_| cx.focus_handle()).collect();
+            self.child_focus_handles = Vec::from_fn(count, |_| cx.focus_handle());
             self
         }
 

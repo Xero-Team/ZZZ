@@ -67,14 +67,13 @@ impl AgentServer for CustomAgentServer {
         settings
             .as_ref()
             .and_then(|s| s.favorite_config_option_values(config_id.0.as_ref()))
-            .map(|values| {
+            .map_or_default(|values| {
                 values
                     .iter()
                     .cloned()
                     .map(acp::SessionConfigValueId::new)
                     .collect()
             })
-            .unwrap_or_default()
     }
 
     fn toggle_favorite_config_option_value(
@@ -210,7 +209,7 @@ impl AgentServer for CustomAgentServer {
             settings
                 .get::<AllAgentServersSettings>(None)
                 .get(self.agent_id().as_ref())
-                .map(|s| match s {
+                .map_or_default(|s| match s {
                     project::agent_server_store::CustomAgentServerSettings::Custom {
                         default_config_options,
                         ..
@@ -220,7 +219,6 @@ impl AgentServer for CustomAgentServer {
                         ..
                     } => default_config_options.clone(),
                 })
-                .unwrap_or_default()
         });
 
         let mut extra_env = load_proxy_env(cx);

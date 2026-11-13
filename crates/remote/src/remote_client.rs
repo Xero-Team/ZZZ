@@ -1,4 +1,3 @@
-#[cfg(any(test, feature = "test-support"))]
 use crate::transport::mock::ConnectGuard;
 use crate::{
     SshConnectionOptions,
@@ -29,6 +28,8 @@ use gpui::{
     EventEmitter, FutureExt, Global, Task, WeakEntity,
 };
 use parking_lot::Mutex;
+#[cfg(any(test, feature = "test-support"))]
+use std::assert_matches;
 
 use release_channel::ReleaseChannel;
 use rpc::{
@@ -1210,7 +1211,7 @@ impl RemoteClient {
         opts: RemoteConnectionOptions,
         client_cx: &mut gpui::TestAppContext,
     ) -> Entity<Self> {
-        assert!(matches!(opts, RemoteConnectionOptions::Mock(..)));
+        assert_matches!(opts, RemoteConnectionOptions::Mock(..));
         use crate::transport::mock::MockDelegate;
         let (_tx, rx) = oneshot::channel();
         let mut cx = client_cx.to_async();

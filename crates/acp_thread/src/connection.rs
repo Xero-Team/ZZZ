@@ -1004,7 +1004,7 @@ mod test_support {
             } else {
                 for update in self.next_prompt_updates.lock().drain(..) {
                     let thread = thread.clone();
-                    let update = update.clone();
+                    let update = update;
                     let permission_request = if let acp::SessionUpdate::ToolCall(tool_call) =
                         &update
                         && let Some(options) = self.permission_requests.get(&tool_call.tool_call_id)

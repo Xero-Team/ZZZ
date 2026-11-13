@@ -1705,8 +1705,7 @@ impl AgentPanel {
 
         let last_known_terminal_title = options
             .initial_title
-            .map(|title| title.to_string())
-            .unwrap_or_default();
+            .map_or_default(|title| title.to_string());
         let mut terminal = AgentTerminal {
             view: terminal_view,
             title_editor: None,

@@ -434,7 +434,7 @@ impl PdfView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.show_sidebar = !self.show_sidebar;
+        self.show_sidebar.toggle();
         cx.notify();
     }
 
@@ -444,7 +444,7 @@ impl PdfView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.search_open = !self.search_open;
+        self.search_open.toggle();
         if self.search_open {
             let handle = self.search_editor.focus_handle(cx);
             window.focus(&handle, cx);

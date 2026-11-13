@@ -113,8 +113,9 @@ mod tests {
 
     #[test]
     fn a_doc_comment_mentioning_the_attribute_is_not_a_use() {
-        let matches =
-            format!("crates/foo/src/lib.rs:17://! Tests are marked `{BARE_IGNORE_ATTRIBUTE}` by default.\n");
+        let matches = format!(
+            "crates/foo/src/lib.rs:17://! Tests are marked `{BARE_IGNORE_ATTRIBUTE}` by default.\n"
+        );
         assert!(bare_ignore_findings(&matches).is_empty(), "{matches}");
     }
 
@@ -126,10 +127,7 @@ mod tests {
 
     #[test]
     fn findings_from_several_files_are_kept_in_order() {
-        let matches = format!(
-            "a.rs:1:{0}\nb.rs:2:{0}\n",
-            BARE_IGNORE_ATTRIBUTE
-        );
+        let matches = format!("a.rs:1:{0}\nb.rs:2:{0}\n", BARE_IGNORE_ATTRIBUTE);
         assert_eq!(bare_ignore_findings(&matches).len(), 2);
     }
 

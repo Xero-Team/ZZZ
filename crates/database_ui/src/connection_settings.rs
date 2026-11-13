@@ -21,17 +21,13 @@ pub struct DatabaseSettings {
 
 impl Settings for DatabaseSettings {
     fn from_settings(content: &SettingsContent) -> Self {
-        let connections = content
-            .database
-            .as_ref()
-            .map(|database| {
-                database
-                    .connections
-                    .iter()
-                    .filter_map(connection_from_content)
-                    .collect()
-            })
-            .unwrap_or_default();
+        let connections = content.database.as_ref().map_or_default(|database| {
+            database
+                .connections
+                .iter()
+                .filter_map(connection_from_content)
+                .collect()
+        });
         Self { connections }
     }
 }

@@ -2447,9 +2447,9 @@ impl Workspace {
                 let total_flex = flex + center_column_count + opposite_flex;
                 return Some((flex / total_flex * workspace_width).max(RESIZE_HANDLE_SIZE));
             }
-            let opposite_fixed = opposite
-                .map(|(panel, s)| s.size.unwrap_or_else(|| panel.default_size(window, cx)))
-                .unwrap_or_default();
+            let opposite_fixed = opposite.map_or_default(|(panel, s)| {
+                s.size.unwrap_or_else(|| panel.default_size(window, cx))
+            });
             let available = (workspace_width - opposite_fixed).max(RESIZE_HANDLE_SIZE);
             return Some((flex / (flex + center_column_count) * available).max(RESIZE_HANDLE_SIZE));
         }
@@ -2483,9 +2483,9 @@ impl Workspace {
             let size = size.clamp(px(0.), (workspace_width - px(1.)).max(px(0.)));
             Some((size * (center_column_count + opposite_flex) / (workspace_width - size)).max(0.0))
         } else {
-            let opposite_width = opposite
-                .map(|(panel, s)| s.size.unwrap_or_else(|| panel.default_size(window, cx)))
-                .unwrap_or_default();
+            let opposite_width = opposite.map_or_default(|(panel, s)| {
+                s.size.unwrap_or_else(|| panel.default_size(window, cx))
+            });
             let available = (workspace_width - opposite_width).max(RESIZE_HANDLE_SIZE);
             let remaining = (available - size).max(px(1.));
             Some((size * center_column_count / remaining).max(0.0))
@@ -7575,7 +7575,7 @@ impl Workspace {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.centered_layout = !self.centered_layout;
+        self.centered_layout.toggle();
         if let Some(database_id) = self.database_id() {
             let db = WorkspaceDb::global(cx);
             let centered_layout = self.centered_layout;

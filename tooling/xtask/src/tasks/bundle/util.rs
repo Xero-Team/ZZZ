@@ -180,8 +180,7 @@ pub fn download(url: &str, destination: &Path, expected_sha256: &str, offline: b
         "{}part",
         destination
             .extension()
-            .map(|extension| format!("{}.", extension.to_string_lossy()))
-            .unwrap_or_default()
+            .map_or_default(|extension| format!("{}.", extension.to_string_lossy()))
     ));
     remove(&partial)?;
 

@@ -581,10 +581,7 @@ impl NotebookEditor {
         let code = if let Some(Cell::Code(cell)) = self.cell_map.get(&cell_id) {
             let editor = cell.read(cx).editor().clone();
             let buffer = editor.read(cx).buffer().read(cx);
-            buffer
-                .as_singleton()
-                .map(|b| b.read(cx).text())
-                .unwrap_or_default()
+            buffer.as_singleton().map_or_default(|b| b.read(cx).text())
         } else {
             return;
         };
@@ -1926,8 +1923,7 @@ impl Item for NotebookEditor {
             .project_path
             .path
             .file_name()
-            .map(|s| s.to_owned())
-            .unwrap_or_default()
+            .map_or_default(|s| s.to_owned())
             .into()
     }
 

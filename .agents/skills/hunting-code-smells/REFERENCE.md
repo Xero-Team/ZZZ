@@ -215,8 +215,8 @@ From `docs/src/development/ownership-and-data-flow.md` and `.rules`.
   so it rots).
 - Localizing brand names, shell commands, HTTP headers, or internal/log
   identifiers (do not localize these).
-- Docs changes: `docs/AGENTS.md` is authoritative. Run Prettier
-  (`cd docs && npx prettier --check src/`) and do not hotlink `zed.dev`
+- Docs changes: `docs/AGENTS.md` is authoritative. Run `script/prettier` (the
+  same script `cargo xtask check docs` runs) and do not hotlink `zed.dev`
   images.
 
 ## 6. Quality optimization leads (P2)
@@ -251,11 +251,17 @@ cargo xtask check todos
 cargo xtask check keys
 cargo xtask check scroll-handlers
 cargo xtask check licenses
+cargo xtask check module-layout
+cargo xtask check test-markers
+cargo xtask check locale-catalog
 cargo xtask check locale-keys
+cargo xtask check locale-fallbacks
+cargo xtask check locale-placeholders
 cargo xtask check dco
 cargo xtask check philosophy
 cargo xtask check upstream-ledger
 cargo xtask check workflows
+cargo xtask check docs
 
 # local-only, needs extra tools on PATH
 cargo xtask check links

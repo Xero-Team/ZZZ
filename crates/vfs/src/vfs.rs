@@ -632,7 +632,7 @@ impl NativePath {
         match self.path.encoding {
             PathEncoding::UnixBytes => self.to_unix_bytes().map_or_else(
                 |_| self.path.display(),
-                |bytes| String::from_utf8_lossy(&bytes).into_owned(),
+                |bytes| String::from_utf8_lossy_owned(bytes),
             ),
             PathEncoding::WindowsWtf8 => self.to_windows_wide().map_or_else(
                 |_| self.path.display(),
@@ -1145,6 +1145,8 @@ fn windows_drive_from_prefix(prefix: &[u8]) -> Result<WindowsDrive, PathError> {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
 
     fn portable_component(bytes: &[u8]) -> ExactComponent {
@@ -1274,13 +1276,13 @@ mod tests {
         let Ok(path) = path else {
             panic!("Unix byte path must be valid: {path:?}");
         };
-        assert!(matches!(
+        assert_matches!(
             provider_path_to_legacy_utf8(&path),
             Err(CompatibilityPathError::UnrepresentableComponent {
                 component_index: 1,
                 encoding: PathEncoding::UnixBytes,
             })
-        ));
+        );
     }
 
     #[test]

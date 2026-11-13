@@ -9575,11 +9575,7 @@ fn branch_to_proto(branch: &git::repository::Branch) -> proto::Branch {
 fn worktree_to_proto(worktree: &git::repository::Worktree) -> Result<proto::Worktree> {
     let path_v2 = native_path_to_proto(&worktree.path)?;
     Ok(proto::Worktree {
-        ref_name: worktree
-            .ref_name
-            .as_ref()
-            .map(|s| s.to_string())
-            .unwrap_or_default(),
+        ref_name: worktree.ref_name.as_ref().map_or_default(|s| s.to_string()),
         sha: worktree.sha.to_string(),
         is_main: worktree.is_main,
         is_bare: worktree.is_bare,
@@ -10565,7 +10561,7 @@ mod tests {
         init_test(cx);
         let mut rng = StdRng::seed_from_u64(seed);
 
-        let commit_shas = (0..2000).map(|_| Oid::random(&mut rng)).collect::<Vec<_>>();
+        let commit_shas = Vec::from_fn(2000, |_| Oid::random(&mut rng));
         let failing_shas = failing_commit_indexes
             .into_iter()
             .map(|index| commit_shas[index % commit_shas.len()])

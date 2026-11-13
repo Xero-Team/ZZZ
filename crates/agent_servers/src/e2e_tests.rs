@@ -8,6 +8,7 @@ use indoc::indoc;
 use project::{FakeFs, Project};
 #[cfg(test)]
 use settings::Settings;
+use std::assert_matches;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -36,14 +37,8 @@ where
             "Expected at least 2 entries. Got: {:?}",
             thread.entries()
         );
-        assert!(matches!(
-            thread.entries()[0],
-            AgentThreadEntry::UserMessage(_)
-        ));
-        assert!(matches!(
-            thread.entries()[1],
-            AgentThreadEntry::AssistantMessage(_)
-        ));
+        assert_matches!(thread.entries()[0], AgentThreadEntry::UserMessage(_));
+        assert_matches!(thread.entries()[1], AgentThreadEntry::AssistantMessage(_));
     });
 }
 
@@ -81,10 +76,7 @@ where
         .unwrap();
 
     thread.read_with(cx, |thread, cx| {
-        assert!(matches!(
-            thread.entries()[0],
-            AgentThreadEntry::UserMessage(_)
-        ));
+        assert_matches!(thread.entries()[0], AgentThreadEntry::UserMessage(_));
         let assistant_message = &thread
             .entries()
             .iter()
@@ -317,10 +309,10 @@ where
         .await
         .unwrap();
     thread.read_with(cx, |thread, _| {
-        assert!(matches!(
+        assert_matches!(
             &thread.entries().last().unwrap(),
             AgentThreadEntry::AssistantMessage(..),
-        ))
+        )
     });
 }
 

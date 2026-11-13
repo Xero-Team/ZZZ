@@ -295,8 +295,7 @@ impl TabMatch {
                 let entry = project.entry_for_path(&path, cx)?;
                 let git_status = project
                     .project_path_git_status(&path, cx)
-                    .map(|status| status.summary())
-                    .unwrap_or_default();
+                    .map_or_default(|status| status.summary());
                 Some(entry_git_aware_label_color(
                     git_status,
                     entry.is_ignored,

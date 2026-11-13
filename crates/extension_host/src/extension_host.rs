@@ -1393,7 +1393,7 @@ impl ExtensionStore {
         if !semantic_token_rules_to_add.is_empty() {
             SettingsStore::update_global(cx, |store, cx| {
                 for (language_name, rules) in semantic_token_rules_to_add {
-                    store.set_language_semantic_token_rules(language_name.0.clone(), rules, cx);
+                    store.set_language_semantic_token_rules(language_name.0, rules, cx);
                 }
             });
         }
@@ -1494,7 +1494,7 @@ impl ExtensionStore {
                             this.proxy.register_language_server(
                                 extension.clone(),
                                 language_server_id.clone(),
-                                language.clone(),
+                                language,
                             );
                         }
                     }

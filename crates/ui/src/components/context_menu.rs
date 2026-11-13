@@ -2381,6 +2381,7 @@ impl Render for ContextMenu {
 
 #[cfg(test)]
 mod tests {
+
     use gpui::{Modifiers, TestAppContext, VisualTestContext, size};
 
     use super::*;

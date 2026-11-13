@@ -1137,8 +1137,7 @@ impl SshRemoteConnection {
             self.socket
                 .connection_options
                 .port
-                .map(|port| vec!["-P".to_owned(), port.to_string()])
-                .unwrap_or_default(),
+                .map_or_default(|port| vec!["-P".to_owned(), port.to_string()]),
         );
         if let Some(args) = args {
             command.args(args);
@@ -1159,8 +1158,7 @@ impl SshRemoteConnection {
             self.socket
                 .connection_options
                 .port
-                .map(|port| vec!["-P".to_owned(), port.to_string()])
-                .unwrap_or_default(),
+                .map_or_default(|port| vec!["-P".to_owned(), port.to_string()]),
         );
         command.arg("-b").arg("-");
         command
@@ -1582,7 +1580,7 @@ impl SshConnectionOptions {
 
         'outer: while let Some(arg) = tokens.next() {
             if ALLOWED_OPTS.contains(&(&arg as &str)) {
-                args.push(arg.clone());
+                args.push(arg);
                 continue;
             }
             if arg == "-p" {
@@ -1643,11 +1641,11 @@ impl SshConnectionOptions {
             // IPv6 addresses can be: 2001:db8::1 or [2001:db8::1]:22
             if input.starts_with('[') {
                 if let Some((rest, p)) = input.rsplit_once("]:") {
-                    input = rest.strip_prefix('[').unwrap_or(rest);
+                    input = rest.trim_prefix('[');
                     port = p.parse().ok();
                 } else if input.ends_with(']') {
-                    input = input.strip_prefix('[').unwrap_or(input);
-                    input = input.strip_suffix(']').unwrap_or(input);
+                    input = input.trim_prefix('[');
+                    input = input.trim_suffix(']');
                 }
             } else if let Some((rest, p)) = input.rsplit_once(':')
                 && !rest.contains(":")

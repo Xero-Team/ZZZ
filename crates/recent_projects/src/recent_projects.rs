@@ -2653,6 +2653,8 @@ impl RecentProjectsDelegate {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use chrono::Utc;
     use gpui::{TestAppContext, UpdateGlobal, VisualTestContext};
 
@@ -2720,7 +2722,7 @@ mod tests {
     }
 
     fn recent_workspaces() -> Vec<RecentWorkspace> {
-        (0..RECENT_PROJECT_COUNT).map(recent_workspace).collect()
+        Vec::from_fn(RECENT_PROJECT_COUNT, recent_workspace)
     }
 
     fn draw(cx: &mut VisualTestContext) {
@@ -2823,13 +2825,13 @@ mod tests {
 
     #[track_caller]
     fn assert_selected_entry_is_recent_project(picker: &Picker<RecentProjectsDelegate>) {
-        assert!(matches!(
+        assert_matches!(
             picker
                 .delegate
                 .filtered_entries
                 .get(picker.delegate.selected_index),
             Some(ProjectPickerEntry::RecentProject(_))
-        ));
+        );
     }
 
     #[gpui::test]

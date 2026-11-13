@@ -271,7 +271,7 @@ impl Render for KeyContextView {
             )
             .children({
                 self.context_stack.iter().enumerate().map(|(i, context)| {
-                    let primary = context.primary().map(|e| e.key.clone()).unwrap_or_default();
+                    let primary = context.primary().map_or_default(|e| e.key.clone());
                     let secondary = context
                         .secondary()
                         .map(|e| {

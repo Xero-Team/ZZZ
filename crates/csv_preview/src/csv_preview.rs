@@ -435,6 +435,8 @@ fn estimated_cell_width_px(cell: &crate::types::TableCell) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
 
     #[test]
@@ -459,12 +461,10 @@ mod tests {
 
         assert_eq!(widths.len(), 4);
         assert_eq!(widths[0], AbsoluteLength::Pixels(px(60.0)));
-        assert!(
-            matches!(widths[1], AbsoluteLength::Pixels(width) if width >= px(MIN_DATA_COLUMN_WIDTH_PX))
+        assert_matches!(widths[1], AbsoluteLength::Pixels(width) if width >= px(MIN_DATA_COLUMN_WIDTH_PX)
         );
-        assert!(matches!(widths[2], AbsoluteLength::Pixels(width) if width > px(150.0)));
-        assert!(
-            matches!(widths[3], AbsoluteLength::Pixels(width) if width >= px(MIN_DATA_COLUMN_WIDTH_PX))
+        assert_matches!(widths[2], AbsoluteLength::Pixels(width) if width > px(150.0));
+        assert_matches!(widths[3], AbsoluteLength::Pixels(width) if width >= px(MIN_DATA_COLUMN_WIDTH_PX)
         );
     }
 }

@@ -243,8 +243,7 @@ impl LspAdapter for ExtensionLspAdapter {
             .manifest()
             .language_servers
             .get(&self.language_server_id)
-            .map(|server| server.language_ids.clone())
-            .unwrap_or_default()
+            .map_or_default(|server| server.language_ids.clone())
     }
 
     fn is_opt_in_for(&self, language: &LanguageName) -> bool {

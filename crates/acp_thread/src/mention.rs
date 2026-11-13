@@ -606,11 +606,11 @@ fn parse_hyperlink_path(
 }
 
 fn parse_line_range(fragment: &str) -> Result<RangeInclusive<u32>> {
-    let range = fragment.strip_prefix("L").unwrap_or(fragment);
+    let range = fragment.trim_prefix("L");
     let (start, end) = if let Some((start, end)) = range.split_once(":") {
         (start, end)
     } else if let Some((start, end)) = range.split_once("-") {
-        (start, end.strip_prefix("L").unwrap_or(end))
+        (start, end.trim_prefix("L"))
     } else {
         (range, range)
     };

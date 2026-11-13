@@ -806,8 +806,7 @@ fn workspace_menu_worktree_labels(
             let root_path = root_path.as_ref();
             let folder_name = root_path
                 .file_name()
-                .map(|name| SharedString::from(name.to_string_lossy().to_string()))
-                .unwrap_or_default();
+                .map_or_default(|name| SharedString::from(name.to_string_lossy().to_string()));
             let repository_snapshot = repository_snapshots
                 .iter()
                 .find(|snapshot| snapshot.work_directory_abs_path.as_ref() == root_path);
@@ -2302,7 +2301,7 @@ impl Sidebar {
                                     .into_any_element()
                             },
                             {
-                                let workspace = workspace.clone();
+                                let workspace = workspace;
                                 let this = this.clone();
                                 move |window, cx| {
                                     this.update(cx, |sidebar, cx| {
@@ -2684,7 +2683,7 @@ impl Sidebar {
                                 let activate_weak_menu = weak_menu.clone();
                                 let close_weak_menu = weak_menu.clone();
                                 let activate_workspace = workspace.clone();
-                                let close_workspace = workspace.clone();
+                                let close_workspace = workspace;
 
                                 menu = menu.custom_entry(
                                     move |_window, _cx| {
@@ -3959,50 +3958,46 @@ impl Sidebar {
         // workspace from the MultiWorkspace, because `build_root_plan` needs
         // the currently open workspaces in order to find the affected projects
         // and repository handles for each linked worktree.
-        let roots_to_archive = metadata
-            .as_ref()
-            .map(|metadata| {
-                let mut workspaces = self
-                    .multi_workspace
-                    .upgrade()
-                    .map(|multi_workspace| {
-                        multi_workspace
-                            .read(cx)
-                            .workspaces()
-                            .cloned()
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
-                for workspace in thread_worktree_archive::all_open_workspaces(cx) {
-                    if !workspaces.contains(&workspace) {
-                        workspaces.push(workspace);
-                    }
+        let roots_to_archive = metadata.as_ref().map_or_default(|metadata| {
+            let mut workspaces = self
+                .multi_workspace
+                .upgrade()
+                .map_or_default(|multi_workspace| {
+                    multi_workspace
+                        .read(cx)
+                        .workspaces()
+                        .cloned()
+                        .collect::<Vec<_>>()
+                });
+            for workspace in thread_worktree_archive::all_open_workspaces(cx) {
+                if !workspaces.contains(&workspace) {
+                    workspaces.push(workspace);
                 }
-                metadata
-                    .folder_paths()
-                    .ordered_paths()
-                    .filter_map(|path| {
-                        thread_worktree_archive::build_root_plan(
-                            path,
-                            metadata.remote_connection.as_ref(),
-                            &workspaces,
-                            cx,
-                        )
+            }
+            metadata
+                .folder_paths()
+                .ordered_paths()
+                .filter_map(|path| {
+                    thread_worktree_archive::build_root_plan(
+                        path,
+                        metadata.remote_connection.as_ref(),
+                        &workspaces,
+                        cx,
+                    )
+                })
+                .filter(|plan| {
+                    thread_id.is_none_or(|tid| {
+                        !store
+                            .read(cx)
+                            .path_is_referenced_by_other_unarchived_threads(
+                                tid,
+                                &plan.root_path,
+                                metadata.remote_connection.as_ref(),
+                            )
                     })
-                    .filter(|plan| {
-                        thread_id.is_none_or(|tid| {
-                            !store
-                                .read(cx)
-                                .path_is_referenced_by_other_unarchived_threads(
-                                    tid,
-                                    &plan.root_path,
-                                    metadata.remote_connection.as_ref(),
-                                )
-                        })
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
+                })
+                .collect::<Vec<_>>()
+        });
 
         // Find the neighbor thread in the sidebar (by display position).
         // Look below first, then above, for the nearest thread that isn't
@@ -4154,13 +4149,10 @@ impl Sidebar {
 
             let (fallback_paths, project_group_key) = neighbor.as_ref().map_or_else(
                 || {
-                    workspaces_to_remove
-                        .first()
-                        .map(|ws| {
-                            let key = ws.read(cx).project_group_key(cx);
-                            (key.path_list().clone(), key)
-                        })
-                        .unwrap_or_default()
+                    workspaces_to_remove.first().map_or_default(|ws| {
+                        let key = ws.read(cx).project_group_key(cx);
+                        (key.path_list().clone(), key)
+                    })
                 },
                 |(_, paths, project_group_key)| (paths.clone(), project_group_key.clone()),
             );
@@ -5045,8 +5037,7 @@ impl Sidebar {
 
         let window_project_groups: Vec<ProjectGroupKey> = multi_workspace
             .as_ref()
-            .map(|mw| mw.read(cx).project_group_keys())
-            .unwrap_or_default();
+            .map_or_default(|mw| mw.read(cx).project_group_keys());
 
         let popover_handle = self.recent_projects_popover_handle.clone();
 

@@ -57,27 +57,36 @@ description: "Creates consistent releases and changelogs. Use when drafting rele
 
 ## Recognized Frontmatter Fields
 
-OpenCode recognizes these fields in `SKILL.md` frontmatter:
+V2 interprets these fields:
 
-- `name` required
-- `description` required
-- `license` optional
-- `compatibility` optional
-- `metadata` optional string-to-string map
+- `description`: the discovery surface; a skill without one is not advertised
+- `name`: the display label only; the skill ID comes from the path
+- `metadata.opencode/autoinvoke`: `false` hides the skill from the model's
+  available list while keeping it loadable by ID
+- `disable-model-invocation`: `true` has the same effect as the above
 
-Unknown fields are ignored by OpenCode. For this repository, prefer the
-OpenCode-native fields unless there is a deliberate cross-tool compatibility
-reason to keep extra metadata.
+V2 accepts the portability fields `license` and `compatibility` but does not
+interpret them. Repository convention keeps `license: CC-BY-4.0` and
+`compatibility: opencode` on every skill, plus a `metadata` map carrying
+`prompt-language` and `user-language`.
+
+All frontmatter is optional at runtime. Add a clear `description` whenever the
+model should discover the skill, and do not add fields OpenCode does not read
+unless this repository's convention requires them.
 
 ## Naming Rules
 
-The skill name must:
+The skill ID comes from the path, not from `name`: `git-release/SKILL.md` and
+`git-release.md` both become `git-release`, and a nested `teams/release/SKILL.md`
+becomes `release`. Keep the ID and directory name aligned:
 
-- be 1 to 64 characters long
-- use lowercase alphanumeric segments separated by single hyphens
-- not start or end with `-`
-- not contain consecutive `--`
-- match the directory name exactly
+- 1 to 64 characters
+- lowercase alphanumeric segments separated by single hyphens
+- no leading or trailing `-`
+- no consecutive `--`
+
+OpenCode recommends this shape but does not currently enforce it. As a
+repository rule, the directory name and the `name` field also match exactly.
 
 Gerund naming is recommended when it fits naturally, for example
 `creating-skills` or `processing-pdfs`. This is a style preference, not a hard
@@ -102,9 +111,9 @@ The description is the main trigger surface. It should:
 - front-load concrete keywords, filenames, or paths when they matter for
   discovery
 
-The OpenCode docs allow descriptions from 1 to 1024 characters. Use enough
-detail to make triggering reliable without turning the description into a wall
-of text.
+OpenCode advertises the description and does not currently enforce a maximum
+length. Use enough detail to make triggering reliable without turning the
+description into a wall of text.
 
 Good pattern:
 

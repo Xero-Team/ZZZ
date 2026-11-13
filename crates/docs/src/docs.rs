@@ -292,12 +292,7 @@ impl Item for DocumentationView {
     type Event = ();
 
     fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
-        SharedString::from(
-            self.current
-                .strip_suffix(".md")
-                .unwrap_or(&self.current)
-                .to_string(),
-        )
+        SharedString::from(self.current.trim_suffix(".md").to_string())
     }
 
     fn to_item_events(_event: &Self::Event, _f: &mut dyn FnMut(ItemEvent)) {}
@@ -648,7 +643,7 @@ fn first_heading(content: &str) -> Option<String> {
 
 fn humanize_path(path: &str) -> String {
     let name = path.rsplit('/').next().unwrap_or(path);
-    let name = name.strip_suffix(".md").unwrap_or(name);
+    let name = name.trim_suffix(".md");
     name.replace(['-', '_'], " ")
 }
 
@@ -668,6 +663,7 @@ fn strip_front_matter(content: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]

@@ -1,3 +1,6 @@
+// serde's derive emits an empty `__Field` enum for actions without fields.
+#![allow(clippy::empty_enums)]
+
 use gpui::{Action, actions};
 use gpui_macros::register_action;
 use schemars::JsonSchema;

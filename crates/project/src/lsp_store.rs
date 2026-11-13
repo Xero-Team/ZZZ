@@ -2416,8 +2416,7 @@ impl LocalLspStore {
                     let available_commands = server_capabilities
                         .execute_command_provider
                         .as_ref()
-                        .map(|options| options.commands.as_slice())
-                        .unwrap_or_default();
+                        .map_or_default(|options| options.commands.as_slice());
                     if !available_commands.contains(&command.command) {
                         zlog::warn!(
                             logger =>
@@ -3533,8 +3532,7 @@ impl LocalLspStore {
             let available_commands = server_capabilities
                 .execute_command_provider
                 .as_ref()
-                .map(|options| options.commands.as_slice())
-                .unwrap_or_default();
+                .map_or_default(|options| options.commands.as_slice());
             if !available_commands.contains(&command.command) {
                 log::warn!(
                     "Cannot execute a command {} not listed in the language server capabilities",
@@ -3870,12 +3868,10 @@ impl LocalLspStore {
                     } else {
                         fs.create_file(
                             &abs_path,
-                            op.options
-                                .map(|options| fs::CreateOptions {
-                                    overwrite: options.overwrite.unwrap_or(false),
-                                    ignore_if_exists: options.ignore_if_exists.unwrap_or(false),
-                                })
-                                .unwrap_or_default(),
+                            op.options.map_or_default(|options| fs::CreateOptions {
+                                overwrite: options.overwrite.unwrap_or(false),
+                                ignore_if_exists: options.ignore_if_exists.unwrap_or(false),
+                            }),
                         )
                         .await
                         .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
@@ -3985,13 +3981,10 @@ impl LocalLspStore {
                         .native_path()
                         .to_local_path_buf()
                         .map_err(|error| WorkspaceEditFailure::new(change_index, error))?;
-                    let options = op
-                        .options
-                        .map(|options| fs::RemoveOptions {
-                            recursive: options.recursive.unwrap_or(false),
-                            ignore_if_not_exists: options.ignore_if_not_exists.unwrap_or(false),
-                        })
-                        .unwrap_or_default();
+                    let options = op.options.map_or_default(|options| fs::RemoveOptions {
+                        recursive: options.recursive.unwrap_or(false),
+                        ignore_if_not_exists: options.ignore_if_not_exists.unwrap_or(false),
+                    });
                     if op.uri.path().ends_with('/') {
                         fs.remove_dir(&abs_path, options)
                             .await
@@ -6220,7 +6213,7 @@ impl LspStore {
                             worktree_path,
                             language.name(),
                             language.manifest(),
-                            delegate.clone(),
+                            delegate,
                             cx,
                         )
                         .collect::<Vec<_>>();
@@ -6360,8 +6353,7 @@ impl LspStore {
                 let available_commands = server_capabilities
                     .execute_command_provider
                     .as_ref()
-                    .map(|options| options.commands.as_slice())
-                    .unwrap_or_default();
+                    .map_or_default(|options| options.commands.as_slice());
 
                 if !available_commands.contains(&command.command) {
                     log::warn!(
@@ -6443,8 +6435,7 @@ impl LspStore {
                 .capabilities()
                 .execute_command_provider
                 .as_ref()
-                .map(|options| options.commands.clone())
-                .unwrap_or_default();
+                .map_or_default(|options| options.commands.clone());
             if !available_commands.contains(&command) {
                 return Task::ready(Err(anyhow!(
                     "command {command} is not advertised by the language server"
@@ -8137,8 +8128,7 @@ impl LspStore {
         let existing_inlay_hints = &mut lsp_data.inlay_hints;
         let known_chunks = known_chunks
             .filter(|(known_version, _)| !lsp_data.buffer_version.changed_since(known_version))
-            .map(|(_, known_chunks)| known_chunks)
-            .unwrap_or_default();
+            .map_or_default(|(_, known_chunks)| known_chunks);
 
         let buffer_snapshot = buffer.read(cx).snapshot();
         let ranges = ranges
@@ -8584,8 +8574,7 @@ impl LspStore {
                         .await
                         .log_err()
                         .flatten()
-                        .map(|response| response.payload)
-                        .unwrap_or_default()
+                        .map_or_default(|response| response.payload)
                         .into_iter()
                         .map(|response| {
                             let response = GetSignatureHelp { position }.response_from_proto(
@@ -8651,8 +8640,7 @@ impl LspStore {
                         .await
                         .log_err()
                         .flatten()
-                        .map(|response| response.payload)
-                        .unwrap_or_default()
+                        .map_or_default(|response| response.payload)
                         .into_iter()
                         .map(|response| {
                             let response = GetHover { position }.response_from_proto(
@@ -8783,7 +8771,7 @@ impl LspStore {
                                 .context("workspace symbols request")
                                 .log_err()
                                 .flatten()
-                                .map(|symbol_response| match symbol_response {
+                                .map_or_default(|symbol_response| match symbol_response {
                                     lsp::WorkspaceSymbolResponse::Flat(flat_responses) => {
                                         flat_responses
                                             .into_iter()
@@ -8821,8 +8809,7 @@ impl LspStore {
                                             })
                                             .collect::<Vec<_>>()
                                     }
-                                })
-                                .unwrap_or_default();
+                                });
 
                             WorkspaceSymbolsResult {
                                 server_id,
@@ -9008,7 +8995,7 @@ impl LspStore {
         let line_ending = next_snapshot.line_ending();
 
         for language_server in language_servers {
-            let language_server = language_server.clone();
+            let language_server = language_server;
 
             let buffer_snapshots = self
                 .as_local_mut()?
@@ -9264,9 +9251,8 @@ impl LspStore {
         cx: &mut App,
     ) -> impl Iterator<Item = (&'a Arc<CachedLspAdapter>, &'a Arc<LanguageServer>)> {
         let local = self.as_local();
-        let language_server_ids = local
-            .map(|local| local.language_server_ids_for_buffer(buffer, cx))
-            .unwrap_or_default();
+        let language_server_ids =
+            local.map_or_default(|local| local.language_server_ids_for_buffer(buffer, cx));
 
         language_server_ids
             .into_iter()
@@ -9293,9 +9279,7 @@ impl LspStore {
         cx: &mut App,
     ) -> Vec<LanguageServerId> {
         let local = self.as_local();
-        local
-            .map(|local| local.language_server_ids_for_buffer(buffer, cx))
-            .unwrap_or_default()
+        local.map_or_default(|local| local.language_server_ids_for_buffer(buffer, cx))
     }
 
     pub fn language_server_for_local_buffer<'a>(

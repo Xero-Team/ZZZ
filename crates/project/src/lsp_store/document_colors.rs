@@ -309,8 +309,7 @@ impl LspStore {
                         .await
                         .log_err()
                         .flatten()
-                        .map(|response| response.payload)
-                        .unwrap_or_default()
+                        .map_or_default(|response| response.payload)
                         .into_iter()
                         .map(|color_response| {
                             let response = request.response_from_proto(

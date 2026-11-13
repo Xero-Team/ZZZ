@@ -483,8 +483,7 @@ impl PickerDelegate for ThemeSelectorDelegate {
                         .iter()
                         .enumerate()
                         .find(|(_, mtch)| mtch.string == selected.name)
-                        .map(|(ix, _)| ix)
-                        .unwrap_or_default();
+                        .map_or_default(|(ix, _)| ix);
                 } else {
                     this.delegate.selected_index = 0;
                 }

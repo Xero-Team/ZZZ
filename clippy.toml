@@ -1,6 +1,6 @@
 # Match the channel pinned in rust-toolchain.toml so clippy's version-aware
 # lint suggestions assume the same compiler features CI and local builds use.
-msrv = "1.99.1"
+msrv = "1.100.0"
 allow-private-module-inception = true
 avoid-breaking-exported-api = false
 # This workspace is predominantly application code; when enabling additional

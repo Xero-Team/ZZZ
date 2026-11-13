@@ -2823,6 +2823,7 @@ fn xkb_state_for_key_event(xkb: &xkbc::State, event_state: xproto::KeyButMask) -
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]

@@ -16,8 +16,7 @@ impl Settings for FeatureFlagsSettings {
             overrides: content
                 .feature_flags
                 .as_ref()
-                .map(|map| map.0.clone())
-                .unwrap_or_default(),
+                .map_or_default(|map| map.0.clone()),
         }
     }
 }

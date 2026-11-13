@@ -53,7 +53,7 @@ impl SemanticTokenState {
     }
 
     pub(super) fn toggle_enabled(&mut self) {
-        self.enabled = !self.enabled;
+        self.enabled.toggle();
     }
 
     #[cfg(test)]

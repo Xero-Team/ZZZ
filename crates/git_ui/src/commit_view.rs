@@ -644,8 +644,7 @@ impl CommitView {
                                                     .opened_icon(IconName::FoldVertical)
                                                     .tooltip(Tooltip::text(expand_tooltip))
                                                     .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.message_expanded =
-                                                            !this.message_expanded;
+                                                        this.message_expanded.toggle();
                                                         cx.notify();
                                                     })),
                                                 )
@@ -1164,8 +1163,7 @@ impl Item for CommitView {
             .rhs_editor()
             .read(cx)
             .addon::<CommitDiffAddon>()
-            .map(|addon| addon.file_statuses.clone())
-            .unwrap_or_default();
+            .map_or_default(|addon| addon.file_statuses.clone());
         let Some(workspace_entity) = self.workspace.upgrade() else {
             return Task::ready(None);
         };
