@@ -200,6 +200,7 @@
   - [Releasing ZZZ](./development/releasing.md)
   - [Testing](./development/testing.md)
   - [Coding Standards](./development/coding-standards.md)
+  - [Crate Map](./development/crates.md)
   - [Glossary](./development/glossary.md)
   - [Keeping ZZZ Lean](./development/bloat.md)
   - [GPUI: Ownership and Data Flow](./development/ownership-and-data-flow.md)
