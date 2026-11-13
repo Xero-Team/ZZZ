@@ -7,9 +7,9 @@ Normative rules for the `absorbing-upstream` skill.
 Override only when the user supplies a value.
 
 ```text
-LAST_REVIEWED_UPSTREAM=6ceb6fee8738274589b59139df27efc191ec2231
+LAST_REVIEWED_UPSTREAM=aff99ecc3249cfa95e720c4d6c1eb4a72105a3ee
 LOCAL_BASE_BRANCH=main
-LOCAL_BASE_COMMIT=1201ff99c017d154b750c89c063e76efc82ebfd8
+LOCAL_BASE_COMMIT=be1bfe60fe43c3e031a2742ecdc7776f606fe6a8
 UPSTREAM_URL=https://github.com/zed-industries/zed.git
 UPSTREAM_REF=refs/heads/main
 WORK_BRANCH=sync/upstream-YYYY-MM-DD
@@ -20,14 +20,15 @@ CREATE_PR=no
 PUSH=no
 ```
 
-As of 2026-11-13, local `main` is `1201ff99c0`. The last completed
-sync is `docs/src/development/upstream/upstream-sync-2026-11-12.md` on
-`sync/upstream-2026-11-12`; it reviews
-`43bd5d3cac..6ceb6fee87` and advances the reviewed baseline to
-`6ceb6fee87`, leaving zero commits before the live head. The
-preceding chain is `2026-11-10`, `2026-11-10-b`, `2026-11-11`,
-`2026-11-11-b`, and `2026-11-11-c`, which ended at `43bd5d3cac`. The
-most recent full re-audit is
+As of 2026-11-13, local `main` is `be1bfe60fe`. The last completed
+sync is `docs/src/development/upstream/upstream-sync-2026-11-13.md` on
+`sync/upstream-2026-11-13`; it reviews
+`6ceb6fee87..aff99ecc32`, the first 20 of 22 commits, and advances the
+reviewed baseline to `aff99ecc32`. The live head at query time was
+`dc93abce2f`, so the next range starts with `83df5df635` and
+`dc93abce2f`. The preceding chain is `2026-11-10`, `2026-11-10-b`,
+`2026-11-11`, `2026-11-11-b`, `2026-11-11-c`, and `2026-11-12`, which
+ended at `6ceb6fee87`. The most recent full re-audit is
 `docs/src/development/upstream/upstream-sync-audit-2026-11-03.md` (38
 non-audit reports, 1453 decision rows). Query live upstream again at
 run start; never trust these recorded values as the live head. The next
