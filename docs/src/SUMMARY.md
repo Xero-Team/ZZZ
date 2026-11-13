@@ -198,6 +198,8 @@
   - [Performance](./performance.md)
   - [Build and Optimization Pipeline](./development/build-pipeline.md)
   - [Releasing ZZZ](./development/releasing.md)
+  - [Testing](./development/testing.md)
+  - [Coding Standards](./development/coding-standards.md)
   - [Glossary](./development/glossary.md)
   - [Keeping ZZZ Lean](./development/bloat.md)
   - [GPUI: Ownership and Data Flow](./development/ownership-and-data-flow.md)

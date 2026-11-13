@@ -34,6 +34,7 @@ mod module_layout;
 mod msrv;
 mod release;
 mod scroll_handlers;
+mod test_markers;
 
 #[derive(Args)]
 pub struct CheckArgs {
@@ -63,6 +64,8 @@ enum CheckCommand {
     Msrv,
     /// Require the manifest, lockfile, and changelog to agree on one version.
     Release,
+    /// Require every ignored test to carry a reason.
+    TestMarkers,
     /// Require every workspace member to opt into `[workspace.lints]`.
     LintsInheritance,
     /// Reject duplicate keys, malformed keys, and blank values in the catalogs.
@@ -132,6 +135,7 @@ pub fn run_check(args: CheckArgs) -> Result<()> {
         CheckCommand::ModuleLayout => module_layout::check(),
         CheckCommand::Msrv => msrv::check(),
         CheckCommand::Release => release::check(),
+        CheckCommand::TestMarkers => test_markers::check(),
         CheckCommand::LintsInheritance => lints_inheritance::check(),
         CheckCommand::LocaleCatalog => locale_catalog::check(),
         CheckCommand::LocaleKeys => check_locale_keys(),
@@ -162,6 +166,7 @@ const GATES: &[(&str, fn() -> Result<()>)] = &[
     ("module layout", module_layout::check),
     ("MSRV consistency", msrv::check),
     ("release metadata", release::check),
+    ("test markers", test_markers::check),
     ("lint inheritance", lints_inheritance::check),
     ("locale catalog structure", locale_catalog::check),
     ("locale catalog keys", check_locale_keys),
@@ -482,7 +487,7 @@ mod tests {
 
     /// Deleting a line from `GATES` silently disables a gate for both local
     /// runs and CI, so the list length is pinned; adding a gate bumps it.
-    const GATE_COUNT: usize = 20;
+    const GATE_COUNT: usize = 21;
 
     #[test]
     fn gate_list_keeps_every_gate() {
