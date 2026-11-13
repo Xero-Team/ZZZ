@@ -13,11 +13,9 @@
 //! deliberately does not police the changelog wording; see
 //! `docs/src/development/releasing.md`.
 
-use std::fs;
-use std::path::Path;
 use std::sync::LazyLock;
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Result, bail};
 use regex::Regex;
 
 const PACKAGE_MANIFEST: &str = "crates/zzz/Cargo.toml";
@@ -36,12 +34,14 @@ static SEMVER: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 pub fn check() -> Result<()> {
-    let manifest = fs::read_to_string(Path::new(PACKAGE_MANIFEST))
-        .with_context(|| format!("failed to read {PACKAGE_MANIFEST}"))?;
-    let lockfile =
-        fs::read_to_string(Path::new(LOCKFILE)).with_context(|| format!("failed to read {LOCKFILE}"))?;
-    let changelog =
-        fs::read_to_string(Path::new(CHANGELOG)).with_context(|| format!("failed to read {CHANGELOG}"))?;
+    check_at(&super::Repo::discover()?)
+}
+
+/// The gate, rooted at an injected repository.
+pub fn check_at(repo: &super::Repo) -> Result<()> {
+    let manifest = repo.read(PACKAGE_MANIFEST)?;
+    let lockfile = repo.read(LOCKFILE)?;
+    let changelog = repo.read(CHANGELOG)?;
 
     let failures = collect_failures(&manifest, &lockfile, &changelog);
     if failures.is_empty() {
@@ -155,7 +155,10 @@ fn changelog_failures(changelog: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{collect_failures, lockfile_version, manifest_version};
+    use super::{
+        CHANGELOG, LOCKFILE, PACKAGE_MANIFEST, collect_failures, lockfile_version,
+        manifest_version,
+    };
 
     fn manifest(version: &str) -> String {
         format!("[package]\nname = \"zzz\"\nversion = \"{version}\"\n")
@@ -232,7 +235,9 @@ mod tests {
         let failures = collect_failures(&manifest("1.29.0"), &lockfile("1.29.0"), changelog);
         assert_eq!(failures.len(), 3, "{failures:?}");
         assert!(
-            failures.iter().all(|failure| failure.contains("subsection")),
+            failures
+                .iter()
+                .all(|failure| failure.contains("subsection")),
             "{failures:?}"
         );
     }
@@ -244,12 +249,38 @@ mod tests {
         assert_eq!(failures.len(), 3, "{failures:?}");
     }
 
+    /// The gate end to end, against a fixture tree instead of the workspace.
+    ///
+    /// This is what `Repo` exists for: the gate resolves every path through
+    /// the injected root, so a test can exercise the real file IO without
+    /// changing the process working directory.
+    #[test]
+    fn a_fixture_repository_passes_and_reports_drift() {
+        use crate::tasks::check::Repo;
+        use std::fs;
+
+        let directory = tempfile::tempdir().expect("a temporary directory");
+        let repo = Repo::at(directory.path());
+        fs::create_dir_all(repo.path("crates/zzz")).expect("the fixture manifest directory");
+        fs::write(repo.path(PACKAGE_MANIFEST), manifest("1.29.0")).expect("the fixture manifest");
+        fs::write(repo.path(LOCKFILE), lockfile("1.29.0")).expect("the fixture lockfile");
+        fs::write(repo.path(CHANGELOG), changelog()).expect("the fixture changelog");
+
+        super::check_at(&repo).expect("an agreeing fixture repository must pass");
+
+        fs::write(repo.path(LOCKFILE), lockfile("1.28.0")).expect("a stale fixture lockfile");
+        let error = super::check_at(&repo).expect_err("a stale lockfile must fail");
+        assert!(error.to_string().contains("pins zzz 1.28.0"), "{error}");
+    }
+
     #[test]
     fn unparsable_sources_are_reported() {
         let failures = collect_failures("not toml", "not toml", &changelog());
         assert_eq!(failures.len(), 2, "{failures:?}");
         assert!(
-            failures.iter().all(|failure| failure.contains("not valid TOML")),
+            failures
+                .iter()
+                .all(|failure| failure.contains("not valid TOML")),
             "{failures:?}"
         );
     }

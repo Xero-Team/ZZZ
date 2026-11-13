@@ -33,8 +33,11 @@ mod locale_placeholders;
 mod module_layout;
 mod msrv;
 mod release;
+mod repo;
 mod scroll_handlers;
 mod test_markers;
+
+pub use repo::Repo;
 
 #[derive(Args)]
 pub struct CheckArgs {
@@ -122,8 +125,12 @@ impl Severity {
 }
 
 pub fn run_check(args: CheckArgs) -> Result<()> {
-    if !Path::new("script").is_dir() {
-        bail!("cargo xtask check must be run from the workspace root");
+    let repo = Repo::discover()?;
+    if !repo.path("script").is_dir() {
+        bail!(
+            "cargo xtask check needs a ZZZ checkout: no script/ directory under {}",
+            repo.root().display()
+        );
     }
 
     match args.command.unwrap_or(CheckCommand::All) {
@@ -206,8 +213,9 @@ fn run_all() -> Result<()> {
 }
 
 fn check_todos() -> Result<()> {
+    let repo = Repo::discover()?;
     // Brackets around a character keep the pattern out of plain-text searches.
-    let matches = git_grep(&[
+    let matches = repo.grep(&[
         "--no-color",
         "--ignore-case",
         "--line-number",
@@ -229,7 +237,8 @@ fn check_todos() -> Result<()> {
 }
 
 fn check_licenses() -> Result<()> {
-    let manifests = tracked_files("**/*/Cargo.toml")?;
+    let repo = Repo::discover()?;
+    let manifests = repo.tracked("**/*/Cargo.toml")?;
     let mut failures = Vec::new();
 
     for manifest in manifests {
@@ -243,7 +252,7 @@ fn check_licenses() -> Result<()> {
         {
             continue;
         }
-        if let Err(error) = check_crate_license(directory) {
+        if let Err(error) = check_crate_license(&repo, directory) {
             failures.push(format!("{}: {error}", directory.display()));
         }
     }
@@ -257,10 +266,12 @@ fn check_licenses() -> Result<()> {
     );
 }
 
-fn check_crate_license(directory: &Path) -> Result<()> {
+fn check_crate_license(repo: &Repo, directory: &Path) -> Result<()> {
     const LICENSE: &str = "LICENSE-AGPL";
 
-    let license_path = directory.join(LICENSE);
+    // `directory` is repo-relative: the symlink depth is counted from it while
+    // the file itself is read through the injected root.
+    let license_path = repo.path(&directory.join(LICENSE).to_string_lossy());
     match fs::symlink_metadata(&license_path) {
         Ok(metadata) if metadata.file_type().is_symlink() => {}
         Ok(_) => bail!("{LICENSE} exists but is not a symlink"),
@@ -312,8 +323,10 @@ fn check_shellcheck(severity: Severity) -> Result<()> {
 /// The scripts ShellCheck covers: files directly in `script/` whose shebang
 /// asks for a POSIX shell. Nested directories hold Python and JavaScript.
 fn shell_scripts() -> Result<Vec<PathBuf>> {
+    let repo = Repo::discover()?;
     let mut scripts = Vec::new();
-    let entries = fs::read_dir("script").context("failed to read the script directory")?;
+    let entries =
+        fs::read_dir(repo.path("script")).context("failed to read the script directory")?;
     for entry in entries {
         let entry = entry.context("failed to read a directory entry in script/")?;
         if !entry.file_type().is_ok_and(|file_type| file_type.is_file()) {
@@ -375,14 +388,17 @@ fn check_upstream_ledger() -> Result<()> {
 }
 
 fn check_links(all: bool) -> Result<()> {
+    let repo = Repo::discover()?;
+    let target = format!("{}/**/*", repo.path("docs/src").display());
+
     let mut command = Command::new("lychee");
     command.arg("--no-progress");
     if !all {
         command.args(["--exclude", "^http"]);
     }
-    command.arg("./docs/src/**/*");
+    command.arg(&target);
 
-    eprintln!("+ lychee --no-progress ./docs/src/**/*");
+    eprintln!("+ lychee --no-progress {target}");
     let status = command
         .status()
         .context("failed to start lychee; install it with `cargo install lychee`")?;
@@ -424,67 +440,8 @@ fn run_script(command: &[&str], description: &str) -> Result<()> {
     Ok(())
 }
 
-/// Returns the output of `git grep`, or an empty string when nothing matched.
-fn git_grep(arguments: &[&str]) -> Result<String> {
-    let output = Command::new("git")
-        .arg("grep")
-        .args(arguments)
-        .output()
-        .context("failed to run git grep")?;
-
-    match output.status.code() {
-        // `git grep` exits 1 when it finds nothing.
-        Some(0) => Ok(String::from_utf8_lossy(&output.stdout)
-            .trim_end()
-            .to_owned()),
-        Some(1) => Ok(String::new()),
-        _ => bail!(
-            "git grep failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        ),
-    }
-}
-
-/// Expands a `git ls-files` pathspec, so checks only look at tracked files.
-///
-/// `git ls-files` exits 0 with empty output when nothing matches, including
-/// when the pathspec is misspelled or the index is empty/unreadable. Every
-/// caller scans the returned files and treats "no findings" as success, so an
-/// empty result must fail closed instead of silently disabling the gate.
-fn tracked_files(pathspec: &str) -> Result<Vec<PathBuf>> {
-    let output = Command::new("git")
-        .args(["ls-files", pathspec])
-        .output()
-        .context("failed to run git ls-files")?;
-    if !output.status.success() {
-        bail!(
-            "git ls-files failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-
-    parse_tracked_files(&String::from_utf8_lossy(&output.stdout), pathspec)
-}
-
-fn parse_tracked_files(stdout: &str, pathspec: &str) -> Result<Vec<PathBuf>> {
-    let files: Vec<PathBuf> = stdout
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(PathBuf::from)
-        .collect();
-    if files.is_empty() {
-        bail!(
-            "git ls-files {pathspec:?} matched no tracked files; the pathspec may be wrong, or the git index empty or unreadable"
-        );
-    }
-    Ok(files)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::parse_tracked_files;
-    use std::path::PathBuf;
-
     /// Deleting a line from `GATES` silently disables a gate for both local
     /// runs and CI, so the list length is pinned; adding a gate bumps it.
     const GATE_COUNT: usize = 21;
@@ -505,29 +462,5 @@ mod tests {
         let unique = names.len();
         names.dedup();
         assert_eq!(names.len(), unique, "duplicate gate names: {names:?}");
-    }
-
-    #[test]
-    fn empty_git_ls_files_output_fails_closed() {
-        let error = parse_tracked_files("", "*.rs").expect_err("empty output must fail");
-        assert!(
-            error.to_string().contains("matched no tracked files"),
-            "unexpected error: {error}"
-        );
-        assert!(
-            error.to_string().contains("*.rs"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn whitespace_only_output_fails_closed() {
-        assert!(parse_tracked_files("\n", "*.rs").is_err());
-    }
-
-    #[test]
-    fn collects_every_line_as_a_path() {
-        let files = parse_tracked_files("a.rs\nb/c.rs\n", "*.rs").expect("paths should parse");
-        assert_eq!(files, vec![PathBuf::from("a.rs"), PathBuf::from("b/c.rs")]);
     }
 }

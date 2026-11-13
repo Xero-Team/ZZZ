@@ -10,9 +10,6 @@
 //! Gates that live in their own workflow (`REQUIRED_STEPS`) are checked by
 //! reading that file, because the `run:` scan only covers ci.yaml.
 
-use std::fs;
-use std::path::Path;
-
 use anyhow::{Context as _, Result, bail};
 use serde_yaml::Value;
 
@@ -45,8 +42,12 @@ const REQUIRED_RUNS: &[&str] = &[
 ];
 
 pub fn check() -> Result<()> {
-    let source = fs::read_to_string(Path::new(CI_WORKFLOW))
-        .with_context(|| format!("failed to read {CI_WORKFLOW}"))?;
+    check_at(&super::Repo::discover()?)
+}
+
+/// The gate, rooted at an injected repository.
+pub fn check_at(repo: &super::Repo) -> Result<()> {
+    let source = repo.read(CI_WORKFLOW)?;
     let parsed: Value = serde_yaml::from_str(&source)
         .with_context(|| format!("failed to parse {CI_WORKFLOW} as YAML"))?;
 
@@ -62,7 +63,7 @@ pub fn check() -> Result<()> {
             format!("{CI_WORKFLOW} no longer runs `{command}` (a step may have been deleted)")
         })
         .collect();
-    failures.extend(missing_steps(|path| fs::read_to_string(path).ok()));
+    failures.extend(missing_steps(|path| repo.read(path).ok()));
 
     if failures.is_empty() {
         return Ok(());

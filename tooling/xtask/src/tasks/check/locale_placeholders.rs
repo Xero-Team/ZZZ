@@ -16,8 +16,6 @@
 //! parity check, so every value is also syntax-checked on its own first.
 
 use std::collections::BTreeMap;
-use std::fs;
-use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
 use serde::Deserialize;
@@ -31,8 +29,13 @@ struct LocaleDocument {
 }
 
 pub fn check() -> Result<()> {
-    let en = load(EN_CATALOG)?;
-    let zh = load(ZH_CATALOG)?;
+    check_at(&super::Repo::discover()?)
+}
+
+/// The gate, rooted at an injected repository.
+pub fn check_at(repo: &super::Repo) -> Result<()> {
+    let en = load(repo, EN_CATALOG)?;
+    let zh = load(repo, ZH_CATALOG)?;
     let mut findings = check_syntax(EN_CATALOG, &en.entries);
     findings.extend(check_syntax(ZH_CATALOG, &zh.entries));
     findings.extend(find_mismatches(&en.entries, &zh.entries));
@@ -46,9 +49,8 @@ pub fn check() -> Result<()> {
     )
 }
 
-fn load(path: &str) -> Result<LocaleDocument> {
-    let contents =
-        fs::read_to_string(Path::new(path)).with_context(|| format!("failed to read {path}"))?;
+fn load(repo: &super::Repo, path: &str) -> Result<LocaleDocument> {
+    let contents = repo.read(path)?;
     serde_json::from_str(&contents).with_context(|| format!("failed to parse {path}"))
 }
 

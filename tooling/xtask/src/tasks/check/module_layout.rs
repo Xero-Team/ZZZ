@@ -11,7 +11,12 @@ use std::path::Path;
 use anyhow::{Result, bail};
 
 pub fn check() -> Result<()> {
-    let files = super::tracked_files("*.rs")?;
+    check_at(&super::Repo::discover()?)
+}
+
+/// The gate, rooted at an injected repository.
+pub fn check_at(repo: &super::Repo) -> Result<()> {
+    let files = repo.tracked("*.rs")?;
     let mut findings = Vec::new();
 
     for path in &files {

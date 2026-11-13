@@ -15,8 +15,6 @@
 //! This gate parses with `syn` and inspects only real `tr` calls.
 
 use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
 use serde::Deserialize;
@@ -32,12 +30,16 @@ struct LocaleDocument {
 }
 
 pub fn check() -> Result<()> {
-    let catalog = fs::read_to_string(Path::new(EN_CATALOG))
-        .with_context(|| format!("failed to read {EN_CATALOG}"))?;
+    check_at(&super::Repo::discover()?)
+}
+
+/// The gate, rooted at an injected repository.
+pub fn check_at(repo: &super::Repo) -> Result<()> {
+    let catalog = repo.read(EN_CATALOG)?;
     let document: LocaleDocument =
         serde_json::from_str(&catalog).with_context(|| format!("failed to parse {EN_CATALOG}"))?;
 
-    let files = super::tracked_files("*.rs")?;
+    let files = repo.tracked("*.rs")?;
     let mut findings = Vec::new();
 
     for path in &files {
@@ -45,8 +47,7 @@ pub fn check() -> Result<()> {
         if path.starts_with("vendor/") || path.starts_with("crates/grammars/vendor/") {
             continue;
         }
-        let source = fs::read_to_string(path)
-            .with_context(|| format!("failed to read {}", path.display()))?;
+        let source = repo.read(&path.to_string_lossy())?;
         if !might_contain_tr_call(&source) {
             continue;
         }

@@ -12,10 +12,8 @@
 //! gate was added.
 
 use std::collections::BTreeMap;
-use std::fs;
-use std::path::Path;
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Result, bail};
 use serde::Deserialize;
 
 use super::keymaps::NoDuplicateKeys;
@@ -29,10 +27,14 @@ struct LocaleDocument {
 }
 
 pub fn check() -> Result<()> {
+    check_at(&super::Repo::discover()?)
+}
+
+/// The gate, rooted at an injected repository.
+pub fn check_at(repo: &super::Repo) -> Result<()> {
     let mut findings = Vec::new();
     for path in [EN_CATALOG, ZH_CATALOG] {
-        let source = fs::read_to_string(Path::new(path))
-            .with_context(|| format!("failed to read {path}"))?;
+        let source = repo.read(path)?;
         findings.extend(check_source(path, &source));
     }
 

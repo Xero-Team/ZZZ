@@ -14,15 +14,20 @@ use serde::de::{self, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 
 pub fn check() -> Result<()> {
-    reject_macos_only_modifiers()?;
-    reject_unknown_modifiers()?;
-    reject_duplicate_bindings()
+    check_at(&super::Repo::discover()?)
+}
+
+/// The gate, rooted at an injected repository.
+pub fn check_at(repo: &super::Repo) -> Result<()> {
+    reject_macos_only_modifiers(repo)?;
+    reject_unknown_modifiers(repo)?;
+    reject_duplicate_bindings(repo)
 }
 
 /// `cmd-` is the macOS spelling of the primary modifier. Shared and Windows
 /// keymaps spell it `ctrl-`, so a `cmd-` there is a binding that never fires.
-fn reject_macos_only_modifiers() -> Result<()> {
-    let matches = super::git_grep(&[
+fn reject_macos_only_modifiers(repo: &super::Repo) -> Result<()> {
+    let matches = repo.grep(&[
         "--no-color",
         "--line-number",
         "--fixed-strings",
@@ -65,9 +70,9 @@ const RECOGNIZED_MODIFIERS: &[&str] = &[
 /// because `super-` and `fn-` are legitimate and already shipped. Checking the
 /// parsed binding keys against the parser's real modifier list is both live and
 /// free of false positives.
-fn reject_unknown_modifiers() -> Result<()> {
+fn reject_unknown_modifiers(repo: &super::Repo) -> Result<()> {
     let mut failures = Vec::new();
-    for path in super::tracked_files("assets/keymaps/*.json")? {
+    for path in repo.tracked("assets/keymaps/*.json")? {
         let source = std::fs::read_to_string(&path)
             .with_context(|| format!("failed to read {}", path.display()))?;
         let jsonc = strip_jsonc(&source);
@@ -140,10 +145,10 @@ fn collect_binding_keys(value: &serde_json::Value, keys: &mut Vec<String>) {
     }
 }
 
-fn reject_duplicate_bindings() -> Result<()> {
+fn reject_duplicate_bindings(repo: &super::Repo) -> Result<()> {
     let mut failures = Vec::new();
 
-    for path in super::tracked_files("assets/keymaps/*.json")? {
+    for path in repo.tracked("assets/keymaps/*.json")? {
         let source = std::fs::read_to_string(&path)
             .with_context(|| format!("failed to read {}", path.display()))?;
         let jsonc = strip_jsonc(&source);

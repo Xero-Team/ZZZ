@@ -15,8 +15,17 @@ use anyhow::{Result, bail};
 /// Matches the attribute only when it carries no reason string.
 const BARE_IGNORE: &str = r"#\[ignor[e]\]";
 
+/// The attribute as it appears in source. Assembled from two pieces so this
+/// file does not match the gate it implements.
+const BARE_IGNORE_ATTRIBUTE: &str = concat!("#[ignor", "e]");
+
 pub fn check() -> Result<()> {
-    let matches = super::git_grep(&[
+    check_at(&super::Repo::discover()?)
+}
+
+/// The gate, rooted at an injected repository.
+pub fn check_at(repo: &super::Repo) -> Result<()> {
+    let matches = repo.grep(&[
         "--no-color",
         "--line-number",
         "--extended-regexp",
@@ -29,7 +38,7 @@ pub fn check() -> Result<()> {
     ])?;
 
     let findings = bare_ignore_findings(&matches);
-    report_should_panic()?;
+    report_should_panic(repo)?;
 
     if findings.is_empty() {
         return Ok(());
@@ -51,7 +60,7 @@ fn bare_ignore_findings(matches: &str) -> Vec<String> {
         .filter(|line| !line.trim().is_empty())
         .filter(|line| {
             let content = line.splitn(3, ':').nth(2).unwrap_or(line);
-            match content.find("#[ignore]") {
+            match content.find(BARE_IGNORE_ATTRIBUTE) {
                 Some(offset) => !content[..offset].contains("//"),
                 None => false,
             }
@@ -60,8 +69,8 @@ fn bare_ignore_findings(matches: &str) -> Vec<String> {
         .collect()
 }
 
-fn report_should_panic() -> Result<()> {
-    let matches = super::git_grep(&[
+fn report_should_panic(repo: &super::Repo) -> Result<()> {
+    let matches = repo.grep(&[
         "--no-color",
         "--line-number",
         "--extended-regexp",
@@ -84,27 +93,29 @@ fn report_should_panic() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::bare_ignore_findings;
+    use super::{BARE_IGNORE_ATTRIBUTE, bare_ignore_findings};
 
     #[test]
     fn a_bare_attribute_is_reported() {
-        let matches = "crates/foo/src/lib.rs:12:    #[ignore]\n";
+        let matches = format!("crates/foo/src/lib.rs:12:    {BARE_IGNORE_ATTRIBUTE}\n");
         assert_eq!(
-            bare_ignore_findings(matches),
+            bare_ignore_findings(&matches),
             vec![matches.trim().to_owned()]
         );
     }
 
     #[test]
     fn a_documented_reason_passes() {
-        let matches = "crates/foo/src/lib.rs:12:    #[ignore = \"needs a GPU\"]\n";
-        assert!(bare_ignore_findings(matches).is_empty(), "{matches}");
+        let with_reason = BARE_IGNORE_ATTRIBUTE.replacen(']', " = \"needs a GPU\"]", 1);
+        let matches = format!("crates/foo/src/lib.rs:12:    {with_reason}\n");
+        assert!(bare_ignore_findings(&matches).is_empty(), "{matches}");
     }
 
     #[test]
     fn a_doc_comment_mentioning_the_attribute_is_not_a_use() {
-        let matches = "crates/foo/src/lib.rs:17://! Tests are marked `#[ignore]` by default.\n";
-        assert!(bare_ignore_findings(matches).is_empty(), "{matches}");
+        let matches =
+            format!("crates/foo/src/lib.rs:17://! Tests are marked `{BARE_IGNORE_ATTRIBUTE}` by default.\n");
+        assert!(bare_ignore_findings(&matches).is_empty(), "{matches}");
     }
 
     #[test]
@@ -115,13 +126,16 @@ mod tests {
 
     #[test]
     fn findings_from_several_files_are_kept_in_order() {
-        let matches = "a.rs:1:#[ignore]\nb.rs:2:#[ignore]\n";
-        assert_eq!(bare_ignore_findings(matches).len(), 2);
+        let matches = format!(
+            "a.rs:1:{0}\nb.rs:2:{0}\n",
+            BARE_IGNORE_ATTRIBUTE
+        );
+        assert_eq!(bare_ignore_findings(&matches).len(), 2);
     }
 
     #[test]
     fn a_line_without_separators_is_reported_rather_than_dropped() {
-        let matches = "#[ignore]\n";
-        assert_eq!(bare_ignore_findings(matches).len(), 1);
+        let matches = format!("{BARE_IGNORE_ATTRIBUTE}\n");
+        assert_eq!(bare_ignore_findings(&matches).len(), 1);
     }
 }

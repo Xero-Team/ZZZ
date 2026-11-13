@@ -8,8 +8,6 @@
 //! to compile under `unsafe_code = "deny"`, while the same crate without the
 //! opt-in compiles cleanly. Nothing enforced the opt-in before this gate.
 
-use std::fs;
-use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
 use toml::Value;
@@ -17,7 +15,12 @@ use toml::Value;
 const WORKSPACE_MANIFEST: &str = "Cargo.toml";
 
 pub fn check() -> Result<()> {
-    let members = workspace_members()?;
+    check_at(&super::Repo::discover()?)
+}
+
+/// The gate, rooted at an injected repository.
+pub fn check_at(repo: &super::Repo) -> Result<()> {
+    let members = workspace_members(repo)?;
     if members.is_empty() {
         bail!(
             "{WORKSPACE_MANIFEST} lists no workspace members; the lint-inheritance gate would scan nothing"
@@ -26,11 +29,10 @@ pub fn check() -> Result<()> {
 
     let mut inheritance = Vec::with_capacity(members.len());
     for member in &members {
-        let manifest_path = Path::new(member).join("Cargo.toml");
-        let source = fs::read_to_string(&manifest_path)
-            .with_context(|| format!("failed to read {}", manifest_path.display()))?;
+        let manifest_path = format!("{member}/Cargo.toml");
+        let source = repo.read(&manifest_path)?;
         let parsed: Value = toml::from_str(&source)
-            .with_context(|| format!("failed to parse {}", manifest_path.display()))?;
+            .with_context(|| format!("failed to parse {manifest_path}"))?;
         inheritance.push((member.clone(), opts_in(&parsed)));
     }
 
@@ -48,9 +50,8 @@ pub fn check() -> Result<()> {
     )
 }
 
-fn workspace_members() -> Result<Vec<String>> {
-    let source = fs::read_to_string(Path::new(WORKSPACE_MANIFEST))
-        .with_context(|| format!("failed to read {WORKSPACE_MANIFEST}"))?;
+fn workspace_members(repo: &super::Repo) -> Result<Vec<String>> {
+    let source = repo.read(WORKSPACE_MANIFEST)?;
     parse_members(&source)
 }
 

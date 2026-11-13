@@ -8,8 +8,6 @@
 //! stale CI matrix stops testing the version the workspace promises. This gate
 //! reads all four and fails on drift or an unparsable version.
 
-use std::fs;
-use std::path::Path;
 use std::sync::LazyLock;
 
 use anyhow::{Context as _, Result, bail};
@@ -31,10 +29,14 @@ const SOURCES: &[(&str, &str, &str)] = &[
 ];
 
 pub fn check() -> Result<()> {
+    check_at(&super::Repo::discover()?)
+}
+
+/// The gate, rooted at an injected repository.
+pub fn check_at(repo: &super::Repo) -> Result<()> {
     let mut readings = Vec::new();
     for &(label, path, marker) in SOURCES {
-        let source = fs::read_to_string(Path::new(path))
-            .with_context(|| format!("failed to read {path}"))?;
+        let source = repo.read(path)?;
         let version = find_version(&source, marker).with_context(|| {
             format!("{label}: no quoted version on the `{marker}` line in {path}")
         })?;
@@ -146,6 +148,32 @@ mod tests {
             failures.iter().any(|failure| failure.contains("invalid")),
             "{failures:?}"
         );
+    }
+
+    /// The gate end to end: four fixture files that disagree must fail, and
+    /// agreeing files must pass, without touching the repository itself.
+    #[test]
+    fn a_fixture_repository_reports_drift_between_sources() {
+        use crate::tasks::check::Repo;
+        use std::fs;
+
+        let directory = tempfile::tempdir().expect("a temporary directory");
+        let repo = Repo::at(directory.path());
+        fs::create_dir_all(repo.path(".github/workflows")).expect("the fixture workflow directory");
+        fs::write(repo.path("rust-toolchain.toml"), "channel = \"1.99.1\"\n").expect("toolchain");
+        fs::write(repo.path("clippy.toml"), "msrv = \"1.99.1\"\n").expect("clippy");
+        fs::write(repo.path("Cargo.toml"), "rust-version = \"1.99.1\"\n").expect("manifest");
+        fs::write(
+            repo.path(".github/workflows/ci.yaml"),
+            "        toolchain: [\"1.99.1\", \"stable\"]\n",
+        )
+        .expect("workflow");
+
+        super::check_at(&repo).expect("agreeing fixture sources must pass");
+
+        fs::write(repo.path("clippy.toml"), "msrv = \"1.98.0\"\n").expect("drifted clippy");
+        let error = super::check_at(&repo).expect_err("drifted sources must fail");
+        assert!(error.to_string().contains("1.98.0"), "{error}");
     }
 
     #[test]

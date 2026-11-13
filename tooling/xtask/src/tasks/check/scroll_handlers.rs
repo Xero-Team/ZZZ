@@ -17,7 +17,6 @@
 //! the `impl ListState` block in the gpui source and fails on any drift.
 
 use std::collections::BTreeSet;
-use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
 use proc_macro2::Span;
@@ -135,9 +134,8 @@ fn is_inherent_list_state_impl(item_impl: &syn::ItemImpl) -> bool {
 /// Fails when `LIST_STATE_METHODS` drifts from the real `ListState` API. An
 /// upstream change that adds an instance method and forgets to register it
 /// would otherwise let a re-entrant call through while this gate still passes.
-fn check_method_list() -> Result<()> {
-    let source = std::fs::read_to_string(Path::new(LIST_STATE_SOURCE))
-        .with_context(|| format!("failed to read {LIST_STATE_SOURCE}"))?;
+fn check_method_list(repo: &super::Repo) -> Result<()> {
+    let source = repo.read(LIST_STATE_SOURCE)?;
     let file: syn::File =
         syn::parse_file(&source).with_context(|| format!("failed to parse {LIST_STATE_SOURCE}"))?;
     let derived = impl_list_state_methods(&file).with_context(|| {
@@ -180,9 +178,14 @@ fn method_list_drift(derived: &BTreeSet<String>) -> Vec<String> {
 }
 
 pub fn check() -> Result<()> {
-    check_method_list()?;
+    check_at(&super::Repo::discover()?)
+}
 
-    let files = super::tracked_files("*.rs")?;
+/// The gate, rooted at an injected repository.
+pub fn check_at(repo: &super::Repo) -> Result<()> {
+    check_method_list(repo)?;
+
+    let files = repo.tracked("*.rs")?;
     let mut findings = Vec::new();
 
     for path in &files {
@@ -190,8 +193,7 @@ pub fn check() -> Result<()> {
         if path.starts_with("vendor/") || path.starts_with("crates/grammars/vendor/") {
             continue;
         }
-        let source = std::fs::read_to_string(path)
-            .with_context(|| format!("failed to read {}", path.display()))?;
+        let source = repo.read(&path.to_string_lossy())?;
         if !source.contains("set_scroll_handler") {
             continue;
         }
