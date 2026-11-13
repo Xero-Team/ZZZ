@@ -3,27 +3,25 @@
 mod which_key_modal;
 mod which_key_settings;
 
-use gpui::{App, Keystroke};
+use gpui::{App, AppContext as _, DismissEvent, Keystroke};
 use settings::Settings;
 use std::{sync::LazyLock, time::Duration};
 use util::ResultExt;
 use which_key_modal::WhichKeyModal;
 use which_key_settings::WhichKeySettings;
-use workspace::Workspace;
+use workspace::MultiWorkspace;
 
 pub fn init(cx: &mut App) {
     WhichKeySettings::register(cx);
 
-    cx.observe_new(|_: &mut Workspace, window, cx| {
+    cx.observe_new(|_: &mut MultiWorkspace, window, cx| {
         let Some(window) = window else {
             return;
         };
         let mut timer = None;
-        cx.observe_pending_input(window, move |workspace, window, cx| {
+        cx.observe_pending_input(window, move |multi_workspace, window, cx| {
             if window.pending_input_keystrokes().is_none() {
-                if let Some(modal) = workspace.active_modal::<WhichKeyModal>(cx) {
-                    modal.update(cx, |modal, cx| modal.dismiss(cx));
-                }
+                multi_workspace.set_pending_bindings_popup(None, cx);
                 timer.take();
                 return;
             }
@@ -35,21 +33,23 @@ pub fn init(cx: &mut App) {
 
             let delay_ms = which_key_settings.delay_ms;
 
-            timer.replace(cx.spawn_in(window, async move |workspace_handle, cx| {
+            timer.replace(cx.spawn_in(window, async move |multi_workspace, cx| {
                 cx.background_executor()
                     .timer(Duration::from_millis(delay_ms))
                     .await;
-                workspace_handle
-                    .update_in(cx, |workspace, window, cx| {
-                        // The modal layer holds one modal at a time, so showing which-key
-                        // would dismiss an open modal such as the commit editor or a picker.
-                        if workspace.has_active_modal(window, cx) {
+                multi_workspace
+                    .update_in(cx, |multi_workspace, window, cx| {
+                        if multi_workspace.pending_bindings_popup().is_some() {
                             return;
                         }
 
-                        workspace.toggle_modal(window, cx, |window, cx| {
-                            WhichKeyModal::new(workspace_handle.clone(), window, cx)
-                        });
+                        let workspace = multi_workspace.workspace().downgrade();
+                        let popup = cx.new(|cx| WhichKeyModal::new(workspace, window, cx));
+                        cx.subscribe(&popup, |multi_workspace, _, _: &DismissEvent, cx| {
+                            multi_workspace.set_pending_bindings_popup(None, cx);
+                        })
+                        .detach();
+                        multi_workspace.set_pending_bindings_popup(Some(popup.into()), cx);
                     })
                     .log_err();
             }));

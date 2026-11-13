@@ -12,7 +12,7 @@ use ui::{
     Divider, DividerColor, DynamicSpacing, LabelSize, WithScrollbar, prelude::*,
     text_for_keybinding_keystrokes, text_for_keystrokes,
 };
-use workspace::{ModalView, Workspace};
+use workspace::Workspace;
 
 use crate::FILTERED_KEYSTROKES;
 
@@ -63,10 +63,6 @@ impl WhichKeyModal {
         };
         this.update_pending_keys(window, cx);
         this
-    }
-
-    pub fn dismiss(&self, cx: &mut Context<Self>) {
-        cx.emit(DismissEvent)
     }
 
     fn update_pending_keys(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -247,12 +243,6 @@ impl EventEmitter<DismissEvent> for WhichKeyModal {}
 impl Focusable for WhichKeyModal {
     fn focus_handle(&self, _cx: &App) -> gpui::FocusHandle {
         self.focus_handle.clone()
-    }
-}
-
-impl ModalView for WhichKeyModal {
-    fn render_bare(&self) -> bool {
-        true
     }
 }
 
