@@ -10,7 +10,7 @@ description: Evidence-backed analysis and staged refactoring plan for ZZZ GUI in
 - 最终基线 revision：`152a5eb983a883c69a6cc4eae082312ba75aa9f9`
 - 漂移复核：2026-11-14，仓库 HEAD 已到 `4d9899f3814cd3c759159ce9d902e85d98582879`，见 [2.4 相对当前 HEAD 的漂移](#baseline-drift)
 - 研究方式：本地源码静态分析；未安装依赖，未构建、运行或 benchmark 任何参考仓库
-- 台账：[sources.tsv](./sources.tsv)、[inventory.tsv](./inventory.tsv)、[evidence.tsv](./evidence.tsv)、[experiments.tsv](./experiments.tsv)
+- 台账：[sources.tsv](./sources.tsv)、[inventory.tsv](./inventory.tsv)、[evidence.tsv](./evidence.tsv)、[experiments.tsv](./experiments.tsv)、[lineage.tsv](./lineage.tsv)、[lineage-gpui.tsv](./lineage-gpui.tsv)
 - 实施：[GPUI 完整重构执行计划](./refactoring-plan.md)、[可复制的 `/goal`](./goal.md)
 
 正文中的 `[ZZZ-001]`、`[ZED-001]` 等编号均指向 `evidence.tsv` 中包含 repository、relative path、line locator、commit SHA、evidence kind 与 confidence 的对应 claim。
@@ -139,6 +139,19 @@ ZZZ 本地 claim 固定于 `152a5eb`，仍是当前 HEAD 的祖先，判定「�
 - 报告其余编号结论（血统、参考项目分析、对照矩阵、不采用清单）是
   2026-10-03 对参考仓库的判断；这些 checkout 已清理，本次没有重新核对。
 
+#### 参考语料重建（2026-11-14） {#corpus-rebuild}
+
+9 个参考仓库已按 `--no-checkout`、depth 1、blobless 重建，并逐个
+`git fetch --depth 1` 回各自 pinned SHA，因此旧 claim 可以在原始 revision
+上重新校验，而不只是读台账：
+
+- `validate_evidence.py`：`claims=116 errors=0 missing_checkouts=0`。此前 68
+  条参考仓库 claim 因 checkout 缺失只能跳过。
+- 远程 HEAD 相对 2026-10-03 已有 9 个移动（`adabraka-ui` 未变），新 HEAD 与
+  `path_filter` 记录在两份 lineage 台账里。
+- [inventory.tsv](./inventory.tsv) 与 [repository-state.tsv](./repository-state.tsv)
+  仍是 2026-10-03 的快照；它们记录的是当次研究的仓库状态，本次没有重写。
+
 ## 3. 共同血统与独立创新 {#lineage}
 
 ### 3.1 血统关系 {#lineage-map}
@@ -159,7 +172,16 @@ flowchart TD
     OSUI[OpenSwiftUI independent Swift/AttributeGraph runtime]
 ```
 
-对核心 GPUI Rust 文件做相对路径与 byte hash 比较，结果记录在 [lineage.tsv](./lineage.tsv)：ZZZ/zed、zed/gpui-ce、zed/gpui-toolkit 都有大量共同路径，但当前 revision 已有显著修改；这些不是多份独立证据。
+对核心 GPUI Rust 文件做相对路径与 blob hash 比较，结果记录在
+[lineage.tsv](./lineage.tsv)（整树）与 [lineage-gpui.tsv](./lineage-gpui.tsv)
+（`crates/gpui` + `crates/editor`）。2026-11-14 用重建的 checkout 重跑：
+
+- ZZZ/zed：子系统内 197 条共同路径，17 条字节相同，180 条不同；
+- ZZZ/gpui-ce：84 / 9 / 75；zed/gpui-ce：104 / 16 / 88；
+- `gpui-toolkit` 没有 `crates/gpui`（vendored core 在别处），子系统计数为 0，
+  只在整树台账出现（ZZZ 15 条、zed 11 条，且无一条字节相同）。
+
+共同路径说明血统，不是多份独立证据；哪个分叉在前面要读具体 diff 才能判断。
 
 ### 3.2 真正独立或新增的内容 {#independent-innovations}
 
