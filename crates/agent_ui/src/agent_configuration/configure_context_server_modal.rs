@@ -577,7 +577,7 @@ pub struct ConfigureContextServerModal {
     original_server_id: Option<ContextServerId>,
     scroll_handle: ScrollHandle,
     secret_editor: Entity<Editor>,
-    _auth_subscription: Option<Subscription>,
+    auth_subscription: Option<Subscription>,
 }
 
 impl ConfigureContextServerModal {
@@ -770,7 +770,7 @@ impl ConfigureContextServerModal {
                         editor.set_masked(true, cx);
                         editor
                     }),
-                    _auth_subscription: None,
+                    auth_subscription: None,
                 });
                 Ok(())
             })??;
@@ -788,7 +788,7 @@ impl ConfigureContextServerModal {
             return;
         }
 
-        self._auth_subscription = None;
+        self.auth_subscription = None;
 
         self.state = State::Idle;
         let Some(workspace) = self.workspace.upgrade() else {
@@ -896,7 +896,7 @@ impl ConfigureContextServerModal {
     }
 
     fn cancel_authentication(&mut self, server_id: &ContextServerId, cx: &mut Context<Self>) {
-        self._auth_subscription = None;
+        self.auth_subscription = None;
         self.context_server_store.update(cx, |store, cx| {
             store.stop_server(server_id, cx).log_err();
         });
@@ -924,7 +924,7 @@ impl ConfigureContextServerModal {
             server_id: server_id.clone(),
         };
 
-        self._auth_subscription = Some(cx.subscribe(
+        self.auth_subscription = Some(cx.subscribe(
             &self.context_server_store,
             move |this, _, event: &ServerStatusChangedEvent, cx| {
                 if event.server_id != server_id {
@@ -932,20 +932,20 @@ impl ConfigureContextServerModal {
                 }
                 match &event.status {
                     ContextServerStatus::Running => {
-                        this._auth_subscription = None;
+                        this.auth_subscription = None;
                         this.state = State::Idle;
                         this.show_configured_context_server_toast(event.server_id.clone(), cx);
                         cx.emit(DismissEvent);
                     }
                     ContextServerStatus::AuthRequired => {
-                        this._auth_subscription = None;
+                        this.auth_subscription = None;
                         this.state = State::AuthRequired {
                             server_id: event.server_id.clone(),
                         };
                         cx.notify();
                     }
                     ContextServerStatus::ClientSecretRequired { error } => {
-                        this._auth_subscription = None;
+                        this.auth_subscription = None;
                         this.state = State::ClientSecretRequired {
                             server_id: event.server_id.clone(),
                             error: error.clone().map(SharedString::from),
@@ -953,7 +953,7 @@ impl ConfigureContextServerModal {
                         cx.notify();
                     }
                     ContextServerStatus::Error(error) => {
-                        this._auth_subscription = None;
+                        this.auth_subscription = None;
                         this.set_error(error.clone(), cx);
                     }
                     ContextServerStatus::Authenticating

@@ -1111,7 +1111,7 @@ fn consolidate_inlay_edits(mut edits: Vec<InlayEdit>) -> Vec<InlayEdit> {
             .then_with(|| b.old.end.cmp(&a.old.end))
     });
 
-    let _old_alloc_ptr = edits.as_ptr();
+    let old_alloc_ptr = edits.as_ptr();
     let mut inlay_edits = edits.into_iter();
 
     if let Some(mut first_edit) = inlay_edits.next() {
@@ -1132,7 +1132,7 @@ fn consolidate_inlay_edits(mut edits: Vec<InlayEdit>) -> Vec<InlayEdit> {
             .filter_map(|x| x)
             .collect();
         v.push(first_edit.clone());
-        debug_assert_eq!(_old_alloc_ptr, v.as_ptr(), "Inlay edits were reallocated");
+        debug_assert_eq!(old_alloc_ptr, v.as_ptr(), "Inlay edits were reallocated");
         v
     } else {
         vec![]

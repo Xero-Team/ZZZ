@@ -94,7 +94,7 @@ async fn peek_ports(ip: IpAddr) -> Result<[u16; 5]> {
 pub struct NativeRunningKernel {
     pub process: util::process::Child,
     connection_path: PathBuf,
-    _process_status_task: Option<Task<()>>,
+    process_status_task: Option<Task<()>>,
     pub working_directory: PathBuf,
     pub request_tx: mpsc::Sender<JupyterMessage>,
     pub stdin_tx: mpsc::Sender<JupyterMessage>,
@@ -264,7 +264,7 @@ impl NativeRunningKernel {
                 request_tx,
                 stdin_tx,
                 working_directory,
-                _process_status_task: Some(process_status_task),
+                process_status_task: Some(process_status_task),
                 connection_path,
                 execution_state: ExecutionState::Idle,
                 kernel_info: None,
@@ -308,7 +308,7 @@ impl RunningKernel for NativeRunningKernel {
     }
 
     fn kill(&mut self) {
-        self._process_status_task.take();
+        self.process_status_task.take();
         self.request_tx.close_channel();
         self.stdin_tx.close_channel();
         self.process.kill().ok();

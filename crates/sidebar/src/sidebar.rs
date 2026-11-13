@@ -937,7 +937,7 @@ pub struct Sidebar {
     /// background data changes. Used to sort the thread switcher popup.
     thread_last_accessed: HashMap<ThreadId, DateTime<Utc>>,
     thread_switcher: Option<Entity<ThreadSwitcher>>,
-    _thread_switcher_subscriptions: Vec<gpui::Subscription>,
+    thread_switcher_subscriptions: Vec<gpui::Subscription>,
     pending_thread_activation: Option<agent_ui::ThreadId>,
     /// Persists live thread statuses across rebuilds so that Running→Completed
     /// transitions can be detected even when the group is collapsed (and
@@ -950,7 +950,7 @@ pub struct Sidebar {
     project_header_new_thread_menu_handles: HashMap<usize, PopoverMenuHandle<ContextMenu>>,
     project_header_menu_ix: Option<usize>,
     worktree_default_branches: HashMap<ProjectGroupKey, DefaultBranchCache>,
-    _subscriptions: Vec<gpui::Subscription>,
+    subscriptions: Vec<gpui::Subscription>,
     /// For the thread import banners, if there is just one we show "Import
     /// Threads" but if we are showing both the external agents and other
     /// channels import banners then we change the text to disambiguate the
@@ -1050,7 +1050,7 @@ impl Sidebar {
 
             thread_last_accessed: HashMap::new(),
             thread_switcher: None,
-            _thread_switcher_subscriptions: Vec::new(),
+            thread_switcher_subscriptions: Vec::new(),
             pending_thread_activation: None,
             live_thread_statuses: HashMap::new(),
             view: SidebarView::default(),
@@ -1060,7 +1060,7 @@ impl Sidebar {
             project_header_new_thread_menu_handles: HashMap::new(),
             project_header_menu_ix: None,
             worktree_default_branches: HashMap::new(),
-            _subscriptions: Vec::new(),
+            subscriptions: Vec::new(),
             import_banners_use_verbose_labels: None,
         }
     }
@@ -2686,7 +2686,7 @@ impl Sidebar {
                                 let close_workspace = workspace;
 
                                 menu = menu.custom_entry(
-                                    move |_window, _cx| {
+                                    move |_window, cx| {
                                         let close_multi_workspace = close_multi_workspace.clone();
                                         let close_weak_menu = close_weak_menu.clone();
                                         let close_workspace = close_workspace.clone();
@@ -2733,7 +2733,7 @@ impl Sidebar {
                                                     .icon_size(IconSize::Small)
                                                     .visible_on_hover(&row_group_name)
                                                     .tooltip(Tooltip::text(app_i18n::tr(
-                                                        _cx,
+                                                        cx,
                                                         "sidebar.project.close_worktree",
                                                         "Close Worktree",
                                                     )))
@@ -4580,7 +4580,7 @@ impl Sidebar {
 
     fn dismiss_thread_switcher(&mut self, cx: &mut Context<Self>) {
         self.thread_switcher = None;
-        self._thread_switcher_subscriptions.clear();
+        self.thread_switcher_subscriptions.clear();
         if let Some(mw) = self.multi_workspace.upgrade() {
             mw.update(cx, |mw, cx| {
                 mw.set_sidebar_overlay(None, cx);
@@ -4730,7 +4730,7 @@ impl Sidebar {
             .map(|entry| (entry.metadata.clone(), entry.workspace.clone()));
 
         self.thread_switcher = Some(thread_switcher);
-        self._thread_switcher_subscriptions = subscriptions;
+        self.thread_switcher_subscriptions = subscriptions;
         if let Some(mw) = self.multi_workspace.upgrade() {
             mw.update(cx, |mw, cx| {
                 mw.set_sidebar_overlay(Some(overlay_view), cx);
@@ -5504,10 +5504,10 @@ impl Sidebar {
         )
     }
 
-    fn render_sidebar_toggle_button(&self, _cx: &mut Context<Self>) -> impl IntoElement {
-        let on_right = AgentSettings::get_global(_cx).sidebar_side() == SidebarSide::Right;
+    fn render_sidebar_toggle_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let on_right = AgentSettings::get_global(cx).sidebar_side() == SidebarSide::Right;
 
-        sidebar_side_context_menu("sidebar-toggle-menu", _cx)
+        sidebar_side_context_menu("sidebar-toggle-menu", cx)
             .anchor(if on_right {
                 gpui::Anchor::BottomRight
             } else {
@@ -5818,7 +5818,7 @@ impl Sidebar {
             },
         );
 
-        self._subscriptions.push(subscription);
+        self.subscriptions.push(subscription);
         self.view = SidebarView::Archive(archive_view.clone());
         archive_view.update(cx, |view, cx| view.focus_filter_editor(window, cx));
         self.serialize(cx);
@@ -5827,7 +5827,7 @@ impl Sidebar {
 
     fn show_thread_list(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.view = SidebarView::ThreadList;
-        self._subscriptions.clear();
+        self.subscriptions.clear();
         let handle = self.filter_editor.read(cx).focus_handle(cx);
         handle.focus(window, cx);
         self.serialize(cx);
@@ -6299,7 +6299,7 @@ pub fn dump_workspace_info(
 
     let project = workspace.project().clone();
     let title = app_i18n::tr(cx, "sidebar.dump.workspace_info", "Workspace Info");
-    cx.spawn_in(window, async move |_this, cx| {
+    cx.spawn_in(window, async move |this, cx| {
         let buffer = project
             .update(cx, |project, cx| project.create_buffer(None, false, cx))
             .await?;
@@ -6311,7 +6311,7 @@ pub fn dump_workspace_info(
         let buffer =
             cx.new(|cx| editor::MultiBuffer::singleton(buffer, cx).with_title(title.clone()));
 
-        _this.update_in(cx, |workspace, window, cx| {
+        this.update_in(cx, |workspace, window, cx| {
             workspace.add_item_to_active_pane(
                 Box::new(cx.new(|cx| {
                     let mut editor =

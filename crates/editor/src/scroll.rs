@@ -239,7 +239,7 @@ pub struct ScrollManager {
     minimap_thumb_state: Option<ScrollbarThumbState>,
     pub(crate) scroll_animation: Option<ScrollAnimation>,
     pub(crate) scroll_animation_duration: Duration,
-    _save_scroll_position_task: Task<()>,
+    save_scroll_position_task: Task<()>,
 }
 
 impl ScrollManager {
@@ -267,7 +267,7 @@ impl ScrollManager {
             scroll_animation_duration: Duration::from_millis(
                 EditorSettings::get_global(cx).smooth_scroll.duration.0,
             ),
-            _save_scroll_position_task: Task::ready(()),
+            save_scroll_position_task: Task::ready(()),
         }
     }
 
@@ -562,7 +562,7 @@ impl ScrollManager {
             let executor = cx.background_executor().clone();
 
             let db = EditorDb::global(cx);
-            self._save_scroll_position_task = cx.background_executor().spawn(async move {
+            self.save_scroll_position_task = cx.background_executor().spawn(async move {
                 executor.timer(Duration::from_millis(10)).await;
                 log::debug!(
                     "Saving scroll position for item {item_id:?} in workspace {workspace_id:?}"

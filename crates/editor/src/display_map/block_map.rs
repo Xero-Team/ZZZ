@@ -4848,7 +4848,7 @@ mod tests {
         let (mut rhs_fold_map, rhs_fold_snapshot) = FoldMap::new(rhs_inlay_snapshot);
         let (mut rhs_tab_map, rhs_tab_snapshot) =
             TabMap::new(rhs_fold_snapshot, 4.try_into().unwrap());
-        let (_rhs_wrap_map, rhs_wrap_snapshot) =
+        let (rhs_wrap_map, rhs_wrap_snapshot) =
             cx.update(|cx| WrapMap::new(rhs_tab_snapshot, font("Helvetica"), px(14.0), None, cx));
         let rhs_block_map = BlockMap::new(rhs_wrap_snapshot.clone(), 0, 0);
 
@@ -4970,7 +4970,7 @@ mod tests {
             rhs_fold_map.read(rhs_inlay_snapshot, rhs_inlay_edits);
         let (rhs_tab_snapshot, rhs_tab_edits) =
             rhs_tab_map.sync(rhs_fold_snapshot, rhs_fold_edits, 4.try_into().unwrap());
-        let (rhs_wrap_snapshot, rhs_wrap_edits) = _rhs_wrap_map.update(cx, |wrap_map, cx| {
+        let (rhs_wrap_snapshot, rhs_wrap_edits) = rhs_wrap_map.update(cx, |wrap_map, cx| {
             wrap_map.sync(rhs_tab_snapshot, rhs_tab_edits, cx)
         });
 

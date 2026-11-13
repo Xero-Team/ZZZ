@@ -156,7 +156,7 @@ pub struct TerminalView {
     rename_editor: Option<Entity<Editor>>,
     rename_editor_subscription: Option<Subscription>,
     _subscriptions: Vec<Subscription>,
-    _terminal_subscriptions: Vec<Subscription>,
+    terminal_subscriptions: Vec<Subscription>,
 }
 
 #[derive(Default, Clone)]
@@ -310,7 +310,7 @@ impl TerminalView {
             rename_editor: None,
             rename_editor_subscription: None,
             _subscriptions: subscriptions,
-            _terminal_subscriptions: terminal_subscriptions,
+            terminal_subscriptions,
         }
     }
 
@@ -1115,7 +1115,7 @@ impl TerminalView {
         window: &mut Window,
         cx: &mut Context<TerminalView>,
     ) {
-        self._terminal_subscriptions =
+        self.terminal_subscriptions =
             subscribe_for_terminal_events(&terminal, self.workspace.clone(), window, cx);
         self.terminal = terminal;
     }

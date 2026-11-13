@@ -100,7 +100,7 @@ pub struct BufferSearchBar {
     scroll_handle: ScrollHandle,
     regex_language: Option<Arc<Language>>,
     splittable_editor: Option<WeakEntity<SplittableEditor>>,
-    _splittable_editor_subscription: Option<Subscription>,
+    splittable_editor_subscription: Option<Subscription>,
 }
 
 impl EventEmitter<Event> for BufferSearchBar {}
@@ -721,7 +721,7 @@ impl ToolbarItemView for BufferSearchBar {
         cx.notify();
         self.active_searchable_item_subscriptions.take();
         self.splittable_editor = None;
-        self._splittable_editor_subscription = None;
+        self.splittable_editor_subscription = None;
         self.pending_search.take();
 
         if let Some(item) = self.active_searchable_item.take() {
@@ -732,7 +732,7 @@ impl ToolbarItemView for BufferSearchBar {
             .and_then(|item| item.act_as_type(TypeId::of::<SplittableEditor>(), cx))
             .and_then(|entity| entity.downcast::<SplittableEditor>().ok())
         {
-            self._splittable_editor_subscription =
+            self.splittable_editor_subscription =
                 Some(cx.observe(&splittable_editor, |_, _, cx| cx.notify()));
             self.splittable_editor = Some(splittable_editor.downgrade());
         }
@@ -999,7 +999,7 @@ impl BufferSearchBar {
             scroll_handle: ScrollHandle::new(),
             regex_language: None,
             splittable_editor: None,
-            _splittable_editor_subscription: None,
+            splittable_editor_subscription: None,
         }
     }
 

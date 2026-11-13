@@ -68,7 +68,7 @@ pub struct ModelPickerDelegate {
     selected_model: Option<AgentModelInfo>,
     favorites: HashSet<AgentModelId>,
     _refresh_models_task: Task<()>,
-    _select_model_task: Option<Task<()>>,
+    select_model_task: Option<Task<()>>,
     _settings_subscription: Subscription,
     focus_handle: FocusHandle,
 }
@@ -143,7 +143,7 @@ impl ModelPickerDelegate {
             selected_description: None,
             favorites,
             _refresh_models_task: refresh_models_task,
-            _select_model_task: None,
+            select_model_task: None,
             _settings_subscription: settings_subscription,
             focus_handle,
         }
@@ -180,7 +180,7 @@ impl ModelPickerDelegate {
     ) {
         let model_id = model.id.clone();
         let select_model_task = self.selector.select_model(model_id.clone(), cx);
-        self._select_model_task = Some(cx.spawn_in(window, async move |this, cx| {
+        self.select_model_task = Some(cx.spawn_in(window, async move |this, cx| {
             if let Err(error) = select_model_task.await {
                 log::error!(
                     "Failed to select agent model {}: {error:#}",

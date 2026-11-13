@@ -971,8 +971,8 @@ pub struct GitPanel {
     focused_history_entry: Option<usize>,
     active_history_sha: Option<Oid>,
     history_keyboard_nav: bool,
-    _commit_message_buffer_subscription: Option<Subscription>,
-    _repo_subscriptions: Vec<Subscription>,
+    commit_message_buffer_subscription: Option<Subscription>,
+    repo_subscriptions: Vec<Subscription>,
     git_access: Option<GitAccess>,
 }
 
@@ -1265,8 +1265,8 @@ impl GitPanel {
                 focused_history_entry: None,
                 active_history_sha: None,
                 history_keyboard_nav: false,
-                _commit_message_buffer_subscription: None,
-                _repo_subscriptions: Vec::new(),
+                commit_message_buffer_subscription: None,
+                repo_subscriptions: Vec::new(),
                 git_access: None,
             };
 
@@ -3948,7 +3948,7 @@ impl GitPanel {
                 self.set_amend_pending(false, cx);
             }
             self.git_access = None;
-            self._repo_subscriptions.clear();
+            self.repo_subscriptions.clear();
             if self.active_tab == GitPanelTab::History {
                 self.set_commit_history(CommitHistory::Loading, cx);
             }
@@ -4054,7 +4054,7 @@ impl GitPanel {
                         });
                     }
 
-                    git_panel._commit_message_buffer_subscription =
+                    git_panel.commit_message_buffer_subscription =
                         Some(cx.subscribe(&buffer, |this, _, event, cx| {
                             if matches!(event, BufferEvent::Edited { .. }) {
                                 this.serialize(cx);
@@ -5809,7 +5809,7 @@ impl GitPanel {
             }
             GitPanelTab::Changes => {
                 self.set_commit_history(CommitHistory::Loading, cx);
-                self._repo_subscriptions.clear();
+                self.repo_subscriptions.clear();
             }
         }
         cx.notify();

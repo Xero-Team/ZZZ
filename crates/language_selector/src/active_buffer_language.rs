@@ -16,7 +16,7 @@ pub struct ActiveBufferLanguage {
     /// has no language, and `Some(Some(name))` when it does.
     active_language: Option<Option<LanguageName>>,
     workspace: WeakEntity<Workspace>,
-    _observe_active_editor: Option<Subscription>,
+    observe_active_editor: Option<Subscription>,
 }
 
 impl ActiveBufferLanguage {
@@ -24,7 +24,7 @@ impl ActiveBufferLanguage {
         Self {
             active_language: None,
             workspace: workspace.weak_handle(),
-            _observe_active_editor: None,
+            observe_active_editor: None,
         }
     }
 
@@ -89,12 +89,12 @@ impl StatusItemView for ActiveBufferLanguage {
         cx: &mut Context<Self>,
     ) {
         if let Some(editor) = active_pane_item.and_then(|item| item.downcast::<Editor>()) {
-            self._observe_active_editor =
+            self.observe_active_editor =
                 Some(cx.observe_in(&editor, window, Self::update_language));
             self.update_language(editor, window, cx);
         } else {
             self.active_language = None;
-            self._observe_active_editor = None;
+            self.observe_active_editor = None;
         }
 
         cx.notify();

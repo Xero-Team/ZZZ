@@ -210,7 +210,7 @@ pub struct ProjectDiff {
     focus_handle: FocusHandle,
     pending_scroll: Option<PathKey>,
     review_comment_count: usize,
-    _task: Task<Result<()>>,
+    task: Task<Result<()>>,
     _subscription: Subscription,
 }
 
@@ -613,14 +613,14 @@ impl ProjectDiff {
             window,
             move |this, _git_store, event, window, cx| match event {
                 BranchDiffEvent::FileListChanged => {
-                    this._task = window.spawn(cx, {
+                    this.task = window.spawn(cx, {
                         let this = cx.weak_entity();
                         async |cx| Self::refresh(this, cx).await
                     })
                 }
                 BranchDiffEvent::DiffBaseChanged => {
                     this.pending_scroll.take();
-                    this._task = window.spawn(cx, {
+                    this.task = window.spawn(cx, {
                         let this = cx.weak_entity();
                         async |cx| Self::refresh(this, cx).await
                     })
@@ -644,7 +644,7 @@ impl ProjectDiff {
                 || tree_view != was_tree_view
                 || is_collapse_untracked_diff != was_collapse_untracked_diff
             {
-                this._task = {
+                this.task = {
                     window.spawn(cx, {
                         let this = cx.weak_entity();
                         async |cx| Self::refresh(this, cx).await
@@ -673,7 +673,7 @@ impl ProjectDiff {
             buffer_subscriptions: Default::default(),
             pending_scroll: None,
             review_comment_count: 0,
-            _task: task,
+            task,
             _subscription: Subscription::join(
                 branch_diff_subscription,
                 Subscription::join(editor_subscription, review_comment_subscription),
@@ -873,7 +873,7 @@ impl ProjectDiff {
                     .log_err();
             }
             EditorEvent::Saved => {
-                self._task =
+                self.task =
                     cx.spawn_in(window, async move |this, cx| Self::refresh(this, cx).await);
             }
             _ => {}
@@ -1092,8 +1092,8 @@ impl ProjectDiff {
                     editor.rhs_editor().update(cx, |editor, cx| {
                         conflict_view::buffers_removed(editor, &[buffer_id], cx);
                     });
-                    let _span = ztracing::info_span!("remove_excerpts_for_path");
-                    _span.enter();
+                    let span = ztracing::info_span!("remove_excerpts_for_path");
+                    span.enter();
                     editor.remove_excerpts_for_path(path, cx);
                 }
             });
@@ -1492,7 +1492,7 @@ impl Item for ProjectDiff {
 impl Render for ProjectDiff {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let is_empty = self.multibuffer.read(cx).is_empty();
-        let is_loading = self.branch_diff.read(cx).is_tree_base_loading() || !self._task.is_ready();
+        let is_loading = self.branch_diff.read(cx).is_tree_base_loading() || !self.task.is_ready();
 
         let is_branch_diff_view = matches!(self.diff_base(cx), DiffBase::Merge { .. });
 

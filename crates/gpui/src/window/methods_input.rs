@@ -922,11 +922,13 @@ impl Window {
     }
 
     /// Returns true if the window is in inspector mode.
-    pub fn is_inspector_picking(&self, _cx: &App) -> bool {
+    pub fn is_inspector_picking(&self, cx: &App) -> bool {
+        #[cfg(not(any(feature = "inspector", debug_assertions)))]
+        let _ = cx;
         #[cfg(any(feature = "inspector", debug_assertions))]
         {
             if let Some(inspector) = &self.inspector {
-                return inspector.read(_cx).is_picking();
+                return inspector.read(cx).is_picking();
             }
         }
         false

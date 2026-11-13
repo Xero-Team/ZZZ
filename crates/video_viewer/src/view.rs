@@ -165,8 +165,8 @@ pub struct VideoView {
     clock: PlaybackClock,
     decoder: Option<Arc<Mutex<VideoDecoder>>>,
     generation: u64,
-    _load_task: Task<()>,
-    _pump_task: Option<Task<()>>,
+    load_task: Task<()>,
+    pump_task: Option<Task<()>>,
     _worktree_subscription: Subscription,
 }
 
@@ -222,8 +222,8 @@ impl VideoView {
             clock: PlaybackClock::new(),
             decoder: None,
             generation: 0,
-            _load_task: load_task,
-            _pump_task: None,
+            load_task,
+            pump_task: None,
             _worktree_subscription: worktree_subscription,
         }
     }
@@ -256,7 +256,7 @@ impl VideoView {
         self.current_frame = None;
         self.playback_error = None;
         self.load_state = LoadState::Loading;
-        self._load_task = Self::start_load(cx);
+        self.load_task = Self::start_load(cx);
         cx.notify();
     }
 
@@ -266,7 +266,7 @@ impl VideoView {
             return;
         };
         let generation = self.generation;
-        self._pump_task = Some(cx.spawn(async move |this, cx| {
+        self.pump_task = Some(cx.spawn(async move |this, cx| {
             let decoded = cx
                 .background_spawn(async move { next_decoder_frame(&decoder) })
                 .await;
@@ -601,7 +601,7 @@ impl VideoView {
             .map_or(Duration::from_millis(33), |loaded| loaded.frame_interval);
         let tick = frame_interval.clamp(MIN_TICK, MAX_TICK);
 
-        self._pump_task = Some(cx.spawn(async move |this, cx| {
+        self.pump_task = Some(cx.spawn(async move |this, cx| {
             if let Some(target) = seek {
                 let result = cx
                     .background_spawn({
@@ -826,7 +826,7 @@ impl VideoView {
         let Some(decoder) = self.decoder.clone() else {
             return;
         };
-        self._pump_task = Some(cx.spawn(async move |this, cx| {
+        self.pump_task = Some(cx.spawn(async move |this, cx| {
             let decoded = cx
                 .background_spawn(async move {
                     seek_decoder(&decoder, target)?;

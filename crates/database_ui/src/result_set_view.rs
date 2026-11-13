@@ -242,12 +242,12 @@ pub struct ResultSetView {
     selected_cell: Option<(usize, usize)>,
     edit_running: bool,
     grid: ResultGridState,
-    _load_task: Option<Task<()>>,
-    _query_task: Option<Task<()>>,
-    _schema_task: Option<Task<()>>,
-    _diagram_task: Option<Task<()>>,
-    _import_task: Option<Task<()>>,
-    _history_task: Option<Task<()>>,
+    load_task: Option<Task<()>>,
+    query_task: Option<Task<()>>,
+    schema_task: Option<Task<()>>,
+    diagram_task: Option<Task<()>>,
+    import_task: Option<Task<()>>,
+    history_task: Option<Task<()>>,
 }
 
 impl ResultSetView {
@@ -378,12 +378,12 @@ impl ResultSetView {
             selected_cell: None,
             edit_running: false,
             grid: ResultGridState::new(cx),
-            _load_task: None,
-            _query_task: None,
-            _schema_task: None,
-            _diagram_task: None,
-            _import_task: None,
-            _history_task: None,
+            load_task: None,
+            query_task: None,
+            schema_task: None,
+            diagram_task: None,
+            import_task: None,
+            history_task: None,
         };
         view.load_schema(cx);
         view
@@ -437,7 +437,7 @@ impl ResultSetView {
                 log::error!("failed to update database schema view: {error:#}");
             });
         });
-        self._load_task = Some(task);
+        self.load_task = Some(task);
     }
 
     fn toggle_table(&mut self, table: TableRef, cx: &mut Context<Self>) {
@@ -476,7 +476,7 @@ impl ResultSetView {
                 log::error!("failed to update database table details: {error:#}");
             });
         });
-        self._load_task = Some(task);
+        self.load_task = Some(task);
     }
 
     fn cache_schema(&mut self, schema: TableSchema) {
@@ -568,7 +568,7 @@ impl ResultSetView {
                 log::error!("failed to describe database tables: {error:#}");
             });
         });
-        self._schema_task = Some(task);
+        self.schema_task = Some(task);
     }
 
     fn run_schema_action(&mut self, action: SchemaAction, cx: &mut Context<Self>) {
@@ -652,7 +652,7 @@ impl ResultSetView {
             })
             .ok();
         });
-        self._diagram_task = Some(task);
+        self.diagram_task = Some(task);
     }
 
     fn close_er_diagram(&mut self, cx: &mut Context<Self>) {
@@ -757,7 +757,7 @@ impl ResultSetView {
             })
             .ok();
         });
-        self._import_task = Some(task);
+        self.import_task = Some(task);
     }
 
     fn selected_sql(&self, cx: &mut Context<Self>) -> (String, usize) {
@@ -905,7 +905,7 @@ impl ResultSetView {
             })
             .ok();
         });
-        self._query_task = Some(task);
+        self.query_task = Some(task);
     }
 
     fn close_explain(&mut self, cx: &mut Context<Self>) {
@@ -1037,7 +1037,7 @@ impl ResultSetView {
             })
             .ok();
         });
-        self._history_task = Some(task);
+        self.history_task = Some(task);
     }
 
     /// Put a past statement back in the editor without running it.
@@ -1343,7 +1343,7 @@ impl ResultSetView {
             })
             .ok();
         });
-        self._query_task = Some(task);
+        self.query_task = Some(task);
     }
 
     fn cancel_query(&mut self, cx: &mut Context<Self>) {
@@ -1598,7 +1598,7 @@ impl ResultSetView {
             })
             .ok();
         });
-        self._query_task = Some(task);
+        self.query_task = Some(task);
     }
 
     fn render_edit_bar(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {

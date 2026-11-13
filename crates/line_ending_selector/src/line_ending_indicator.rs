@@ -14,7 +14,7 @@ use crate::{LineEndingSelector, Toggle};
 pub struct LineEndingIndicator {
     line_ending: Option<LineEnding>,
     active_editor: Option<WeakEntity<Editor>>,
-    _observe_active_editor: Option<Subscription>,
+    observe_active_editor: Option<Subscription>,
 }
 
 impl LineEndingIndicator {
@@ -71,12 +71,12 @@ impl StatusItemView for LineEndingIndicator {
         cx: &mut Context<Self>,
     ) {
         if let Some(editor) = active_pane_item.and_then(|item| item.downcast::<Editor>()) {
-            self._observe_active_editor = Some(cx.observe_in(&editor, window, Self::update));
+            self.observe_active_editor = Some(cx.observe_in(&editor, window, Self::update));
             self.update(editor, window, cx);
         } else {
             self.line_ending = None;
             self.active_editor = None;
-            self._observe_active_editor = None;
+            self.observe_active_editor = None;
         }
         cx.notify();
     }

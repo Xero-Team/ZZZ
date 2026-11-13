@@ -67,7 +67,7 @@ pub struct FakeLanguageServerEntry {
     pub capabilities: lsp::ServerCapabilities,
     pub initializer: Option<Box<dyn 'static + Send + Sync + Fn(&mut lsp::FakeLanguageServer)>>,
     pub tx: futures::channel::mpsc::UnboundedSender<lsp::FakeLanguageServer>,
-    pub _server: Option<lsp::FakeLanguageServer>,
+    pub server: Option<lsp::FakeLanguageServer>,
 }
 
 #[derive(Clone)]
@@ -376,7 +376,7 @@ impl LanguageRegistry {
                 tx: servers_tx,
                 capabilities,
                 initializer,
-                _server: None,
+                server: None,
             },
         );
         servers_rx
@@ -1094,7 +1094,7 @@ impl LanguageRegistry {
             fake_entry.capabilities.clone(),
             cx,
         );
-        fake_entry._server = Some(fake_server.clone());
+        fake_entry.server = Some(fake_server.clone());
 
         if let Some(initializer) = &fake_entry.initializer {
             initializer(&mut fake_server);

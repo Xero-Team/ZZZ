@@ -687,12 +687,12 @@ impl ContextServerStore {
                 let new_state = match server.clone().start(cx).await {
                     Ok(_) => {
                         debug_assert!(server.client().is_some());
-                        let _transport_watch =
+                        let transport_watch =
                             Self::watch_transport_shutdown(this.clone(), server.clone(), cx);
                         ContextServerState::Running {
                             server,
                             configuration,
-                            _transport_watch,
+                            _transport_watch: transport_watch,
                         }
                     }
                     Err(err) => resolve_start_failure(&id, err, server, configuration, cx).await,

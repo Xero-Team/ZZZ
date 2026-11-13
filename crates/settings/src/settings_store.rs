@@ -153,7 +153,7 @@ pub struct SettingsStore {
     local_settings_vfs_paths: HashMap<(WorktreeId, Arc<RelPath>), vfs::VfsPath>,
     pub editorconfig_store: Entity<EditorconfigStore>,
 
-    _settings_files_watcher: Option<Task<()>>,
+    settings_files_watcher: Option<Task<()>>,
     _setting_file_updates: Task<()>,
     setting_file_updates_tx:
         mpsc::UnboundedSender<Box<dyn FnOnce(AsyncApp) -> LocalBoxFuture<'static, Result<()>>>>,
@@ -297,7 +297,7 @@ impl SettingsStore {
             local_settings: BTreeMap::default(),
             local_settings_vfs_paths: HashMap::default(),
             editorconfig_store: cx.new(|_| EditorconfigStore::default()),
-            _settings_files_watcher: None,
+            settings_files_watcher: None,
             setting_file_updates_tx,
             _setting_file_updates: cx.spawn(async move |cx| {
                 while let Some(setting_file_update) = setting_file_updates_rx.next().await {
@@ -358,7 +358,7 @@ impl SettingsStore {
         let result = self.set_global_settings(&global_content, cx);
         settings_changed(SettingsFile::Global, result, cx);
 
-        self._settings_files_watcher = Some(cx.spawn(async move |cx| {
+        self.settings_files_watcher = Some(cx.spawn(async move |cx| {
             let _user_settings_watcher = user_settings_watcher;
             let _global_settings_watcher = global_settings_watcher;
             let mut settings_streams = futures::stream::select(

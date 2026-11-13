@@ -1108,9 +1108,9 @@ Interactivity::on_mouse_up method & mut self , button : MouseButton , listener :
 Interactivity::on_mouse_up_out method & mut self , button : MouseButton , listener : impl Fn (& MouseUpEvent , & mut Window , & mut App) + 'static ,
 Interactivity::on_pinch method & mut self , listener : impl Fn (& PinchEvent , & mut Window , & mut App) + 'static
 Interactivity::on_scroll_wheel method & mut self , listener : impl Fn (& ScrollWheelEvent , & mut Window , & mut App) + 'static ,
-Interactivity::paint method & mut self , global_id : Option < & GlobalElementId > , _inspector_id : Option < & InspectorElementId > , bounds : Bounds < Pixels > , hitbox : Option < & Hitbox > , window : & mut Window , cx : & mut App , f : impl FnOnce (& Style , & mut Window , & mut App) ,
-Interactivity::prepaint method <R>  & mut self , global_id : Option < & GlobalElementId > , _inspector_id : Option < & InspectorElementId > , bounds : Bounds < Pixels > , content_size : Size < Pixels > , window : & mut Window , cx : & mut App , f : impl FnOnce (& Style , Point < Pixels > , Option < Hitbox > , & mut Window , & mut App) -> R , -> R
-Interactivity::request_layout method & mut self , global_id : Option < & GlobalElementId > , _inspector_id : Option < & InspectorElementId > , window : & mut Window , cx : & mut App , f : impl FnOnce (Style , & mut Window , & mut App) -> LayoutId , -> LayoutId
+Interactivity::paint method & mut self , global_id : Option < & GlobalElementId > , inspector_id : Option < & InspectorElementId > , bounds : Bounds < Pixels > , hitbox : Option < & Hitbox > , window : & mut Window , cx : & mut App , f : impl FnOnce (& Style , & mut Window , & mut App) ,
+Interactivity::prepaint method <R>  & mut self , global_id : Option < & GlobalElementId > , inspector_id : Option < & InspectorElementId > , bounds : Bounds < Pixels > , content_size : Size < Pixels > , window : & mut Window , cx : & mut App , f : impl FnOnce (& Style , Point < Pixels > , Option < Hitbox > , & mut Window , & mut App) -> R , -> R
+Interactivity::request_layout method & mut self , global_id : Option < & GlobalElementId > , inspector_id : Option < & InspectorElementId > , window : & mut Window , cx : & mut App , f : impl FnOnce (Style , & mut Window , & mut App) -> LayoutId , -> LayoutId
 Interactivity::source_location method & self -> Option < & 'static std :: panic :: Location < 'static > >
 Interactivity::tooltip method & mut self , build_tooltip : impl Fn (& mut Window , & mut App) -> AnyView + 'static
 Interactivity::tooltip_show_delay method & mut self , delay : Duration
@@ -2417,7 +2417,7 @@ Window::invalidate_character_coordinates method & self
 Window::is_action_available method & self , action : & dyn Action , cx : & App -> bool
 Window::is_action_available_in method & self , action : & dyn Action , focus_handle : & FocusHandle -> bool
 Window::is_fullscreen method & self -> bool
-Window::is_inspector_picking method & self , _cx : & App -> bool
+Window::is_inspector_picking method & self , cx : & App -> bool
 Window::is_maximized method & self -> bool
 Window::is_minimizable method & self -> bool
 Window::is_resizable method & self -> bool

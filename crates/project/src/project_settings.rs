@@ -909,7 +909,7 @@ impl SettingsObserver {
         cx.subscribe(&worktree_store, Self::on_worktree_store_event)
             .detach();
 
-        let _trusted_worktrees_watcher =
+        let trusted_worktrees_watcher =
             TrustedWorktrees::try_get_global(cx).map(|trusted_worktrees| {
                 cx.subscribe(
                     &trusted_worktrees,
@@ -953,7 +953,7 @@ impl SettingsObserver {
             });
 
         let editorconfig_store = cx.global::<SettingsStore>().editorconfig_store.clone();
-        let _editorconfig_watcher = cx.subscribe(
+        let editorconfig_watcher = cx.subscribe(
             &editorconfig_store,
             |this, _, event: &EditorconfigEvent, cx| {
                 let EditorconfigEvent::ExternalConfigChanged {
@@ -986,10 +986,10 @@ impl SettingsObserver {
             task_store,
             mode: SettingsObserverMode::Local(fs.clone()),
             downstream_client: None,
-            _trusted_worktrees_watcher,
+            _trusted_worktrees_watcher: trusted_worktrees_watcher,
             pending_local_settings: HashMap::default(),
             _user_settings_watcher: None,
-            _editorconfig_watcher: Some(_editorconfig_watcher),
+            _editorconfig_watcher: Some(editorconfig_watcher),
             project_id: REMOTE_SERVER_PROJECT_ID,
             _global_task_config_watcher: if watch_global_configs {
                 Self::subscribe_to_global_task_file_changes(

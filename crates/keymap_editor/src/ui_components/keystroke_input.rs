@@ -78,7 +78,7 @@ impl KeystrokeInput {
     ) -> Self {
         let outer_focus_handle = cx.focus_handle();
         let inner_focus_handle = cx.focus_handle();
-        let _focus_subscriptions = [
+        let focus_subscriptions = [
             cx.on_focus_in(&inner_focus_handle, window, Self::on_inner_focus_in),
             cx.on_focus_out(&inner_focus_handle, window, Self::on_inner_focus_out),
         ];
@@ -88,7 +88,7 @@ impl KeystrokeInput {
             inner_focus_handle,
             outer_focus_handle,
             intercept_subscription: None,
-            _focus_subscriptions,
+            _focus_subscriptions: focus_subscriptions,
             search: false,
             close_keystrokes: None,
             close_keystrokes_start: None,

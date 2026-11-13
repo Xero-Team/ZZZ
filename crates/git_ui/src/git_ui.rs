@@ -630,7 +630,7 @@ impl RefPickerModal {
             editor
         });
 
-        let _editor_subscription = cx.subscribe_in(
+        let editor_subscription = cx.subscribe_in(
             &editor,
             window,
             |this, _editor, event: &editor::EditorEvent, window, cx| {
@@ -646,7 +646,7 @@ impl RefPickerModal {
             workspace,
             commit_details: None,
             lookup_task: None,
-            _editor_subscription,
+            _editor_subscription: editor_subscription,
         }
     }
 

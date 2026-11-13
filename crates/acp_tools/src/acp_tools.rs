@@ -57,7 +57,7 @@ struct AcpTools {
     selected_connection: Option<AgentId>,
     connection_store: Option<Entity<AgentConnectionStore>>,
     _workspace_subscription: Option<Subscription>,
-    _connection_store_subscription: Option<Subscription>,
+    connection_store_subscription: Option<Subscription>,
 }
 
 struct WatchedConnection {
@@ -92,7 +92,7 @@ impl AcpTools {
             selected_connection: None,
             connection_store: None,
             _workspace_subscription: workspace_subscription,
-            _connection_store_subscription: None,
+            connection_store_subscription: None,
         };
         acp_tools.set_connection_store(connection_store, cx);
         acp_tools
@@ -108,7 +108,7 @@ impl AcpTools {
         }
 
         self.connection_store = connection_store.clone();
-        self._connection_store_subscription = connection_store.as_ref().map(|connection_store| {
+        self.connection_store_subscription = connection_store.as_ref().map(|connection_store| {
             cx.observe(connection_store, |this, _, cx| {
                 this.refresh_connections(cx);
             })

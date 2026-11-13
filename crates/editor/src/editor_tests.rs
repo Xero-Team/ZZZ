@@ -39716,7 +39716,7 @@ async fn test_next_prev_reference(cx: &mut TestAppContext) {
             ))
         });
 
-    let _move = async |direction, count, cx: &mut EditorLspTestContext| {
+    let navigate = async |direction, count, cx: &mut EditorLspTestContext| {
         cx.update_editor(|editor, window, cx| {
             editor.go_to_reference_before_or_after_position(direction, count, window, cx)
         })
@@ -39725,36 +39725,36 @@ async fn test_next_prev_reference(cx: &mut TestAppContext) {
         .unwrap()
     };
 
-    _move(Direction::Next, 1, &mut cx).await;
+    navigate(Direction::Next, 1, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[1]);
 
-    _move(Direction::Next, 1, &mut cx).await;
+    navigate(Direction::Next, 1, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[2]);
 
-    _move(Direction::Next, 1, &mut cx).await;
+    navigate(Direction::Next, 1, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[3]);
 
     // loops back to the start
-    _move(Direction::Next, 1, &mut cx).await;
+    navigate(Direction::Next, 1, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[0]);
 
     // loops back to the end
-    _move(Direction::Prev, 1, &mut cx).await;
+    navigate(Direction::Prev, 1, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[3]);
 
-    _move(Direction::Prev, 1, &mut cx).await;
+    navigate(Direction::Prev, 1, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[2]);
 
-    _move(Direction::Prev, 1, &mut cx).await;
+    navigate(Direction::Prev, 1, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[1]);
 
-    _move(Direction::Prev, 1, &mut cx).await;
+    navigate(Direction::Prev, 1, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[0]);
 
-    _move(Direction::Next, 3, &mut cx).await;
+    navigate(Direction::Next, 3, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[3]);
 
-    _move(Direction::Prev, 2, &mut cx).await;
+    navigate(Direction::Prev, 2, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[1]);
 }
 

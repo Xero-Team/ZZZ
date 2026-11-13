@@ -619,10 +619,10 @@ async fn test_single_workspace_no_threads(cx: &mut TestAppContext) {
     let project = init_test_project_with_agent_panel("/my-project", cx).await;
     let (multi_workspace, cx) =
         cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
-    let (_sidebar, _panel) = setup_sidebar_with_agent_panel(&multi_workspace, cx);
+    let (sidebar, _panel) = setup_sidebar_with_agent_panel(&multi_workspace, cx);
 
     assert_eq!(
-        visible_entries_as_strings(&_sidebar, cx),
+        visible_entries_as_strings(&sidebar, cx),
         vec!["v [my-project]"]
     );
 }
@@ -5073,9 +5073,9 @@ async fn test_restore_worktree_when_branch_has_moved(cx: &mut TestAppContext) {
         .update(cx, |p, cx| p.git_scans_complete(cx))
         .await;
 
-    let (multi_workspace, _cx) =
+    let (multi_workspace, window_cx) =
         cx.add_window_view(|window, cx| MultiWorkspace::test_new(main_project.clone(), window, cx));
-    multi_workspace.update_in(_cx, |mw, window, cx| {
+    multi_workspace.update_in(window_cx, |mw, window, cx| {
         mw.test_add_workspace(worktree_project.clone(), window, cx)
     });
 
@@ -5187,9 +5187,9 @@ async fn test_restore_worktree_when_branch_has_not_moved(cx: &mut TestAppContext
         .update(cx, |p, cx| p.git_scans_complete(cx))
         .await;
 
-    let (multi_workspace, _cx) =
+    let (multi_workspace, window_cx) =
         cx.add_window_view(|window, cx| MultiWorkspace::test_new(main_project.clone(), window, cx));
-    multi_workspace.update_in(_cx, |mw, window, cx| {
+    multi_workspace.update_in(window_cx, |mw, window, cx| {
         mw.test_add_workspace(worktree_project.clone(), window, cx)
     });
 
@@ -5285,9 +5285,9 @@ async fn test_restore_worktree_when_branch_does_not_exist(cx: &mut TestAppContex
         .update(cx, |p, cx| p.git_scans_complete(cx))
         .await;
 
-    let (multi_workspace, _cx) =
+    let (multi_workspace, window_cx) =
         cx.add_window_view(|window, cx| MultiWorkspace::test_new(main_project.clone(), window, cx));
-    multi_workspace.update_in(_cx, |mw, window, cx| {
+    multi_workspace.update_in(window_cx, |mw, window, cx| {
         mw.test_add_workspace(worktree_project.clone(), window, cx)
     });
 
@@ -8939,8 +8939,8 @@ async fn test_linked_worktree_workspace_reachable_after_adding_worktree_to_proje
     // When a linked worktree is opened as its own workspace and then a new
     // folder is added to the main project group, the linked worktree
     // workspace must still be reachable from some sidebar entry.
-    let (_fs, project) = init_multi_project_test(&["/my-project"], cx).await;
-    let fs = _fs.clone();
+    let (fs, project) = init_multi_project_test(&["/my-project"], cx).await;
+    let fs = fs.clone();
 
     // Set up git worktree infrastructure.
     fs.insert_tree(

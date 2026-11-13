@@ -532,7 +532,7 @@ pub trait AnyAgentTool {
     fn name(&self) -> SharedString;
     fn description(&self) -> SharedString;
     fn kind(&self) -> acp::ToolKind;
-    fn initial_title(&self, input: serde_json::Value, _cx: &mut App) -> SharedString;
+    fn initial_title(&self, input: serde_json::Value, cx: &mut App) -> SharedString;
     fn input_schema(&self, format: LanguageModelToolSchemaFormat) -> Result<serde_json::Value>;
     fn supports_input_streaming(&self) -> bool {
         false
@@ -576,9 +576,9 @@ where
         T::supports_input_streaming()
     }
 
-    fn initial_title(&self, input: serde_json::Value, _cx: &mut App) -> SharedString {
+    fn initial_title(&self, input: serde_json::Value, cx: &mut App) -> SharedString {
         let parsed_input = serde_json::from_value(input.clone()).map_err(|_| input);
-        self.0.initial_title(parsed_input, _cx)
+        self.0.initial_title(parsed_input, cx)
     }
 
     fn input_schema(&self, format: LanguageModelToolSchemaFormat) -> Result<serde_json::Value> {

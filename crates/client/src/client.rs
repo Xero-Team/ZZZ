@@ -326,7 +326,7 @@ impl Status {
 struct ClientState {
     credentials: Option<Credentials>,
     status: (watch::Sender<Status>, watch::Receiver<Status>),
-    _reconnect_task: Option<Task<()>>,
+    reconnect_task: Option<Task<()>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -395,7 +395,7 @@ impl Default for ClientState {
         Self {
             credentials: None,
             status: watch::channel_with(Status::SignedOut),
-            _reconnect_task: None,
+            reconnect_task: None,
         }
     }
 }
@@ -544,7 +544,7 @@ impl Client {
     #[cfg(any(test, feature = "test-support"))]
     pub fn teardown(&self) {
         let mut state = self.state.write();
-        state._reconnect_task.take();
+        state.reconnect_task.take();
         self.handler_set.lock().clear();
         self.peer.teardown();
     }
@@ -610,11 +610,11 @@ impl Client {
 
         match status {
             Status::Connected { .. } => {
-                state._reconnect_task = None;
+                state.reconnect_task = None;
             }
             Status::ConnectionLost => {
                 let client = self.clone();
-                state._reconnect_task = Some(cx.spawn(async move |cx| {
+                state.reconnect_task = Some(cx.spawn(async move |cx| {
                     #[cfg(any(test, feature = "test-support"))]
                     let mut rng = StdRng::seed_from_u64(0);
                     #[cfg(not(any(test, feature = "test-support")))]
@@ -660,7 +660,7 @@ impl Client {
                 }));
             }
             Status::SignedOut | Status::UpgradeRequired => {
-                state._reconnect_task.take();
+                state.reconnect_task.take();
             }
             _ => {}
         }
@@ -1027,10 +1027,10 @@ impl Client {
         Ok(())
     }
 
-    fn authenticate(self: &Arc<Self>, _cx: &AsyncApp) -> Task<Result<Credentials>> {
+    fn authenticate(self: &Arc<Self>, cx: &AsyncApp) -> Task<Result<Credentials>> {
         #[cfg(any(test, feature = "test-support"))]
         if let Some(callback) = self.authenticate.read().as_ref() {
-            return callback(_cx);
+            return callback(cx);
         }
 
         Task::ready(Err(anyhow!(

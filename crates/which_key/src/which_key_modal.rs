@@ -17,7 +17,7 @@ use workspace::{ModalView, Workspace};
 use crate::FILTERED_KEYSTROKES;
 
 pub struct WhichKeyModal {
-    _workspace: WeakEntity<Workspace>,
+    workspace: WeakEntity<Workspace>,
     focus_handle: FocusHandle,
     scroll_handle: ScrollHandle,
     bindings: Vec<(SharedString, SharedString)>,
@@ -44,7 +44,7 @@ impl WhichKeyModal {
 
         let handle = cx.weak_entity();
         let mut this = Self {
-            _workspace: workspace,
+            workspace,
             focus_handle: focus_handle.clone(),
             scroll_handle: ScrollHandle::new(),
             bindings: Vec::new(),
@@ -131,7 +131,7 @@ impl Render for WhichKeyModal {
 
         // Push above status bar when visible
         let status_height = self
-            ._workspace
+            .workspace
             .upgrade()
             .and_then(|workspace| {
                 workspace.read_with(cx, |workspace, cx| {

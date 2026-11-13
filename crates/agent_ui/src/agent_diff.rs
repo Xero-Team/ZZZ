@@ -1280,7 +1280,7 @@ pub enum EditorState {
 
 struct WorkspaceThread {
     thread: WeakEntity<AcpThread>,
-    _thread_subscriptions: (Subscription, Subscription),
+    thread_subscriptions: (Subscription, Subscription),
     singleton_editors: HashMap<WeakEntity<Buffer>, HashMap<WeakEntity<Editor>, Subscription>>,
     _settings_subscription: Subscription,
     _workspace_subscription: Option<Subscription>,
@@ -1339,7 +1339,7 @@ impl AgentDiff {
         if let Some(workspace_thread) = self.workspace_threads.get_mut(workspace) {
             // replace thread and action log subscription, but keep editors
             workspace_thread.thread = thread.downgrade();
-            workspace_thread._thread_subscriptions = (action_log_subscription, thread_subscription);
+            workspace_thread.thread_subscriptions = (action_log_subscription, thread_subscription);
             self.update_reviewing_editors(workspace, window, cx);
             return;
         }
@@ -1364,7 +1364,7 @@ impl AgentDiff {
             workspace.clone(),
             WorkspaceThread {
                 thread: thread.downgrade(),
-                _thread_subscriptions: (action_log_subscription, thread_subscription),
+                thread_subscriptions: (action_log_subscription, thread_subscription),
                 singleton_editors: HashMap::default(),
                 _settings_subscription: settings_subscription,
                 _workspace_subscription: workspace_subscription,

@@ -3063,14 +3063,14 @@ mod test {
             .lock()
             .expect("recorded commands");
         assert_eq!(commands.len(), 2);
-        assert_eq!(commands[0]._inner_command.get_program(), "/bin/sh");
+        assert_eq!(commands[0].inner_command.get_program(), "/bin/sh");
         assert_eq!(
-            commands[0]._inner_command.get_args().collect::<Vec<_>>(),
+            commands[0].inner_command.get_args().collect::<Vec<_>>(),
             [OsStr::new("-c"), OsStr::new("echo post-start")]
         );
-        assert_eq!(commands[1]._inner_command.get_program(), "/bin/sh");
+        assert_eq!(commands[1].inner_command.get_program(), "/bin/sh");
         assert_eq!(
-            commands[1]._inner_command.get_args().collect::<Vec<_>>(),
+            commands[1].inner_command.get_args().collect::<Vec<_>>(),
             [OsStr::new("-c"), OsStr::new("echo post-attach")]
         );
     }
@@ -6272,7 +6272,7 @@ RUN echo $RUBY_VERSION2
         pub(crate) _remote_folder: String,
         pub(crate) _user: String,
         pub(crate) env: HashMap<String, String>,
-        pub(crate) _inner_command: Command,
+        pub(crate) inner_command: Command,
     }
 
     pub(crate) struct FakeDocker {
@@ -6599,7 +6599,7 @@ RUN echo $RUBY_VERSION2
                 _remote_folder: remote_folder.to_string(),
                 _user: user.to_string(),
                 env: env.clone(),
-                _inner_command: inner_command,
+                inner_command,
             });
             Ok(())
         }

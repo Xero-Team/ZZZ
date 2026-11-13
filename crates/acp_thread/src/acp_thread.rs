@@ -2091,7 +2091,7 @@ impl AcpThread {
         });
 
         let git_store = project.read(cx).git_store().clone();
-        let _git_store_subscription = cx.subscribe(&git_store, |this, _, event, cx| {
+        let git_store_subscription = cx.subscribe(&git_store, |this, _, event, cx| {
             if matches!(
                 event,
                 GitStoreEvent::RepositoryUpdated(
@@ -2109,7 +2109,7 @@ impl AcpThread {
             parent_session_id,
             work_dirs,
             action_log,
-            _git_store_subscription,
+            _git_store_subscription: git_store_subscription,
             update_last_checkpoint_if_changed_task: None,
             shared_buffers: Default::default(),
             entries: Default::default(),
@@ -2701,7 +2701,7 @@ impl AcpThread {
         }
 
         let target = markdown.clone();
-        let _reveal_task = self.start_streaming_reveal(cx);
+        let reveal_task = self.start_streaming_reveal(cx);
         let pending_len = text.len();
         let bytes_to_reveal = (pending_len as f32 / StreamingTextBuffer::REVEAL_TARGET
             * StreamingTextBuffer::TASK_UPDATE_MS as f32)
@@ -2710,7 +2710,7 @@ impl AcpThread {
             pending: text,
             bytes_to_reveal_per_tick: bytes_to_reveal,
             target,
-            _reveal_task,
+            _reveal_task: reveal_task,
         });
     }
 

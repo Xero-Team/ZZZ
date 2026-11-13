@@ -62,7 +62,7 @@ pub struct CursorPosition {
     context: Option<FocusHandle>,
     workspace: WeakEntity<Workspace>,
     update_position: Task<()>,
-    _observe_active_editor: Option<Subscription>,
+    observe_active_editor: Option<Subscription>,
 }
 
 /// A position in the editor, where user's caret is located at.
@@ -113,7 +113,7 @@ impl CursorPosition {
             selected_count: Default::default(),
             workspace: workspace.weak_handle(),
             update_position: Task::ready(()),
-            _observe_active_editor: None,
+            observe_active_editor: None,
         }
     }
 
@@ -301,7 +301,7 @@ impl StatusItemView for CursorPosition {
         cx: &mut Context<Self>,
     ) {
         if let Some(editor) = active_pane_item.and_then(|item| item.act_as::<Editor>(cx)) {
-            self._observe_active_editor = Some(cx.subscribe_in(
+            self.observe_active_editor = Some(cx.subscribe_in(
                 &editor,
                 window,
                 |cursor_position, editor, event, window, cx| match event {
@@ -318,7 +318,7 @@ impl StatusItemView for CursorPosition {
             self.update_position(&editor, None, window, cx);
         } else {
             self.position = None;
-            self._observe_active_editor = None;
+            self.observe_active_editor = None;
         }
 
         cx.notify();

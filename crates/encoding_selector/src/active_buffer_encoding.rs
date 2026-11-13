@@ -18,7 +18,7 @@ pub struct ActiveBufferEncoding {
     active_encoding: Option<&'static Encoding>,
     workspace: WeakEntity<Workspace>,
     project: Entity<Project>,
-    _observe_active_editor: Option<Subscription>,
+    observe_active_editor: Option<Subscription>,
     has_bom: bool,
     is_dirty: bool,
     is_via_remote_server: bool,
@@ -30,7 +30,7 @@ impl ActiveBufferEncoding {
             active_encoding: None,
             workspace: workspace.weak_handle(),
             project: workspace.project().clone(),
-            _observe_active_editor: None,
+            observe_active_editor: None,
             has_bom: false,
             is_dirty: false,
             is_via_remote_server: false,
@@ -134,7 +134,7 @@ impl StatusItemView for ActiveBufferEncoding {
         cx: &mut Context<Self>,
     ) {
         if let Some(editor) = active_pane_item.and_then(|item| item.downcast::<Editor>()) {
-            self._observe_active_editor =
+            self.observe_active_editor =
                 Some(cx.observe_in(&editor, window, Self::update_encoding));
             self.update_encoding(editor, window, cx);
         } else {
@@ -142,7 +142,7 @@ impl StatusItemView for ActiveBufferEncoding {
             self.has_bom = false;
             self.is_dirty = false;
             self.is_via_remote_server = false;
-            self._observe_active_editor = None;
+            self.observe_active_editor = None;
         }
 
         cx.notify();

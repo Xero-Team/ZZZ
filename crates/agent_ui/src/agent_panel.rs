@@ -992,11 +992,11 @@ pub struct AgentPanel {
     persist_selected_agent_task: Task<()>,
     new_user_onboarding_upsell_dismissed: AtomicBool,
     selected_agent: Agent,
-    _thread_view_subscription: Option<Subscription>,
-    _active_thread_focus_subscription: Option<Subscription>,
-    _base_view_observation: Option<Subscription>,
-    _draft_editor_observation: Option<Subscription>,
-    _empty_thread_title_observation: Option<Subscription>,
+    thread_view_subscription: Option<Subscription>,
+    active_thread_focus_subscription: Option<Subscription>,
+    base_view_observation: Option<Subscription>,
+    draft_editor_observation: Option<Subscription>,
+    empty_thread_title_observation: Option<Subscription>,
     _thread_metadata_store_subscription: Subscription,
     last_context_source: Option<AgentContextSource>,
 }
@@ -1310,7 +1310,7 @@ impl AgentPanel {
         let base_view = BaseView::Uninitialized;
 
         let connection_store = cx.new(|cx| AgentConnectionStore::new(project.clone(), cx));
-        let _project_subscription =
+        let project_subscription =
             cx.subscribe(&project, |this, _project, event, cx| match event {
                 project::Event::WorktreeAdded(_)
                 | project::Event::WorktreeRemoved(_)
@@ -1320,7 +1320,7 @@ impl AgentPanel {
                 _ => {}
             });
 
-        let _thread_metadata_store_subscription = cx.subscribe(
+        let thread_metadata_store_subscription = cx.subscribe(
             &ThreadMetadataStore::global(cx),
             |this, _store, event, cx| {
                 let ThreadMetadataStoreEvent::ThreadArchived(thread_id) = event;
@@ -1351,7 +1351,7 @@ impl AgentPanel {
             agent_panel_menu_handle: PopoverMenuHandle::default(),
 
             _extension_subscription: None,
-            _project_subscription,
+            _project_subscription: project_subscription,
             zoomed: false,
             pending_serialization: None,
             persist_selected_agent_task: Task::ready(()),
@@ -1368,13 +1368,13 @@ impl AgentPanel {
                     Agent::default()
                 }
             },
-            _thread_view_subscription: None,
-            _active_thread_focus_subscription: None,
+            thread_view_subscription: None,
+            active_thread_focus_subscription: None,
             new_user_onboarding_upsell_dismissed: AtomicBool::new(OnboardingUpsell::dismissed(cx)),
-            _base_view_observation: None,
-            _draft_editor_observation: None,
-            _empty_thread_title_observation: None,
-            _thread_metadata_store_subscription,
+            base_view_observation: None,
+            draft_editor_observation: None,
+            empty_thread_title_observation: None,
+            _thread_metadata_store_subscription: thread_metadata_store_subscription,
             last_context_source: None,
         };
 
@@ -2363,7 +2363,7 @@ impl AgentPanel {
                 return Some(draft.clone());
             }
             self.draft_thread = None;
-            self._draft_editor_observation = None;
+            self.draft_editor_observation = None;
         }
         let previous_content = self.active_initial_content(cx);
         let thread = self.create_agent_thread(
@@ -2387,7 +2387,7 @@ impl AgentPanel {
         cx: &mut Context<Self>,
     ) {
         if let Some(acp_thread) = conversation_view.read(cx).root_thread(cx) {
-            self._draft_editor_observation = Some(cx.subscribe(
+            self.draft_editor_observation = Some(cx.subscribe(
                 &acp_thread,
                 |this, _, e: &AcpThreadEvent, cx| {
                     if matches!(e, AcpThreadEvent::PromptUpdated) {
@@ -2397,7 +2397,7 @@ impl AgentPanel {
             ));
         } else {
             let cv = conversation_view.clone();
-            self._draft_editor_observation = Some(cx.observe(&cv, |this, cv, cx| {
+            self.draft_editor_observation = Some(cx.observe(&cv, |this, cv, cx| {
                 if cv.read(cx).root_thread(cx).is_some() {
                     this.observe_draft_editor(&cv, cx);
                 }
@@ -2415,11 +2415,11 @@ impl AgentPanel {
             .root_thread_view()
             .map(|thread_view| thread_view.read(cx).message_editor.clone())
         else {
-            self._empty_thread_title_observation = None;
+            self.empty_thread_title_observation = None;
             return;
         };
 
-        self._empty_thread_title_observation = Some(cx.observe(&editor, |this, _editor, cx| {
+        self.empty_thread_title_observation = Some(cx.observe(&editor, |this, _editor, cx| {
             if !this.active_thread_has_messages(cx) {
                 cx.notify();
             }
@@ -3198,14 +3198,14 @@ impl AgentPanel {
     }
 
     fn refresh_base_view_subscriptions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self._base_view_observation = match &self.base_view {
+        self.base_view_observation = match &self.base_view {
             BaseView::AgentThread { conversation_view } => {
                 let conversation_view = conversation_view.clone();
-                self._thread_view_subscription =
+                self.thread_view_subscription =
                     Self::subscribe_to_active_thread_view(&conversation_view, window, cx);
                 self.observe_message_editor_for_toolbar_title(&conversation_view, cx);
                 let focus_handle = conversation_view.focus_handle(cx);
-                self._active_thread_focus_subscription =
+                self.active_thread_focus_subscription =
                     Some(cx.on_focus_in(&focus_handle, window, |_this, _window, cx| {
                         cx.emit(AgentPanelEvent::ThreadFocused);
                         cx.notify();
@@ -3214,7 +3214,7 @@ impl AgentPanel {
                     &conversation_view,
                     window,
                     |this, server_view, window, cx| {
-                        this._thread_view_subscription =
+                        this.thread_view_subscription =
                             Self::subscribe_to_active_thread_view(&server_view, window, cx);
                         this.observe_message_editor_for_toolbar_title(&server_view, cx);
                         cx.emit(AgentPanelEvent::ActiveViewChanged);
@@ -3224,9 +3224,9 @@ impl AgentPanel {
                 ))
             }
             BaseView::Uninitialized | BaseView::Terminal { .. } => {
-                self._thread_view_subscription = None;
-                self._active_thread_focus_subscription = None;
-                self._empty_thread_title_observation = None;
+                self.thread_view_subscription = None;
+                self.active_thread_focus_subscription = None;
+                self.empty_thread_title_observation = None;
                 None
             }
         };
@@ -3284,7 +3284,7 @@ impl AgentPanel {
                                 .is_some_and(|active| active.entity_id() == d.entity_id())
                         }) {
                             this.draft_thread = None;
-                            this._draft_editor_observation = None;
+                            this.draft_editor_observation = None;
                         }
                         this.retained_threads.remove(&thread_id);
                         cx.emit(AgentPanelEvent::ThreadInteracted { thread_id });
@@ -7082,8 +7082,8 @@ mod tests {
         let path = PathBuf::from("/worktrees/branch/project");
 
         // Drop the sender to simulate a canceled receiver.
-        let (_sender, receiver) = futures::channel::oneshot::channel::<Result<()>>();
-        drop(_sender);
+        let (sender, receiver) = futures::channel::oneshot::channel::<Result<()>>();
+        drop(sender);
 
         let creation_infos = vec![(repository.clone(), path.clone(), receiver)];
 
@@ -7674,7 +7674,7 @@ mod tests {
         send_message(&panel, &mut cx);
 
         let session_id_a = active_session_id(&panel, &cx);
-        let _thread_id_a = active_thread_id(&panel, &cx);
+        let thread_id_a = active_thread_id(&panel, &cx);
 
         // Step 2: Open thread B → A goes to retained_threads.
         panel.update_in(&mut cx, |panel, window, cx| {
@@ -7696,7 +7696,7 @@ mod tests {
         // Confirm A is retained.
         panel.read_with(&cx, |panel, _cx| {
             assert!(
-                panel.retained_threads.contains_key(&_thread_id_a),
+                panel.retained_threads.contains_key(&thread_id_a),
                 "thread A should be in retained_threads after switching to B"
             );
         });
@@ -7707,7 +7707,7 @@ mod tests {
         let retained_conversation_a = panel.read_with(&cx, |panel, _cx| {
             panel
                 .retained_threads
-                .get(&_thread_id_a)
+                .get(&thread_id_a)
                 .expect("thread A should be retained")
                 .clone()
         });
@@ -7785,7 +7785,7 @@ mod tests {
         // so on_release → close_all_sessions fires only on A.
         drop(retained_conversation_a);
         panel.update(&mut cx, |panel, _cx| {
-            panel.retained_threads.remove(&_thread_id_a);
+            panel.retained_threads.remove(&thread_id_a);
         });
         cx.run_until_parked();
 

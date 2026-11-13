@@ -785,7 +785,7 @@ impl ToolchainSelectorDelegate {
         let detection_project = project.clone();
         let path_style = project.read(cx).path_style(cx);
 
-        let _fetch_candidates_task = cx.spawn_in(window, {
+        let fetch_candidates_task = cx.spawn_in(window, {
             async move |this, cx| {
                 let meta = detection_project
                     .read_with(cx, |this, _| {
@@ -899,7 +899,7 @@ impl ToolchainSelectorDelegate {
             worktree_abs_path_root,
             placeholder_text,
             relative_path,
-            _fetch_candidates_task,
+            _fetch_candidates_task: fetch_candidates_task,
             project,
             focus_handle: cx.focus_handle(),
             add_toolchain_text: Arc::from(tr(

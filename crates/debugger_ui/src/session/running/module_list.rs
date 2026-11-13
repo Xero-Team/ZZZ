@@ -31,7 +31,7 @@ impl ModuleList {
     ) -> Self {
         let focus_handle = cx.focus_handle();
 
-        let _subscription = cx.subscribe(&session, |this, _, event, cx| match event {
+        let subscription = cx.subscribe(&session, |this, _, event, cx| match event {
             SessionEvent::Stopped(_)
             | SessionEvent::HistoricSnapshotSelected
             | SessionEvent::Modules => {
@@ -51,7 +51,7 @@ impl ModuleList {
             focus_handle,
             entries: Vec::new(),
             selected_ix: None,
-            _subscription,
+            _subscription: subscription,
             rebuild_task: None,
         }
     }

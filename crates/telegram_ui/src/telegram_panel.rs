@@ -242,17 +242,17 @@ pub struct TelegramPanel {
     _composer_subscription: Subscription,
     _search_subscription: Subscription,
     _notification_release: Subscription,
-    _activation_subscription: Option<Subscription>,
-    _search_task: Option<Task<()>>,
+    activation_subscription: Option<Subscription>,
+    search_task: Option<Task<()>>,
     _snapshot_task: Task<()>,
     voice_playback: Option<audio::PlaybackHandle>,
     playing_voice: Option<MessageKey>,
     /// Drives playhead updates and resets the bar when playback ends.
-    _voice_task: Option<Task<()>>,
+    voice_task: Option<Task<()>>,
     /// The moment the current flood-wait pause ends, when one is active.
     flood_wait_deadline: Option<std::time::Instant>,
     /// Ticks the flood-wait countdown and dismisses the error once it ends.
-    _flood_task: Option<Task<()>>,
+    flood_task: Option<Task<()>>,
     /// A voice message the user asked to play before its file was downloaded.
     pending_voice: Option<(i64, i32)>,
     /// Media attachments whose card is expanded, keyed by chat and message.
@@ -355,7 +355,7 @@ impl TelegramPanel {
             )
         });
 
-        let _composer_subscription = cx.subscribe_in(
+        let composer_subscription = cx.subscribe_in(
             &composer,
             window,
             |this, _editor, event: &EditorEvent, _window, cx| {
@@ -379,7 +379,7 @@ impl TelegramPanel {
             },
         );
 
-        let _search_subscription = cx.subscribe_in(
+        let search_subscription = cx.subscribe_in(
             &search_editor,
             window,
             |this, _editor, event: &EditorEvent, window, cx| {
@@ -389,11 +389,11 @@ impl TelegramPanel {
             },
         );
 
-        let _notification_release = cx.on_release(|this, cx| {
+        let notification_release = cx.on_release(|this, cx| {
             this.notification_windows.dismiss_all(cx);
         });
 
-        let _snapshot_task = cx.spawn_in(window, async move |this, cx| {
+        let snapshot_task = cx.spawn_in(window, async move |this, cx| {
             loop {
                 if snapshot_rx.changed().await.is_err() {
                     break;
@@ -437,17 +437,17 @@ impl TelegramPanel {
             search_editor,
             search_open: false,
             qr_cache: None,
-            _composer_subscription,
-            _search_subscription,
-            _notification_release,
-            _activation_subscription: None,
-            _search_task: None,
-            _snapshot_task,
+            _composer_subscription: composer_subscription,
+            _search_subscription: search_subscription,
+            _notification_release: notification_release,
+            activation_subscription: None,
+            search_task: None,
+            _snapshot_task: snapshot_task,
             voice_playback: None,
             playing_voice: None,
-            _voice_task: None,
+            voice_task: None,
             flood_wait_deadline: None,
-            _flood_task: None,
+            flood_task: None,
             pending_voice: None,
             expanded_media: HashSet::new(),
             requested_thumbnails: HashSet::new(),
@@ -498,7 +498,7 @@ impl TelegramPanel {
         if this.view_model.selected_chat.is_some() {
             this.mode = ViewMode::Conversation;
         }
-        this._activation_subscription =
+        this.activation_subscription =
             Some(cx.observe_window_activation(window, |this, window, cx| {
                 this.report_viewing(window, cx);
             }));
@@ -1678,7 +1678,7 @@ impl TelegramPanel {
 
     /// Debounces the search editor and forwards the query to the engine.
     fn schedule_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self._search_task = Some(cx.spawn_in(window, async move |this, cx| {
+        self.search_task = Some(cx.spawn_in(window, async move |this, cx| {
             cx.background_executor().timer(SEARCH_DEBOUNCE).await;
             this.update_in(cx, |this, _window, cx| {
                 let query = this.search_editor.read(cx).text(cx);
@@ -1796,7 +1796,7 @@ impl TelegramPanel {
     /// Refreshes the voice playhead while playing and clears it once playback
     /// finishes so the bar returns to its idle state.
     fn spawn_voice_tick(&mut self, message_key: MessageKey, cx: &mut Context<Self>) {
-        self._voice_task = Some(cx.spawn(async move |this, cx| {
+        self.voice_task = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(VOICE_TICK).await;
                 let keep_going = this
@@ -1898,7 +1898,7 @@ impl TelegramPanel {
         }
         let seconds = self.view_model.flood_wait_seconds.unwrap_or(0).max(1);
         self.flood_wait_deadline = Some(std::time::Instant::now() + Duration::from_secs(seconds));
-        self._flood_task = Some(cx.spawn(async move |this, cx| {
+        self.flood_task = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(Duration::from_secs(1)).await;
                 let keep_going = this

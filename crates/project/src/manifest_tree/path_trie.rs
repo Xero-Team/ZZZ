@@ -70,8 +70,8 @@ impl<Label: Ord + Clone> RootPathTrie<Label> {
                 Entry::Occupied(occupied_entry) => occupied_entry.into_mut(),
             };
         }
-        let _previous_value = current.labels.insert(value, presence);
-        debug_assert_eq!(_previous_value, None);
+        let previous_value = current.labels.insert(value, presence);
+        debug_assert_eq!(previous_value, None);
         current
     }
 

@@ -58,7 +58,7 @@ pub struct StashList {
     width: Rems,
     pub picker: Entity<Picker<StashListDelegate>>,
     picker_focus_handle: FocusHandle,
-    _subscriptions: Vec<Subscription>,
+    subscriptions: Vec<Subscription>,
 }
 
 impl StashList {
@@ -70,7 +70,7 @@ impl StashList {
         cx: &mut Context<Self>,
     ) -> Self {
         let mut this = Self::new_inner(repository, workspace, width, false, window, cx);
-        this._subscriptions
+        this.subscriptions
             .push(cx.subscribe(&this.picker, |_, _, _, cx| {
                 cx.emit(DismissEvent);
             }));
@@ -141,7 +141,7 @@ impl StashList {
             picker,
             picker_focus_handle,
             width,
-            _subscriptions: subscriptions,
+            subscriptions,
         }
     }
 
@@ -157,7 +157,7 @@ impl StashList {
         this.picker.update(cx, |picker, _| {
             picker.delegate.show_footer = show_footer;
         });
-        this._subscriptions
+        this.subscriptions
             .push(cx.subscribe(&this.picker, |_, _, _, cx| {
                 cx.emit(DismissEvent);
             }));

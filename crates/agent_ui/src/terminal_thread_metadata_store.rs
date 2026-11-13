@@ -402,7 +402,7 @@ impl TerminalThreadMetadataStore {
 
     fn new(db: TerminalThreadMetadataDb, cx: &mut Context<Self>) -> Self {
         let (tx, rx) = async_channel::unbounded();
-        let _db_operations_task = cx.background_spawn({
+        let db_operations_task = cx.background_spawn({
             let db = db.clone();
             async move {
                 while let Ok(first_update) = rx.recv().await {
@@ -432,7 +432,7 @@ impl TerminalThreadMetadataStore {
             terminals_by_main_paths: HashMap::default(),
             reload_task: None,
             pending_terminal_ops_tx: tx,
-            _db_operations_task,
+            _db_operations_task: db_operations_task,
         };
         this.reload(cx);
         this

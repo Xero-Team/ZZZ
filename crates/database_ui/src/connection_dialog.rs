@@ -45,7 +45,7 @@ pub struct ConnectionDialog {
     password_editor: Entity<Editor>,
     message: Option<(SharedString, MessageKind)>,
     busy: bool,
-    _task: Option<Task<()>>,
+    task: Option<Task<()>>,
 }
 
 /// Localized, classified error text. The driver's diagnostic is appended, but
@@ -163,7 +163,7 @@ impl ConnectionDialog {
             password_editor,
             message: None,
             busy: false,
-            _task: None,
+            task: None,
         }
     }
 
@@ -298,7 +298,7 @@ impl ConnectionDialog {
             })
             .ok();
         });
-        self._task = Some(task);
+        self.task = Some(task);
     }
 
     fn save(&mut self, cx: &mut Context<Self>) {
@@ -362,7 +362,7 @@ impl ConnectionDialog {
             })
             .ok();
         });
-        self._task = Some(task);
+        self.task = Some(task);
     }
 
     fn delete(&mut self, cx: &mut Context<Self>) {
@@ -398,7 +398,7 @@ impl ConnectionDialog {
             })
             .ok();
         });
-        self._task = Some(task);
+        self.task = Some(task);
     }
 
     fn pick_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -433,7 +433,7 @@ impl ConnectionDialog {
             })
             .ok();
         });
-        self._task = Some(task);
+        self.task = Some(task);
     }
 }
 

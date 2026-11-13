@@ -742,22 +742,22 @@ impl ContextProvider for GoContextProvider {
                 (GO_MODULE_ROOT_TASK_VARIABLE.clone(), module_dir)
             });
 
-        let _subtest_name = variables.get(&VariableName::Custom(Cow::Borrowed("_subtest_name")));
+        let subtest_name = variables.get(&VariableName::Custom(Cow::Borrowed("_subtest_name")));
 
-        let go_subtest_variable = extract_subtest_name(_subtest_name.unwrap_or(""))
+        let go_subtest_variable = extract_subtest_name(subtest_name.unwrap_or(""))
             .map(|subtest_name| (GO_SUBTEST_NAME_TASK_VARIABLE.clone(), subtest_name));
 
-        let _table_test_case_name = variables.get(&VariableName::Custom(Cow::Borrowed(
+        let table_test_case_name = variables.get(&VariableName::Custom(Cow::Borrowed(
             "_table_test_case_name",
         )));
 
-        let go_table_test_case_variable = _table_test_case_name
+        let go_table_test_case_variable = table_test_case_name
             .and_then(extract_subtest_name)
             .map(|case_name| (GO_TABLE_TEST_CASE_NAME_TASK_VARIABLE.clone(), case_name));
 
-        let _suite_name = variables.get(&VariableName::Custom(Cow::Borrowed("_suite_name")));
+        let suite_name = variables.get(&VariableName::Custom(Cow::Borrowed("suite_name")));
 
-        let go_suite_variable = _suite_name
+        let go_suite_variable = suite_name
             .and_then(extract_subtest_name)
             .map(|suite_name| (GO_SUITE_NAME_TASK_VARIABLE.clone(), suite_name));
 

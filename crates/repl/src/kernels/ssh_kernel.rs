@@ -20,7 +20,7 @@ pub struct SshRunningKernel {
     execution_state: ExecutionState,
     kernel_info: Option<KernelInfoReply>,
     working_directory: PathBuf,
-    _ssh_tunnel_process: util::command::Child,
+    ssh_tunnel_process: util::command::Child,
     _local_connection_file: PathBuf,
     kernel_id: String,
     project: Entity<Project>,
@@ -287,7 +287,7 @@ impl SshRunningKernel {
                 execution_state: ExecutionState::Idle,
                 kernel_info: None,
                 working_directory,
-                _ssh_tunnel_process: ssh_tunnel_process,
+                ssh_tunnel_process: ssh_tunnel_process,
                 _local_connection_file: local_connection_file,
                 kernel_id,
                 project,
@@ -342,6 +342,6 @@ impl RunningKernel for SshRunningKernel {
     }
 
     fn kill(&mut self) {
-        self._ssh_tunnel_process.kill().log_err();
+        self.ssh_tunnel_process.kill().log_err();
     }
 }

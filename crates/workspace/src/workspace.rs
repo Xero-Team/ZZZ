@@ -1385,8 +1385,8 @@ pub struct Workspace {
     dispatching_keystrokes: Rc<RefCell<DispatchingKeystrokes>>,
     _subscriptions: Vec<Subscription>,
     _observe_current_user: Task<Result<()>>,
-    _schedule_serialize_workspace: Option<Task<()>>,
-    _serialize_workspace_task: Option<Task<()>>,
+    schedule_serialize_workspace: Option<Task<()>>,
+    serialize_workspace_task: Option<Task<()>>,
     _schedule_serialize_ssh_paths: Option<Task<()>>,
     pane_history_timestamp: Arc<AtomicUsize>,
     bounds: Bounds<Pixels>,
@@ -1403,8 +1403,8 @@ pub struct Workspace {
     last_open_dock_positions: Vec<DockPosition>,
     removing: bool,
     open_in_dev_container: bool,
-    _dev_container_task: Option<Task<Result<()>>>,
-    _panels_task: Option<Task<Result<()>>>,
+    dev_container_task: Option<Task<Result<()>>>,
+    panels_task: Option<Task<Result<()>>>,
     sidebar_focus_handle: Option<FocusHandle>,
     multi_workspace: Option<WeakEntity<MultiWorkspace>>,
     active_workspace_id: Option<Rc<Cell<EntityId>>>,
@@ -1673,7 +1673,7 @@ impl Workspace {
 
         let mut current_user = app_state.user_store.read(cx).watch_current_user();
         let mut connection_status = app_state.client.status();
-        let _observe_current_user = cx.spawn_in(window, async move |this, cx| {
+        let observe_current_user = cx.spawn_in(window, async move |this, cx| {
             current_user.next().await;
             connection_status.next().await;
             let mut stream =
@@ -1730,7 +1730,7 @@ impl Workspace {
 
         let (serializable_items_tx, serializable_items_rx) =
             mpsc::unbounded::<Box<dyn SerializableItemHandle>>();
-        let _items_serializer = cx.spawn_in(window, async move |this, cx| {
+        let items_serializer = cx.spawn_in(window, async move |this, cx| {
             Self::serialize_items(&this, serializable_items_rx, cx).await
         });
 
@@ -1799,7 +1799,7 @@ impl Workspace {
             left_dock,
             bottom_dock,
             right_dock,
-            _panels_task: None,
+            panels_task: None,
             project: project.clone(),
             follower_states: Default::default(),
             last_leaders_by_pane: Default::default(),
@@ -1809,9 +1809,9 @@ impl Workspace {
             dirty_items: Default::default(),
             database_id: workspace_id,
             app_state,
-            _observe_current_user,
-            _schedule_serialize_workspace: None,
-            _serialize_workspace_task: None,
+            _observe_current_user: observe_current_user,
+            schedule_serialize_workspace: None,
+            serialize_workspace_task: None,
             _schedule_serialize_ssh_paths: None,
             _subscriptions: subscriptions,
             pane_history_timestamp,
@@ -1825,7 +1825,7 @@ impl Workspace {
             terminal_provider: None,
             debugger_provider: None,
             serializable_items_tx,
-            _items_serializer,
+            _items_serializer: items_serializer,
             session_id: Some(session_id),
 
             scheduled_tasks: Vec::new(),
@@ -1836,7 +1836,7 @@ impl Workspace {
             active_workspace_id: None,
             active_worktree_creation: ActiveWorktreeCreation::default(),
             open_in_dev_container: false,
-            _dev_container_task: None,
+            dev_container_task: None,
             deferred_save_items: Vec::new(),
             persisted_recent_navigation_history: Vec::new(),
             last_active_project_path: None,
@@ -2613,11 +2613,11 @@ impl Workspace {
     }
 
     pub fn set_panels_task(&mut self, task: Task<Result<()>>) {
-        self._panels_task = Some(task);
+        self.panels_task = Some(task);
     }
 
     pub fn take_panels_task(&mut self) -> Option<Task<Result<()>>> {
-        self._panels_task.take()
+        self.panels_task.take()
     }
 
     pub fn user_store(&self) -> &Entity<UserStore> {
@@ -3150,7 +3150,7 @@ impl Workspace {
     }
 
     pub fn set_dev_container_task(&mut self, task: Task<Result<()>>) {
-        self._dev_container_task = Some(task);
+        self.dev_container_task = Some(task);
     }
 
     pub fn debugger_provider(&self) -> Option<Arc<dyn DebuggerProvider>> {
@@ -6566,8 +6566,8 @@ impl Workspace {
     /// write completes. Used by the quit handler so the most recent state
     /// isn't lost to a pending throttle timer when the process exits.
     pub fn flush_serialization(&mut self, window: &mut Window, cx: &mut App) -> Task<()> {
-        self._schedule_serialize_workspace.take();
-        self._serialize_workspace_task.take();
+        self.schedule_serialize_workspace.take();
+        self.serialize_workspace_task.take();
         self.bounds_save_task_queued.take();
 
         let bounds_task = self.save_window_bounds(window, cx);
@@ -6636,19 +6636,18 @@ impl Workspace {
     }
 
     fn serialize_workspace(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self._schedule_serialize_workspace.is_none() {
-            self._schedule_serialize_workspace =
-                Some(cx.spawn_in(window, async move |this, cx| {
-                    cx.background_executor()
-                        .timer(SERIALIZATION_THROTTLE_TIME)
-                        .await;
-                    this.update_in(cx, |this, window, cx| {
-                        this._serialize_workspace_task =
-                            Some(this.serialize_workspace_internal(window, cx));
-                        this._schedule_serialize_workspace.take();
-                    })
-                    .log_err();
-                }));
+        if self.schedule_serialize_workspace.is_none() {
+            self.schedule_serialize_workspace = Some(cx.spawn_in(window, async move |this, cx| {
+                cx.background_executor()
+                    .timer(SERIALIZATION_THROTTLE_TIME)
+                    .await;
+                this.update_in(cx, |this, window, cx| {
+                    this.serialize_workspace_task =
+                        Some(this.serialize_workspace_internal(window, cx));
+                    this.schedule_serialize_workspace.take();
+                })
+                .log_err();
+            }));
         }
     }
 
@@ -17276,13 +17275,13 @@ mod tests {
         );
 
         assert!(workspace.read_with(cx, |workspace, _| {
-            workspace._schedule_serialize_workspace.is_none()
+            workspace.schedule_serialize_workspace.is_none()
         }));
         workspace.update_in(cx, |workspace, window, cx| {
             workspace.active_item_path_changed(false, window, cx);
         });
         assert!(workspace.read_with(cx, |workspace, _| {
-            workspace._schedule_serialize_workspace.is_none()
+            workspace.schedule_serialize_workspace.is_none()
         }));
 
         workspace.update(cx, |workspace, _| {

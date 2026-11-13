@@ -854,7 +854,7 @@ impl App {
         let keyboard_mapper = platform.keyboard_mapper();
 
         #[cfg(any(test, feature = "leak-detection"))]
-        let _ref_counts = entities.ref_counts_drop_handle();
+        let ref_counts = entities.ref_counts_drop_handle();
 
         let app = Rc::new_cyclic(|this| AppCell {
             borrow_origin: Cell::new(None),
@@ -922,7 +922,7 @@ impl App {
                 event_arena: Arena::new(1024 * 1024),
 
                 #[cfg(any(test, feature = "leak-detection"))]
-                _ref_counts,
+                _ref_counts: ref_counts,
             }),
         });
 

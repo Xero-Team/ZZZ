@@ -357,12 +357,12 @@ impl Search {
 
                 let should_find_all_matches = !tx.is_closed();
 
-                let _executor = executor.clone();
+                let worker_executor = executor.clone();
                 let worker_pool = executor.spawn(async move {
-                    let num_cpus = _executor.num_cpus();
+                    let num_cpus = worker_executor.num_cpus();
 
                     assert!(num_cpus > 0);
-                    _executor
+                    worker_executor
                         .scoped(|scope| {
                             let worker_count = (num_cpus - 1).max(1);
                             for _ in 0..worker_count {
@@ -1047,7 +1047,7 @@ type IsTerminating = bool;
 pub struct AdaptiveBatcher<T> {
     items: Sender<T>,
     flush_batch: Sender<IsTerminating>,
-    _batch_task: Task<()>,
+    batch_task: Task<()>,
 }
 
 impl<T: 'static + Send> AdaptiveBatcher<T> {
@@ -1057,7 +1057,7 @@ impl<T: 'static + Send> AdaptiveBatcher<T> {
         let (flush_batch_tx, flush_batch_rx) = unbounded();
         let flush_batch = flush_batch_tx.clone();
         let executor = cx.clone();
-        let _batch_task = cx.spawn_with_priority(gpui::Priority::High, async move {
+        let batch_task = cx.spawn_with_priority(gpui::Priority::High, async move {
             let mut current_batch = vec![];
             let mut items_produced_so_far = 0_u64;
 
@@ -1076,11 +1076,11 @@ impl<T: 'static + Send> AdaptiveBatcher<T> {
                                 // Chosen arbitrarily based on some experimentation with plots.
                                 let desired_duration_ms = (20 * (items_produced_so_far + 2).ilog2() as u64).min(300);
                                 let desired_duration = Duration::from_millis(desired_duration_ms);
-                                let _executor = executor.clone();
-                                let _flush = flush_batch_tx.clone();
+                                let timer_executor = executor.clone();
+                                let flush = flush_batch_tx.clone();
                                 let new_timer = executor.spawn_with_priority(Priority::High, async move {
-                                    _executor.timer(desired_duration).await;
-                                    _ = _flush.send(false).await;
+                                    timer_executor.timer(desired_duration).await;
+                                    _ = flush.send(false).await;
                                 });
                                 _schedule_flush_after_delay = Some(new_timer);
                             }
@@ -1119,7 +1119,7 @@ impl<T: 'static + Send> AdaptiveBatcher<T> {
         });
         let this = Self {
             items,
-            _batch_task,
+            batch_task,
             flush_batch,
         };
         (this, batch_rx)
@@ -1131,7 +1131,7 @@ impl<T: 'static + Send> AdaptiveBatcher<T> {
 
     pub async fn flush(self) {
         _ = self.flush_batch.send(true).await;
-        self._batch_task.await;
+        self.batch_task.await;
     }
 }
 

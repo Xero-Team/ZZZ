@@ -23,8 +23,8 @@ pub struct SvgPreviewView {
     focus_handle: FocusHandle,
     buffer: Option<Entity<Buffer>>,
     current_svg: Option<Result<Arc<RenderImage>, SharedString>>,
-    _refresh: Task<()>,
-    _buffer_subscription: Option<Subscription>,
+    refresh: Task<()>,
+    buffer_subscription: Option<Subscription>,
     _workspace_subscription: Option<Subscription>,
 }
 
@@ -63,9 +63,9 @@ impl SvgPreviewView {
                 focus_handle: cx.focus_handle(),
                 buffer,
                 current_svg: None,
-                _buffer_subscription: subscription,
+                buffer_subscription: subscription,
                 _workspace_subscription: workspace_subscription,
-                _refresh: Task::ready(()),
+                refresh: Task::ready(()),
             };
             this.render_image(window, cx);
 
@@ -92,7 +92,7 @@ impl SvgPreviewView {
                             return;
                         };
                         if this.buffer.as_ref() != Some(&buffer) {
-                            this._buffer_subscription =
+                            this.buffer_subscription =
                                 Some(Self::create_buffer_subscription(&buffer, window, cx));
                             this.buffer = Some(buffer);
                             this.render_image(window, cx);
@@ -147,7 +147,7 @@ impl SvgPreviewView {
             renderer.render_single_frame(content.text().as_bytes(), SCALE_FACTOR)
         });
 
-        self._refresh = cx.spawn_in(window, async move |this, cx| {
+        self.refresh = cx.spawn_in(window, async move |this, cx| {
             let result = background_task.await;
 
             let Some(this) = this.upgrade() else {

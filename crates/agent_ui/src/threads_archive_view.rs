@@ -186,7 +186,7 @@ pub struct ThreadsArchiveView {
     restoring: HashSet<ThreadId>,
     archived_thread_ids: HashSet<ThreadId>,
     archived_branch_names: HashMap<ThreadId, HashMap<PathBuf, String>>,
-    _load_branch_names_task: Task<()>,
+    load_branch_names_task: Task<()>,
     thread_filter: ThreadFilter,
 }
 
@@ -268,7 +268,7 @@ impl ThreadsArchiveView {
             restoring: HashSet::default(),
             archived_thread_ids: HashSet::default(),
             archived_branch_names: HashMap::default(),
-            _load_branch_names_task: Task::ready(()),
+            load_branch_names_task: Task::ready(()),
             thread_filter: ThreadFilter::All,
         };
 
@@ -416,7 +416,7 @@ impl ThreadsArchiveView {
         let task = ThreadMetadataStore::global(cx)
             .read(cx)
             .get_all_archived_branch_names(cx);
-        self._load_branch_names_task = cx.spawn(async move |this, cx| {
+        self.load_branch_names_task = cx.spawn(async move |this, cx| {
             if let Some(branch_names) = task.await.log_err() {
                 this.update(cx, |this, cx| {
                     this.archived_branch_names = branch_names;
@@ -1219,7 +1219,7 @@ impl ProjectPickerModal {
             picker.delegate.focus_handle = picker_focus_handle;
         });
 
-        let _subscription =
+        let subscription =
             cx.subscribe(&picker, |_this: &mut Self, _, _event: &DismissEvent, cx| {
                 cx.emit(DismissEvent);
             });
@@ -1248,7 +1248,7 @@ impl ProjectPickerModal {
         Self {
             picker,
             _load_workspaces_task: load_workspaces_task,
-            _subscription,
+            _subscription: subscription,
         }
     }
 }

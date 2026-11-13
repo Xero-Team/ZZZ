@@ -55,7 +55,7 @@ pub struct Session {
     result_inlays: HashMap<String, (InlayId, Range<Anchor>, usize)>,
     next_inlay_id: usize,
 
-    _subscriptions: Vec<Subscription>,
+    subscriptions: Vec<Subscription>,
 }
 
 struct EditorBlock {
@@ -263,7 +263,7 @@ impl Session {
             result_inlays: HashMap::default(),
             next_inlay_id: 0,
             kernel_specification,
-            _subscriptions: vec![subscription],
+            subscriptions: vec![subscription],
         };
 
         session.start_kernel(window, cx);
@@ -795,7 +795,7 @@ impl Session {
                 session.replace_block_with_inlay(&msg_id, "✓", cx);
             },
         );
-        self._subscriptions.push(subscription);
+        self.subscriptions.push(subscription);
 
         let msg_id = message.header.msg_id.clone();
         let subscription = cx.subscribe(
@@ -804,7 +804,7 @@ impl Session {
                 session.replace_block_with_inlay(&msg_id, &event.0, cx);
             },
         );
-        self._subscriptions.push(subscription);
+        self.subscriptions.push(subscription);
 
         let subscription = cx.subscribe(
             &editor_block.execution_view,
@@ -812,7 +812,7 @@ impl Session {
                 session.send_stdin_reply(event.value.clone(), &event.parent_message, cx);
             },
         );
-        self._subscriptions.push(subscription);
+        self.subscriptions.push(subscription);
 
         self.blocks
             .insert(message.header.msg_id.clone(), editor_block);

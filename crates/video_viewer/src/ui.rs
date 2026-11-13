@@ -471,14 +471,14 @@ impl Render for VideoView {
 
 pub struct VideoToolbarControls {
     video_view: Option<WeakEntity<VideoView>>,
-    _subscription: Option<gpui::Subscription>,
+    subscription: Option<gpui::Subscription>,
 }
 
 impl VideoToolbarControls {
     pub fn new() -> Self {
         Self {
             video_view: None,
-            _subscription: None,
+            subscription: None,
         }
     }
 }
@@ -537,10 +537,10 @@ impl ToolbarItemView for VideoToolbarControls {
         cx: &mut Context<Self>,
     ) -> ToolbarItemLocation {
         self.video_view = None;
-        self._subscription = None;
+        self.subscription = None;
 
         if let Some(item) = active_pane_item.and_then(|item| item.downcast::<VideoView>()) {
-            self._subscription = Some(cx.observe(&item, |_, _, cx| cx.notify()));
+            self.subscription = Some(cx.observe(&item, |_, _, cx| cx.notify()));
             self.video_view = Some(item.downgrade());
             cx.notify();
             return ToolbarItemLocation::PrimaryRight;
@@ -552,14 +552,14 @@ impl ToolbarItemView for VideoToolbarControls {
 
 pub struct VideoInfo {
     parts: Option<Vec<String>>,
-    _observe_active: Option<gpui::Subscription>,
+    observe_active: Option<gpui::Subscription>,
 }
 
 impl VideoInfo {
     pub fn new(_workspace: &Workspace) -> Self {
         Self {
             parts: None,
-            _observe_active: None,
+            observe_active: None,
         }
     }
 }
@@ -581,11 +581,11 @@ impl StatusItemView for VideoInfo {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self._observe_active = None;
+        self.observe_active = None;
 
         if let Some(video_view) = active_pane_item.and_then(|item| item.act_as::<VideoView>(cx)) {
             self.parts = video_view.read(cx).metadata_parts(cx);
-            self._observe_active = Some(cx.observe(&video_view, |this, view, cx| {
+            self.observe_active = Some(cx.observe(&video_view, |this, view, cx| {
                 this.parts = view.read(cx).metadata_parts(cx);
                 cx.notify();
             }));

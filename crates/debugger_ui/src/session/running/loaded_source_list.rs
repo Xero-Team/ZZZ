@@ -16,7 +16,7 @@ impl LoadedSourceList {
         let focus_handle = cx.focus_handle();
         let list = ListState::new(0, gpui::ListAlignment::Top, px(1000.));
 
-        let _subscription = cx.subscribe(&session, |this, _, event, cx| match event {
+        let subscription = cx.subscribe(&session, |this, _, event, cx| match event {
             SessionEvent::Stopped(_)
             | SessionEvent::HistoricSnapshotSelected
             | SessionEvent::LoadedSources => {
@@ -30,7 +30,7 @@ impl LoadedSourceList {
             list,
             session,
             focus_handle,
-            _subscription,
+            _subscription: subscription,
             invalidate: true,
         }
     }

@@ -22,7 +22,7 @@ pub struct ConnectionPanel {
     workspace: WeakEntity<Workspace>,
     manager: Arc<ConnectionManager>,
     _settings_subscription: Subscription,
-    _task: Option<Task<()>>,
+    task: Option<Task<()>>,
 }
 
 impl ConnectionPanel {
@@ -36,7 +36,7 @@ impl ConnectionPanel {
             workspace,
             manager: DatabaseState::manager(cx),
             _settings_subscription: settings_subscription,
-            _task: None,
+            task: None,
         }
     }
 
@@ -156,7 +156,7 @@ impl ConnectionPanel {
             }
             this.update(cx, |_, cx| cx.notify()).ok();
         });
-        self._task = Some(task);
+        self.task = Some(task);
     }
 
     fn disconnect(&mut self, id: ConnectionId, cx: &mut Context<Self>) {
@@ -167,7 +167,7 @@ impl ConnectionPanel {
             }
             this.update(cx, |_, cx| cx.notify()).ok();
         });
-        self._task = Some(task);
+        self.task = Some(task);
     }
 
     fn status_text(&self, config: &ConnectionConfig, cx: &App) -> (SharedString, Hsla) {

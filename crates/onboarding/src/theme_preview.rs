@@ -283,7 +283,7 @@ impl ThemePreviewTile {
 }
 
 impl RenderOnce for ThemePreviewTile {
-    fn render(self, _window: &mut ui::Window, _cx: &mut ui::App) -> impl IntoElement {
+    fn render(self, _window: &mut ui::Window, cx: &mut ui::App) -> impl IntoElement {
         match self.style {
             ThemePreviewStyle::Bordered => {
                 Self::render_border(self.seed, self.theme).into_any_element()
@@ -295,7 +295,7 @@ impl RenderOnce for ThemePreviewTile {
                 self.seed,
                 self.theme,
                 other_theme,
-                _cx.theme().colors().border,
+                cx.theme().colors().border,
             )
             .into_any_element(),
         }

@@ -1092,7 +1092,7 @@ impl ThreadMetadataStore {
         .detach();
 
         let (tx, rx) = async_channel::unbounded();
-        let _db_operations_task = cx.background_spawn({
+        let db_operations_task = cx.background_spawn({
             let db = db.clone();
             async move {
                 while let Ok(first_update) = rx.recv().await {
@@ -1125,7 +1125,7 @@ impl ThreadMetadataStore {
             conversation_subscriptions: HashMap::default(),
             pending_thread_ops_tx: tx,
             in_flight_archives: HashMap::default(),
-            _db_operations_task,
+            _db_operations_task: db_operations_task,
         };
         drop(this.reload(cx));
         this

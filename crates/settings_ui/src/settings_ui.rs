@@ -381,14 +381,14 @@ impl NonFocusableHandle {
 
     fn from_handle(handle: FocusHandle, window: &mut Window, cx: &mut App) -> Entity<Self> {
         cx.new(|cx| {
-            let _subscription = cx.on_focus(&handle, window, {
+            let subscription = cx.on_focus(&handle, window, {
                 move |_, window, cx| {
                     window.focus_next(cx);
                 }
             });
             Self {
                 handle,
-                _subscription,
+                _subscription: subscription,
             }
         })
     }

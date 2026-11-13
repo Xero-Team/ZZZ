@@ -396,63 +396,67 @@ pub fn build_window_options(display_uuid: Option<Uuid>, cx: &mut App) -> WindowO
 }
 
 pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
-    let mut _on_close_subscription = bind_on_window_closed(cx);
+    let mut on_close_subscription = bind_on_window_closed(cx);
     cx.observe_global::<SettingsStore>(move |cx| {
         // A 1.92 regression causes unused-assignment to trigger on this variable.
-        _ = _on_close_subscription.is_some();
-        _on_close_subscription = bind_on_window_closed(cx);
+        _ = on_close_subscription.is_some();
+        on_close_subscription = bind_on_window_closed(cx);
     })
     .detach();
 
     init_cursor_hide_mode(cx);
     init_app_appearance(cx);
 
-    cx.observe_new(|_multi_workspace: &mut MultiWorkspace, window, cx| {
-        let Some(window) = window else {
-            return;
-        };
+    cx.observe_new(
+        |#[cfg_attr(not(feature = "track-project-leak"), allow(unused_variables))]
+         multi_workspace: &mut MultiWorkspace,
+         window,
+         cx| {
+            let Some(window) = window else {
+                return;
+            };
 
-        #[cfg(feature = "track-project-leak")]
-        {
-            let multi_workspace_handle = cx.weak_entity();
-            let workspace_handle = _multi_workspace.workspace().downgrade();
-            let project_handle = _multi_workspace.workspace().read(cx).project().downgrade();
-            let window_id_2 = window.window_handle().window_id();
-            cx.on_window_closed(move |cx, window_id| {
-                let multi_workspace_handle = multi_workspace_handle.clone();
-                let workspace_handle = workspace_handle.clone();
-                let project_handle = project_handle.clone();
-                if window_id != window_id_2 {
-                    return;
-                }
-                cx.spawn(async move |cx| {
-                    cx.background_executor()
-                        .timer(std::time::Duration::from_millis(1500))
-                        .await;
+            #[cfg(feature = "track-project-leak")]
+            {
+                let multi_workspace_handle = cx.weak_entity();
+                let workspace_handle = multi_workspace.workspace().downgrade();
+                let project_handle = multi_workspace.workspace().read(cx).project().downgrade();
+                let window_id_2 = window.window_handle().window_id();
+                cx.on_window_closed(move |cx, window_id| {
+                    let multi_workspace_handle = multi_workspace_handle.clone();
+                    let workspace_handle = workspace_handle.clone();
+                    let project_handle = project_handle.clone();
+                    if window_id != window_id_2 {
+                        return;
+                    }
+                    cx.spawn(async move |cx| {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(1500))
+                            .await;
 
-                    multi_workspace_handle.assert_released();
-                    workspace_handle.assert_released();
-                    project_handle.assert_released();
+                        multi_workspace_handle.assert_released();
+                        workspace_handle.assert_released();
+                        project_handle.assert_released();
+                    })
+                    .detach();
                 })
                 .detach();
-            })
-            .detach();
-        }
+            }
 
-        let multi_workspace_handle = cx.entity().downgrade();
-        window.on_window_should_close(cx, move |window, cx| {
-            multi_workspace_handle
-                .update(cx, |multi_workspace, cx| {
-                    // We'll handle closing asynchronously
-                    multi_workspace.close_window(&CloseWindow, window, cx);
-                    false
-                })
-                .unwrap_or(true)
-        });
+            let multi_workspace_handle = cx.entity().downgrade();
+            window.on_window_should_close(cx, move |window, cx| {
+                multi_workspace_handle
+                    .update(cx, |multi_workspace, cx| {
+                        // We'll handle closing asynchronously
+                        multi_workspace.close_window(&CloseWindow, window, cx);
+                        false
+                    })
+                    .unwrap_or(true)
+            });
 
-        let window_handle = window.window_handle();
-        let multi_workspace_handle = cx.entity();
-        cx.subscribe_in(
+            let window_handle = window.window_handle();
+            let multi_workspace_handle = cx.entity();
+            cx.subscribe_in(
             &multi_workspace_handle,
             window,
             |this, _multi_workspace, event: &workspace::MultiWorkspaceEvent, window, cx| {

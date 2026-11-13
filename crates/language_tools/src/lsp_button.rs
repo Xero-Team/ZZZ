@@ -1405,7 +1405,7 @@ impl StatusItemView for LspButton {
                             .excerpts()
                             .map(|excerpt| excerpt.context.start.buffer_id),
                     );
-                    let _editor_subscription = cx.subscribe_in(
+                    let editor_subscription = cx.subscribe_in(
                         &editor,
                         window,
                         |lsp_button, _, e: &EditorEvent, window, cx| match e {
@@ -1446,7 +1446,7 @@ impl StatusItemView for LspButton {
                     self.server_state.update(cx, |state, _| {
                         state.active_editor = Some(ActiveEditor {
                             editor: editor.downgrade(),
-                            _editor_subscription,
+                            _editor_subscription: editor_subscription,
                             editor_buffers,
                         });
                     });

@@ -239,7 +239,7 @@ impl PasswordProxy {
         let askpass_script = generate_askpass_script(shell_kind, askpass_program, &askpass_socket)?;
         // Holding on to the task keeps the accept loop (and the temp dir it owns)
         // alive for as long as this proxy exists.
-        let _task = executor.spawn(async move {
+        let task = executor.spawn(async move {
             maybe!(async move {
                 let _temp_dir = temp_dir;
                 let listener =
@@ -305,7 +305,7 @@ impl PasswordProxy {
         );
 
         Ok(Self {
-            _task,
+            _task: task,
             #[cfg(not(target_os = "windows"))]
             askpass_script_path,
             #[cfg(target_os = "windows")]

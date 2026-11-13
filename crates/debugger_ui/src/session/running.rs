@@ -873,7 +873,7 @@ impl RunningState {
             cx,
         );
 
-        let _subscriptions = vec![
+        let subscriptions = vec![
             cx.on_app_quit(move |this, cx| {
                 let shutdown = this
                     .session
@@ -996,7 +996,7 @@ impl RunningState {
             project: weak_project,
             focus_handle,
             variable_list,
-            _subscriptions,
+            _subscriptions: subscriptions,
             thread_id: None,
             _remote_id: None,
             stack_frame_list,

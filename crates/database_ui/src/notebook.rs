@@ -65,7 +65,7 @@ struct NotebookCell {
     message: Option<CellMessage>,
     running: bool,
     /// Owning the task means dropping the cell cancels its query.
-    _task: Option<Task<()>>,
+    task: Option<Task<()>>,
 }
 
 impl NotebookCell {
@@ -78,7 +78,7 @@ impl NotebookCell {
             result: None,
             message: None,
             running: false,
-            _task: None,
+            task: None,
         }
     }
 }
@@ -324,7 +324,7 @@ impl DatabaseNotebook {
             })
             .ok();
         });
-        self.cells[index]._task = Some(task);
+        self.cells[index].task = Some(task);
     }
 
     async fn connect_session(

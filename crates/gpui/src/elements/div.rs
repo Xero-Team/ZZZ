@@ -1955,14 +1955,16 @@ impl Interactivity {
     pub fn request_layout(
         &mut self,
         global_id: Option<&GlobalElementId>,
-        _inspector_id: Option<&InspectorElementId>,
+        inspector_id: Option<&InspectorElementId>,
         window: &mut Window,
         cx: &mut App,
         f: impl FnOnce(Style, &mut Window, &mut App) -> LayoutId,
     ) -> LayoutId {
+        #[cfg(not(any(feature = "inspector", debug_assertions)))]
+        let _ = inspector_id;
         #[cfg(any(feature = "inspector", debug_assertions))]
         window.with_inspector_state(
-            _inspector_id,
+            inspector_id,
             cx,
             |inspector_state: &mut Option<DivInspectorState>, _window| {
                 if let Some(inspector_state) = inspector_state {
@@ -2040,18 +2042,20 @@ impl Interactivity {
     pub fn prepaint<R>(
         &mut self,
         global_id: Option<&GlobalElementId>,
-        _inspector_id: Option<&InspectorElementId>,
+        inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         content_size: Size<Pixels>,
         window: &mut Window,
         cx: &mut App,
         f: impl FnOnce(&Style, Point<Pixels>, Option<Hitbox>, &mut Window, &mut App) -> R,
     ) -> R {
+        #[cfg(not(any(feature = "inspector", debug_assertions)))]
+        let _ = inspector_id;
         self.content_size = content_size;
 
         #[cfg(any(feature = "inspector", debug_assertions))]
         window.with_inspector_state(
-            _inspector_id,
+            inspector_id,
             cx,
             |inspector_state: &mut Option<DivInspectorState>, _window| {
                 if let Some(inspector_state) = inspector_state {
@@ -2214,13 +2218,15 @@ impl Interactivity {
     pub fn paint(
         &mut self,
         global_id: Option<&GlobalElementId>,
-        _inspector_id: Option<&InspectorElementId>,
+        inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         hitbox: Option<&Hitbox>,
         window: &mut Window,
         cx: &mut App,
         f: impl FnOnce(&Style, &mut Window, &mut App),
     ) {
+        #[cfg(not(any(feature = "inspector", debug_assertions)))]
+        let _ = inspector_id;
         self.hovered = hitbox.map(|hitbox| hitbox.is_hovered(window));
         window.with_optional_element_state::<InteractiveElementState, _>(
             global_id,
@@ -2298,11 +2304,15 @@ impl Interactivity {
                                         self.paint_keyboard_listeners(window, cx);
                                         f(&style, window, cx);
 
-                                        if let Some(_hitbox) = hitbox {
+                                        #[cfg_attr(
+                                            not(any(feature = "inspector", debug_assertions)),
+                                            allow(unused_variables)
+                                        )]
+                                        if let Some(hitbox) = hitbox {
                                             #[cfg(any(feature = "inspector", debug_assertions))]
                                             window.insert_inspector_hitbox(
-                                                _hitbox.id,
-                                                _inspector_id,
+                                                hitbox.id,
+                                                inspector_id,
                                                 cx,
                                             );
 

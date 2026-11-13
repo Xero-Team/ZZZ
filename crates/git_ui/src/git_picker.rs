@@ -41,7 +41,7 @@ pub struct GitPicker {
     width: Rems,
     branch_list: Option<Entity<BranchList>>,
     stash_list: Option<Entity<StashList>>,
-    _subscriptions: Vec<Subscription>,
+    subscriptions: Vec<Subscription>,
     popover_style: bool,
 }
 
@@ -80,7 +80,7 @@ impl GitPicker {
             width,
             branch_list: None,
             stash_list: None,
-            _subscriptions: Vec::new(),
+            subscriptions: Vec::new(),
             popover_style,
         };
 
@@ -133,7 +133,7 @@ impl GitPicker {
             }
         });
 
-        self._subscriptions.push(subscription);
+        self.subscriptions.push(subscription);
         self.branch_list = Some(branch_list.clone());
         branch_list
     }
@@ -165,7 +165,7 @@ impl GitPicker {
             }
         });
 
-        self._subscriptions.push(subscription);
+        self.subscriptions.push(subscription);
         self.stash_list = Some(stash_list.clone());
         stash_list
     }

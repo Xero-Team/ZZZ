@@ -2059,10 +2059,10 @@ async fn test_realfs_watch_stress_reports_missed_paths(
     }
 
     let (mut events, watcher) = fs.watch(root, Duration::from_millis(10)).await;
-    let _watcher = watcher;
+    let watcher = watcher;
 
     for file_path in &expected_paths {
-        _watcher
+        watcher
             .add(file_path.parent().expect("file has parent"))
             .expect("add explicit directory watch");
     }

@@ -2413,7 +2413,7 @@ async fn test_managing_language_servers(cx: &mut gpui::TestAppContext) {
     );
 
     // Open a third buffer with a different associated language server.
-    let (json_buffer, _json_handle) = project
+    let (json_buffer, json_handle) = project
         .update(cx, |project, cx| {
             project.open_local_buffer_with_lsp(path!("/dir/package.json"), cx)
         })
@@ -2670,7 +2670,7 @@ async fn test_managing_language_servers(cx: &mut gpui::TestAppContext) {
     );
 
     // Close notifications are reported only to servers matching the buffer's language.
-    cx.update(|_| drop(_json_handle));
+    cx.update(|_| drop(json_handle));
     let close_message = lsp::DidCloseTextDocumentParams {
         text_document: lsp::TextDocumentIdentifier::new(
             lsp::Uri::from_file_path(path!("/dir/package.json")).unwrap(),
@@ -12373,10 +12373,10 @@ async fn test_uncommitted_diff_opened_before_unstaged_diff(cx: &mut gpui::TestAp
     let unstaged_diff_task = project.update(cx, |project, cx| {
         project.open_unstaged_diff(buffer.clone(), cx)
     });
-    let (uncommitted_diff, _unstaged_diff) =
+    let (uncommitted_diff, unstaged_diff) =
         futures::future::join(uncommitted_diff_task, unstaged_diff_task).await;
     let uncommitted_diff = uncommitted_diff.unwrap();
-    let _unstaged_diff = _unstaged_diff.unwrap();
+    let _ = unstaged_diff.unwrap();
 
     cx.run_until_parked();
 

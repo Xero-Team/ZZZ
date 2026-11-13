@@ -1758,11 +1758,11 @@ impl ConversationView {
             }
             AcpThreadEvent::PromptCapabilitiesUpdated => {
                 if let Some(active) = self.thread_view(&session_id) {
-                    active.update(cx, |active, _cx| {
+                    active.update(cx, |active, cx| {
                         active
                             .session_capabilities
                             .write()
-                            .set_prompt_capabilities(thread.read(_cx).prompt_capabilities());
+                            .set_prompt_capabilities(thread.read(cx).prompt_capabilities());
                     });
                 }
             }

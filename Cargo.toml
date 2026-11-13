@@ -1366,6 +1366,11 @@ from_over_into = "deny"
 # adds noise around the closing brace.
 unnecessary_semicolon = "deny"
 
+# The fourteenth batch removes the misleading underscore prefix from bindings
+# that are actually read; where the underscore marked a deliberate keep-alive
+# field, the field keeps its name and the local passed into it is renamed.
+used_underscore_binding = "deny"
+
 # We currently do not restrict any style rules
 # as it slows down shipping code to ZZZ.
 #

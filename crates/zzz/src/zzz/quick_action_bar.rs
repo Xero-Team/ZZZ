@@ -34,7 +34,7 @@ use zzz_actions::{agent::AddSelectionToThread, outline::ToggleOutline};
 const MAX_CODE_ACTION_MENU_LINES: u32 = 16;
 
 pub struct QuickActionBar {
-    _inlay_hints_enabled_subscription: Option<Subscription>,
+    inlay_hints_enabled_subscription: Option<Subscription>,
     _ai_settings_subscription: Subscription,
     active_item: Option<Box<dyn ItemHandle>>,
     buffer_search_bar: Entity<BufferSearchBar>,
@@ -65,7 +65,7 @@ impl QuickActionBar {
         });
 
         let mut this = Self {
-            _inlay_hints_enabled_subscription: None,
+            inlay_hints_enabled_subscription: None,
             _ai_settings_subscription: ai_settings_subscription,
             active_item: None,
             buffer_search_bar,
@@ -834,7 +834,7 @@ impl ToolbarItemView for QuickActionBar {
     ) -> ToolbarItemLocation {
         self.active_item = active_pane_item.map(ItemHandle::boxed_clone);
         if let Some(active_item) = active_pane_item {
-            self._inlay_hints_enabled_subscription.take();
+            self.inlay_hints_enabled_subscription.take();
 
             if let Some(editor) = active_item.downcast::<Editor>() {
                 let (
@@ -848,7 +848,7 @@ impl ToolbarItemView for QuickActionBar {
                         editor.supports_semantic_tokens(cx),
                     )
                 });
-                self._inlay_hints_enabled_subscription =
+                self.inlay_hints_enabled_subscription =
                     Some(cx.observe(&editor, move |_, editor, cx| {
                         let (
                             new_inlay_hints_enabled,

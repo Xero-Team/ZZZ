@@ -166,7 +166,7 @@ pub struct GitStore {
     diffs: HashMap<BufferId, Entity<BufferGitState>>,
     shared_diffs: HashMap<proto::PeerId, HashMap<BufferId, SharedDiffs>>,
     blob_read_limiter: Arc<Semaphore>,
-    _subscriptions: Vec<Subscription>,
+    subscriptions: Vec<Subscription>,
 }
 
 pub const MAX_CONCURRENT_BLOB_READS: usize = 16;
@@ -449,7 +449,7 @@ pub struct Repository {
     // and that should be examined during the next status scan.
     paths_needing_status_update: Vec<Vec<RepoPath>>,
     job_sender: mpsc::UnboundedSender<GitJob>,
-    _worker_task: Task<()>,
+    worker_task: Task<()>,
     active_jobs: HashMap<JobId, JobInfo>,
     job_debug_queue: job_debug_queue::GitJobDebugQueue,
     pending_ops: SumTree<PendingOps>,
@@ -685,7 +685,7 @@ impl GitStore {
         cx: &mut Context<Self>,
     ) -> Self {
         let fs = native_execution_context.file_system().clone();
-        let _fs_watches = if fs.is_fake() {
+        let fs_watches = if fs.is_fake() {
             Box::new([])
         } else {
             [
@@ -751,7 +751,7 @@ impl GitStore {
                 next_repository_id: Arc::new(AtomicU64::new(1)),
                 downstream: None,
                 project_environment: environment,
-                _fs_watches,
+                _fs_watches: fs_watches,
                 native_execution_context,
             },
             cx,
@@ -783,13 +783,13 @@ impl GitStore {
         state: GitStoreState,
         cx: &mut Context<Self>,
     ) -> Self {
-        let mut _subscriptions = vec![
+        let mut subscriptions = vec![
             cx.subscribe(&worktree_store, Self::on_worktree_store_event),
             cx.subscribe(&buffer_store, Self::on_buffer_store_event),
         ];
 
         if let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx) {
-            _subscriptions.push(cx.subscribe(&trusted_worktrees, Self::on_trusted_worktrees_event));
+            subscriptions.push(cx.subscribe(&trusted_worktrees, Self::on_trusted_worktrees_event));
         }
 
         GitStore {
@@ -799,7 +799,7 @@ impl GitStore {
             repositories: HashMap::default(),
             worktree_ids: HashMap::default(),
             active_repo_id: None,
-            _subscriptions,
+            subscriptions,
             loading_diffs: HashMap::default(),
             shared_diffs: HashMap::default(),
             diffs: HashMap::default(),
@@ -1393,7 +1393,7 @@ impl GitStore {
             .or_insert_with(|| cx.new(|_| BufferGitState::new(git_store)));
         let conflict_set = cx.new(|cx| ConflictSet::new(buffer_id, is_unmerged, cx));
 
-        self._subscriptions
+        self.subscriptions
             .push(cx.subscribe(&conflict_set, |_, _, _, cx| {
                 cx.emit(GitStoreEvent::ConflictsUpdated);
             }));
@@ -1935,9 +1935,9 @@ impl GitStore {
                     repo.schedule_scan(updates_tx.clone(), cx);
                     repo
                 });
-                self._subscriptions
+                self.subscriptions
                     .push(cx.subscribe(&repo, Self::on_repository_event));
-                self._subscriptions
+                self.subscriptions
                     .push(cx.subscribe(&repo, Self::on_jobs_updated));
                 self.repositories.insert(id, repo);
                 self.worktree_ids.insert(id, HashSet::from([worktree_id]));
@@ -2390,7 +2390,7 @@ impl GitStore {
                 cx.emit(GitStoreEvent::RepositoryAdded);
                 repo
             });
-            this._subscriptions.extend(repo_subscription);
+            this.subscriptions.extend(repo_subscription);
 
             repo.update(cx, {
                 let update = update.clone();
@@ -4938,7 +4938,7 @@ impl Repository {
             })
             .shared();
         self.job_sender.close_channel();
-        self._worker_task = Task::ready(());
+        self.worker_task = Task::ready(());
         self.active_jobs.clear();
         self.job_debug_queue
             .mark_unfinished_complete(job_debug_queue::CompletedJobStatus::Skipped);
@@ -4946,7 +4946,7 @@ impl Repository {
 
         let (job_sender, worker_task) = Repository::spawn_local_git_worker(state.clone(), cx);
         self.job_sender = job_sender;
-        self._worker_task = worker_task;
+        self.worker_task = worker_task;
         self.repository_state = cx
             .spawn(async move |_, _| {
                 let state = state.await?;
@@ -5020,7 +5020,7 @@ impl Repository {
             snapshot,
             pending_ops: Default::default(),
             repository_state: Task::ready(Err("not yet initialized".into())).shared(),
-            _worker_task: Task::ready(()),
+            worker_task: Task::ready(()),
             commit_message_buffer: None,
             askpass_delegates: Default::default(),
             paths_needing_status_update: Default::default(),
@@ -5079,7 +5079,7 @@ impl Repository {
             pending_ops: Default::default(),
             paths_needing_status_update: Default::default(),
             job_sender,
-            _worker_task: worker_task,
+            worker_task,
             repository_state,
             askpass_delegates: Default::default(),
             latest_askpass_id: 0,

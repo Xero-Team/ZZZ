@@ -91,7 +91,7 @@ pub struct LspLogView {
 
 pub struct LspLogToolbarItemView {
     log_view: Option<Entity<LspLogView>>,
-    _log_view_subscription: Option<Subscription>,
+    log_view_subscription: Option<Subscription>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -881,13 +881,13 @@ impl ToolbarItemView for LspLogToolbarItemView {
             && let Some(log_view) = item.downcast::<LspLogView>()
         {
             self.log_view = Some(log_view.clone());
-            self._log_view_subscription = Some(cx.observe(&log_view, |_, _, cx| {
+            self.log_view_subscription = Some(cx.observe(&log_view, |_, _, cx| {
                 cx.notify();
             }));
             return ToolbarItemLocation::PrimaryLeft;
         }
         self.log_view = None;
-        self._log_view_subscription = None;
+        self.log_view_subscription = None;
         ToolbarItemLocation::Hidden
     }
 }
@@ -1295,7 +1295,7 @@ impl LspLogToolbarItemView {
     pub fn new() -> Self {
         Self {
             log_view: None,
-            _log_view_subscription: None,
+            log_view_subscription: None,
         }
     }
 

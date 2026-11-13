@@ -99,7 +99,7 @@ impl MouseContextMenu {
             });
         });
 
-        let _dismiss_subscription = cx.subscribe_in(&context_menu, window, {
+        let dismiss_subscription = cx.subscribe_in(&context_menu, window, {
             let context_menu_focus = context_menu_focus.clone();
             move |editor, _, _event: &DismissEvent, window, cx| {
                 editor.mouse_context_menu.take();
@@ -111,7 +111,7 @@ impl MouseContextMenu {
 
         let selection_init = editor.selections.newest_anchor().clone();
 
-        let _cursor_move_subscription = cx.subscribe_in(
+        let cursor_move_subscription = cx.subscribe_in(
             &cx.entity(),
             window,
             move |editor, _, event: &crate::EditorEvent, window, cx| {
@@ -139,8 +139,8 @@ impl MouseContextMenu {
         Self {
             position,
             context_menu,
-            _dismiss_subscription,
-            _cursor_move_subscription,
+            _dismiss_subscription: dismiss_subscription,
+            _cursor_move_subscription: cursor_move_subscription,
         }
     }
 }

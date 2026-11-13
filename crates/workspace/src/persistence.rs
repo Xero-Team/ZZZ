@@ -1516,7 +1516,7 @@ impl WorkspaceDb {
         let mut ret = BTreeMap::<_, IndexSet<_>>::default();
 
         for (
-            _workspace_id,
+            row_workspace_id,
             worktree_root_path,
             relative_worktree_path,
             language_name,
@@ -1526,12 +1526,12 @@ impl WorkspaceDb {
         ) in toolchains
         {
             // INTEGER's that are primary keys (like workspace ids, remote connection ids and such) start at 1, so we're safe to
-            let scope = if _workspace_id == WorkspaceId(0) {
+            let scope = if row_workspace_id == WorkspaceId(0) {
                 debug_assert_eq!(worktree_root_path, String::default());
                 debug_assert_eq!(relative_worktree_path, String::default());
                 ToolchainScope::Global
             } else {
-                debug_assert_eq!(workspace_id, _workspace_id);
+                debug_assert_eq!(workspace_id, row_workspace_id);
                 debug_assert_eq!(
                     worktree_root_path == String::default(),
                     relative_worktree_path == String::default()
@@ -3029,13 +3029,13 @@ mod tests {
         );
 
         // --- Remove the non-active workspace ---
-        multi_workspace.update_in(cx, |mw, _window, cx| {
+        multi_workspace.update_in(cx, |mw, window, cx| {
             let active = mw.workspace().clone();
             let ws = mw
                 .workspaces()
                 .find(|ws| *ws != &active)
                 .expect("should have a non-active workspace");
-            mw.remove([ws.clone()], false, |_, _, _| unreachable!(), _window, cx)
+            mw.remove([ws.clone()], false, |_, _, _| unreachable!(), window, cx)
                 .detach_and_log_err(cx);
         });
 

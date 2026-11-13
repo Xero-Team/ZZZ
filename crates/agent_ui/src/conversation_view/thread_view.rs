@@ -649,9 +649,9 @@ pub struct ThreadView {
         clippy::pub_underscore_fields,
         reason = "kept alive so the cancellation task is not dropped"
     )]
-    pub _cancel_task: Option<Task<()>>,
-    _save_task: Option<Task<()>>,
-    _draft_resolve_task: Option<Task<()>>,
+    pub cancel_task: Option<Task<()>>,
+    save_task: Option<Task<()>>,
+    draft_resolve_task: Option<Task<()>>,
     pub skip_queue_processing_count: usize,
     pub user_interrupted_generation: bool,
     pub can_fast_track_queue: bool,
@@ -661,7 +661,7 @@ pub struct ThreadView {
         clippy::pub_underscore_fields,
         reason = "kept alive for the lifetime of the view"
     )]
-    pub _subscriptions: Vec<Subscription>,
+    pub subscriptions: Vec<Subscription>,
     pub message_editor: Entity<MessageEditor>,
     pub add_context_menu_handle: PopoverMenuHandle<ContextMenu>,
     pub thinking_effort_menu_handle: PopoverMenuHandle<ContextMenu>,
@@ -699,7 +699,7 @@ pub struct TurnFields {
         clippy::pub_underscore_fields,
         reason = "kept alive so the turn timer task is not dropped"
     )]
-    pub _turn_timer_task: Option<Task<()>>,
+    pub turn_timer_task: Option<Task<()>>,
     pub last_turn_duration: Option<Duration>,
     pub last_turn_tokens: Option<u64>,
     pub turn_generation: usize,
@@ -845,7 +845,7 @@ impl ThreadView {
             } else {
                 Some(editor.update(cx, |editor, cx| editor.draft_contents(cx)))
             };
-            this._draft_resolve_task = Some(cx.spawn(async move |this, cx| {
+            this.draft_resolve_task = Some(cx.spawn(async move |this, cx| {
                 let draft = match draft_contents_task {
                     Some(task) => task.await.log_err().filter(|blocks| !blocks.is_empty()),
                     None => None,
@@ -881,7 +881,7 @@ impl ThreadView {
             list_state,
             session_capabilities,
             resumed_without_history,
-            _subscriptions: subscriptions,
+            subscriptions,
             permission_dropdown_handle: PopoverMenuHandle::default(),
             thread_retry_status: None,
             thread_error: None,
@@ -909,9 +909,9 @@ impl ThreadView {
             is_loading_contents: false,
             new_server_version_available: None,
             elicitation_form_states: HashMap::default(),
-            _cancel_task: None,
-            _save_task: None,
-            _draft_resolve_task: None,
+            cancel_task: None,
+            save_task: None,
+            draft_resolve_task: None,
             skip_queue_processing_count: 0,
             user_interrupted_generation: false,
             can_fast_track_queue: false,
@@ -958,7 +958,7 @@ impl ThreadView {
     /// Schedule a throttled save of the thread state (draft prompt, scroll position, etc.).
     /// Multiple calls within `SERIALIZATION_THROTTLE_TIME` are coalesced into a single save.
     fn schedule_save(&mut self, cx: &mut Context<Self>) {
-        self._save_task = Some(cx.spawn(async move |this, cx| {
+        self.save_task = Some(cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(SERIALIZATION_THROTTLE_TIME)
                 .await;
@@ -1167,7 +1167,7 @@ impl ThreadView {
         self.turn_fields.last_turn_duration = None;
         self.turn_fields.last_turn_tokens = None;
         self.turn_fields.turn_tokens = Some(0);
-        self.turn_fields._turn_timer_task = Some(cx.spawn(async move |this, cx| {
+        self.turn_fields.turn_timer_task = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(Duration::from_secs(1)).await;
                 if this.update(cx, |_, cx| cx.notify()).is_err() {
@@ -1357,7 +1357,7 @@ impl ThreadView {
             })
             .log_err();
 
-            let _stop_turn = defer({
+            let stop_turn = defer({
                 let this = this.clone();
                 let mut cx = cx.clone();
                 move || {
@@ -1407,7 +1407,7 @@ impl ThreadView {
 
             let res = send.await;
             let _turn_time_ms = turn_start_time.elapsed().as_millis();
-            drop(_stop_turn);
+            drop(stop_turn);
             this.update(cx, |this, cx| {
                 // Cancellation can return control to the UI before this response settles.
                 if this.turn_fields.turn_generation != generation {
@@ -1498,7 +1498,7 @@ impl ThreadView {
         self.thread_retry_status.take();
         self.thread_error.take();
         self.user_interrupted_generation = true;
-        self._cancel_task = Some(self.thread.update(cx, |thread, cx| thread.cancel(cx)));
+        self.cancel_task = Some(self.thread.update(cx, |thread, cx| thread.cancel(cx)));
         self.sync_generating_indicator(cx);
         cx.notify();
     }
@@ -3806,7 +3806,7 @@ impl ThreadView {
 
     fn render_message_queue_entries(
         &self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &Context<Self>,
     ) -> impl IntoElement {
         let message_editor = self.message_editor.read(cx);
@@ -3842,7 +3842,7 @@ impl ThreadView {
                             )
                         };
 
-                        let editor_focused = editor.focus_handle(cx).is_focused(_window);
+                        let editor_focused = editor.focus_handle(cx).is_focused(window);
                         h_flex()
                             .group("queue_entry")
                             .w_full()
@@ -4282,7 +4282,7 @@ impl ThreadView {
                         this.icon_color(Color::Accent)
                     }
                 })
-                .tooltip(move |_window, cx| {
+                .tooltip(move |window, cx| {
                     if is_editor_empty && !is_generating {
                         Tooltip::for_action(
                             tr(cx, "agent_ui.thread_view.type_to_send", "Type to Send"),
@@ -4325,7 +4325,7 @@ impl ThreadView {
                                         )),
                                 )
                                 .into_any_element()
-                        })(_window, cx)
+                        })(window, cx)
                     } else {
                         Tooltip::for_action(
                             tr(cx, "agent_ui.thread_view.send_message", "Send Message"),
@@ -9753,7 +9753,7 @@ impl ThreadView {
             let search_bar = cx.new(|cx| {
                 ThreadSearchBar::new(thread, thread_view_for_search, on_activate, window, cx)
             });
-            self._subscriptions.push(cx.subscribe_in(
+            self.subscriptions.push(cx.subscribe_in(
                 &search_bar,
                 window,
                 |this, _bar, event, window, cx| {

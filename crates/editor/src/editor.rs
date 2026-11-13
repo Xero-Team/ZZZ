@@ -1159,7 +1159,7 @@ pub struct Editor {
     in_leading_whitespace: bool,
     next_inlay_id: usize,
     next_color_inlay_id: usize,
-    _subscriptions: Vec<Subscription>,
+    subscriptions: Vec<Subscription>,
     pixel_position_of_newest_cursor: Option<gpui::Point<Pixels>>,
     gutter_dimensions: GutterDimensions,
     style: Option<EditorStyle>,
@@ -1237,7 +1237,7 @@ pub struct Editor {
     temporary_diff_override: bool,
     selection_mark_mode: bool,
     toggle_fold_multiple_buffers: Task<()>,
-    _scroll_cursor_center_top_bottom_task: Task<()>,
+    scroll_cursor_center_top_bottom_task: Task<()>,
     serialize_selections: Task<()>,
     serialize_folds: Task<()>,
     minimap: Option<Entity<Self>>,
@@ -2622,7 +2622,7 @@ impl Editor {
             stored_review_comments: Vec::new(),
             next_review_comment_id: 0,
             hovered_diff_hunk_row: None,
-            _subscriptions: if is_minimap {
+            subscriptions: if is_minimap {
                 Default::default()
             } else {
                 {
@@ -2657,7 +2657,7 @@ impl Editor {
             addons: Default::default(),
             registered_buffers: HashMap::default(),
             language_detection_task: Task::ready(()),
-            _scroll_cursor_center_top_bottom_task: Task::ready(()),
+            scroll_cursor_center_top_bottom_task: Task::ready(()),
             selection_mark_mode: false,
             toggle_fold_multiple_buffers: Task::ready(()),
             serialize_selections: Task::ready(()),
@@ -2699,14 +2699,14 @@ impl Editor {
 
         if let Some(breakpoints) = editor.breakpoint_store.as_ref() {
             editor
-                ._subscriptions
+                .subscriptions
                 .push(cx.observe(breakpoints, |_, _, cx| {
                     cx.notify();
                 }));
         }
-        editor._subscriptions.extend(project_subscriptions);
+        editor.subscriptions.extend(project_subscriptions);
 
-        editor._subscriptions.push(cx.subscribe_in(
+        editor.subscriptions.push(cx.subscribe_in(
             &cx.entity(),
             window,
             |editor, _, e: &EditorEvent, window, cx| match e {
@@ -2763,13 +2763,13 @@ impl Editor {
             let weak_editor = cx.weak_entity();
 
             editor
-                ._subscriptions
+                .subscriptions
                 .push(
                     cx.observe_new::<project::debugger::session::Session>(move |_, _, cx| {
                         let session_entity = cx.entity();
                         if let Some(editor) = weak_editor.upgrade() {
                             editor.update(cx, |editor, cx| {
-                                editor._subscriptions.push(
+                                editor.subscriptions.push(
                                     cx.subscribe(&session_entity, Self::on_debug_session_event),
                                 );
                             });
@@ -2779,7 +2779,7 @@ impl Editor {
 
             for session in dap_store.read(cx).sessions().cloned().collect::<Vec<_>>() {
                 editor
-                    ._subscriptions
+                    .subscriptions
                     .push(cx.subscribe(&session, Self::on_debug_session_event));
             }
         }
@@ -13635,7 +13635,7 @@ impl Editor {
         if self.read_only(cx) {
             return;
         }
-        self.transact(window, cx, |this, _window, cx| {
+        self.transact(window, cx, |this, window, cx| {
             let mut selections = this
                 .selections
                 .all::<MultiBufferPoint>(&this.display_snapshot(cx));
@@ -13812,7 +13812,7 @@ impl Editor {
                     }
                 }
             }
-            this.change_selections(Default::default(), _window, cx, |s| s.select(selections));
+            this.change_selections(Default::default(), window, cx, |s| s.select(selections));
         });
     }
 

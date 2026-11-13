@@ -10579,10 +10579,14 @@ impl Element for EditorElement {
         })
     }
 
+    #[allow(
+        clippy::only_used_in_recursion,
+        reason = "the inspector id is threaded into the recursive prepaint pass that re-lays out resized blocks"
+    )]
     fn prepaint(
         &mut self,
         _: Option<&GlobalElementId>,
-        _inspector_id: Option<&gpui::InspectorElementId>,
+        inspector_id: Option<&gpui::InspectorElementId>,
         bounds: Bounds<Pixels>,
         request_layout: &mut Self::RequestLayoutState,
         window: &mut Window,
@@ -10879,7 +10883,7 @@ impl Element for EditorElement {
                     if renderer_widths_changed {
                         return self.prepaint(
                             None,
-                            _inspector_id,
+                            inspector_id,
                             bounds,
                             request_layout,
                             window,
@@ -11014,7 +11018,7 @@ impl Element for EditorElement {
                             });
                             return self.prepaint(
                                 None,
-                                _inspector_id,
+                                inspector_id,
                                 bounds,
                                 request_layout,
                                 window,
@@ -14129,8 +14133,8 @@ mod tests {
         cx.run_until_parked();
 
         window
-            .update(cx, |editor, _window, cx| {
-                let snapshot = editor.snapshot(_window, cx);
+            .update(cx, |editor, window, cx| {
+                let snapshot = editor.snapshot(window, cx);
 
                 let line_1_display_row = Point::new(1, 0).to_display_point(&snapshot).row();
                 assert!(

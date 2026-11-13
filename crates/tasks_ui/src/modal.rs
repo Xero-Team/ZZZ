@@ -163,7 +163,7 @@ impl TasksModal {
             )
             .modal(is_modal)
         });
-        let mut _subscriptions = [
+        let subscriptions = [
             cx.subscribe(&picker, |_, _, _: &DismissEvent, cx| {
                 cx.emit(DismissEvent);
             }),
@@ -176,7 +176,7 @@ impl TasksModal {
 
         Self {
             picker,
-            _subscriptions,
+            _subscriptions: subscriptions,
         }
     }
 

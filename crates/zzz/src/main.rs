@@ -142,12 +142,12 @@ fn fail_to_open_window_async(e: anyhow::Error, cx: &mut AsyncApp) {
     cx.update(|cx| fail_to_open_window(e, cx));
 }
 
-fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
-    let _launch_failed = app_i18n::tr(_cx, "zzz.launch.failed_title", "ZZZ failed to launch");
+fn fail_to_open_window(e: anyhow::Error, cx: &mut App) {
+    let launch_failed = app_i18n::tr(cx, "zzz.launch.failed_title", "ZZZ failed to launch");
     eprintln!(
         "{}: {e:?}. See the local troubleshooting documentation for help.",
         app_i18n::tr(
-            _cx,
+            cx,
             "zzz.launch.failed_to_open_window",
             "ZZZ failed to open a window"
         )
@@ -161,7 +161,7 @@ fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     {
         use ashpd::desktop::notification::{Notification, NotificationProxy, Priority};
-        _cx.spawn(async move |_cx| {
+        cx.spawn(async move |_cx| {
             let Ok(proxy) = NotificationProxy::new().await else {
                 process::exit(1);
             };
@@ -170,7 +170,7 @@ fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
             proxy
                 .add_notification(
                     notification_id,
-                    Notification::new(_launch_failed.as_ref())
+                    Notification::new(launch_failed.as_ref())
                         .body(Some(
                             format!("{e:?}. See the local troubleshooting documentation for help.")
                                 .as_str(),
@@ -843,7 +843,7 @@ fn main() {
 
         let (first_window_tx, first_window_rx) = oneshot::channel::<()>();
         let first_window_tx = Rc::new(RefCell::new(Some(first_window_tx)));
-        let _first_window_subscription = cx.observe_new::<MultiWorkspace>(move |_, _, _| {
+        let first_window_subscription = cx.observe_new::<MultiWorkspace>(move |_, _, _| {
             if let Some(tx) = first_window_tx.borrow_mut().take() {
                 tx.send(()).ok();
             }
@@ -872,7 +872,7 @@ fn main() {
         component_preview::init(app_state.clone(), cx);
 
         cx.spawn(async move |cx| {
-            let _first_window_subscription = _first_window_subscription;
+            let _first_window_subscription = first_window_subscription;
             let first_window_placed = first_window_rx.shared();
             while let Some(urls) = open_rx.next().await {
                 // A macOS cold-launch CLI request can arrive after startup begins restoring.

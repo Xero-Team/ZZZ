@@ -572,12 +572,12 @@ impl Agent {
 
     /// The bindings are the only localized variant, so this stays `_cx` outside
     /// of test builds.
-    pub fn localized_label(&self, _cx: &App) -> SharedString {
+    pub fn localized_label(&self, cx: &App) -> SharedString {
         match self {
             Self::Absent => SharedString::default(),
             Self::Custom { id, .. } => id.0.clone(),
             #[cfg(any(test, feature = "test-support"))]
-            Self::Stub => tr(_cx, "agent_ui.agent.stub", "Stub Agent"),
+            Self::Stub => tr(cx, "agent_ui.agent.stub", "Stub Agent"),
         }
     }
 

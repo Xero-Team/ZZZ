@@ -390,7 +390,7 @@ pub struct LocalLspStore {
 
     buffers_to_refresh_hash_set: HashSet<BufferId>,
     buffers_to_refresh_queue: VecDeque<BufferId>,
-    _background_diagnostics_worker: Shared<Task<()>>,
+    background_diagnostics_worker: Shared<Task<()>>,
 }
 
 fn workspace_folder_uri(worktree: &Worktree, path: &RelPath) -> Option<Uri> {
@@ -4608,7 +4608,7 @@ pub struct LspStore {
     pub languages: Arc<LanguageRegistry>,
     pub language_server_statuses: BTreeMap<LanguageServerId, LanguageServerStatus>,
     active_entry: Option<ProjectEntryId>,
-    _maintain_workspace_config: (Task<Result<()>>, watch::Sender<()>),
+    maintain_workspace_config: (Task<Result<()>>, watch::Sender<()>),
     _maintain_buffer_languages: Task<()>,
     diagnostic_summaries:
         HashMap<WorktreeId, HashMap<Arc<RelPath>, HashMap<LanguageServerId, DiagnosticSummary>>>,
@@ -4911,7 +4911,7 @@ impl LspStore {
             .detach();
         subscribe_to_binary_statuses(&languages, cx).detach();
 
-        let _maintain_workspace_config = {
+        let maintain_workspace_config = {
             let (sender, receiver) = watch::channel();
             (Self::maintain_workspace_config(receiver, cx), sender)
         };
@@ -4932,7 +4932,7 @@ impl LspStore {
                 buffers_being_formatted: Default::default(),
                 buffers_to_refresh_hash_set: HashSet::default(),
                 buffers_to_refresh_queue: VecDeque::new(),
-                _background_diagnostics_worker: Task::ready(()).shared(),
+                background_diagnostics_worker: Task::ready(()).shared(),
                 buffer_snapshots: Default::default(),
                 prettier_store,
                 environment,
@@ -4977,7 +4977,7 @@ impl LspStore {
             buffer_reload_tasks: HashMap::default(),
             next_hint_id: Arc::default(),
             active_entry: None,
-            _maintain_workspace_config,
+            maintain_workspace_config,
             _maintain_buffer_languages: Self::maintain_buffer_languages(languages, cx),
         }
     }
@@ -5038,7 +5038,7 @@ impl LspStore {
         cx.subscribe(&worktree_store, Self::on_worktree_store_event)
             .detach();
         subscribe_to_binary_statuses(&languages, cx).detach();
-        let _maintain_workspace_config = {
+        let maintain_workspace_config = {
             let (sender, receiver) = watch::channel();
             (Self::maintain_workspace_config(receiver, cx), sender)
         };
@@ -5062,7 +5062,7 @@ impl LspStore {
             buffer_reload_tasks: HashMap::default(),
             active_entry: None,
 
-            _maintain_workspace_config,
+            maintain_workspace_config,
             _maintain_buffer_languages: Self::maintain_buffer_languages(languages.clone(), cx),
         }
     }
@@ -5180,7 +5180,7 @@ impl LspStore {
     }
 
     fn request_workspace_config_refresh(&mut self) {
-        *self._maintain_workspace_config.1.borrow_mut() = ();
+        *self.maintain_workspace_config.1.borrow_mut() = ();
     }
 
     pub fn prettier_store(&self) -> Option<Entity<PrettierStore>> {
@@ -5248,13 +5248,13 @@ impl LspStore {
             if local.buffers_to_refresh_hash_set.insert(buffer) {
                 local.buffers_to_refresh_queue.push_back(buffer);
                 if local.buffers_to_refresh_queue.len() == 1 {
-                    local._background_diagnostics_worker =
+                    local.background_diagnostics_worker =
                         Self::background_diagnostics_worker(cx).shared();
                 }
             }
         }
 
-        local._background_diagnostics_worker.clone()
+        local.background_diagnostics_worker.clone()
     }
 
     fn refresh_next_buffer(&mut self, cx: &mut Context<Self>) -> Option<Task<Result<()>>> {

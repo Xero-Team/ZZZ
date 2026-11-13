@@ -296,8 +296,8 @@ pub fn property_test(args: TokenStream, function: TokenStream) -> TokenStream {
 /// provides the method's documentation.
 #[cfg(any(feature = "inspector", debug_assertions))]
 #[proc_macro_attribute]
-pub fn derive_inspector_reflection(_arguments: TokenStream, input: TokenStream) -> TokenStream {
-    derive_inspector_reflection::derive_inspector_reflection(_arguments, input)
+pub fn derive_inspector_reflection(arguments: TokenStream, input: TokenStream) -> TokenStream {
+    derive_inspector_reflection::derive_inspector_reflection(arguments, input)
 }
 
 pub(crate) fn get_simple_attribute_field(

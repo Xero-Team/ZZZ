@@ -24,7 +24,7 @@ pub struct ModeSelector {
     menu_handle: PopoverMenuHandle<ContextMenu>,
     fs: Arc<dyn Fs>,
     setting_mode: bool,
-    _setting_mode_task: Option<Task<()>>,
+    setting_mode_task: Option<Task<()>>,
 }
 
 impl ModeSelector {
@@ -39,7 +39,7 @@ impl ModeSelector {
             menu_handle: PopoverMenuHandle::default(),
             fs,
             setting_mode: false,
-            _setting_mode_task: None,
+            setting_mode_task: None,
         }
     }
 
@@ -69,19 +69,18 @@ impl ModeSelector {
     pub fn set_mode(&mut self, mode: acp::SessionModeId, cx: &mut Context<Self>) {
         let task = self.connection.set_mode(mode, cx);
         self.setting_mode = true;
-        self._setting_mode_task =
-            Some(cx.spawn(async move |this: WeakEntity<ModeSelector>, cx| {
-                if let Err(err) = task.await {
-                    log::error!("Failed to set session mode: {:?}", err);
-                }
-                let Some(this) = this.upgrade() else {
-                    return;
-                };
-                this.update(cx, |this, cx| {
-                    this.setting_mode = false;
-                    cx.notify();
-                });
-            }));
+        self.setting_mode_task = Some(cx.spawn(async move |this: WeakEntity<ModeSelector>, cx| {
+            if let Err(err) = task.await {
+                log::error!("Failed to set session mode: {:?}", err);
+            }
+            let Some(this) = this.upgrade() else {
+                return;
+            };
+            this.update(cx, |this, cx| {
+                this.setting_mode = false;
+                cx.notify();
+            });
+        }));
         cx.notify();
     }
 

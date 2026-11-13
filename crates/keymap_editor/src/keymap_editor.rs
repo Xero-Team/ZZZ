@@ -567,7 +567,7 @@ fn binding_is_unbound_by_unbind(
 
 impl KeymapEditor {
     fn new(workspace: WeakEntity<Workspace>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let _keymap_subscription =
+        let keymap_subscription =
             cx.observe_global_in::<KeymapEventChannel>(window, Self::on_keymap_changed);
         let table_interaction_state = cx.new(|cx| {
             TableInteractionState::new(cx).with_custom_scrollbar(ui::Scrollbars::for_settings::<
@@ -646,7 +646,7 @@ impl KeymapEditor {
             string_match_candidates: Arc::new(vec![]),
             matches: vec![],
             focus_handle: cx.focus_handle(),
-            _keymap_subscription,
+            _keymap_subscription: keymap_subscription,
             table_interaction_state,
             filter_editor,
             keystroke_editor,
@@ -1089,33 +1089,33 @@ impl KeymapEditor {
             let selected_binding_is_non_interactable =
                 selected_binding_is_unmapped || selected_binding_is_suppressed;
 
-            let context_menu = ContextMenu::build(window, cx, |menu, _window, _cx| {
+            let context_menu = ContextMenu::build(window, cx, |menu, _window, cx| {
                 menu.context(self.focus_handle.clone())
                     .when(selected_binding_is_unmapped, |this| {
                         this.action(
-                            tr(_cx, "keymap_editor.context_menu.create", "Create"),
+                            tr(cx, "keymap_editor.context_menu.create", "Create"),
                             Box::new(CreateBinding),
                         )
                     })
                     .action_disabled_when(
                         selected_binding_is_non_interactable,
-                        tr(_cx, "keymap_editor.context_menu.edit", "Edit"),
+                        tr(cx, "keymap_editor.context_menu.edit", "Edit"),
                         Box::new(EditBinding),
                     )
                     .action_disabled_when(
                         selected_binding_is_non_interactable,
-                        tr(_cx, "keymap_editor.context_menu.delete", "Delete"),
+                        tr(cx, "keymap_editor.context_menu.delete", "Delete"),
                         Box::new(DeleteBinding),
                     )
                     .separator()
                     .action(
-                        tr(_cx, "keymap_editor.context_menu.copy_action", "Copy Action"),
+                        tr(cx, "keymap_editor.context_menu.copy_action", "Copy Action"),
                         Box::new(CopyAction),
                     )
                     .action_disabled_when(
                         selected_binding_has_no_context,
                         tr(
-                            _cx,
+                            cx,
                             "keymap_editor.context_menu.copy_context",
                             "Copy Context",
                         ),
@@ -1125,7 +1125,7 @@ impl KeymapEditor {
                     .action_disabled_when(
                         selected_binding_has_no_context,
                         tr(
-                            _cx,
+                            cx,
                             "keymap_editor.context_menu.show_matching_keybindings",
                             "Show Matching Keybindings",
                         ),

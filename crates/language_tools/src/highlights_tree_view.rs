@@ -154,7 +154,7 @@ pub struct HighlightsTreeView {
 
 pub struct HighlightsTreeToolbarItemView {
     tree_view: Option<Entity<HighlightsTreeView>>,
-    _subscription: Option<gpui::Subscription>,
+    subscription: Option<gpui::Subscription>,
     toggle_settings_handle: PopoverMenuHandle<ContextMenu>,
 }
 
@@ -968,7 +968,7 @@ impl HighlightsTreeToolbarItemView {
     pub fn new() -> Self {
         Self {
             tree_view: None,
-            _subscription: None,
+            subscription: None,
             toggle_settings_handle: PopoverMenuHandle::default(),
         }
     }
@@ -1148,11 +1148,11 @@ impl ToolbarItemView for HighlightsTreeToolbarItemView {
             && let Some(view) = item.downcast::<HighlightsTreeView>()
         {
             self.tree_view = Some(view.clone());
-            self._subscription = Some(cx.observe_in(&view, window, |_, _, _, cx| cx.notify()));
+            self.subscription = Some(cx.observe_in(&view, window, |_, _, _, cx| cx.notify()));
             return ToolbarItemLocation::PrimaryLeft;
         }
         self.tree_view = None;
-        self._subscription = None;
+        self.subscription = None;
         ToolbarItemLocation::Hidden
     }
 }

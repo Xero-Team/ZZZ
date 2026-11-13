@@ -62,7 +62,7 @@ impl SidebarRecentProjects {
                 picker.delegate.focus_handle = picker_focus_handle;
             });
 
-            let _subscription =
+            let subscription =
                 cx.subscribe(&picker, |_this: &mut Self, _, _, cx| cx.emit(DismissEvent));
 
             let db = WorkspaceDb::global(cx);
@@ -90,7 +90,7 @@ impl SidebarRecentProjects {
 
             Self {
                 picker,
-                _subscription,
+                _subscription: subscription,
             }
         })
     }

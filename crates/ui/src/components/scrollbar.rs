@@ -631,7 +631,7 @@ struct ScrollbarState<T: ScrollableHandle = ScrollHandle> {
     style: ScrollbarStyle,
     mouse_in_parent: bool,
     last_prepaint_state: Option<ScrollbarPrepaintState>,
-    _auto_hide_task: Option<Task<()>>,
+    auto_hide_task: Option<Task<()>>,
 }
 
 impl<T: ScrollableHandle> ScrollbarState<T> {
@@ -664,7 +664,7 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
             show_state: VisibilityState::from_behavior(show_behavior),
             mouse_in_parent: true,
             last_prepaint_state: None,
-            _auto_hide_task: None,
+            auto_hide_task: None,
         }
     }
 
@@ -678,8 +678,8 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
 
     /// Schedules a scrollbar auto hide if no auto hide is currently in progress yet.
     fn schedule_auto_hide(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self._auto_hide_task.is_none() {
-            self._auto_hide_task = (self.visible() && self.show_behavior == ShowBehavior::Autohide)
+        if self.auto_hide_task.is_none() {
+            self.auto_hide_task = (self.visible() && self.show_behavior == ShowBehavior::Autohide)
                 .then(|| {
                     cx.spawn_in(window, async move |scrollbar_state, cx| {
                         cx.background_executor()
@@ -690,7 +690,7 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
                                 if state.thumb_state == ThumbState::Inactive {
                                     state.set_visibility(VisibilityState::for_autohide(), cx);
                                 }
-                                state._auto_hide_task.take();
+                                state.auto_hide_task.take();
                             })
                             .log_err();
                     })
@@ -701,7 +701,7 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
     fn show_scrollbars(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let visibility = self.show_state.toggle_visible(self.show_behavior);
         self.set_visibility(visibility, cx);
-        self._auto_hide_task.take();
+        self.auto_hide_task.take();
         self.schedule_auto_hide(window, cx);
     }
 
@@ -809,7 +809,7 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
                 self.schedule_auto_hide(window, cx);
             } else {
                 self.set_visibility(self.show_state.toggle_visible(self.show_behavior), cx);
-                self._auto_hide_task.take();
+                self.auto_hide_task.take();
             }
             self.thumb_state = state;
             cx.notify();

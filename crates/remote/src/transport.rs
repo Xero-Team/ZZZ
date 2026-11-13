@@ -26,12 +26,12 @@ pub mod ssh;
 pub mod wsl;
 
 pub(crate) struct EmbeddedRemoteServerFile {
-    _file: tempfile::NamedTempFile,
+    file: tempfile::NamedTempFile,
 }
 
 impl EmbeddedRemoteServerFile {
     pub(crate) fn path(&self) -> &Path {
-        self._file.path()
+        self.file.path()
     }
 }
 
@@ -53,7 +53,7 @@ pub(crate) fn materialize_embedded_remote_server(
         .context("writing embedded remote server archive")?;
     file.flush()
         .context("flushing embedded remote server archive")?;
-    Ok(Some(EmbeddedRemoteServerFile { _file: file }))
+    Ok(Some(EmbeddedRemoteServerFile { file }))
 }
 
 pub(crate) fn embedded_remote_server_extension(platform: RemotePlatform) -> Option<&'static str> {

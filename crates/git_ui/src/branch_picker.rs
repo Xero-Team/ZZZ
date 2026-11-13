@@ -176,7 +176,7 @@ pub struct BranchList {
     width: Rems,
     pub picker: Entity<Picker<BranchListDelegate>>,
     picker_focus_handle: FocusHandle,
-    _subscriptions: Vec<Subscription>,
+    subscriptions: Vec<Subscription>,
     _load_default_branch: Option<Task<()>>,
     embedded: bool,
 }
@@ -191,7 +191,7 @@ impl BranchList {
         cx: &mut Context<Self>,
     ) -> Self {
         let mut this = Self::new_inner(workspace, repository, style, width, false, window, cx);
-        this._subscriptions
+        this.subscriptions
             .push(cx.subscribe(&this.picker, |this, _, _, cx| {
                 if !this.branch_filter_menu_open(cx) {
                     cx.emit(DismissEvent);
@@ -244,7 +244,7 @@ impl BranchList {
             window,
             cx,
         );
-        this._subscriptions
+        this.subscriptions
             .push(cx.subscribe(&this.picker, |this, _, _, cx| {
                 if !this.branch_filter_menu_open(cx) {
                     cx.emit(DismissEvent);
@@ -353,7 +353,7 @@ impl BranchList {
             picker,
             picker_focus_handle,
             width,
-            _subscriptions: subscriptions,
+            subscriptions,
             _load_default_branch: load_default_branch,
             embedded,
         }
@@ -379,7 +379,7 @@ impl BranchList {
         this.picker.update(cx, |picker, _| {
             picker.delegate.show_footer = show_footer;
         });
-        this._subscriptions
+        this.subscriptions
             .push(cx.subscribe(&this.picker, |_, _, _, cx| {
                 cx.emit(DismissEvent);
             }));
@@ -2365,7 +2365,7 @@ mod tests {
                         picker.delegate.focus_handle = picker_focus_handle.clone();
                     });
 
-                    let _subscription = cx.subscribe(&picker, |_, _, _, cx| {
+                    let subscription = cx.subscribe(&picker, |_, _, _, cx| {
                         cx.emit(DismissEvent);
                     });
 
@@ -2373,7 +2373,7 @@ mod tests {
                         picker,
                         picker_focus_handle,
                         width: rems(34.),
-                        _subscriptions: vec![_subscription],
+                        subscriptions: vec![subscription],
                         _load_default_branch: None,
                         embedded: false,
                     }

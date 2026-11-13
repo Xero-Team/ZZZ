@@ -155,7 +155,7 @@ pub struct LocalWorktree {
     path_prefixes_to_scan_tx: async_channel::Sender<PathPrefixScanRequest>,
     is_scanning: (watch::Sender<bool>, watch::Receiver<bool>),
     snapshot_subscriptions: VecDeque<(usize, oneshot::Sender<()>)>,
-    _background_scanner_tasks: Vec<Task<()>>,
+    background_scanner_tasks: Vec<Task<()>>,
     update_observer: Option<UpdateObservationState>,
     fs: Arc<dyn Fs>,
     vfs_snapshot: Option<VfsSnapshot>,
@@ -643,7 +643,7 @@ impl Worktree {
                 update_observer: None,
                 scan_requests_tx,
                 path_prefixes_to_scan_tx,
-                _background_scanner_tasks: Vec::new(),
+                background_scanner_tasks: Vec::new(),
                 fs,
                 vfs_snapshot,
                 fs_case_sensitive,
@@ -1876,7 +1876,7 @@ impl LocalWorktree {
                 });
             }
         });
-        self._background_scanner_tasks = vec![background_scanner, scan_state_updater];
+        self.background_scanner_tasks = vec![background_scanner, scan_state_updater];
         *self.is_scanning.0.borrow_mut() = true;
     }
 
@@ -2737,7 +2737,7 @@ impl LocalWorktree {
             .ok();
 
         let worktree_id = self.id.to_proto();
-        let _maintain_remote_snapshot = cx.background_spawn(async move {
+        let maintain_remote_snapshot = cx.background_spawn(async move {
             let mut is_first = true;
             while let Some((snapshot, entry_changes)) = snapshots_rx.next().await {
                 let update = if is_first {
@@ -2767,7 +2767,7 @@ impl LocalWorktree {
         self.update_observer = Some(UpdateObservationState {
             snapshots_tx,
             resume_updates: resume_updates_tx,
-            _maintain_remote_snapshot,
+            _maintain_remote_snapshot: maintain_remote_snapshot,
         });
     }
 

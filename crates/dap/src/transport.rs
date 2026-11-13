@@ -722,7 +722,7 @@ impl StdioTransport {
 
         let mut process = Child::spawn(command, Stdio::piped(), Stdio::piped(), Stdio::piped())?;
 
-        let _stderr_task = process.stderr.take().map(|stderr| {
+        let stderr_task = process.stderr.take().map(|stderr| {
             cx.background_spawn(TransportDelegate::handle_adapter_log(
                 stderr,
                 IoKind::StdErr,
@@ -734,7 +734,7 @@ impl StdioTransport {
 
         Ok(Self {
             process,
-            _stderr_task,
+            _stderr_task: stderr_task,
         })
     }
 }

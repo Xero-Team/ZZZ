@@ -203,7 +203,7 @@ impl VariableList {
     ) -> Self {
         let focus_handle = cx.focus_handle();
 
-        let _subscriptions = vec![
+        let subscriptions = vec![
             cx.subscribe(&stack_frame_list, Self::handle_stack_frame_list_events),
             cx.subscribe(&session, |this, _, event, cx| match event {
                 SessionEvent::HistoricSnapshotSelected => {
@@ -235,7 +235,7 @@ impl VariableList {
             list_handle: list_state,
             session,
             focus_handle,
-            _subscriptions,
+            _subscriptions: subscriptions,
             selected_stack_frame_id: None,
             selection: None,
             open_context_menu: None,

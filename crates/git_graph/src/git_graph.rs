@@ -1420,9 +1420,9 @@ pub struct GitGraph {
     log_order: LogOrder,
     selected_commit_diff: Option<CommitDiff>,
     selected_commit_diff_stats: Option<(usize, usize)>,
-    _commit_diff_task: Option<Task<()>>,
+    commit_diff_task: Option<Task<()>>,
     selected_commit_message: Option<DetailPanelCommitMessage>,
-    _selected_commit_message_task: Option<Task<()>>,
+    selected_commit_message_task: Option<Task<()>>,
     commit_details_split_state: Entity<SplitState>,
     repo_id: RepositoryId,
     changed_files_scroll_handle: UniformListScrollHandle,
@@ -1662,9 +1662,9 @@ impl GitGraph {
             },
             workspace,
             graph_data: graph,
-            _commit_diff_task: None,
+            commit_diff_task: None,
             selected_commit_message: None,
-            _selected_commit_message_task: None,
+            selected_commit_message_task: None,
             context_menu: None,
             table_interaction_state,
             column_widths,
@@ -2178,7 +2178,7 @@ impl GitGraph {
         self.selected_commit_diff = None;
         self.selected_commit_diff_stats = None;
         self.selected_commit_message = None;
-        self._selected_commit_message_task = None;
+        self.selected_commit_message_task = None;
         self.changed_files_expanded_dirs.clear();
         cx.emit(ItemEvent::Edit);
         cx.notify();
@@ -2394,7 +2394,7 @@ impl GitGraph {
 
         let diff_receiver = repository.update(cx, |repo, _| repo.load_commit_diff(diff_sha));
 
-        self._commit_diff_task = Some(cx.spawn(async move |this, cx| {
+        self.commit_diff_task = Some(cx.spawn(async move |this, cx| {
             if let Ok(Ok(diff)) = diff_receiver.await {
                 this.update(cx, |this, cx| {
                     let stats = compute_diff_stats(&diff);
@@ -2424,7 +2424,7 @@ impl GitGraph {
             return;
         }
 
-        self._selected_commit_message_task = None;
+        self.selected_commit_message_task = None;
         match repository.update(cx, |repository, cx| {
             repository.fetch_commit_data(sha, true, cx).clone()
         }) {
@@ -2432,7 +2432,7 @@ impl GitGraph {
                 self.set_selected_commit_message(cx, data.sha, data.message.clone());
             }
             CommitDataState::Loading(Some(receiver)) => {
-                self._selected_commit_message_task = Some(cx.spawn(async move |this, cx| {
+                self.selected_commit_message_task = Some(cx.spawn(async move |this, cx| {
                     if let Ok(data) = receiver.await {
                         this.update(cx, |this, cx| {
                             this.set_selected_commit_message(cx, data.sha, data.message.clone());
@@ -2462,7 +2462,7 @@ impl GitGraph {
             message: cx.new(|cx| Markdown::new(message, languages, None, cx)),
             scroll_handle: ScrollHandle::new(),
         });
-        self._selected_commit_message_task = None;
+        self.selected_commit_message_task = None;
         cx.notify();
     }
 
@@ -3230,9 +3230,9 @@ impl GitGraph {
                                     this.selected_commit_diff = None;
                                     this.selected_commit_diff_stats = None;
                                     this.selected_commit_message = None;
-                                    this._selected_commit_message_task = None;
+                                    this.selected_commit_message_task = None;
                                     this.changed_files_expanded_dirs.clear();
-                                    this._commit_diff_task = None;
+                                    this.commit_diff_task = None;
                                     cx.notify();
                                 })),
                         ),

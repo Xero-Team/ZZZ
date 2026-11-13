@@ -1777,13 +1777,17 @@ impl Window {
         let mut request_layout_operations = 0;
         self.interaction.tooltip_bounds.take();
 
-        let _inspector_width: Pixels = rems(30.0).to_pixels(self.rem_size());
+        #[cfg_attr(
+            not(any(feature = "inspector", debug_assertions)),
+            allow(unused_variables)
+        )]
+        let inspector_width: Pixels = rems(30.0).to_pixels(self.rem_size());
         let root_size = {
             #[cfg(any(feature = "inspector", debug_assertions))]
             {
                 if self.inspector.is_some() {
                     let mut size = self.viewport_size;
-                    size.width = (size.width - _inspector_width).max(px(0.0));
+                    size.width = (size.width - inspector_width).max(px(0.0));
                     size
                 } else {
                     self.viewport_size
@@ -1819,7 +1823,7 @@ impl Window {
         root_element.prepaint_as_root(Point::default(), root_size.into(), self, cx);
 
         #[cfg(any(feature = "inspector", debug_assertions))]
-        let inspector_element = self.prepaint_inspector(_inspector_width, cx);
+        let inspector_element = self.prepaint_inspector(inspector_width, cx);
 
         self.prepaint_deferred_draws(cx);
 

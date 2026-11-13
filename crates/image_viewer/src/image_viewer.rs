@@ -747,14 +747,14 @@ impl ProjectItem for ImageView {
 
 pub struct ImageViewToolbarControls {
     image_view: Option<WeakEntity<ImageView>>,
-    _subscription: Option<gpui::Subscription>,
+    subscription: Option<gpui::Subscription>,
 }
 
 impl ImageViewToolbarControls {
     pub fn new() -> Self {
         Self {
             image_view: None,
-            _subscription: None,
+            subscription: None,
         }
     }
 }
@@ -860,10 +860,10 @@ impl ToolbarItemView for ImageViewToolbarControls {
         cx: &mut Context<Self>,
     ) -> ToolbarItemLocation {
         self.image_view = None;
-        self._subscription = None;
+        self.subscription = None;
 
         if let Some(item) = active_pane_item.and_then(|i| i.downcast::<ImageView>()) {
-            self._subscription = Some(cx.observe(&item, |_, _, cx| {
+            self.subscription = Some(cx.observe(&item, |_, _, cx| {
                 cx.notify();
             }));
             self.image_view = Some(item.downgrade());

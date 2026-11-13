@@ -522,14 +522,14 @@ impl Render for AudioView {
 
 pub struct AudioToolbarControls {
     audio_view: Option<WeakEntity<AudioView>>,
-    _subscription: Option<gpui::Subscription>,
+    subscription: Option<gpui::Subscription>,
 }
 
 impl AudioToolbarControls {
     pub fn new() -> Self {
         Self {
             audio_view: None,
-            _subscription: None,
+            subscription: None,
         }
     }
 }
@@ -591,10 +591,10 @@ impl ToolbarItemView for AudioToolbarControls {
         cx: &mut Context<Self>,
     ) -> ToolbarItemLocation {
         self.audio_view = None;
-        self._subscription = None;
+        self.subscription = None;
 
         if let Some(item) = active_pane_item.and_then(|item| item.downcast::<AudioView>()) {
-            self._subscription = Some(cx.observe(&item, |_, _, cx| cx.notify()));
+            self.subscription = Some(cx.observe(&item, |_, _, cx| cx.notify()));
             self.audio_view = Some(item.downgrade());
             cx.notify();
             return ToolbarItemLocation::PrimaryRight;
@@ -606,14 +606,14 @@ impl ToolbarItemView for AudioToolbarControls {
 
 pub struct AudioInfo {
     parts: Option<Vec<String>>,
-    _subscription: Option<gpui::Subscription>,
+    subscription: Option<gpui::Subscription>,
 }
 
 impl AudioInfo {
     pub fn new(_workspace: &Workspace) -> Self {
         Self {
             parts: None,
-            _subscription: None,
+            subscription: None,
         }
     }
 }
@@ -635,11 +635,11 @@ impl StatusItemView for AudioInfo {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self._subscription = None;
+        self.subscription = None;
 
         if let Some(audio_view) = active_pane_item.and_then(|item| item.act_as::<AudioView>(cx)) {
             self.parts = audio_view.read(cx).metadata_parts(cx);
-            self._subscription = Some(cx.subscribe(
+            self.subscription = Some(cx.subscribe(
                 &audio_view,
                 |this, view, event: &AudioViewEvent, cx| {
                     if matches!(event, AudioViewEvent::MetadataChanged) {

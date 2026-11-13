@@ -72,7 +72,7 @@ pub struct FeatureFlagStore {
     server_flags: HashMap<String, String>,
     server_flags_received: bool,
 
-    _settings_subscription: Option<Subscription>,
+    settings_subscription: Option<Subscription>,
 }
 
 impl FeatureFlagStore {
@@ -83,7 +83,7 @@ impl FeatureFlagStore {
         });
 
         cx.update_default_global::<FeatureFlagStore, _>(|store, _| {
-            store._settings_subscription = Some(subscription);
+            store.settings_subscription = Some(subscription);
         });
     }
 

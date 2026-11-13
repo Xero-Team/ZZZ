@@ -446,14 +446,14 @@ impl Render for PdfView {
 
 pub struct PdfToolbarControls {
     pdf_view: Option<WeakEntity<PdfView>>,
-    _subscription: Option<gpui::Subscription>,
+    subscription: Option<gpui::Subscription>,
 }
 
 impl PdfToolbarControls {
     pub fn new() -> Self {
         Self {
             pdf_view: None,
-            _subscription: None,
+            subscription: None,
         }
     }
 }
@@ -605,10 +605,10 @@ impl ToolbarItemView for PdfToolbarControls {
         cx: &mut Context<Self>,
     ) -> ToolbarItemLocation {
         self.pdf_view = None;
-        self._subscription = None;
+        self.subscription = None;
 
         if let Some(item) = active_pane_item.and_then(|item| item.downcast::<PdfView>()) {
-            self._subscription = Some(cx.observe(&item, |_, _, cx| cx.notify()));
+            self.subscription = Some(cx.observe(&item, |_, _, cx| cx.notify()));
             self.pdf_view = Some(item.downgrade());
             cx.notify();
             return ToolbarItemLocation::PrimaryRight;

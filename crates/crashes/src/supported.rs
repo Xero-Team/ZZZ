@@ -136,7 +136,7 @@ async fn connect_and_keepalive<F: Future<Output = ()> + Send + Sync + 'static>(
     // Leak the handler so that its `Drop` (which detaches the signal handlers)
     // never runs while the process is alive. The binding is only read on Linux,
     // so it is intentionally underscore-prefixed to stay alive without warning.
-    let _handler = std::mem::ManuallyDrop::new(handler);
+    let handler = std::mem::ManuallyDrop::new(handler);
     let exe = match env::current_exe() {
         Ok(exe) => exe,
         Err(error) => {
@@ -147,7 +147,7 @@ async fn connect_and_keepalive<F: Future<Output = ()> + Send + Sync + 'static>(
     let zzz_pid = process::id();
     let socket_name = paths::temp_dir().join(format!("zzz-crash-handler-{zzz_pid}"));
     #[cfg(not(target_os = "windows"))]
-    let _crash_handler = match Command::new(exe)
+    let crash_handler = match Command::new(exe)
         .arg("--crash-handler")
         .arg(&socket_name)
         .spawn()
@@ -187,7 +187,7 @@ async fn connect_and_keepalive<F: Future<Output = ()> + Send + Sync + 'static>(
     let client = Arc::new(client);
 
     #[cfg(target_os = "linux")]
-    _handler.set_ptracer(Some(_crash_handler.id()));
+    handler.set_ptracer(Some(crash_handler.id()));
 
     // Publishing the client to the OnceLock makes it visible to the signal
     // handler callback installed earlier.
