@@ -283,7 +283,6 @@ command_palette_hooks = { path = "crates/command_palette_hooks" }
 compliance = { path = "tooling/compliance" }
 ui_component_registry = { path = "crates/component" }
 component_preview = { path = "crates/component_preview" }
-console = "0.16"
 context_server = { path = "crates/context_server" }
 crashes = { path = "crates/crashes" }
 credentials_provider = { path = "crates/credentials_provider" }
@@ -464,7 +463,6 @@ which_key = { path = "crates/which_key" }
 watch = { path = "crates/watch" }
 workspace = { path = "crates/workspace" }
 worktree = { path = "crates/worktree" }
-zzz = { package = "zzz", path = "crates/zzz" }
 zzz_actions = { path = "crates/zzz_actions" }
 zzz_credentials_provider = { path = "crates/zzz_credentials_provider" }
 zzz_env_vars = { path = "crates/zzz_env_vars" }
@@ -517,7 +515,6 @@ base64 = "0.23"
 betlang = "0.1.1"
 bitflags = "2.13.2"
 block2 = "0.6"
-brotli = "9.1.1"
 bytes = "1.12"
 cargo_metadata = "0.23"
 cargo_toml = "1.0"
@@ -525,14 +522,12 @@ brush-parser = "0.4"
 chacha20poly1305 = "0.11.0"
 chardetng = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
-ciborium = "0.2"
 circular-buffer = "2.0"
 clap = { version = "4.6", features = ["derive", "wrap_help"] }
 clap_complete = { version = "4.6" }
 clap_complete_nushell = { version = "4.6" }
 cocoa = "=0.27.0"
 cocoa-foundation = "=0.2.1"
-const_format = "0.2"
 convert_case = "0.12.0"
 core-foundation = "=0.10.1"
 core-foundation-sys = "0.8.7"
@@ -543,7 +538,6 @@ criterion = { version = "0.8", features = ["html_reports"] }
 ctor = "1.0.13"
 # Vendored from https://github.com/jDomantas/dap-types @ 591bd28ef0d5283b37057577dc11d616e60fbd37
 dap-types = { path = "vendor/dap-types/dap-types" }
-dashmap = "6.2"
 derive_more = { version = "2.1.1", features = [
     "add",
     "add_assign",
@@ -632,7 +626,6 @@ metal = "0.33"
 minidumper = "0.11"
 moka = { version = "0.12.16", features = ["sync"] }
 naga = { version = "30.0", features = ["wgsl-in"] }
-nanoid = "0.5"
 nbformat = "3.0.0"
 nix = "0.31"
 nucleo = "0.5"
@@ -679,14 +672,12 @@ objc2-foundation = { version = "=0.3.2", default-features = false, features = [
     "objc2-core-foundation",
     "std",
 ] }
-open = "5.4.5"
 ordered-float = "5.5.1"
 palette = { version = "0.7.7", default-features = false, features = ["std"] }
 parking_lot = "0.13.0"
 partial-json-fixer = "0.5.5"
 parse_int = "0.9"
 pciid-parser = "0.8.1"
-pathdiff = "0.2"
 percent-encoding = "2.3.2"
 pet = { git = "https://github.com/microsoft/python-environment-tools.git", rev = "9e61a22af989fe54937bf07c9f9cff1bc53d9056" }
 pet-conda = { git = "https://github.com/microsoft/python-environment-tools.git", rev = "9e61a22af989fe54937bf07c9f9cff1bc53d9056" }
@@ -705,7 +696,6 @@ proptest = { git = "https://github.com/proptest-rs/proptest", rev = "3dca198a8fe
 proptest-derive = "0.9.0"
 prost = "0.14"
 prost-build = "0.14"
-prost-types = "0.14"
 pollster = "1.0.1"
 pulldown-cmark = { version = "0.13.6", default-features = false }
 qrcodegen = "1.8"
@@ -749,7 +739,6 @@ serde_json_lenient = { version = "0.2", features = [
 ] }
 serde_path_to_error = "0.1.20"
 serde_yaml = "0.9.34"
-serde_urlencoded = "0.7"
 sha2 = "0.11"
 shellexpand = "3.1"
 shlex = "2.0.1"
@@ -789,7 +778,6 @@ toml_edit = { version = "0.25", default-features = false, features = [
     "parse",
     "serde",
 ] }
-tower-http = "0.7.1"
 tree-sitter = { version = "0.27.1", features = ["wasm"] }
 # Vendored from https://github.com/tree-sitter/tree-sitter-bash @ v0.25.1
 tree-sitter-bash = { path = "crates/grammars/vendor/tree-sitter-bash" }

@@ -2,6 +2,7 @@
 name = "gpui"
 version = "0.2.2"
 edition.workspace = true
+rust-version.workspace = true
 authors = ["Nathan Sobo <nathan@zed.dev>"]
 description = "ZZZ's GPU-accelerated UI framework"
 repository = "https://github.com/Xero-Team/ZZZ"
