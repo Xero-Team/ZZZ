@@ -129,10 +129,7 @@ fn localize_permission_label(cx: &App, label: &str) -> SharedString {
                 }
 
                 if let Some(display) = display.strip_suffix(" commands") {
-                    let display = display
-                        .strip_prefix('`')
-                        .and_then(|display| display.strip_suffix('`'))
-                        .unwrap_or(display);
+                    let display = display.strip_circumfix('`', '`').unwrap_or(display);
                     return tr(
                         cx,
                         "agent_ui.thread_view.always_for_commands",
@@ -142,10 +139,7 @@ fn localize_permission_label(cx: &App, label: &str) -> SharedString {
                     .into();
                 }
 
-                if let Some(display) = display
-                    .strip_prefix('`')
-                    .and_then(|display| display.strip_suffix('`'))
-                {
+                if let Some(display) = display.strip_circumfix('`', '`') {
                     return tr(
                         cx,
                         "agent_ui.thread_view.always_for_pattern",
@@ -6305,8 +6299,7 @@ impl ThreadView {
         // strip the fences so the copy button yields just the command text.
         let command_source = command.read(cx).source();
         let command_text = command_source
-            .strip_prefix("```\n")
-            .and_then(|s| s.strip_suffix("\n```"))
+            .strip_circumfix("```\n", "\n```")
             .unwrap_or(&command_source)
             .to_owned();
 

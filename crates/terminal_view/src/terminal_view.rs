@@ -1988,10 +1988,7 @@ impl SerializableItem for TerminalView {
                         .get_working_directory(item_id, workspace_id)
                         .log_err()
                         .flatten();
-                    let cwd = if from_db
-                        .as_ref()
-                        .is_some_and(|from_db| !from_db.as_os_str().is_empty())
-                    {
+                    let cwd = if from_db.as_ref().is_some_and(|from_db| !from_db.is_empty()) {
                         from_db
                     } else {
                         workspace

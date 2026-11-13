@@ -2442,10 +2442,7 @@ impl RuffLspAdapter {
                             }
                         } else if value_type.starts_with("list[") {
                             schema_entry.insert("type".to_owned(), serde_json::json!("array"));
-                            if let Some(item_type) = value_type
-                                .strip_prefix("list[")
-                                .and_then(|s| s.strip_suffix(']'))
-                            {
+                            if let Some(item_type) = value_type.strip_circumfix("list[", ']') {
                                 let json_type = match item_type {
                                     "str" => "string",
                                     "int" => "integer",

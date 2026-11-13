@@ -21221,11 +21221,11 @@ impl Editor {
                 }
 
                 if chunk_lines.peek().is_some() {
-                    if line.len() > 1 && line.front().is_some_and(|chunk| chunk.text.is_empty()) {
-                        line.pop_front();
+                    if line.len() > 1 {
+                        line.pop_front_if(|chunk| chunk.text.is_empty());
                     }
-                    if line.len() > 1 && line.back().is_some_and(|chunk| chunk.text.is_empty()) {
-                        line.pop_back();
+                    if line.len() > 1 {
+                        line.pop_back_if(|chunk| chunk.text.is_empty());
                     }
 
                     lines.push(mem::take(&mut line));

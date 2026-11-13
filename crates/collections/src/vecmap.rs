@@ -102,12 +102,9 @@ impl<'a, K, V> Entry<'a, K, V> {
         match self {
             Entry::Occupied(entry) => entry.value,
             Entry::Vacant(entry) => {
-                entry.map.values.push(default(&entry.key));
+                let value = entry.map.values.push_mut(default(&entry.key));
                 entry.map.keys.push(entry.key);
-                match entry.map.values.last_mut() {
-                    Some(value) => value,
-                    None => unreachable!("vec empty after pushing to it"),
-                }
+                value
             }
         }
     }
@@ -166,12 +163,9 @@ where
         match self {
             EntryRef::Occupied(entry) => entry.value,
             EntryRef::Vacant(entry) => {
-                entry.map.values.push(default(entry.key));
+                let value = entry.map.values.push_mut(default(entry.key));
                 entry.map.keys.push(entry.key.clone());
-                match entry.map.values.last_mut() {
-                    Some(value) => value,
-                    None => unreachable!("vec empty after pushing to it"),
-                }
+                value
             }
         }
     }

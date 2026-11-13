@@ -217,11 +217,7 @@ fn trim_metadata_range(source: &str, range: Range<usize>) -> Range<usize> {
 }
 
 fn is_br_tag(html: &str) -> bool {
-    let Some(inner) = html
-        .trim()
-        .strip_prefix('<')
-        .and_then(|s| s.strip_suffix('>'))
-    else {
+    let Some(inner) = html.trim().strip_circumfix('<', '>') else {
         return false;
     };
     let inner = inner.trim_suffix('/');

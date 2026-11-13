@@ -119,11 +119,7 @@ fn parse_emacs_local_variables(lines: &[&str], settings: &mut ModelineSettings) 
     let mut continuation = String::new();
 
     for line in &lines[start_idx + 1..] {
-        let Some(content) = line
-            .strip_prefix(prefix)
-            .and_then(|l| l.strip_suffix(suffix))
-            .map(str::trim)
-        else {
+        let Some(content) = line.strip_circumfix(prefix, suffix).map(str::trim) else {
             return;
         };
 

@@ -57,7 +57,7 @@ mod tests {
     fn test_duration_alt_display() {
         assert_eq!("0s", duration_alt_display(Duration::from_secs(0)));
         assert_eq!("59s", duration_alt_display(Duration::from_secs(59)));
-        assert_eq!("1m 0s", duration_alt_display(Duration::from_secs(60)));
+        assert_eq!("1m 0s", duration_alt_display(Duration::from_mins(1)));
         assert_eq!("10m 0s", duration_alt_display(Duration::from_secs(600)));
         assert_eq!("1h 0m 0s", duration_alt_display(Duration::from_hours(1)));
         assert_eq!(

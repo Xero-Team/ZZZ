@@ -105,8 +105,7 @@ fn parse_stash_index(input: &str) -> Result<usize> {
     }
 
     let index_str = trimmed
-        .strip_prefix("stash@{")
-        .and_then(|s| s.strip_suffix('}'))
+        .strip_circumfix("stash@{", '}')
         .ok_or_else(|| anyhow!("Failed to extract index from stash reference"))?;
 
     index_str

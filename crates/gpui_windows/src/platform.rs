@@ -638,7 +638,7 @@ impl Platform for WindowsPlatform {
     }
 
     fn reveal_path(&self, path: &Path) {
-        if path.as_os_str().is_empty() {
+        if path.is_empty() {
             return;
         }
         let path = path.to_path_buf();
@@ -652,7 +652,7 @@ impl Platform for WindowsPlatform {
     }
 
     fn open_with_system(&self, path: &Path) {
-        if path.as_os_str().is_empty() {
+        if path.is_empty() {
             return;
         }
         let path = path.to_path_buf();

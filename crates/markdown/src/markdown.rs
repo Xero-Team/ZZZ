@@ -3513,10 +3513,7 @@ impl Element for MarkdownElement {
                 }
                 MarkdownEvent::InlineHtml => {
                     let html = &parsed_markdown.source[range.clone()];
-                    if let Some(code) = html
-                        .strip_prefix("<code>")
-                        .and_then(|html| html.strip_suffix("</code>"))
-                    {
+                    if let Some(code) = html.strip_circumfix("<code>", "</code>") {
                         let code_start = range.start + "<code>".len();
                         self.push_markdown_code_span(
                             &mut builder,

@@ -61,7 +61,7 @@ impl NodeTracker {
 pub(crate) fn parse_translate(e: &BytesStart<'_>) -> Option<(f64, f64)> {
     let attr = e.try_get_attribute("transform").ok()??;
     let val = attr.normalized_value(XmlVersion::Implicit1_0).ok()?;
-    let inner = val.strip_prefix("translate(")?.strip_suffix(')')?;
+    let inner = val.strip_circumfix("translate(", ')')?;
     let (x_str, y_str) = inner.split_once(',')?;
     Some((x_str.trim().parse().ok()?, y_str.trim().parse().ok()?))
 }

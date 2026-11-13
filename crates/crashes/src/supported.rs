@@ -39,7 +39,7 @@ use std::{
 static CRASH_HANDLER: OnceLock<Arc<Client>> = OnceLock::new();
 // Set when the first minidump request is made to avoid generating duplicate crash reports.
 pub static REQUESTED_MINIDUMP: AtomicBool = AtomicBool::new(false);
-const CRASH_HANDLER_PING_TIMEOUT: Duration = Duration::from_secs(60);
+const CRASH_HANDLER_PING_TIMEOUT: Duration = Duration::from_mins(1);
 const CRASH_HANDLER_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 static PENDING_CRASH_SERVER_MESSAGES: Mutex<Vec<CrashServerMessage>> = Mutex::new(Vec::new());

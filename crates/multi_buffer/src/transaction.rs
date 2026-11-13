@@ -164,22 +164,14 @@ impl History {
 
     fn pop_undo(&mut self) -> Option<&mut Transaction> {
         assert_eq!(self.transaction_depth, 0);
-        if let Some(transaction) = self.undo_stack.pop() {
-            self.redo_stack.push(transaction);
-            self.redo_stack.last_mut()
-        } else {
-            None
-        }
+        let transaction = self.undo_stack.pop()?;
+        Some(self.redo_stack.push_mut(transaction))
     }
 
     fn pop_redo(&mut self) -> Option<&mut Transaction> {
         assert_eq!(self.transaction_depth, 0);
-        if let Some(transaction) = self.redo_stack.pop() {
-            self.undo_stack.push(transaction);
-            self.undo_stack.last_mut()
-        } else {
-            None
-        }
+        let transaction = self.redo_stack.pop()?;
+        Some(self.undo_stack.push_mut(transaction))
     }
 
     fn remove_from_undo(&mut self, transaction_id: TransactionId) -> Option<&Transaction> {

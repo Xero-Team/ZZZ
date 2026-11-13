@@ -2869,7 +2869,7 @@ mod tests {
 
     #[test]
     fn test_mcp_oauth_provider_returns_none_when_token_expired() {
-        let expired = SystemTime::now() - Duration::from_secs(60);
+        let expired = SystemTime::now() - Duration::from_mins(1);
         let session = make_test_session("stale-token", Some("rt"), Some(expired));
         let provider = McpOAuthTokenProvider::new(
             session,

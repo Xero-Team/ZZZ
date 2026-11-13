@@ -1217,13 +1217,13 @@ mod tests {
 
     #[test]
     fn playback_retry_preserves_position_until_end() {
-        let duration = Some(Duration::from_secs(60));
+        let duration = Some(Duration::from_mins(1));
         assert_eq!(
             playback_start_position(Duration::from_secs(42), duration),
             Duration::from_secs(42)
         );
         assert_eq!(
-            playback_start_position(Duration::from_secs(60), duration),
+            playback_start_position(Duration::from_mins(1), duration),
             Duration::ZERO
         );
         assert_eq!(

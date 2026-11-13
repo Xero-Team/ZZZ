@@ -3581,7 +3581,7 @@ impl AgentCodeSpanResolver {
     fn resolve_uncached(&self, trimmed: &str, cx: &App) -> Option<SharedString> {
         let path_with_position = PathWithPosition::parse_str(trimmed);
         let candidate_path = &path_with_position.path;
-        if candidate_path.as_os_str().is_empty() {
+        if candidate_path.is_empty() {
             return None;
         }
 

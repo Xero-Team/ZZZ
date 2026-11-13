@@ -237,7 +237,7 @@ impl RustLspAdapter {
         };
 
         let path = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
-        Some(path).filter(|p| !p.as_os_str().is_empty())
+        Some(path).filter(|p| !p.is_empty())
     }
 
     async fn workspace_has_rust_toolchain_override(delegate: &dyn LspAdapterDelegate) -> bool {

@@ -162,7 +162,7 @@ fn validate_manifest(workspace_root: &Path, manifest: &GrammarManifest) -> Resul
 }
 
 fn validate_relative_path(path: &Path) -> Result<()> {
-    if path.as_os_str().is_empty()
+    if path.is_empty()
         || path.is_absolute()
         || path.components().any(|component| {
             matches!(

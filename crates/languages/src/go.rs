@@ -718,7 +718,7 @@ impl ContextProvider for GoContextProvider {
                     .map_or_else(
                         || format!("{}", buffer_dir.to_string_lossy()),
                         |relative_pkg_dir| {
-                            if relative_pkg_dir.as_os_str().is_empty() {
+                            if relative_pkg_dir.is_empty() {
                                 ".".into()
                             } else {
                                 format!("./{}", relative_pkg_dir.to_string_lossy())

@@ -3872,21 +3872,19 @@ impl EditorElement {
         let boundaries_len = boundaries.len();
         while i < boundaries_len {
             let current_boundary_pos = boundaries[i].pos;
-            if start_pos < current_boundary_pos {
-                if !active_ranges.is_empty() {
-                    let mut color = base_background;
-                    for &(_, c) in &active_ranges {
-                        color = Hsla::blend(color, c);
-                    }
-                    if let Some((last_range, last_color)) = processed_ranges.last_mut() {
-                        if *last_color == color && last_range.end == start_pos {
-                            last_range.end = current_boundary_pos;
-                        } else {
-                            processed_ranges.push((start_pos..current_boundary_pos, color));
-                        }
+            if start_pos < current_boundary_pos && !active_ranges.is_empty() {
+                let mut color = base_background;
+                for &(_, c) in &active_ranges {
+                    color = Hsla::blend(color, c);
+                }
+                if let Some((last_range, last_color)) = processed_ranges.last_mut() {
+                    if *last_color == color && last_range.end == start_pos {
+                        last_range.end = current_boundary_pos;
                     } else {
                         processed_ranges.push((start_pos..current_boundary_pos, color));
                     }
+                } else {
+                    processed_ranges.push((start_pos..current_boundary_pos, color));
                 }
             }
             while i < boundaries_len && boundaries[i].pos == current_boundary_pos {

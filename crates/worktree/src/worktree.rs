@@ -5580,7 +5580,7 @@ impl BackgroundScanner {
             let keep_original = target_root.starts_with(root_canonical_path.as_path());
 
             for symlink_path in symlink_paths {
-                let mapped_path = if suffix.as_os_str().is_empty() {
+                let mapped_path = if suffix.is_empty() {
                     root_canonical_path
                         .as_path()
                         .join(symlink_path.as_std_path())
