@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a reproducible inventory for repository checkouts in SOURCES.tsv."""
+"""Create a reproducible inventory for repository checkouts in sources.tsv."""
 
 from __future__ import annotations
 

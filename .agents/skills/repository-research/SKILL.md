@@ -56,10 +56,14 @@ repositories unless their name explicitly says `clone` or `init`.
   subsystem, manifest, dependency, entrypoint, test, documentation, and
   architecture-keyword hints.
 - `scripts/validate_evidence.py`: validate local evidence paths, line/heading
-  locators, commit pins, external timestamps, and evidence kinds.
+  locators, commit pins, external timestamps, and evidence kinds. `--report`
+  checks report citations against the ledger; `--allow-missing-checkout` turns a
+  deliberately cleaned-up corpus into warnings instead of errors.
 
 Run each script with `--help` before adapting its defaults. Prefer the templates
-in `assets/` for `SOURCES.tsv`, `EVIDENCE.tsv`, `EXPERIMENTS.tsv`, and the final report.
+in `assets/` for `sources.tsv`, `evidence.tsv`, `experiments.tsv`, and the final
+report. Ledger filenames stay lowercase so a workspace can sit beside the report
+it supports.
 
 ## Core workflow
 
@@ -91,7 +95,7 @@ in `assets/` for `SOURCES.tsv`, `EVIDENCE.tsv`, `EXPERIMENTS.tsv`, and the final
    or compression → synthesis → evaluation. Health tools require input → checks
    → scoring → reporting/export.
 
-6. **Record claims while reading.** Add material claims to `EVIDENCE.tsv` as
+6. **Record claims while reading.** Add material claims to `evidence.tsv` as
    soon as they are established. Cite implementation or tests for behavioral
    claims. Use documentation evidence only for declared intent or when source
    is unavailable, and label it accordingly.
@@ -110,6 +114,12 @@ in `assets/` for `SOURCES.tsv`, `EVIDENCE.tsv`, `EXPERIMENTS.tsv`, and the final
    visible, dynamic metrics are timestamped, local claims use the pinned commit,
    and conclusions do not exceed the inspected evidence. List skipped runtime
    tests rather than implying they passed.
+
+10. **Revalidate when the code moves.** A ledger describes one revision. On a
+    later re-pin, update `sources.tsv`, `inventory.tsv`, and `evidence.tsv`
+    together, re-read every decisive claim, and record the drift in a dated
+    report section instead of overwriting the earlier conclusion. See
+    [references/evidence-reporting.md](references/evidence-reporting.md).
 
 ## Non-negotiable evidence rules
 

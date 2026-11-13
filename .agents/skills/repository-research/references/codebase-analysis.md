@@ -34,7 +34,7 @@ Generate a survey before deep reading:
 
 ```bash
 python .agents/skills/repository-research/scripts/survey_repositories.py \
-  --sources .tmp/skill_ref/SOURCES.tsv \
+  --sources .tmp/skill_ref/sources.tsv \
   --output-dir .tmp/skill_ref/surveys
 ```
 

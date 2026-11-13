@@ -2,7 +2,7 @@
 
 Checked at: <UTC timestamp>
 
-Corpus: `SOURCES.tsv`, `INVENTORY.tsv`, `EVIDENCE.tsv`, and `EXPERIMENTS.tsv`
+Corpus: `sources.tsv`, `inventory.tsv`, `evidence.tsv`, and `experiments.tsv`
 
 ## Decision answer
 

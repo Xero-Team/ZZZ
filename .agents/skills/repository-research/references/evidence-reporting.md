@@ -122,8 +122,9 @@ Run:
 
 ```bash
 python .agents/skills/repository-research/scripts/validate_evidence.py \
-  --sources .tmp/skill_ref/SOURCES.tsv \
-  --evidence .tmp/skill_ref/EVIDENCE.tsv
+  --sources .tmp/skill_ref/sources.tsv \
+  --evidence .tmp/skill_ref/evidence.tsv \
+  --report .tmp/skill_ref/report.md
 ```
 
 The validator checks:
@@ -132,13 +133,37 @@ The validator checks:
 - valid evidence kinds and confidence values;
 - local path containment and existence;
 - line ranges and Markdown heading locators;
-- commit pins against checkout HEAD;
+- commit pins against checkout HEAD or an ancestor of it;
 - URL shape and timestamp for external-primary evidence;
 - explanatory notes for inference and unknown evidence;
-- duplicate or missing claim IDs.
+- duplicate or missing claim IDs;
+- claim-ID prefixes that map to a single repository;
+- report citations that resolve, and ledger claims the report never cites.
 
 A passing ledger proves structural consistency, not that the interpretation is
 correct. Re-read decisive source locations before finalizing the report.
+
+## Re-validation and staleness
+
+A research ledger decays. Treat it as a snapshot of one revision, not as a
+standing claim about the repository:
+
+- Put the pinned revision, the report date, and the evidence date in the report
+  header, and say explicitly that the code may have moved since.
+- Keep the cited checkouts reachable, or materialize the cited files under the
+  workspace before deleting a clone. A ledger whose corpus is gone cannot be
+  re-checked and should be reported as such rather than silently trusted.
+- Re-run the validator with `--allow-missing-checkout` when the corpus was
+  cleaned up on purpose. Missing checkouts then become warnings; path, locator,
+  and commit errors stay errors.
+- On every re-pin, update `sources.tsv`, `inventory.tsv`, `evidence.tsv`
+  commit and locator fields together, then re-read each decisive claim. Update
+  the matching `commit_sha` only after the claim still holds at the new
+  revision.
+- Record drift as a dated section in the report: which claims changed, which
+  became obsolete, and which new HEAD state invalidates a recommendation.
+  Do not rewrite old conclusions in place without leaving the prior revision
+  visible.
 
 ## Report structure
 

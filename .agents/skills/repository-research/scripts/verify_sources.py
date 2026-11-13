@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify repository URLs from SOURCES.tsv with non-interactive git ls-remote."""
+"""Verify repository URLs from sources.tsv with non-interactive git ls-remote."""
 
 from __future__ import annotations
 
