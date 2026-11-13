@@ -375,7 +375,7 @@ fn test_dynamic_language_injection(cx: &mut App) {
         &buffer,
         Point::new(3, 0)..Point::new(3, 0),
         &[
-            "(document (section (paragraph (inline)) (fenced_code_block (fenced_code_block_delimiter) (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter))))",
+            "(document (section (paragraph (inline)) (fenced_code_block (fenced_code_block_delimiter) info_string: (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter))))",
             "(inline (code_span (code_span_delimiter) (code_span_delimiter)))",
             "...(function_item name: (identifier) parameters: (parameters) body: (block)...",
         ],
@@ -392,7 +392,7 @@ fn test_dynamic_language_injection(cx: &mut App) {
         &buffer,
         Point::new(3, 0)..Point::new(3, 0),
         &[
-            "(document (section (paragraph (inline)) (fenced_code_block (fenced_code_block_delimiter) (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter))))",
+            "(document (section (paragraph (inline)) (fenced_code_block (fenced_code_block_delimiter) info_string: (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter))))",
             "(inline (code_span (code_span_delimiter) (code_span_delimiter)))",
             "...(call method: (identifier) arguments: (argument_list (call method: (identifier) arguments: (argument_list) block: (block)...",
         ],
@@ -409,7 +409,7 @@ fn test_dynamic_language_injection(cx: &mut App) {
         &buffer,
         Point::new(3, 0)..Point::new(3, 0),
         &[
-            "(document (section (paragraph (inline)) (fenced_code_block (fenced_code_block_delimiter) (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter))))",
+            "(document (section (paragraph (inline)) (fenced_code_block (fenced_code_block_delimiter) info_string: (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter))))",
             "(inline (code_span (code_span_delimiter) (code_span_delimiter)))",
         ],
     );
@@ -423,7 +423,7 @@ fn test_dynamic_language_injection(cx: &mut App) {
         &buffer,
         Point::new(3, 0)..Point::new(3, 0),
         &[
-            "(document (section (paragraph (inline)) (fenced_code_block (fenced_code_block_delimiter) (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter))))",
+            "(document (section (paragraph (inline)) (fenced_code_block (fenced_code_block_delimiter) info_string: (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter))))",
             "(inline (code_span (code_span_delimiter) (code_span_delimiter)))",
             "(document (text))",
         ],
@@ -1101,7 +1101,7 @@ fn test_empty_combined_injections_inside_injections(cx: &mut App) {
         Point::new(0, 0)..Point::new(5, 0),
         &[
             // Markdown document
-            "(document (section (fenced_code_block (fenced_code_block_delimiter) (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter)) (paragraph (inline))))",
+            "(document (section (fenced_code_block (fenced_code_block_delimiter) info_string: (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter)) (paragraph (inline))))",
             // ERB template in the code block
             "(template...",
             // Markdown inline content

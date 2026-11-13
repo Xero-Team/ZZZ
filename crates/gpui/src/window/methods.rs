@@ -647,6 +647,20 @@ impl Window {
         self.interaction.focused(cx)
     }
 
+    /// While focus-lost listeners are being dispatched, returns the closest ancestor of the
+    /// previously focused element that can still receive focus, making it a suitable target
+    /// for focus restoration. Returns `None` at all other times, or when no such ancestor exists.
+    pub fn focus_lost_restore_target(&self, cx: &App) -> Option<FocusHandle> {
+        let (_leaf, ancestors) = self.interaction.focus_lost_path.split_last()?;
+        ancestors.iter().rev().find_map(|id| {
+            self.interaction
+                .rendered_frame
+                .dispatch_tree
+                .focusable_node_id(*id)?;
+            FocusHandle::for_id(*id, &cx.focus_handles)
+        })
+    }
+
     /// Move focus to the element associated with the given [`FocusHandle`].
     pub fn focus(&mut self, handle: &FocusHandle, cx: &mut App) {
         InteractionOwner::focus(self, handle, cx);
@@ -1600,10 +1614,12 @@ impl Window {
             || previous_window_active != current_window_active
         {
             if !previous_focus_path.is_empty() && current_focus_path.is_empty() {
+                self.interaction.focus_lost_path = previous_focus_path.clone();
                 self.interaction
                     .focus_lost_listeners
                     .clone()
                     .retain(&(), |listener| listener(self, cx));
+                self.interaction.focus_lost_path.clear();
                 // Focus-lost fallbacks may move focus to a node outside the current tree.
                 // Track only focus changes made by listeners to avoid a redraw loop.
                 focus_before_listeners = self.interaction.focus;

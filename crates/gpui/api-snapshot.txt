@@ -2395,6 +2395,7 @@ Window::draw_and_present_for_test method & mut self , cx : & mut App
 Window::drop_image method & mut self , data : Arc < RenderImage > -> Result < () >
 Window::element_offset method & self -> Point < Pixels >
 Window::focus method & mut self , handle : & FocusHandle , cx : & mut App
+Window::focus_lost_restore_target method & self , cx : & App -> Option < FocusHandle >
 Window::focus_next method & mut self , cx : & mut App
 Window::focus_prev method & mut self , cx : & mut App
 Window::focused method & self , cx : & App -> Option < FocusHandle >
