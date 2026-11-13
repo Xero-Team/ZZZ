@@ -1627,7 +1627,7 @@ impl SshConnectionOptions {
                     continue 'outer;
                 }
             }
-            if arg.starts_with("-") || hostname.is_some() {
+            if arg.starts_with('-') || hostname.is_some() {
                 anyhow::bail!("unsupported argument: {:?}", arg);
             }
             let mut input = &arg as &str;
@@ -1648,7 +1648,7 @@ impl SshConnectionOptions {
                     input = input.trim_suffix(']');
                 }
             } else if let Some((rest, p)) = input.rsplit_once(':')
-                && !rest.contains(":")
+                && !rest.contains(':')
             {
                 input = rest;
                 port = p.parse().ok();

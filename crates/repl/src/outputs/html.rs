@@ -102,7 +102,7 @@ mod tests {
         </table>"#;
 
         let md = html_to_markdown(html).unwrap();
-        assert!(md.contains("|"));
+        assert!(md.contains('|'));
         assert!(md.contains("---"));
     }
 
@@ -124,12 +124,12 @@ mod tests {
         </table>"#;
 
         let md = html_to_markdown(html).unwrap();
-        assert!(md.contains("|"));
+        assert!(md.contains('|'));
         // Verify table rows are properly formatted (start with |)
         for line in md.lines() {
-            if line.contains("|") {
+            if line.contains('|') {
                 assert!(
-                    line.starts_with("|"),
+                    line.starts_with('|'),
                     "Table line should start with |: {:?}",
                     line
                 );

@@ -717,7 +717,7 @@ impl ToolCall {
             tool_call.title
         } else if tool_call.kind == acp::ToolKind::Edit {
             MarkdownEscaped(tool_call.title.as_str()).to_string()
-        } else if let Some((first_line, _)) = tool_call.title.split_once("\n") {
+        } else if let Some((first_line, _)) = tool_call.title.split_once('\n') {
             first_line.to_owned() + "..."
         } else {
             tool_call.title
@@ -819,7 +819,7 @@ impl ToolCall {
                     label.replace(title, cx);
                 } else if self.kind == acp::ToolKind::Edit {
                     label.replace(MarkdownEscaped(&title).to_string(), cx)
-                } else if let Some((first_line, _)) = title.split_once("\n") {
+                } else if let Some((first_line, _)) = title.split_once('\n') {
                     label.replace(first_line.to_owned() + "...", cx);
                 } else {
                     label.replace(title, cx);

@@ -179,7 +179,7 @@ pub(crate) fn ensure_remote_server_version_matches(
 fn parse_platform(output: &str) -> Result<RemotePlatform> {
     let output = output.trim();
     let uname = output.rsplit_once('\n').map_or(output, |(_, last)| last);
-    let Some((os, arch)) = uname.split_once(" ") else {
+    let Some((os, arch)) = uname.split_once(' ') else {
         anyhow::bail!("unknown uname: {uname:?}")
     };
 

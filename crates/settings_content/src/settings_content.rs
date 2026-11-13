@@ -1437,9 +1437,9 @@ pub struct WhichKeySettingsContent {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ExtendingVec<T>(pub Vec<T>);
 
-impl<T> Into<Vec<T>> for ExtendingVec<T> {
-    fn into(self) -> Vec<T> {
-        self.0
+impl<T> From<ExtendingVec<T>> for Vec<T> {
+    fn from(value: ExtendingVec<T>) -> Self {
+        value.0
     }
 }
 impl<T> From<Vec<T>> for ExtendingVec<T> {

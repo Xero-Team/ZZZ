@@ -38,7 +38,7 @@ pub(crate) fn should_auto_close(
             .text_for_range(edited_range.clone())
             .collect::<String>();
         let edited_range = edited_range.to_offset(buffer);
-        if !text.ends_with(">") {
+        if !text.ends_with('>') {
             continue;
         }
         let Some(layer) = buffer.smallest_syntax_layer_containing(edited_range.clone()) else {

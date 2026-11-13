@@ -437,7 +437,7 @@ mod tests {
 
         let result = map
             .iter_from(&"c")
-            .take_while(|(key, _)| key.starts_with("c"))
+            .take_while(|(key, _)| key.starts_with('c'))
             .collect::<Vec<_>>();
 
         assert_eq!(result.len(), 1);

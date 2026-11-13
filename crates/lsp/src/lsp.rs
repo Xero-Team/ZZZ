@@ -1376,7 +1376,7 @@ impl LanguageServer {
                             version: &'a str,
                         }
                         let parsed: GoplsVersion = serde_json::from_str(obj.as_str()).ok()?;
-                        Some(parsed.version.trim_start_matches("v").to_owned().into())
+                        Some(parsed.version.trim_start_matches('v').to_owned().into())
                     })
                     .or_else(|| self.version.clone())
             }

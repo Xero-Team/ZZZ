@@ -1142,7 +1142,7 @@ fn compute_hunks(
         // A common case in ZZZ is that the empty buffer is represented as just a newline,
         // but if we just compute a naive diff you get a "preserved" line in the middle,
         // which is a bit odd.
-        if buffer_text == "\n" && diff_base.ends_with("\n") && diff_base.len() > 1 {
+        if buffer_text == "\n" && diff_base.ends_with('\n') && diff_base.len() > 1 {
             tree.push(
                 InternalDiffHunk {
                     buffer_range: buffer.anchor_before(0)..buffer.anchor_before(0),
@@ -3247,7 +3247,7 @@ mod tests {
                 let mut old_lines = Vec::new();
                 let old_lines_iter = head.lines();
                 for line in old_lines_iter {
-                    assert!(!line.ends_with("\n"));
+                    assert!(!line.ends_with('\n'));
                     old_lines.push(line.to_owned());
                 }
                 if old_lines.last().is_some_and(|line| line.is_empty()) {

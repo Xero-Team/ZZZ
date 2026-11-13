@@ -322,12 +322,12 @@ impl From<settings::DockPosition> for DockPosition {
     }
 }
 
-impl Into<settings::DockPosition> for DockPosition {
-    fn into(self) -> settings::DockPosition {
-        match self {
-            Self::Left => settings::DockPosition::Left,
-            Self::Bottom => settings::DockPosition::Bottom,
-            Self::Right => settings::DockPosition::Right,
+impl From<DockPosition> for settings::DockPosition {
+    fn from(value: DockPosition) -> settings::DockPosition {
+        match value {
+            DockPosition::Left => settings::DockPosition::Left,
+            DockPosition::Bottom => settings::DockPosition::Bottom,
+            DockPosition::Right => settings::DockPosition::Right,
         }
     }
 }

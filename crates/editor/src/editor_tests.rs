@@ -5891,7 +5891,7 @@ async fn test_newline_comments(cx: &mut TestAppContext) {
         //s
         // ˇ
     "}
-            .replace("s", " ") // s is used as space placeholder to prevent format on save
+            .replace('s', " ") // s is used as space placeholder to prevent format on save
             .as_str(),
         );
         // Ensure that we add comment prefix when existing line does not contain space
@@ -6134,7 +6134,7 @@ async fn test_newline_documentation_comments(cx: &mut TestAppContext) {
          * ˇ
          */
     "}
-            .replace("s", " ") // s is used as space placeholder to prevent format on save
+            .replace('s', " ") // s is used as space placeholder to prevent format on save
             .as_str(),
         );
         // Ensure that delimiter space is preserved when newline on already
@@ -6147,7 +6147,7 @@ async fn test_newline_documentation_comments(cx: &mut TestAppContext) {
          * ˇ
          */
     "}
-            .replace("s", " ") // s is used as space placeholder to prevent format on save
+            .replace('s', " ") // s is used as space placeholder to prevent format on save
             .as_str(),
         );
         // Ensure that delimiter space is preserved when space is not
@@ -40183,7 +40183,7 @@ async fn test_newline_task_list_continuation(cx: &mut TestAppContext) {
         - [ ]$$
         ˇ
     "}
-        .replace("$", " ")
+        .replace('$', " ")
         .as_str(),
     );
 
@@ -40317,7 +40317,7 @@ async fn test_newline_unordered_list_continuation(cx: &mut TestAppContext) {
         - $
         ˇ
     "}
-        .replace("$", " ")
+        .replace('$', " ")
         .as_str(),
     );
 
@@ -40408,7 +40408,7 @@ async fn test_newline_unordered_list_continuation(cx: &mut TestAppContext) {
         indoc! {"
         $$$$$$- ˇ
     "}
-        .replace("$", " ")
+        .replace('$', " ")
         .as_str(),
     );
     cx.update_editor(|e, window, cx| e.newline(&Newline, window, cx));
@@ -40417,7 +40417,7 @@ async fn test_newline_unordered_list_continuation(cx: &mut TestAppContext) {
         indoc! {"
         $$$$- ˇ
     "}
-        .replace("$", " ")
+        .replace('$', " ")
         .as_str(),
     );
 }
@@ -40476,7 +40476,7 @@ async fn test_newline_ordered_list_continuation(cx: &mut TestAppContext) {
         1. $
         ˇ
     "}
-        .replace("$", " ")
+        .replace('$', " ")
         .as_str(),
     );
 
@@ -40591,7 +40591,7 @@ async fn test_tab_list_indent(cx: &mut TestAppContext) {
     let expected = indoc! {"
         $$- ˇitem
     "};
-    cx.assert_editor_state(expected.replace("$", " ").as_str());
+    cx.assert_editor_state(expected.replace('$', " ").as_str());
 
     // Case 2: Task list - cursor after prefix
     cx.set_state(indoc! {"
@@ -40602,7 +40602,7 @@ async fn test_tab_list_indent(cx: &mut TestAppContext) {
     let expected = indoc! {"
         $$- [ ] ˇtask
     "};
-    cx.assert_editor_state(expected.replace("$", " ").as_str());
+    cx.assert_editor_state(expected.replace('$', " ").as_str());
 
     // Case 3: Ordered list - cursor after prefix
     cx.set_state(indoc! {"
@@ -40613,19 +40613,19 @@ async fn test_tab_list_indent(cx: &mut TestAppContext) {
     let expected = indoc! {"
         $$1. ˇfirst
     "};
-    cx.assert_editor_state(expected.replace("$", " ").as_str());
+    cx.assert_editor_state(expected.replace('$', " ").as_str());
 
     // Case 4: With existing indentation - adds more indent
     let initial = indoc! {"
         $$- ˇitem
     "};
-    cx.set_state(initial.replace("$", " ").as_str());
+    cx.set_state(initial.replace('$', " ").as_str());
     cx.update_editor(|e, window, cx| e.tab(&Tab, window, cx));
     cx.wait_for_autoindent_applied().await;
     let expected = indoc! {"
         $$$$- ˇitem
     "};
-    cx.assert_editor_state(expected.replace("$", " ").as_str());
+    cx.assert_editor_state(expected.replace('$', " ").as_str());
 
     // Case 5: Empty list item
     cx.set_state(indoc! {"
@@ -40636,7 +40636,7 @@ async fn test_tab_list_indent(cx: &mut TestAppContext) {
     let expected = indoc! {"
         $$- ˇ
     "};
-    cx.assert_editor_state(expected.replace("$", " ").as_str());
+    cx.assert_editor_state(expected.replace('$', " ").as_str());
 
     // Case 6: Cursor at end of line with content
     cx.set_state(indoc! {"
@@ -40647,7 +40647,7 @@ async fn test_tab_list_indent(cx: &mut TestAppContext) {
     let expected = indoc! {"
         $$- itemˇ
     "};
-    cx.assert_editor_state(expected.replace("$", " ").as_str());
+    cx.assert_editor_state(expected.replace('$', " ").as_str());
 
     // Case 7: Cursor at start of list item, indents it
     cx.set_state(indoc! {"

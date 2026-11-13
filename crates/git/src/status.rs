@@ -548,7 +548,7 @@ impl FromStr for TreeDiff {
         while let Some((status, path)) = fields.next().zip(fields.next()) {
             let path = RepoPath::from_rel_path(RelPath::unix(path)?);
 
-            let mut fields = status.split(" ").skip(2);
+            let mut fields = status.split(' ').skip(2);
             let old_sha = fields
                 .next()
                 .ok_or_else(|| anyhow!("expected to find old_sha"))?

@@ -261,9 +261,9 @@ impl From<settings::ContextServerSettingsContent> for ContextServerSettings {
         }
     }
 }
-impl Into<settings::ContextServerSettingsContent> for ContextServerSettings {
-    fn into(self) -> settings::ContextServerSettingsContent {
-        match self {
+impl From<ContextServerSettings> for settings::ContextServerSettingsContent {
+    fn from(value: ContextServerSettings) -> settings::ContextServerSettingsContent {
+        match value {
             ContextServerSettings::Stdio {
                 enabled,
                 remote,

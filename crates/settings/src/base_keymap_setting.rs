@@ -37,9 +37,9 @@ impl From<BaseKeymapContent> for BaseKeymap {
         }
     }
 }
-impl Into<BaseKeymapContent> for BaseKeymap {
-    fn into(self) -> BaseKeymapContent {
-        match self {
+impl From<BaseKeymap> for BaseKeymapContent {
+    fn from(value: BaseKeymap) -> BaseKeymapContent {
+        match value {
             BaseKeymap::VSCode => BaseKeymapContent::VSCode,
             BaseKeymap::JetBrains => BaseKeymapContent::JetBrains,
             BaseKeymap::SublimeText => BaseKeymapContent::SublimeText,

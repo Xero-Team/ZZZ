@@ -378,7 +378,7 @@ fn worktree_root(delegate: &Arc<dyn LspAdapterDelegate>, settings: Option<Value>
             continue;
         };
 
-        if !url.starts_with(".") && !url.starts_with("~") {
+        if !url.starts_with('.') && !url.starts_with('~') {
             continue;
         }
 

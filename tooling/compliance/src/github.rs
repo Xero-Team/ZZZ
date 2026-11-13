@@ -414,7 +414,7 @@ pub mod graph_ql {
             .join("\n");
 
         format!("{{  repository(owner: \"{org}\", name: \"{repo}\") {{ {objects}  }} }}")
-            .replace("\n", "")
+            .replace('\n', "")
     }
 }
 

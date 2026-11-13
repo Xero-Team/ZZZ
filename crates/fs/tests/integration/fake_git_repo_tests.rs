@@ -191,6 +191,6 @@ async fn test_checkpoints(executor: BackgroundExecutor) {
         .diff_checkpoints(checkpoint_1.clone(), checkpoint_2.clone())
         .await
         .unwrap();
-    assert!(diff.contains("b"), "diff should mention changed file 'b'");
-    assert!(diff.contains("c"), "diff should mention added file 'c'");
+    assert!(diff.contains('b'), "diff should mention changed file 'b'");
+    assert!(diff.contains('c'), "diff should mention added file 'c'");
 }

@@ -515,7 +515,7 @@ pub fn replace_top_level_array_value_in_json_text(
             while let Some(idx) = replace_value.find("\n ") {
                 replace_value.remove(idx + 1);
             }
-            while let Some(idx) = replace_value.find("\n") {
+            while let Some(idx) = replace_value.find('\n') {
                 replace_value.replace_range(idx..=idx, " ");
             }
         }

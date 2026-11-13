@@ -420,7 +420,7 @@ impl Render for DataTable {
                                     .truncate()
                                     .px_1()
                                     .w(px(width))
-                                    .child(key.replace("_", " ").to_uppercase())
+                                    .child(key.replace('_', " ").to_uppercase())
                             })),
                     )
                     .child(

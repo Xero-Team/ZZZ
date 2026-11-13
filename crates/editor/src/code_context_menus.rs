@@ -1706,8 +1706,8 @@ impl CodeActionsItem {
 
     pub fn menu_label(&self) -> String {
         match self {
-            Self::CodeAction { action, .. } => action.lsp_action.title().replace("\n", ""),
-            Self::Task(_, task) => task.resolved_label.replace("\n", ""),
+            Self::CodeAction { action, .. } => action.lsp_action.title().replace('\n', ""),
+            Self::Task(_, task) => task.resolved_label.replace('\n', ""),
             Self::DebugScenario(scenario) => format!("debug: {}", scenario.label),
         }
     }

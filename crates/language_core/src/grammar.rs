@@ -215,7 +215,7 @@ fn populate_capture_indices(
                 _ => {}
             }
         }
-        if !name.starts_with("_")
+        if !name.starts_with('_')
             && !expected_prefixes
                 .iter()
                 .any(|&prefix| name.starts_with(prefix))

@@ -2094,7 +2094,7 @@ impl SettingsWindow {
             return;
         }
 
-        let is_json_link_query = query.starts_with("#");
+        let is_json_link_query = query.starts_with('#');
         if is_json_link_query {
             let indices = self.filter_by_json_path(&query);
             if !indices.is_empty() {
@@ -4939,7 +4939,7 @@ pub mod test {
                 selected_idx = Some(index);
                 line = pre;
             }
-            let (kind, title) = line.split_once(" ").unwrap();
+            let (kind, title) = line.split_once(' ').unwrap();
             assert_eq!(kind.len(), 1);
             let kind = kind.chars().next().unwrap();
             if kind == 'v' {

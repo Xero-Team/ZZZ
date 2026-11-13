@@ -97,7 +97,7 @@ pub enum VimOption {
 impl VimOption {
     fn possible_commands(query: &str) -> Vec<CommandInterceptItem> {
         let mut prefix_of_options = Vec::new();
-        let mut options = query.split(" ").collect::<Vec<_>>();
+        let mut options = query.split(' ').collect::<Vec<_>>();
         let prefix = options.pop().unwrap_or_default();
         for option in options {
             if let Some(opt) = Self::from(option) {
@@ -1982,7 +1982,7 @@ pub fn command_interceptor(
 
     let (range, query) = VimCommand::parse_range(input);
     let range_prefix = input[0..(input.len() - query.len())].to_string();
-    let has_trailing_space = query.ends_with(" ");
+    let has_trailing_space = query.ends_with(' ');
     let mut query = query.as_str().trim_start();
 
     let on_matching_lines = (query.starts_with('g') || query.starts_with('v'))

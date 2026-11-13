@@ -296,7 +296,7 @@ impl Branch {
     pub fn remote_name(&self) -> Option<&str> {
         self.ref_name
             .strip_prefix("refs/remotes/")
-            .and_then(|stripped| stripped.split("/").next())
+            .and_then(|stripped| stripped.split('/').next())
     }
 
     pub fn tracking_status(&self) -> Option<UpstreamTrackingStatus> {
@@ -468,7 +468,7 @@ impl Upstream {
     pub fn remote_name(&self) -> Option<&str> {
         self.ref_name
             .strip_prefix("refs/remotes/")
-            .and_then(|stripped| stripped.split("/").next())
+            .and_then(|stripped| stripped.split('/').next())
     }
 
     pub fn stripped_ref_name(&self) -> Option<&str> {
@@ -2158,7 +2158,7 @@ impl GitRepository for RealGitRepository {
                         (name, revision.peel_to_commit()?)
                     };
                 let (_, branch_name) = resolved_name
-                    .split_once("/")
+                    .split_once('/')
                     .context("Unexpected branch format")?;
                 let mut branch = match repo.branch(&branch_name, &branch_commit, false) {
                     Ok(branch) => branch,

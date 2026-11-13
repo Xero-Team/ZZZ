@@ -1354,6 +1354,13 @@ collapsible_else_if = "deny"
 # one-line blocks.
 collapsible_if = "deny"
 
+# The twelfth batch replaces single-character `&str` patterns with `char`, which
+# avoids the multi-byte substring search in `str` methods, and turns `impl
+# Into<T> for S` into the `impl From<S> for T` the standard library expects so
+# the blanket impl is not shadowed by a second conversion path.
+single_char_pattern = "deny"
+from_over_into = "deny"
+
 # We currently do not restrict any style rules
 # as it slows down shipping code to ZZZ.
 #

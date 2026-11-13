@@ -475,8 +475,8 @@ impl ProfilerWindow {
         let bar_width = (end_fraction - start_fraction).max(0.0);
 
         let file_str: &str = &item.location.file;
-        let basename = file_str.rsplit_once("/").unwrap_or(("", file_str)).1;
-        let basename = basename.rsplit_once("\\").unwrap_or(("", basename)).1;
+        let basename = file_str.rsplit_once('/').unwrap_or(("", file_str)).1;
+        let basename = basename.rsplit_once('\\').unwrap_or(("", basename)).1;
 
         let label = SharedString::from(format!(
             "{}:{}:{}",

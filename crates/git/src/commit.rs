@@ -150,7 +150,7 @@ async fn get_messages_impl(git: &GitBinary, shas: &[Oid]) -> Result<Vec<String>>
     Ok(String::from_utf8_lossy(&output.stdout)
         .trim()
         .split_terminator(MARKER)
-        .map(|str| str.trim().replace("<", "&lt;").replace(">", "&gt;"))
+        .map(|str| str.trim().replace('<', "&lt;").replace('>', "&gt;"))
         .collect::<Vec<_>>())
 }
 

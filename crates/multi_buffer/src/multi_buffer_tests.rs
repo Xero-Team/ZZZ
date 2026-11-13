@@ -3383,7 +3383,7 @@ impl ReferenceMultibuffer {
                             remaining_newlines == usize::from(!is_last_region)
                         };
                         if region_ix < regions.len() - 1
-                            && !text[ix..].contains("\n")
+                            && !text[ix..].contains('\n')
                             && (region.status == Some(DiffHunkStatus::added_none())
                                 || region.status.is_some_and(|s| s.is_deleted()))
                             && regions[region_ix + 1].excerpt.as_ref().map(|e| &e.range)

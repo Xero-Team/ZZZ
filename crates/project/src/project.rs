@@ -4248,7 +4248,7 @@ impl Project {
         buffer: &Entity<Buffer>,
         cx: &mut Context<Self>,
     ) -> Task<Option<ResolvedPath>> {
-        if util::paths::is_absolute(path, self.path_style(cx)) || path.starts_with("~") {
+        if util::paths::is_absolute(path, self.path_style(cx)) || path.starts_with('~') {
             self.resolve_abs_path(path, cx)
         } else {
             self.resolve_path_in_worktrees(path, buffer, cx)

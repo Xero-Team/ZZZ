@@ -370,9 +370,9 @@ impl<'de> Deserialize<'de> for RelPathBuf {
     }
 }
 
-impl Into<Arc<RelPath>> for RelPathBuf {
-    fn into(self) -> Arc<RelPath> {
-        Arc::from(self.as_rel_path())
+impl From<RelPathBuf> for Arc<RelPath> {
+    fn from(value: RelPathBuf) -> Arc<RelPath> {
+        Arc::from(value.as_rel_path())
     }
 }
 

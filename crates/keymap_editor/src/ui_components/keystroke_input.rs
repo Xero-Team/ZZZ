@@ -739,7 +739,7 @@ mod tests {
                 .unwrap_or_else(|_| panic!("Invalid keystroke: {}", keystroke_input));
 
             // Remove the dummy key if we added it for modifier-only keystrokes
-            if keystroke_input.ends_with('-') && keystroke_str.ends_with("_") {
+            if keystroke_input.ends_with('-') && keystroke_str.ends_with('_') {
                 keystroke.key = String::new();
             }
 
@@ -814,7 +814,7 @@ mod tests {
                     let mut keystroke = Keystroke::parse(&keystroke_str)?;
 
                     // Remove the dummy key if we added it for modifier-only keystrokes
-                    if s.ends_with('-') && keystroke_str.ends_with("_") {
+                    if s.ends_with('-') && keystroke_str.ends_with('_') {
                         keystroke.key = String::new();
                     }
 

@@ -257,7 +257,7 @@ fn template_big_table_of_actions(book: &mut Book, actions: &ActionManifest) {
 }
 
 fn format_binding(binding: String) -> String {
-    binding.replace("\\", "\\\\")
+    binding.replace('\\', "\\\\")
 }
 
 fn escape_html_text(text: &str) -> String {
@@ -617,7 +617,7 @@ fn template_and_validate_json_snippets(
 /// ```
 fn name_for_action(action_as_str: String) -> String {
     action_as_str
-        .split(",")
+        .split(',')
         .next()
         .map(|name| name.trim_matches('"').to_owned())
         .unwrap_or(action_as_str)

@@ -675,7 +675,7 @@ impl DapStore {
         fn format_value(mut value: String) -> String {
             const LIMIT: usize = 100;
 
-            if let Some(index) = value.find("\n") {
+            if let Some(index) = value.find('\n') {
                 value.truncate(index);
                 value.push_str("...");
             }

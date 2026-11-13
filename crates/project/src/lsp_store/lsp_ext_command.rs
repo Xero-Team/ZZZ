@@ -619,14 +619,14 @@ pub fn runnable_to_task_template(label: String, args: RunnableArgs) -> TaskTempl
         RunnableArgs::Cargo(cargo) => {
             match cargo.override_cargo {
                 Some(override_cargo) => {
-                    let mut override_parts = override_cargo.split(" ").map(|s| s.to_owned());
+                    let mut override_parts = override_cargo.split(' ').map(|s| s.to_owned());
                     task_template.command = override_parts
                         .next()
                         .unwrap_or_else(|| override_cargo.clone());
                     task_template.args.extend(override_parts);
                 }
                 None => task_template.command = "cargo".to_owned(),
-            };
+            }
             task_template.env = cargo.environment;
             task_template.cwd = Some(
                 cargo

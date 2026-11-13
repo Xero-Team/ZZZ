@@ -247,8 +247,8 @@ mod drag_handle {
 
     fn parse(input: &str) -> (Vec<f32>, f32, Option<usize>) {
         let mut widths = Vec::new();
-        let column_index = input.replace("*", "").find("I");
-        for col in input.replace("I", "|").split('|') {
+        let column_index = input.replace('*', "").find('I');
+        for col in input.replace('I', "|").split('|') {
             widths.push(col.len() as f32);
         }
 

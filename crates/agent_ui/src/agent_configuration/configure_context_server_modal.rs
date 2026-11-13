@@ -348,7 +348,7 @@ fn context_server_http_input(
             } else {
                 let json = serde_json::to_string_pretty(&headers)
                     .context("failed to serialize context server headers")?;
-                let mut lines = json.split("\n").collect::<Vec<_>>();
+                let mut lines = json.split('\n').collect::<Vec<_>>();
                 if lines.len() > 1 {
                     lines.remove(0);
                     lines.pop();
