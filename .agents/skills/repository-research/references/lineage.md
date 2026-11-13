@@ -57,6 +57,23 @@ checkouts.
 - **Exclude generated and vendored trees** from comparative counts unless the
   question is distribution size.
 
+## Validation
+
+The evidence validator also reads the lineage ledger:
+
+```bash
+python .agents/skills/repository-research/scripts/validate_evidence.py \
+  --sources .tmp/skill_ref/sources.tsv \
+  --evidence .tmp/skill_ref/evidence.tsv \
+  --lineage .tmp/skill_ref/lineage.tsv
+```
+
+It rejects unknown repository IDs, non-integer counts, and rows where
+`common_paths` does not equal `byte_identical + changed_common_paths`. A row
+whose `head_a` or `head_b` matches no checkout `HEAD` is reported as stale, and
+rows without head pins are counted as unrecheckable rather than treated as
+current.
+
 ## Reporting
 
 State the ancestor revision and the `path_filter` next to any lineage claim. In

@@ -25,6 +25,7 @@ LOCAL_KINDS = {"implementation", "test", "documentation"}
 LINE_LOCATOR = re.compile(r"L([1-9]\d*)(?:-L?([1-9]\d*))?$")
 CLAIM_PREFIX = re.compile(r"([A-Za-z]+)-\d+$")
 CITATION = re.compile(r"\[([A-Za-z]+-\d+)\]")
+LINEAGE_COUNTS = ("common_paths", "byte_identical", "changed_common_paths", "only_a", "only_b")
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -32,6 +33,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--sources", type=Path, required=True)
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--lineage", type=Path)
     parser.add_argument("--base-dir", type=Path, default=Path.cwd())
     parser.add_argument(
         "--allow-missing-checkout",
@@ -196,8 +198,60 @@ def check_report(path: Path, claim_ids: Sequence[str]) -> tuple[list[str], list[
     return errors, warnings
 
 
+def check_lineage(
+    path: Path, repositories: dict[str, Path]
+) -> tuple[list[str], list[str], int]:
+    if not path.is_file():
+        return [f"lineage ledger does not exist: {path}"], [], 0
+    rows = read_tsv(path)
+    errors: list[str] = []
+    warnings: list[str] = []
+    unpinned = 0
+    for number, row in enumerate(rows, start=2):
+        prefix = f"lineage row {number}"
+        counts: dict[str, int] = {}
+        for field in LINEAGE_COUNTS:
+            raw = row.get(field, "").strip()
+            if not raw.isdigit():
+                errors.append(f"{prefix}: {field} must be a non-negative integer")
+                continue
+            counts[field] = int(raw)
+        for side in ("repository_a", "repository_b"):
+            identifier = row.get(side, "").strip()
+            if identifier not in repositories:
+                errors.append(f"{prefix}: unknown repository {identifier!r} in {side}")
+        if (
+            len(counts) == len(LINEAGE_COUNTS)
+            and counts["common_paths"] != counts["byte_identical"] + counts["changed_common_paths"]
+        ):
+            errors.append(f"{prefix}: common_paths must equal byte_identical + changed_common_paths")
+        head_a = row.get("head_a", "").strip().lower()
+        head_b = row.get("head_b", "").strip().lower()
+        if not (head_a and head_b):
+            unpinned += 1
+            continue
+        for side, head, key in (("head_a", head_a, "repository_a"), ("head_b", head_b, "repository_b")):
+            repo = repositories.get(row.get(key, "").strip())
+            if repo is None or not is_git_repository(repo):
+                continue
+            try:
+                current = git(repo, "rev-parse", "HEAD").lower()
+            except RuntimeError as error:
+                warnings.append(f"{prefix}: {error}")
+                continue
+            if not (current.startswith(head) or head.startswith(current)):
+                warnings.append(f"{prefix}: {side} matches no checkout HEAD; the lineage row is stale")
+    if unpinned:
+        warnings.append(f"{unpinned} lineage rows lack head pins; they cannot be re-checked against checkouts")
+    return errors, warnings, len(rows)
+
+
 def main() -> int:
     arguments = parse_arguments()
+    missing_inputs = [str(path) for path in (arguments.sources, arguments.evidence) if not path.is_file()]
+    if missing_inputs:
+        print(f"ERROR\tinput ledger does not exist: {', '.join(missing_inputs)}")
+        return 1
     base_dir = arguments.base_dir.resolve()
     repositories = build_repository_map(read_tsv(arguments.sources), base_dir)
     rows = read_tsv(arguments.evidence)
@@ -264,6 +318,11 @@ def main() -> int:
             warnings.append(f"row {number}: inference notes should identify supporting claim IDs")
 
     errors.extend(check_claim_prefixes(rows))
+    lineage_pairs = 0
+    if arguments.lineage is not None:
+        lineage_errors, lineage_warnings, lineage_pairs = check_lineage(arguments.lineage, repositories)
+        errors.extend(lineage_errors)
+        warnings.extend(lineage_warnings)
     if arguments.report is not None:
         report_errors, report_warnings = check_report(
             arguments.report, [row.get("claim_id", "").strip() for row in rows]
@@ -284,7 +343,8 @@ def main() -> int:
         print(f"WARN\t{message}")
     print(
         f"claims={len(rows)} errors={len(errors)} warnings={len(warnings)} "
-        f"missing_checkouts={missing_checkouts} stale_pins={stale_pins}"
+        f"missing_checkouts={missing_checkouts} stale_pins={stale_pins} "
+        f"lineage_pairs={lineage_pairs}"
     )
     return 1 if errors else 0
 

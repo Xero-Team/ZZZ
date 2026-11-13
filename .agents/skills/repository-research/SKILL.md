@@ -62,8 +62,9 @@ repositories unless their name explicitly says `clone` or `init`.
   `lineage.tsv` with common, byte-identical, changed, and one-sided path counts.
 - `scripts/validate_evidence.py`: validate local evidence paths, line/heading
   locators, commit pins, external timestamps, and evidence kinds. `--report`
-  checks report citations against the ledger; `--allow-missing-checkout` turns a
-  deliberately cleaned-up corpus into warnings instead of errors.
+  checks report citations against the ledger, `--lineage` checks a
+  `lineage.tsv`, and `--allow-missing-checkout` turns a deliberately
+  cleaned-up corpus into warnings instead of errors.
 
 Run each script with `--help` before adapting its defaults. Prefer the templates
 in `assets/` for `sources.tsv`, `evidence.tsv`, `experiments.tsv`, and the final

@@ -138,7 +138,8 @@ The validator checks:
 - explanatory notes for inference and unknown evidence;
 - duplicate or missing claim IDs;
 - claim-ID prefixes that map to a single repository;
-- report citations that resolve, and ledger claims the report never cites.
+- report citations that resolve, and ledger claims the report never cites;
+- lineage rows that name unknown repositories or report inconsistent counts.
 
 A passing ledger proves structural consistency, not that the interpretation is
 correct. Re-read decisive source locations before finalizing the report.
