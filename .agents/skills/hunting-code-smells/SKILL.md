@@ -3,10 +3,11 @@ name: hunting-code-smells
 description:
   "Finds and fixes code smells and quality regressions in ZZZ. Use when
   reviewing a diff or module for code quality, hunting code smells,
-  refactoring, auditing an absorbed upstream change for cleanliness, or when
-  asked whether Rust code is idiomatic, clean, or over-engineered. Covers ZZZ
-  hard rules (.rules, clippy.toml, i18n, GPUI, philosophy gate), Clean Code
-  heuristics, and Rust idiom rules."
+  refactoring, auditing an absorbed upstream change for cleanliness, auditing
+  unsafe blocks for soundness, or when asked whether Rust code is idiomatic,
+  clean, or over-engineered. Covers ZZZ hard rules (.rules, clippy.toml, i18n,
+  GPUI, philosophy gate), the memory-safety contract for unsafe/UB/aliasing
+  and FFI boundaries, Clean Code heuristics, and Rust idiom rules."
 license: CC-BY-4.0
 compatibility: opencode
 metadata:
@@ -60,6 +61,15 @@ unrelated documentation.
 - No `unwrap()` or `expect()` outside tests and genuine programmer
   invariants. No `let _ =` on fallible operations. Propagate with `?`, use
   `.log_err()` / `.detach_and_log_err(cx)`, or handle explicitly.
+- Soundness outranks style. An unstated `unsafe` invariant, a safe API that can
+  reach undefined behavior, or an aliasing, validity, initialization, or layout
+  violation is P0/P1 under `REFERENCE.md` section 2 even when the code compiles
+  and reads cleanly.
+- Never widen an `unsafe` scope and never quiet a soundness finding with a lint
+  attribute or a `debug_assert!`. State the invariant or enforce it.
+- Do not manufacture memory-safety findings for a change with no `unsafe`, raw
+  pointer, FFI, or manual allocation. Say the section does not apply and move
+  on.
 - Full-word variable names. No abbreviations.
 - Comments only explain a non-obvious why. Never comment what the code says.
 - In `Entity::update` closures, use the inner `cx`; never re-enter the same
@@ -81,15 +91,21 @@ unrelated documentation.
 1. Scope. Identify the target: `git diff --name-only` for a review, or the
    module the user named. Confirm the worktree is clean except files this
    session owns. If the scope is large, review one crate at a time.
-2. Mechanical pass. Run the cheap checks in `REFERENCE.md` section 7:
+2. Mechanical pass. Run the cheap checks in `REFERENCE.md` section 8:
    `cargo xtask clippy` (or `cargo xtask clippy -p <crate>`),
    `cargo fmt --all -- --check`, `cargo xtask check`, the locale-parity
-   check, and the fast `rg` detectors for the P0 hard rules. Record every
-   FAIL.
+   check, and the fast `rg` detectors for the P0 hard rules. Inventory the
+   unsafe surface with the section 2 lead commands before reading the code, so
+   you know whether the memory-safety contract is in scope. Record every FAIL.
  3. Manual pass. Read the target against `REFERENCE.md` in severity order:
-   section 1 (P0 hard rules), section 2 (Rust idiom), section 3 (Clean Code
-   structure), section 4 (GPUI/architecture), section 5 (i18n/docs), section 6
-   (quality optimization leads). Cite `file:line` for each finding.
+   section 1 (P0 hard rules), section 2 (memory safety and UB contract — P0
+   inside `unsafe`, FFI, and manual allocation, and P0 for a new or changed
+   `unsafe` without a `// SAFETY:` invariant; P1 for a pre-existing undocumented
+   invariant, which you report rather than mass-edit), section 3 (Rust idiom),
+   section 4 (Clean Code structure), section 5 (GPUI/architecture), section 6
+   (i18n/docs), section 7 (quality optimization leads). Cite `file:line` for
+   each finding, and quote the Reference or FLS clause anchor for a
+   memory-safety finding.
 4. Classify. Assign P0/P1/P2 per the severity model. Drop weak or
    speculative findings instead of padding the report.
 5. Fix. Change only what the user asked for, smallest safe diff. When fixing a

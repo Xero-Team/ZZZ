@@ -9,14 +9,15 @@ English.
 - How to use this catalog
 - Severity model
 - 1. ZZZ hard rules (P0)
-- 2. Rust idiom smells (P1)
-- 3. Clean Code structure smells (P1/P2)
-- 4. GPUI and architecture smells (P1/P2)
-- 5. i18n and docs smells (P1/P2)
-- 6. Quality optimization leads (P2)
-- 7. Mechanical checks
-- 8. Review report template
-- 9. Reviewer anti-patterns
+- 2. Memory safety and UB contract (P0/P1)
+- 3. Rust idiom smells (P1)
+- 4. Clean Code structure smells (P1/P2)
+- 5. GPUI and architecture smells (P1/P2)
+- 6. i18n and docs smells (P1/P2)
+- 7. Quality optimization leads (P2)
+- 8. Mechanical checks
+- 9. Review report template
+- 10. Reviewer anti-patterns
 - Sources
 
 ## How to use this catalog
@@ -38,9 +39,11 @@ English.
 | P1 | Idiom or structural regression with clear, contained fix. | unnecessary clone, stringly typed, function does two things, feature envy |
 | P2 | Polish or opportunity, safe to defer. | naming precision, magic number, comment cleanup, unused dep |
 
-Rule IDs in sections 2-3 keep their Clean Code letters (`G5`, `N1`, `F1`, …)
+Rule IDs in sections 3-4 keep their Clean Code letters (`G5`, `N1`, `F1`, …)
 and rust-skills prefixes (`own-`, `anti-`, `perf-`, …) so they can be traced to
-the sources.
+the sources. Section 2 uses `MEM-` IDs anchored to a named clause in the
+Reference or the FLS, so each finding cites the language contract and not an
+opinion.
 
 ## 1. ZZZ hard rules (P0)
 
@@ -58,7 +61,7 @@ These come from `.rules`, `AGENTS.md`, `clippy.toml`, and
 | Z-TIMER | GPUI tests use executor timers | `rg -n 'smol::Timer::after' <path>` | `cx.background_executor().timer(dur).await` |
 | Z-SERDE-IO | Parse from slice, not reader | `rg -n 'serde_json(_lenient)?::from_reader' <path>` | read into `Vec`/`String`, then `from_slice` |
 | Z-I18N-MISS | User-facing text is localized | `rg -n 'Label::new\("|\.child\("[A-Z]|SharedString::from\("[A-Z]' <path>` (leads) | `i18n::tr(cx, "key", "fallback")` |
-| Z-I18N-KEYS | Key sets match in both catalogs | see section 7 locale parity | add the missing key to `en.json` and `zh-CN.json` |
+| Z-I18N-KEYS | Key sets match in both catalogs | see section 8 locale parity | add the missing key to `en.json` and `zh-CN.json` |
 | Z-I18N-FB | In-code `fallback` equals `en.json` value | `rg -n 'tr\(cx, "[^"]+", "[^"]*"' <path>` | make fallback identical to the `en.json` entry |
 | Z-PHIL | No rejected commercial/network surface returns | `cargo xtask check philosophy` (also run as the `cargo xtask clippy` preflight); `script/check-philosophy` | delete the surface; never gate it behind a setting |
 | Z-COMMENT | Comments explain why only | `rg -n '^\s*//' <path>` | delete restating/organizational comments |
@@ -74,7 +77,73 @@ auto-update, or a default remote endpoint, it is P0. The fix is deletion, not
 configuration. Hand the removal to `enforcing-philosophy-absence` if it is
 larger than the reviewed change.
 
-## 2. Rust idiom smells (P1)
+## 2. Memory safety and UB contract (P0/P1)
+
+Source of truth: the Rust Reference UB list, the FLS legality rules, and the
+UCG/MiniRust aliasing models. Section 1 rules are project-local; these are the
+language-level contract, so they outrank every idiom and structural preference
+below.
+
+Read this section when the change touches `unsafe`, FFI, raw pointers,
+`MaybeUninit`, `transmute`, `repr`, manually managed allocation, or a
+hand-written interior-mutability type. When none of those are in scope, say so
+in one line and move on — do not invent memory-safety findings.
+
+### 2.1 Where trust is localized
+
+Every formal system in `Sources` concentrates its trust in one place: lambda-Rust
+in the lifetime logic, RustHornBelt in the prophecy/unsafe interface, Verus in
+`external_body` and `assume`, Creusot in `#[trusted]`. The review lesson is not
+the prover; it is that a soundness argument is only as strong as its trusted
+base. ZZZ has no mechanized spec, so its trust base is:
+
+1. new or widened `unsafe` blocks, `unsafe impl`, and `unsafe fn` signatures;
+2. the FFI boundary (`crates/gpui_macos`, `crates/gpui_windows`, `crates/sqlez`,
+   `crates/database_core`, `crates/media`, `crates/video`, `crates/util`);
+3. hand-written buffers and interior-mutability types anywhere;
+4. `vendor/` code, only when the change edits it.
+
+Review in that order. A P0 memory-safety finding outside those four areas is
+rare enough that you should double-check it before reporting.
+
+### 2.2 Rule table
+
+| ID | Contract | Detect | Fix |
+|----|----------|--------|-----|
+| MEM-ALIAS | A live `&T` referent is not mutated (except inside `UnsafeCell`); a live `&mut T` referent is not read or written through any other pointer and no other reference points to it; `Box<T>` counts as `&'static mut T`. Violating this is UB. Reference `behavior-considered-undefined.md` `r[undefined.alias]`; FLS `ownership-and-deconstruction.rst` aliasing rules | `rg -n 'as \*mut\|as \*const\|: \*mut \|: \*const '`; two pointers derived from one place; a stored `&mut` reused after a second borrow | one owner at a time; `UnsafeCell` for interior mutation; shorten each raw pointer's live range |
+| MEM-PROV | Pointer arithmetic stays inside the same live allocation; a `usize` round trip does not restore provenance. Reference `r[undefined.place-projection]`, `memory-model.md` (bytes carry optional provenance) | `rg -n 'as usize\b\|wrapping_offset\|\.offset\('` | keep `*const T`/`*mut T` and use in-bounds `add`/`offset`; use `expose_provenance` / `with_exposed_provenance` only when an integer is genuinely required |
+| MEM-VALID | Producing an invalid value is UB: `bool` is `0`/`1`, `char` is a non-surrogate scalar, an enum discriminant is valid, a `fn` pointer is non-null, scalars and pointers are initialized. Reference `r[undefined.validity]` | `rg -n 'mem::zeroed\|mem::uninitialized\|transmute'` | `MaybeUninit` plus explicit initialization; never `zeroed()` for a type whose all-zero pattern is invalid |
+| MEM-INIT | Reading uninitialized memory is UB. `assume_init` only after full initialization; `Vec::set_len` only after every element is written; no `ptr::read` of an uninitialized place. FLS `ownership-and-deconstruction.rst` ("all memory starts as uninitialized"; a variable shall be initialized before it is accessed) | `rg -n 'assume_init\|set_len\(\|ptr::read'` | `write` then `assume_init_read` in that order, or a safe container |
+| MEM-ALIGN | A place based on a misaligned pointer is UB when loaded or stored, and alignment comes from the dereferenced pointer type, not the field type. Reference `r[undefined.misaligned]` | `rg -n 'read_unaligned\|write_unaligned\|repr\(packed\)'` | `read_unaligned`/`write_unaligned`, or drop `repr(packed)` |
+| MEM-CELL | `UnsafeCell<T>` is the only legal way to mutate through `&`; multiple `&mut UnsafeCell<T>` aliases are still UB. Reference `interior-mutability.md`; FLS (referent of an immutable reference is mutable only when the type has interior mutability) | `rg -n 'repr\(transparent\)'` near a `*mut` field; `&`→`*mut` casts | use `UnsafeCell`, or a GPUI entity / atomic |
+| MEM-LAYOUT | `repr(Rust)` layout is unspecified (field order, padding), so `transmute` between `repr(Rust)` types and an FFI struct without `repr(C)` are unsound by contract. Reference `r[layout.repr.rust.unspecified]`, `r[layout.repr.c]` | `rg -n 'transmute\|repr\(C\)'` | `repr(C)` at the boundary, or a field-by-field conversion |
+| MEM-UNSOUND | A safe API must not let safe client code reach any of the rows above; `unsafe` code that a safe caller can misuse is unsound. Reference `r[undefined.soundness]` | an `unsafe fn` that does not need `unsafe` at the call site; an invariant that exists only in a doc comment | mark it `unsafe`, narrow to `pub(crate)`, or add the runtime check |
+| MEM-DOC | Every `unsafe` block and `unsafe fn` names the invariant it relies on, plus why the safe equivalent is not viable. `.rules` mandates this for new and changed code, so a bare `unsafe` there is P0; a pre-existing site is P1: report it, do not mass-edit | `rg -n 'unsafe \{\|unsafe fn'` cross-checked against `rg -n '// SAFETY:'` | add the `// SAFETY:` comment stating the invariant, not the code's behavior |
+
+### 2.3 Aliasing models are not normative
+
+Stacked Borrows and Tree Borrows (`unsafe-code-guidelines/wip/stacked-borrows.md`,
+`wip/tree-borrows.md`) say so in their own headers: not normative, not endorsed
+by the UCG WG, describing what Miri implements, with MiniRust as the
+authoritative text. So never cite either model as "the rule". Cite the
+Reference's `r[undefined.alias]` outline, and treat Miri as the executable
+oracle:
+
+- Miri needs a nightly toolchain; `rust-toolchain.toml` pins `1.100.0`, so this
+  is `cargo +nightly miri test -p <crate>`, a manual lead and not a gate.
+- Miri is not wired into CI here. Do not report "Miri is clean" unless you ran
+  it, and say which crate and toolchain.
+
+### 2.4 What not to do
+
+- Do not turn a soundness finding into a lint suppression or a widened
+  `unsafe` scope; both hide the invariant instead of stating it.
+- Do not propose a `debug_assert!` as the fix for a UB path. Debug assertions
+  vanish in release; state the precondition or enforce it.
+- Do not rewrite an FFI shim you cannot build or test on its target platform.
+  Report `file:line` and the clause it breaks.
+
+## 3. Rust idiom smells (P1)
 
 Derived from the rust-skills rule set. Apply only where the project rule does
 not already decide.
@@ -132,12 +201,15 @@ not already decide.
 
 ### Unsafe (`unsafe-`)
 
-- Missing `// SAFETY:` comment (`unsafe-safety-comment`).
+The contract for `unsafe` lives in section 2; these three rust-skills IDs are
+the style half of it.
+
+- Missing `// SAFETY:` comment (`unsafe-safety-comment`, and `MEM-DOC`).
 - Over-broad `unsafe` scope (`unsafe-minimize-scope`).
 - `unsafe` without a Miri-visible test (`unsafe-miri-ci`). Report, do not
   rewrite.
 
-## 3. Clean Code structure smells (P1/P2)
+## 4. Clean Code structure smells (P1/P2)
 
 Adapted from `clean-code-skills` to Rust. Use the letter IDs in reports.
 
@@ -188,7 +260,7 @@ Adapted from `clean-code-skills` to Rust. Use the letter IDs in reports.
   `test-should-panic`, `test-cfg-test-module` from rust-skills.
 - GPUI tests: use executor timers and `run_until_parked`.
 
-## 4. GPUI and architecture smells (P1/P2)
+## 5. GPUI and architecture smells (P1/P2)
 
 From `docs/src/development/ownership-and-data-flow.md` and `.rules`.
 
@@ -205,7 +277,7 @@ From `docs/src/development/ownership-and-data-flow.md` and `.rules`.
 - New `Entity` type created only to hold a temporary; prefer local state or a
   `RenderOnce` component.
 
-## 5. i18n and docs smells (P1/P2)
+## 6. i18n and docs smells (P1/P2)
 
 - Hardcoded user-facing English in UI construction (`Label`, `.child("…")`,
   `SharedString::from` on visible copy).
@@ -219,7 +291,7 @@ From `docs/src/development/ownership-and-data-flow.md` and `.rules`.
   same script `cargo xtask check docs` runs) and do not hotlink `zed.dev`
   images.
 
-## 6. Quality optimization leads (P2)
+## 7. Quality optimization leads (P2)
 
 From `docs/src/development/bloat.md`. Leads, not rules.
 
@@ -232,7 +304,7 @@ From `docs/src/development/bloat.md`. Leads, not rules.
 - Async cost: an `async fn` that never awaits can be plain code.
 - Keep dependency removals and refactors in separate changes.
 
-## 7. Mechanical checks
+## 8. Mechanical checks
 
 Run from the repository root.
 
@@ -293,13 +365,30 @@ rg -n 'smol::Timer::after|std::process::Command|from_reader' crates/<crate>/src 
 git ls-files '**/mod.rs'
 ```
 
+Unsafe surface inventory (section 2 leads):
+
+```sh
+# where the trust base is, by crate, heaviest first
+rg -c 'unsafe ' crates --glob '*.rs' | sort -t: -k2 -rn
+
+# the constructs that carry the contract
+rg -n 'unsafe \{|unsafe fn|unsafe impl' crates/<crate>/src --glob '*.rs'
+rg -n 'transmute|mem::zeroed|mem::uninitialized|assume_init|set_len\(|from_raw_parts' crates/<crate>/src --glob '*.rs'
+rg -n 'as \*(mut|const)|\*mut |\*const ' crates/<crate>/src --glob '*.rs'
+
+# MEM-DOC: unsafe sites without a stated invariant
+rg -n '// SAFETY:' crates/<crate>/src --glob '*.rs' | wc -l
+```
+
 Tests for a behavior-affecting change:
 
 ```sh
 cargo test -p <crate>
+# optional, manual, needs nightly in addition to the pinned 1.100.0
+cargo +nightly miri test -p <crate>
 ```
 
-## 8. Review report template
+## 9. Review report template
 
 Write the report in Simplified Chinese. Keep code identifiers in English.
 
@@ -336,7 +425,7 @@ Write the report in Simplified Chinese. Keep code identifiers in English.
 - <一个>
 ```
 
-## 9. Reviewer anti-patterns
+## 10. Reviewer anti-patterns
 
 - Drive-by refactoring or reformatting outside the reviewed area.
 - Reporting without `file:line`, or padding with speculative findings.
@@ -362,3 +451,91 @@ Write the report in Simplified Chinese. Keep code identifiers in English.
 - `rust-skills` (265 Rust rules) — https://github.com/leonardomso/rust-skills.
 - `rust-course` (Rust 语言圣经, naming and idiomatic conventions) —
   https://github.com/sunface/rust-course.
+
+### Memory-safety sources (section 2)
+
+The memory-safety rules are anchored to the clauses named in section 2.2, not
+to a reviewer's memory. Normative first, then supporting work. Checked
+2026-11-13 by shallow clone; cite the URLs, not a local checkout.
+
+### Normative for Rust as it ships
+
+- **The Rust Reference** — https://github.com/rust-lang/reference,
+  rendered at https://doc.rust-lang.org/reference/.
+  `src/behavior-considered-undefined.md` is the UB list and the soundness
+  definition used by MEM-ALIAS/…/MEM-UNSOUND; `src/memory-model.md` covers
+  bytes, initialization, and provenance; `src/interior-mutability.md` is the
+  `UnsafeCell` contract; `src/type-layout.md` has `r[layout.repr.*]`. Each
+  clause has a stable `r[...]` anchor — quote the anchor in the report.
+- **FLS (Ferrocene Language Specification)** —
+  https://github.com/rust-lang/fls, rendered at
+  https://rust-lang.github.io/fls/. `src/ownership-and-deconstruction.rst`
+  gives the legality rules (one owner per value, referent initialized, no
+  mutation while a reference is active, no overlapping reference while a
+  `&mut` is active, aliasing `&mut`s from an unsafe context is UB);
+  `src/unsafety.rst` enumerates the unsafe operations (raw-pointer
+  dereference, reading or writing an external or mutable `static`, `union`
+  field access other than assignment, calling an `unsafe fn`, `asm!`);
+  `src/undefined-behavior.rst` indexes the UB sections. Ferrocene's
+  qualification material (IEC 61508 / ISO 26262, the pre-qualified `core`
+  API list) lives at https://public-docs.ferrocene.dev/.
+
+### Aliasing models (explicitly non-normative)
+
+- **Unsafe Code Guidelines** — https://github.com/rust-lang/unsafe-code-guidelines.
+  `wip/stacked-borrows.md` and `wip/tree-borrows.md` both say in their own
+  headers that they are non-normative, describe what Miri implements, and
+  point at MiniRust as authoritative; `wip/memory-interface.md` is a stub
+  redirecting to MiniRust. Use these to explain a finding, never as the rule.
+- **MiniRust** — https://github.com/minirust/minirust (referenced by the UCG
+  docs). Authoritative literate specification of the memory model and of Tree
+  Borrows; reach for it when a finding turns on provenance or per-byte
+  permissions.
+
+### Mechanized soundness of safe Rust
+
+- **lambda-Rust / RustBelt** — https://gitlab.mpi-sws.org/iris/lambda-rust.
+  `theories/lang` formalizes the core language with the theorem that programs
+  with data races get stuck; `theories/lifetime` and `theories/typing` hold
+  the lifetime logic and the semantic types. `Missing.md` lists what the model
+  deliberately does not cover (ZST corner cases, structural `Cell` slicing),
+  which is a useful reminder that "proved sound" has a boundary.
+- **RustHornBelt** — https://github.com/dewert99/rust-horn-belt. Extends the
+  same base to functional correctness for code containing `unsafe`;
+  `theories/lang`, `theories/typing`, `theories/prophecy`, plus
+  `walkthrough.md` as the guided tour. Relevant because the local check is
+  "does the unsafe abstraction have a contract", which is this paper's subject.
+- **Oxide: The Essence of Rust** — https://arxiv.org/abs/1903.00982
+  (Weiss, Gierczak, Patterson, Ahmed; v4 2021). First syntactic
+  progress/preservation proof for borrow checking, with lifetimes modelled as
+  an approximation of the provenances of references. The review consequence:
+  a lifetime annotation approximates provenance and is not by itself a
+  licence to fabricate a reference.
+
+### Verification toolchains and their trusted bases
+
+- **Aeneas** — https://github.com/AeneasVerif/aeneas;
+  `documentation/aeneas-overview.md` explains the ownership-driven
+  translation (references become plain values plus backward continuations, no
+  heap model) and the `Result` monad for panics and overflow. **Charon** —
+  https://github.com/AeneasVerif/charon — extracts LLBC from MIR.
+  **mechanized-llbc** — https://github.com/AeneasVerif/mechanized-llbc — is
+  the Rocq formalization of LLBC after Ho, Fromherz, Protzenko, *Sound
+  Borrow-Checking for Rust via Symbolic Semantics* (2024), with
+  `limitations-LLBC-sharp` for edge cases the model excludes. Use these for
+  the argument shape: if the crate's borrow structure cannot be expressed,
+  the tool reports it rather than proving it.
+- **Verus** — https://github.com/verus-lang/verus, guide at
+  https://verus-lang.github.io/verus/guide/. `source/docs/guide/src/memory-safety.md`
+  states the key asymmetry — Verus has no safe/unsafe distinction, so it
+  verifies memory safety through specifications rather than through unsafe
+  encapsulation; `tcb.md`, `tcb`/`external_body`/`assume` and
+  `interacting-with-unverified-code.md` mark the remaining trust holes.
+- **VerusBelt** — https://github.com/verus-lang/verus-belt — the Rocq
+  development validating Verus's proof-oriented extensions to the type
+  system (`src/`, `doc/`, `VERUS-IMPL.md`).
+- **Creusot** — https://github.com/creusot-rs/creusot. `ARCHITECTURE.md` for
+  the pipeline; `guide/src/limitations.md` for what its contracts do not
+  cover (capacity-overflow panics on `Vec` growth, architecture-specific type
+  sizes, the `vec!` reimplementation); `guide/src/trusted.md` for `#[trusted]`.
+  The transferable rule: a trust marker is a review target, not a proof.
