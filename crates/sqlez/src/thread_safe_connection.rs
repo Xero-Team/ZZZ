@@ -38,9 +38,6 @@ pub struct ThreadSafeConnection {
     connections: Arc<ThreadLocal<Connection>>,
 }
 
-unsafe impl Send for ThreadSafeConnection {}
-unsafe impl Sync for ThreadSafeConnection {}
-
 pub struct ThreadSafeConnectionBuilder<M: Migrator + 'static = ()> {
     db_initialize_query: Option<&'static str>,
     write_queue_constructor: Option<WriteQueueConstructor>,
@@ -126,17 +123,15 @@ impl<M: Migrator> ThreadSafeConnectionBuilder<M> {
 }
 
 impl ThreadSafeConnection {
-    fn initialize_queues(&self, write_queue_constructor: Option<WriteQueueConstructor>) -> bool {
+    fn initialize_queues(&self, write_queue_constructor: Option<WriteQueueConstructor>) {
         if !QUEUES.read().contains_key(&self.uri) {
             let mut queues = QUEUES.write();
             if !queues.contains_key(&self.uri) {
                 let mut write_queue_constructor =
                     write_queue_constructor.unwrap_or_else(background_thread_queue);
                 queues.insert(self.uri.clone(), write_queue_constructor());
-                return true;
             }
         }
-        false
     }
 
     pub fn builder<M: Migrator>(uri: &str, persistent: bool) -> ThreadSafeConnectionBuilder<M> {
@@ -171,9 +166,10 @@ impl ThreadSafeConnection {
     ) -> impl Future<Output = T> {
         // Check and invalidate queue and maybe recreate queue
         let queues = QUEUES.read();
-        let write_channel = queues
-            .get(&self.uri)
-            .expect("Queues are inserted when build is called. This should always succeed");
+        let write_channel = queues.get(&self.uri).expect(
+            "invariant: a queue is registered for every uri by `initialize_queues`, which `build` \
+             and `new` both call",
+        );
 
         // Create a one shot channel for the result of the queued write
         // so we can await on the result
@@ -291,7 +287,7 @@ pub fn background_thread_queue() -> WriteQueueConstructor {
                     write()
                 }
             })
-            .expect("channel should yield a value");
+            .expect("failed to spawn the sqlez worker thread");
 
         let sender = UnboundedSyncSender::new(sender);
         Box::new(move |queued_write| {
@@ -320,6 +316,15 @@ mod test {
     use std::{thread, time::Duration};
 
     use crate::{domain::Domain, thread_safe_connection::ThreadSafeConnection};
+
+    #[test]
+    fn thread_safe_connection_stays_send_and_sync() {
+        // `ThreadSafeConnection` shares one connection per thread through `ThreadLocal`, so it has
+        // to stay `Send + Sync`. The property comes from the field types rather than from
+        // hand-written `unsafe impl`s; this test fails the build if a field change removes it.
+        fn assert_send_and_sync<T: Send + Sync>() {}
+        assert_send_and_sync::<ThreadSafeConnection>();
+    }
 
     #[test]
     fn many_initialize_and_migrate_queries_at_once() {

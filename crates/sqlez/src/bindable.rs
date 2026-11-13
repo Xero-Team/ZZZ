@@ -28,7 +28,7 @@ impl StaticColumnCount for bool {}
 impl Bind for bool {
     fn bind(&self, statement: &Statement, start_index: i32) -> Result<i32> {
         statement
-            .bind(&self.then_some(1).unwrap_or(0), start_index)
+            .bind(&i32::from(*self), start_index)
             .with_context(|| format!("Failed to bind bool at index {start_index}"))
     }
 }
@@ -114,7 +114,7 @@ impl Bind for f32 {
     fn bind(&self, statement: &Statement, start_index: i32) -> Result<i32> {
         statement
             .bind_double(start_index, *self as f64)
-            .with_context(|| format!("Failed to bind f64 at index {start_index}"))?;
+            .with_context(|| format!("Failed to bind f32 at index {start_index}"))?;
         Ok(start_index + 1)
     }
 }
@@ -168,17 +168,23 @@ impl Column for i64 {
 impl StaticColumnCount for u64 {}
 impl Bind for u64 {
     fn bind(&self, statement: &Statement, start_index: i32) -> Result<i32> {
+        // SQLite integers are `i64`, so a `u64` above `i64::MAX` would wrap into a negative value.
+        let value = i64::try_from(*self)
+            .with_context(|| format!("value {self} does not fit in a SQLite integer"))?;
         statement
-            .bind_int64(start_index, (*self) as i64)
-            .with_context(|| format!("Failed to bind i64 at index {start_index}"))?;
+            .bind_int64(start_index, value)
+            .with_context(|| format!("Failed to bind u64 at index {start_index}"))?;
         Ok(start_index + 1)
     }
 }
 
 impl Column for u64 {
     fn column(statement: &mut Statement, start_index: i32) -> Result<(Self, i32)> {
-        let result = statement.column_int64(start_index)? as u64;
-        Ok((result, start_index + 1))
+        let result = statement.column_int64(start_index)?;
+        let value = u64::try_from(result).with_context(|| {
+            format!("column {start_index} holds {result}, which is not a valid u64")
+        })?;
+        Ok((value, start_index + 1))
     }
 }
 
@@ -187,14 +193,17 @@ impl Bind for u32 {
     fn bind(&self, statement: &Statement, start_index: i32) -> Result<i32> {
         (*self as i64)
             .bind(statement, start_index)
-            .with_context(|| format!("Failed to bind usize at index {start_index}"))
+            .with_context(|| format!("Failed to bind u32 at index {start_index}"))
     }
 }
 
 impl Column for u32 {
     fn column(statement: &mut Statement, start_index: i32) -> Result<(Self, i32)> {
         let result = statement.column_int64(start_index)?;
-        Ok((result as u32, start_index + 1))
+        let value = u32::try_from(result).with_context(|| {
+            format!("column {start_index} holds {result}, which is not a valid u32")
+        })?;
+        Ok((value, start_index + 1))
     }
 }
 
@@ -203,30 +212,40 @@ impl Bind for u16 {
     fn bind(&self, statement: &Statement, start_index: i32) -> Result<i32> {
         (*self as i64)
             .bind(statement, start_index)
-            .with_context(|| format!("Failed to bind usize at index {start_index}"))
+            .with_context(|| format!("Failed to bind u16 at index {start_index}"))
     }
 }
 
 impl Column for u16 {
     fn column(statement: &mut Statement, start_index: i32) -> Result<(Self, i32)> {
         let result = statement.column_int64(start_index)?;
-        Ok((result as u16, start_index + 1))
+        let value = u16::try_from(result).with_context(|| {
+            format!("column {start_index} holds {result}, which is not a valid u16")
+        })?;
+        Ok((value, start_index + 1))
     }
 }
 
 impl StaticColumnCount for usize {}
 impl Bind for usize {
     fn bind(&self, statement: &Statement, start_index: i32) -> Result<i32> {
-        (*self as i64)
-            .bind(statement, start_index)
-            .with_context(|| format!("Failed to bind usize at index {start_index}"))
+        // On 64-bit targets a `usize` above `i64::MAX` would wrap into a negative value.
+        let value = i64::try_from(*self)
+            .with_context(|| format!("value {self} does not fit in a SQLite integer"))?;
+        statement
+            .bind_int64(start_index, value)
+            .with_context(|| format!("Failed to bind usize at index {start_index}"))?;
+        Ok(start_index + 1)
     }
 }
 
 impl Column for usize {
     fn column(statement: &mut Statement, start_index: i32) -> Result<(Self, i32)> {
         let result = statement.column_int64(start_index)?;
-        Ok((result as usize, start_index + 1))
+        let value = usize::try_from(result).with_context(|| {
+            format!("column {start_index} holds {result}, which is not a valid usize")
+        })?;
+        Ok((value, start_index + 1))
     }
 }
 
@@ -464,3 +483,56 @@ impl_tuple_row_traits!(
     t9: T9,
     t10: T10
 );
+
+#[cfg(test)]
+mod tests {
+    use crate::connection::Connection;
+
+    /// SQLite stores integers as `i64`, so a narrower `Column` impl that casts with `as` silently
+    /// wraps. A wrapped value is indistinguishable from a correct one further up the stack, so
+    /// these conversions have to fail instead.
+    #[test]
+    fn narrow_columns_reject_values_outside_their_range() {
+        let connection = Connection::open_memory(Some("narrow_columns_out_of_range"));
+
+        let mut select_u16 = connection.select_row::<u16>("SELECT 65536").unwrap();
+        assert!(select_u16().is_err(), "65536 must not wrap into u16");
+
+        let mut select_u32 = connection.select_row::<u32>("SELECT -1").unwrap();
+        assert!(select_u32().is_err(), "-1 must not wrap into u32");
+
+        let mut select_u64 = connection.select_row::<u64>("SELECT -1").unwrap();
+        assert!(select_u64().is_err(), "-1 must not wrap into u64");
+
+        let mut select_usize = connection.select_row::<usize>("SELECT -1").unwrap();
+        assert!(select_usize().is_err(), "-1 must not wrap into usize");
+    }
+
+    #[test]
+    fn narrow_columns_accept_the_top_of_their_range() {
+        let connection = Connection::open_memory(Some("narrow_columns_in_range"));
+
+        let mut select_u16 = connection.select_row::<u16>("SELECT 65535").unwrap();
+        assert_eq!(select_u16().unwrap(), Some(u16::MAX));
+
+        let mut select_u32 = connection.select_row::<u32>("SELECT 4294967295").unwrap();
+        assert_eq!(select_u32().unwrap(), Some(u32::MAX));
+    }
+
+    #[test]
+    fn binding_a_u64_that_does_not_fit_an_integer_fails() {
+        let connection = Connection::open_memory(Some("bind_u64_out_of_range"));
+        connection
+            .exec("CREATE TABLE items (value INTEGER)")
+            .unwrap()()
+        .unwrap();
+
+        let mut insert = connection
+            .exec_bound("INSERT INTO items (value) VALUES (?)")
+            .unwrap();
+        assert!(
+            insert(u64::MAX).is_err(),
+            "u64::MAX must not be stored as a negative integer"
+        );
+    }
+}

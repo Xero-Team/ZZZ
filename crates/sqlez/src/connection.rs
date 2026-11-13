@@ -15,6 +15,12 @@ pub struct Connection {
     pub(crate) write: RefCell<bool>,
     _sqlite: PhantomData<sqlite3>,
 }
+
+// SAFETY: a `Connection` owns its `sqlite3` handle outright, so moving the struct moves the
+// only handle to it. The type is deliberately not `Sync`, which is what makes the move sound:
+// SQLite opened with `SQLITE_OPEN_NOMUTEX` may only be used by one thread at a time, and
+// without `Sync` no second thread can reach the handle through a shared reference.
+// `ThreadSafeConnection` is the layer that serializes cross-thread use.
 unsafe impl Send for Connection {}
 
 impl Connection {
@@ -25,17 +31,28 @@ impl Connection {
             write: RefCell::new(true),
             _sqlite: PhantomData,
         };
+        // Bound to a local so the NUL-terminated bytes are provably alive for the whole call
+        // instead of relying on temporary lifetime extension inside the statement.
+        let uri = CString::new(uri)?;
 
+        // SAFETY: `uri` is a NUL-terminated string alive for the duration of the call, and
+        // `connection.sqlite3` is a local field that SQLite may write to. On failure SQLite
+        // still stores a handle in it, which `last_error` below reports and `Drop` closes.
         unsafe {
             sqlite3_open_v2(
-                CString::new(uri)?.as_ptr(),
+                uri.as_ptr(),
                 &raw mut connection.sqlite3,
                 flags,
                 ptr::null(),
             );
         }
 
-        // Turn on extended error codes
+        if connection.sqlite3.is_null() {
+            anyhow::bail!("sqlite3_open_v2 returned no connection handle for {uri:?}");
+        }
+
+        // SAFETY: the handle was just checked non-null and is owned by `connection`, which is
+        // not shared yet.
         unsafe {
             sqlite3_extended_result_codes(connection.sqlite3, 1);
         }
@@ -45,10 +62,11 @@ impl Connection {
         // threads database) are shared between ZZZ instances, so transient
         // lock contention is expected; failing fast turns it into a
         // storm of dropped saves and retry churn.
-        if !connection.sqlite3.is_null() {
-            unsafe {
-                sqlite3_busy_timeout(connection.sqlite3, 5000);
-            }
+        //
+        // SAFETY: same live, exclusively owned handle as above; `sqlite3_busy_timeout` only
+        // stores a timeout on it.
+        unsafe {
+            sqlite3_busy_timeout(connection.sqlite3, 5000);
         }
 
         connection.last_error()?;
@@ -98,17 +116,34 @@ impl Connection {
     }
 
     pub fn backup_main(&self, destination: &Connection) -> Result<()> {
+        // Both database names are bound to locals so the NUL-terminated bytes outlive the
+        // `backup_init` call rather than depending on temporary lifetime extension.
+        let destination_name = CString::new("main")?;
+        let source_name = CString::new("main")?;
+        // SAFETY: both handles are live connections owned by the callers, and both name
+        // strings are alive for the duration of the call. `backup_init` only reads them.
         let backup = unsafe {
             sqlite3_backup_init(
                 destination.sqlite3,
-                CString::new("main")?.as_ptr(),
+                destination_name.as_ptr(),
                 self.sqlite3,
-                CString::new("main")?.as_ptr(),
+                source_name.as_ptr(),
             )
         };
+
+        // `sqlite3_backup_init` reports failure by returning NULL and records the reason on the
+        // destination connection, so the error is read from there instead of stepping a null
+        // backup handle.
+        if backup.is_null() {
+            return destination.last_error();
+        }
+
+        // SAFETY: `backup` is a non-null handle created above; `-1` copies every page, and
+        // `backup_finish` releases the handle exactly once.
         unsafe {
             sqlite3_backup_step(backup, -1);
         }
+        // SAFETY: same handle, still owned here, and this call is what frees it.
         unsafe {
             sqlite3_backup_finish(backup);
         }
@@ -127,10 +162,7 @@ impl Connection {
 
         let mut alter_table = None;
         while {
-            let remaining_sql_str = remaining_sql
-                .to_str()
-                .expect("path should be valid UTF-8")
-                .trim();
+            let remaining_sql_str = remaining_sql.to_str().ok()?.trim();
             let any_remaining_sql = remaining_sql_str != ";" && !remaining_sql_str.is_empty();
             if any_remaining_sql {
                 alter_table = parse_alter_table(remaining_sql_str);
@@ -140,72 +172,71 @@ impl Connection {
             let mut raw_statement = ptr::null_mut::<sqlite3_stmt>();
             let mut remaining_sql_ptr = ptr::null();
 
-            let (res, offset, message, _conn) = if let Some((table_to_alter, column)) = alter_table
-            {
-                // ALTER TABLE is a weird statement. When preparing the statement the table's
-                // existence is checked *before* syntax checking any other part of the statement.
-                // Therefore, we need to make sure that the table has been created before calling
-                // prepare. As we don't want to trash whatever database this is connected to, we
-                // create a new in-memory DB to test.
+            // An ALTER TABLE statement is prepared against a throwaway database that already
+            // contains the table, because `prepare` checks the table's existence before it
+            // checks the rest of the syntax. The stub stays bound for the whole iteration: the
+            // error message read below points into the connection that produced it.
+            let stub_connection = alter_table
+                .as_ref()
+                .and_then(|(table_to_alter, column)| alter_table_stub(table_to_alter, column));
+            let prepare_connection = stub_connection.as_ref().unwrap_or(self);
 
-                let temp_connection = Connection::open_memory(None);
-                //This should always succeed, if it doesn't then you really should know about it
-                temp_connection
-                    .exec(&format!("CREATE TABLE {table_to_alter}({column})"))
-                    .expect("value should be present")()
-                .expect("value should be present");
-
-                unsafe {
-                    sqlite3_prepare_v2(
-                        temp_connection.sqlite3,
-                        remaining_sql.as_ptr(),
-                        -1,
-                        &raw mut raw_statement,
-                        &raw mut remaining_sql_ptr,
-                    )
-                };
-
-                #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
-                let offset = unsafe { sqlite3_error_offset(temp_connection.sqlite3) };
-
-                #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-                let offset = 0;
-
-                let errcode = unsafe { sqlite3_errcode(temp_connection.sqlite3) };
-                let errmsg = unsafe { sqlite3_errmsg(temp_connection.sqlite3) };
-                (errcode, offset, errmsg, Some(temp_connection))
-            } else {
-                unsafe {
-                    sqlite3_prepare_v2(
-                        self.sqlite3,
-                        remaining_sql.as_ptr(),
-                        -1,
-                        &raw mut raw_statement,
-                        &raw mut remaining_sql_ptr,
-                    )
-                };
-
-                #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
-                let offset = unsafe { sqlite3_error_offset(self.sqlite3) };
-
-                #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-                let offset = 0;
-
-                let errcode = unsafe { sqlite3_errcode(self.sqlite3) };
-                let errmsg = unsafe { sqlite3_errmsg(self.sqlite3) };
-                (errcode, offset, errmsg, None)
+            // SAFETY: `prepare_connection` is either `self` or the stub bound above, so it is
+            // alive for the rest of the iteration; `remaining_sql` points into `sql`, which is
+            // alive for the whole function; and both out-parameters are local bindings.
+            unsafe {
+                sqlite3_prepare_v2(
+                    prepare_connection.sqlite3,
+                    remaining_sql.as_ptr(),
+                    -1,
+                    &raw mut raw_statement,
+                    &raw mut remaining_sql_ptr,
+                )
             };
 
+            #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+            // SAFETY: same live connection as above; this only reads its last error offset.
+            let offset = unsafe { sqlite3_error_offset(prepare_connection.sqlite3) };
+
+            #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+            let offset = 0;
+
+            // SAFETY: same live connection; both calls only read connection-owned state, and
+            // the returned message stays valid until the next call on that connection.
+            let errcode = unsafe { sqlite3_errcode(prepare_connection.sqlite3) };
+            // SAFETY: as above.
+            let errmsg = unsafe { sqlite3_errmsg(prepare_connection.sqlite3) };
+
+            // SAFETY: `raw_statement` is whatever `prepare` produced; `sqlite3_finalize`
+            // accepts a null handle and frees a compiled statement exactly once.
             unsafe { sqlite3_finalize(raw_statement) };
 
-            if res == 1 && offset >= 0 {
+            if errcode == 1 && offset >= 0 {
+                // The caller reports an offset into the SQL it passed in, so the position of
+                // this statement inside that buffer is added to the offset SQLite reported.
+                // Only the two addresses are subtracted here; nothing is dereferenced.
                 let sub_statement_correction = remaining_sql.as_ptr() as usize - sql_start as usize;
+                // SAFETY: `errmsg` points into memory owned by `prepare_connection`, which is
+                // still alive, and it is NUL-terminated by SQLite.
                 let err_msg =
-                    String::from_utf8_lossy(unsafe { CStr::from_ptr(message.cast()).to_bytes() })
+                    String::from_utf8_lossy(unsafe { CStr::from_ptr(errmsg.cast()).to_bytes() })
                         .into_owned();
 
                 return Some((err_msg, offset as usize + sub_statement_correction));
             }
+
+            // `prepare` leaves the tail unset only for a statement it refused, which the error
+            // branch above already reported. Stopping here keeps the pointer out of
+            // `CStr::from_ptr`.
+            if remaining_sql_ptr.is_null() {
+                log::error!(
+                    "sqlite3_prepare_v2 reported neither an error nor the remaining SQL while \
+                     syntax checking"
+                );
+                return None;
+            }
+            // SAFETY: non-null (checked above) and NUL-terminated; the tail points into `sql`,
+            // which outlives this borrow.
             remaining_sql = unsafe { CStr::from_ptr(remaining_sql_ptr) };
             alter_table = None;
         }
@@ -213,16 +244,21 @@ impl Connection {
     }
 
     pub(crate) fn last_error(&self) -> Result<()> {
+        // SAFETY: `self.sqlite3` is a live handle owned by this `Connection`; the calls below
+        // only read connection-owned state.
         let code = unsafe { sqlite3_errcode(self.sqlite3) };
         const NON_ERROR_CODES: &[i32] = &[SQLITE_OK, SQLITE_ROW];
         if NON_ERROR_CODES.contains(&code) {
             return Ok(());
         }
 
+        // SAFETY: same live handle. SQLite documents the returned message pointer as valid
+        // until the next call on the connection, and the bytes are copied before that.
         let message = unsafe { sqlite3_errmsg(self.sqlite3) };
         let message = if message.is_null() {
             None
         } else {
+            // SAFETY: non-null (checked above) and NUL-terminated by SQLite.
             Some(
                 String::from_utf8_lossy(unsafe { CStr::from_ptr(message.cast()).to_bytes() })
                     .into_owned(),
@@ -233,10 +269,42 @@ impl Connection {
     }
 
     pub(crate) fn with_write<T>(&self, callback: impl FnOnce(&Connection) -> T) -> T {
+        /// Clears the write flag however the scope ends, so a panicking callback cannot leave
+        /// the connection marked writable for the next user of the queue.
+        struct WriteGuard<'a>(&'a RefCell<bool>);
+
+        impl Drop for WriteGuard<'_> {
+            fn drop(&mut self) {
+                *self.0.borrow_mut() = false;
+            }
+        }
+
         *self.write.borrow_mut() = true;
+        let write_guard = WriteGuard(&self.write);
         let result = callback(self);
-        *self.write.borrow_mut() = false;
+        drop(write_guard);
         result
+    }
+}
+
+/// Builds a throwaway in-memory database holding the table an `ALTER TABLE` statement names, so
+/// the statement can be syntax-checked without touching the schema of the connection under test.
+///
+/// Returns `None` when the stub cannot be created, which happens when the table or column name
+/// taken from the statement is not a bare identifier. The caller then checks the statement
+/// against its own connection instead of failing a migration over the probe.
+fn alter_table_stub(table_to_alter: &str, column: &str) -> Option<Connection> {
+    let connection = Connection::open_memory(None);
+    let create_table = format!("CREATE TABLE {table_to_alter}({column})");
+    let result = connection
+        .exec(&create_table)
+        .and_then(|mut create_table| create_table());
+    match result {
+        Ok(()) => Some(connection),
+        Err(error) => {
+            log::error!("Could not build the ALTER TABLE probe table: {error:#}");
+            None
+        }
     }
 }
 
@@ -280,6 +348,9 @@ fn parse_alter_table(remaining_sql_str: &str) -> Option<(String, String)> {
 
 impl Drop for Connection {
     fn drop(&mut self) {
+        // SAFETY: `sqlite3` is the handle `open_with_flags` created and checked non-null, and
+        // `Drop` takes `&mut self`, so this is the only place that closes it. Every statement
+        // borrows the connection (`Statement<'a>`), so none can outlive this call.
         unsafe { sqlite3_close(self.sqlite3) };
     }
 }
@@ -538,6 +609,20 @@ mod test {
         assert!(
             connection
                 .sql_has_syntax_error("ALTER TABLE test AAD x TEXT")
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn alter_table_with_quoted_identifier_does_not_panic() {
+        let connection = Connection::open_memory(Some("alter_table_with_quoted_identifier"));
+
+        // `parse_alter_table` keeps the next whitespace-delimited token, so a quoted table name
+        // yields a fragment that `CREATE TABLE` rejects on the probe database. The probe has to
+        // fall back to the real connection rather than failing that statement outright.
+        assert!(
+            connection
+                .sql_has_syntax_error(r#"ALTER TABLE "my table" RENAME COLUMN a TO b"#)
                 .is_some()
         );
     }

@@ -515,9 +515,12 @@ impl DriverConnection for ExtensionConnection {
                     break;
                 }
                 if sender.send(Ok(row)).await.is_err() {
-                    return;
+                    // The consumer closed the stream and there is nobody left to report to;
+                    // `finish` below still runs so the stream ends deliberately.
+                    break;
                 }
             }
+            sender.finish();
         })
         .detach();
         Ok(ExecutedQuery {

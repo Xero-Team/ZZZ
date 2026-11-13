@@ -142,21 +142,76 @@ impl QueryCanceller {
 /// A step error (constraint violation, out-of-memory, ...) is delivered as the
 /// stream's final item and then the stream ends; it must not be silently
 /// dropped, because statements that return no rows have no other error channel.
+/// The producer half of a [`RowStream`]. It derefs to the underlying sender so drivers keep
+/// calling `send` and `send_blocking` directly; [`RowStreamWriter::finish`] is what tells the
+/// consumer the producer ended deliberately instead of by unwinding.
+pub struct RowStreamWriter {
+    sender: Sender<DriverResult<Row>>,
+    finished: Arc<AtomicBool>,
+}
+
+impl std::ops::Deref for RowStreamWriter {
+    type Target = Sender<DriverResult<Row>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.sender
+    }
+}
+
+impl RowStreamWriter {
+    /// Marks the stream as complete. A consumer that sees the channel close without this call
+    /// reports a truncated result rather than a normal end of stream.
+    pub fn finish(&self) {
+        self.finished.store(true, Ordering::SeqCst);
+    }
+}
+
 #[derive(Debug)]
 pub struct RowStream {
     pub receiver: Receiver<DriverResult<Row>>,
+    producer_finished: Arc<AtomicBool>,
+    truncation_reported: AtomicBool,
 }
 
 impl RowStream {
-    pub fn new(capacity: usize) -> (Sender<DriverResult<Row>>, Self) {
+    pub fn new(capacity: usize) -> (RowStreamWriter, Self) {
         let (sender, receiver) = bounded(capacity);
-        (sender, Self { receiver })
+        let producer_finished = Arc::new(AtomicBool::new(false));
+        (
+            RowStreamWriter {
+                sender,
+                finished: producer_finished.clone(),
+            },
+            Self {
+                receiver,
+                producer_finished,
+                truncation_reported: AtomicBool::new(false),
+            },
+        )
     }
 
     /// Pull the next row. A closed channel means the producer finished (or was
     /// cancelled); that is a normal terminal condition, not an error.
+    ///
+    /// A closed channel from a producer that never called
+    /// [`RowStreamWriter::finish`] is different: the producer thread unwound mid
+    /// query, and reporting that as a normal end would make a crashed query look
+    /// like a complete result set. It is delivered once as a driver error, after
+    /// which the stream ends.
     pub async fn next(&self) -> Option<DriverResult<Row>> {
-        self.receiver.recv().await.ok()
+        match self.receiver.recv().await {
+            Ok(item) => Some(item),
+            Err(_) if self.producer_finished.load(Ordering::SeqCst) => None,
+            Err(_) => {
+                if self.truncation_reported.swap(true, Ordering::SeqCst) {
+                    None
+                } else {
+                    Some(Err(DatabaseError::driver(
+                        "the row stream ended before the producer reported completion",
+                    )))
+                }
+            }
+        }
     }
 }
 
@@ -290,6 +345,7 @@ mod tests {
             let (sender, stream) = RowStream::new(4);
             assert!(sender.send(Ok(Row(vec![Value::Integer(1)]))).await.is_ok());
             assert!(sender.send(Ok(Row(vec![Value::Integer(2)]))).await.is_ok());
+            sender.finish();
             drop(sender);
             assert_eq!(stream.next().await, Some(Ok(Row(vec![Value::Integer(1)]))));
             assert_eq!(stream.next().await, Some(Ok(Row(vec![Value::Integer(2)]))));
@@ -303,9 +359,31 @@ mod tests {
             let (sender, stream) = RowStream::new(4);
             let error = DatabaseError::constraint("duplicate key");
             sender.send(Err(error.clone())).await.expect("send error");
+            sender.finish();
             drop(sender);
             let item = stream.next().await.expect("error item");
             assert_eq!(item.expect_err("error").kind, error.kind);
+            assert_eq!(stream.next().await, None);
+        });
+    }
+
+    #[test]
+    fn row_stream_reports_a_producer_that_never_finished() {
+        futures::executor::block_on(async {
+            let (sender, stream) = RowStream::new(4);
+            sender
+                .send(Ok(Row(vec![Value::Integer(1)])))
+                .await
+                .expect("send row");
+            // Dropping without `finish` is what a producer that unwound mid query looks like
+            // from the consumer's side.
+            drop(sender);
+
+            assert_eq!(stream.next().await, Some(Ok(Row(vec![Value::Integer(1)]))));
+            assert!(
+                stream.next().await.expect("terminal item").is_err(),
+                "a producer that never finished must not look like a complete result set"
+            );
             assert_eq!(stream.next().await, None);
         });
     }

@@ -20,7 +20,8 @@ use parking_lot::Mutex;
 
 use crate::driver::{
     DatabaseDriver, DriverConnection, DriverResult, ExecutedQuery, ExplainNode, ExplainPlan,
-    Interrupt, QueryHandle, QueryMetadata, ROW_STREAM_CAPACITY, RowStream, TransactionId,
+    Interrupt, QueryHandle, QueryMetadata, ROW_STREAM_CAPACITY, RowStream, RowStreamWriter,
+    TransactionId,
 };
 use crate::error::DatabaseError;
 #[cfg(test)]
@@ -38,14 +39,15 @@ pub const SQLITE_DRIVER_ID: &str = "sqlite";
 /// calls go through the mutex; only `interrupt` uses the stored pointer.
 struct SqliteHandle {
     connection: Mutex<*mut sqlite3>,
-    /// The same pointer as an integer, used only by `sqlite3_interrupt`.
+    /// The same pointer as an exposed-provenance address, used only by `sqlite3_interrupt`.
     interrupt_ptr: usize,
     transaction_counter: AtomicU64,
     closed: AtomicBool,
 }
 
 // SAFETY: every access to `connection` is serialized by the mutex. The
-// `interrupt_ptr` is only passed to `sqlite3_interrupt`, which SQLite documents
+// `interrupt_ptr` is an `expose_provenance` address of that same connection, and is
+// only turned back into a pointer for `sqlite3_interrupt`, which SQLite documents
 // as safe to invoke from another thread on a running connection.
 unsafe impl Send for SqliteHandle {}
 unsafe impl Sync for SqliteHandle {}
@@ -57,6 +59,8 @@ impl Drop for SqliteHandle {
         }
         let connection = *self.connection.lock();
         if !connection.is_null() {
+            // SAFETY: this handle has exactly one owner, `Drop` runs once, and the mutex makes
+            // this take exclusive, so no other use of the handle can overlap the close.
             unsafe {
                 sqlite3_close(connection);
             }
@@ -71,10 +75,13 @@ struct ConnectionInterrupt {
 impl Interrupt for ConnectionInterrupt {
     fn interrupt(&self) {
         if self.interrupt_ptr != 0 {
-            // SAFETY: the pointer belongs to a live connection owned by the same
-            // `SqliteHandle`; SQLite permits calling interrupt from any thread.
+            // SAFETY: the address came from `expose_provenance` on the connection owned by the
+            // same `SqliteHandle`, which is still alive because it holds this copy; SQLite
+            // permits calling interrupt from any thread.
             unsafe {
-                sqlite3_interrupt(self.interrupt_ptr as *mut sqlite3);
+                sqlite3_interrupt(std::ptr::with_exposed_provenance_mut::<sqlite3>(
+                    self.interrupt_ptr,
+                ));
             }
         }
     }
@@ -128,10 +135,14 @@ fn open_connection(config: &ConnectionConfig) -> DriverResult<Arc<SqliteHandle>>
     // connection reports a classified error instead of silently creating an
     // empty database (which `sqlez::open_file` does).
     let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_URI | SQLITE_OPEN_NOMUTEX;
+    // SAFETY: `c_uri` is a NUL-terminated string alive for the call, `raw` is a local that SQLite
+    // may write to, and the connection keeps its own copy of the file name afterwards.
     let code = unsafe { sqlite3_open_v2(c_uri.as_ptr(), &raw mut raw, flags, ptr::null()) };
     if code != SQLITE_OK {
         let message = raw_error_message(raw);
         if !raw.is_null() {
+            // SAFETY: SQLite stores a handle in the out-parameter even when opening fails, so
+            // this closes that failed handle exactly once before it is dropped on the floor.
             unsafe {
                 sqlite3_close(raw);
             }
@@ -143,15 +154,18 @@ fn open_connection(config: &ConnectionConfig) -> DriverResult<Arc<SqliteHandle>>
             "SQLite returned a null connection handle",
         ));
     }
+    // SAFETY: `raw` was checked non-null above and nothing else owns it until the handle below
+    // wraps it; both calls only configure that connection.
     unsafe {
         sqlite3_extended_result_codes(raw, 1);
     }
+    // SAFETY: same live, exclusively owned handle.
     unsafe {
         sqlite3_busy_timeout(raw, 5000);
     }
     Ok(Arc::new(SqliteHandle {
         connection: Mutex::new(raw),
-        interrupt_ptr: raw as usize,
+        interrupt_ptr: raw.expose_provenance(),
         transaction_counter: AtomicU64::new(0),
         closed: AtomicBool::new(false),
     }))
@@ -211,6 +225,9 @@ impl SqliteConnection {
     fn prepare(raw: *mut sqlite3, sql: &str) -> DriverResult<*mut sqlite3_stmt> {
         let c_sql = CString::new(sql).map_err(|error| DatabaseError::syntax(error.to_string()))?;
         let mut statement: *mut sqlite3_stmt = ptr::null_mut();
+        // SAFETY: `raw` is a live connection owned by the caller, `c_sql` is NUL-terminated and
+        // alive for the call, `statement` is a local out-parameter, and the tail pointer is null
+        // because only the first statement of the string is prepared here.
         let code = unsafe {
             sqlite3_prepare_v2(raw, c_sql.as_ptr(), -1, &raw mut statement, ptr::null_mut())
         };
@@ -225,6 +242,7 @@ fn raw_error_message(raw: *mut sqlite3) -> String {
     if raw.is_null() {
         return "SQLite returned a null handle".to_owned();
     }
+    // SAFETY: `raw` was checked non-null above; `sqlite3_errmsg` only reads connection state.
     let pointer = unsafe { sqlite3_errmsg(raw) };
     if pointer.is_null() {
         return String::new();
@@ -248,17 +266,32 @@ fn classify_step_error(code: c_int, message: &str) -> DatabaseError {
 }
 
 fn column_metadata(statement: *mut sqlite3_stmt) -> Vec<Column> {
+    // SAFETY: `statement` is a live prepared statement owned by the caller, and these calls only
+    // read column metadata from it.
     let count = unsafe { sqlite3_column_count(statement) };
     let mut columns = Vec::with_capacity(count.max(0) as usize);
     for index in 0..count {
+        // `sqlite3_column_name` reports allocation failure by returning null, so the pointer is
+        // checked before it reaches `CStr::from_ptr`, exactly like the declared type below.
+        // SAFETY: same live statement; the call only reads the column name.
         let name_pointer = unsafe { sqlite3_column_name(statement, index) };
-        let name = unsafe { CStr::from_ptr(name_pointer) }
-            .to_string_lossy()
-            .into_owned();
+        let name = if name_pointer.is_null() {
+            String::new()
+        } else {
+            // SAFETY: non-null (checked above) and NUL-terminated by SQLite; the bytes stay valid
+            // for as long as the statement is prepared.
+            unsafe { CStr::from_ptr(name_pointer) }
+                .to_string_lossy()
+                .into_owned()
+        };
+        // SAFETY: as above; the declaration string is owned by the prepared statement and the
+        // result is null for expression columns, which the check below handles.
         let declared_pointer = unsafe { sqlite3_column_decltype(statement, index) };
         let declared = if declared_pointer.is_null() {
             String::new()
         } else {
+            // SAFETY: non-null (checked above) and NUL-terminated by SQLite; the declaration is
+            // owned by the prepared statement.
             unsafe { CStr::from_ptr(declared_pointer) }
                 .to_string_lossy()
                 .into_owned()
@@ -271,6 +304,9 @@ fn column_metadata(statement: *mut sqlite3_stmt) -> Vec<Column> {
 fn read_row(statement: *mut sqlite3_stmt, column_count: usize) -> DriverResult<Row> {
     let mut values = Vec::with_capacity(column_count);
     for index in 0..column_count {
+        // SAFETY: `statement` is a live statement positioned on a row, and `index` is bounded by
+        // the column count the caller read from that same statement. Each arm below reads one
+        // value from that same `(statement, index)` pair.
         let value = match unsafe { sqlite3_column_type(statement, index as c_int) } {
             SQLITE_INTEGER => {
                 Value::Integer(unsafe { sqlite3_column_int64(statement, index as c_int) })
@@ -293,26 +329,38 @@ fn read_row(statement: *mut sqlite3_stmt, column_count: usize) -> DriverResult<R
 }
 
 fn read_text(statement: *mut sqlite3_stmt, index: usize) -> Value {
+    // SAFETY: `statement` is a live statement positioned on a row and `index` came from the same
+    // column count; the call only reads that column.
     let pointer = unsafe { sqlite3_column_text(statement, index as c_int) };
     if pointer.is_null() {
         return Value::Null;
     }
+    // SAFETY: same live statement and column; the length is reported for the pointer above and is
+    // valid until the statement advances, which the borrow of `statement` prevents here.
     let length = unsafe { sqlite3_column_bytes(statement, index as c_int) } as usize;
     let slice = unsafe { std::slice::from_raw_parts(pointer, length) };
     Value::Text(String::from_utf8_lossy(slice).into_owned())
 }
 
 fn read_blob(statement: *mut sqlite3_stmt, index: usize) -> Value {
+    // SAFETY: `statement` is a live statement positioned on a row and `index` came from the same
+    // column count; the call only reads that column.
     let pointer = unsafe { sqlite3_column_blob(statement, index as c_int) };
     if pointer.is_null() {
         return Value::Blob(Vec::new());
     }
+    // SAFETY: same live statement and column; the length is reported for the pointer above and is
+    // valid until the statement advances, which the borrow of `statement` prevents here.
     let length = unsafe { sqlite3_column_bytes(statement, index as c_int) } as usize;
     let slice = unsafe { std::slice::from_raw_parts(pointer.cast::<u8>(), length) };
     Value::Blob(slice.to_vec())
 }
 
 fn bind_value(statement: *mut sqlite3_stmt, index: c_int, value: &Value) -> DriverResult<()> {
+    // SAFETY: `statement` is a live statement owned by the caller and `index` is the 1-based
+    // parameter position, which the caller derives from the bound parameter list. Every arm makes
+    // exactly one `sqlite3_bind_*` call on that pair; each copies the value, so borrowed payloads
+    // do not have to outlive the call.
     let code = match value {
         Value::Null => unsafe { sqlite3_bind_null(statement, index) },
         Value::Integer(number) => unsafe { sqlite3_bind_int64(statement, index, *number) },
@@ -322,24 +370,33 @@ fn bind_value(statement: *mut sqlite3_stmt, index: c_int, value: &Value) -> Driv
         | Value::DateTime(text)
         | Value::Time(text)
         | Value::Numeric(text)
-        | Value::Json(text) => unsafe {
-            sqlite3_bind_text(
-                statement,
-                index,
-                text.as_ptr().cast::<c_char>(),
-                text.len() as c_int,
-                SQLITE_TRANSIENT(),
-            )
-        },
-        Value::Blob(bytes) => unsafe {
-            sqlite3_bind_blob(
-                statement,
-                index,
-                bytes.as_ptr().cast::<c_void>(),
-                bytes.len() as c_int,
-                SQLITE_TRANSIENT(),
-            )
-        },
+        | Value::Json(text) => {
+            // SAFETY: one text bind on the live statement above; `SQLITE_TRANSIENT` copies the
+            // bytes, so `text` does not have to outlive the call.
+            unsafe {
+                sqlite3_bind_text(
+                    statement,
+                    index,
+                    text.as_ptr().cast::<c_char>(),
+                    text.len() as c_int,
+                    SQLITE_TRANSIENT(),
+                )
+            }
+        }
+        Value::Blob(bytes) => {
+            // SAFETY: one blob bind on the live statement above; `SQLITE_TRANSIENT` copies the
+            // bytes, so `bytes` does not have to outlive the call.
+            unsafe {
+                sqlite3_bind_blob(
+                    statement,
+                    index,
+                    bytes.as_ptr().cast::<c_void>(),
+                    bytes.len() as c_int,
+                    SQLITE_TRANSIENT(),
+                )
+            }
+        }
+        // SAFETY: one integer bind on the live statement above; nothing is borrowed.
         Value::Bool(value) => unsafe { sqlite3_bind_int64(statement, index, i64::from(*value)) },
     };
     if code == SQLITE_OK {
@@ -354,10 +411,10 @@ impl DriverConnection for SqliteConnection {
     async fn test(&self) -> DriverResult<()> {
         self.with_raw(|raw| {
             let statement = Self::prepare(raw, "SELECT 1")?;
+            let _statement_guard = StatementGuard { statement };
+            // SAFETY: `prepare` returned a live statement owned by this scope; the guard above
+            // finalizes it on this thread when the closure returns.
             let code = unsafe { sqlite3_step(statement) };
-            unsafe {
-                sqlite3_finalize(statement);
-            }
             if code == SQLITE_ROW || code == SQLITE_DONE {
                 Ok(())
             } else {
@@ -412,16 +469,22 @@ impl DriverConnection for SqliteConnection {
         let column_count = metadata.columns.len();
         let flag = cancelled;
         let connection_lock = self.handle.clone();
-        let statement_address = statement as usize;
+        // The statement handle is not `Send`, so it crosses the thread boundary as an address.
+        // `expose_provenance` keeps the provenance that a plain `as usize` cast would drop.
+        let statement_address = statement.expose_provenance();
         std::thread::spawn(move || {
             let guard = connection_lock.connection.lock();
             let raw = *guard;
-            let statement = statement_address as *mut sqlite3_stmt;
+            // SAFETY: the address came from `expose_provenance` on a statement this call owns,
+            // and the guard taken above keeps its connection alive until after the finalize
+            // below, so the handle is still valid here.
+            let statement =
+                std::ptr::with_exposed_provenance_mut::<sqlite3_stmt>(statement_address);
+            let statement_guard = StatementGuard { statement };
             stream_rows(raw, statement, column_count, &sender, &flag);
-            // Finalize on the same thread that stepped the statement.
-            unsafe {
-                sqlite3_finalize(statement);
-            }
+            // Finalize while the connection lock is still held, and on the same thread that
+            // stepped the statement; the guard repeats this if `stream_rows` unwinds.
+            drop(statement_guard);
             drop(guard);
         });
 
@@ -470,6 +533,8 @@ impl DriverConnection for SqliteConnection {
         }
         let raw = *self.handle.connection.lock();
         if !raw.is_null() {
+            // SAFETY: `closed` was just swapped to true, so no later use is possible, and the
+            // lock taken above makes this close exclusive against in-flight queries.
             unsafe {
                 sqlite3_close(raw);
             }
@@ -478,17 +543,35 @@ impl DriverConnection for SqliteConnection {
     }
 }
 
+/// Finalizes a prepared statement when it goes out of scope, including while the streaming thread
+/// unwinds, so a panic inside `stream_rows` cannot leave the handle allocated on the connection.
+struct StatementGuard {
+    statement: *mut sqlite3_stmt,
+}
+
+impl Drop for StatementGuard {
+    fn drop(&mut self) {
+        // SAFETY: the guard owns the statement for its whole lifetime and is the only thing that
+        // finalizes it, so the handle is still live and not yet freed here.
+        unsafe {
+            sqlite3_finalize(self.statement);
+        }
+    }
+}
+
 fn stream_rows(
     raw: *mut sqlite3,
     statement: *mut sqlite3_stmt,
     column_count: usize,
-    sender: &async_channel::Sender<DriverResult<Row>>,
+    sender: &RowStreamWriter,
     flag: &AtomicBool,
 ) {
     loop {
         if flag.load(Ordering::SeqCst) {
             break;
         }
+        // SAFETY: `statement` is live for the whole call (the spawning closure's `StatementGuard`
+        // finalizes it) and is stepped only from this thread.
         let code = unsafe { sqlite3_step(statement) };
         match code {
             SQLITE_ROW => match read_row(statement, column_count) {
@@ -496,6 +579,8 @@ fn stream_rows(
                     if sender.send_blocking(Ok(row)).is_err() {
                         // Receiver dropped: the query was cancelled or the view
                         // closed. Interrupt so a blocked step returns promptly.
+                        // SAFETY: `raw` is the live connection held by this thread's guard, and
+                        // SQLite permits interrupting it from another thread.
                         unsafe {
                             sqlite3_interrupt(raw);
                         }
@@ -522,6 +607,9 @@ fn stream_rows(
             }
         }
     }
+    // Reached on every deliberate exit above, including cancellation; a panic inside the loop
+    // skips it, which is what lets the consumer tell the two apart.
+    sender.finish();
 }
 
 fn as_i64(value: Option<&Value>) -> i64 {
@@ -691,10 +779,10 @@ impl SqliteConnection {
     fn exec_simple(&self, sql: &str) -> DriverResult<()> {
         self.with_raw(|raw| {
             let statement = Self::prepare(raw, sql)?;
+            let _statement_guard = StatementGuard { statement };
+            // SAFETY: `prepare` returned a live statement owned by this scope; the guard above
+            // finalizes it on this thread when the closure returns.
             let code = unsafe { sqlite3_step(statement) };
-            unsafe {
-                sqlite3_finalize(statement);
-            }
             if code == SQLITE_DONE || code == SQLITE_ROW {
                 Ok(())
             } else {
@@ -713,26 +801,22 @@ impl SqliteConnection {
     ) -> DriverResult<Vec<Row>> {
         self.with_raw(|raw| {
             let statement = Self::prepare(raw, sql)?;
+            // Finalizing through the guard also covers the `read_row` error path below, which a
+            // bare `?` used to leave with the statement still allocated.
+            let _statement_guard = StatementGuard { statement };
             for (position, value) in params.iter().enumerate() {
                 bind_value(statement, position as c_int + 1, value)?;
             }
             let mut rows = Vec::new();
             loop {
+                // SAFETY: the statement is live and owned by this scope; `sqlite3_step` is the
+                // only operation that advances it.
                 let code = unsafe { sqlite3_step(statement) };
                 match code {
                     SQLITE_ROW => rows.push(read_row(statement, column_count)?),
                     SQLITE_DONE => break,
-                    _ => {
-                        let error = Self::last_error(raw, code);
-                        unsafe {
-                            sqlite3_finalize(statement);
-                        }
-                        return Err(error);
-                    }
+                    _ => return Err(Self::last_error(raw, code)),
                 }
-            }
-            unsafe {
-                sqlite3_finalize(statement);
             }
             Ok(rows)
         })
