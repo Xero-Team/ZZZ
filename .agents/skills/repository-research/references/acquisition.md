@@ -40,6 +40,7 @@ Recommended layout:
   verified-sources.tsv
   clone-results.tsv
   inventory.tsv
+  lineage.tsv
   evidence.tsv
   experiments.tsv
   report.md

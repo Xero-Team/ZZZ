@@ -38,3 +38,13 @@ Describe the smallest reversible experiment, dataset, and success criteria that 
 ## Unknowns
 
 List unanswered questions requiring runtime tests, credentials, private data, or upstream clarification.
+
+## Handoff to execution
+
+Research ends at a decision; execution needs its own artifacts. When the recommendation is adopted, carry the result forward as:
+
+- `refactoring-plan.md` — staged contract. Each stage names the evidence claims it relies on, its success threshold, and its rollback.
+- `goal.md` — copyable execution instruction that points at the report, the plan, the ledgers, and the progress ledger.
+- `progress-ledger.md` — per-stage changes, commands run, `PASS` / `FAIL` / `BLOCKED` / `NOT RUN`, commit SHAs, and the upstream sources used.
+
+Re-pin the baseline in all three when `HEAD` moves. Port same-ancestry code through the repository's upstream absorption process instead of copying from a secondary fork.

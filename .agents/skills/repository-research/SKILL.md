@@ -29,6 +29,8 @@ Read only the references needed for the current request:
 - For comparison dimensions, normalization, weights, status labels, maintenance
   signals, and recommendations, read
   [references/comparison.md](references/comparison.md).
+- For shared-ancestry, fork, and upstream-diff questions, read
+  [references/lineage.md](references/lineage.md).
 - For code-intelligence and Deep Research design patterns, browser/MCP roles,
   evaluation loops, and known tool boundaries, read
   [references/research-systems.md](references/research-systems.md).
@@ -54,7 +56,10 @@ repositories unless their name explicitly says `clone` or `init`.
   file/language counts, manifests, policy files, and working-tree status.
 - `scripts/survey_repositories.py`: generate deterministic static surveys with
   subsystem, manifest, dependency, entrypoint, test, documentation, and
-  architecture-keyword hints.
+  architecture-keyword hints. `--skip-existing` protects files that a human has
+  annotated beside the generated output.
+- `scripts/compare_lineage.py`: compare shared paths across checkouts and write
+  `lineage.tsv` with common, byte-identical, changed, and one-sided path counts.
 - `scripts/validate_evidence.py`: validate local evidence paths, line/heading
   locators, commit pins, external timestamps, and evidence kinds. `--report`
   checks report citations against the ledger; `--allow-missing-checkout` turns a
@@ -84,9 +89,11 @@ it supports.
    inspected `HEAD` and leave upstream working trees unchanged.
 
 4. **Inventory before interpreting.** Generate the inventory and static survey.
-   Read repository instructions, security and contribution documents, README
-   and architecture documents, manifests, entrypoints, tests, benchmarks, and
-   representative implementation modules in that order.
+   When candidates share an ancestor, also generate `lineage.tsv` so a fork is
+   not counted as an independent design. Read repository instructions, security
+   and contribution documents, README and architecture documents, manifests,
+   entrypoints, tests, benchmarks, and representative implementation modules in
+   that order.
 
 5. **Trace behavior end to end.** Follow one representative task from input to
    output. Code-understanding systems require discovery → parsing/indexing →
@@ -108,7 +115,9 @@ it supports.
 8. **Write the decision report.** Lead with the workload-specific answer, then
    show source limitations, architecture findings, the comparison matrix,
    tradeoffs, security/license/operations risks, unknowns, and the smallest
-   experiment that could change the recommendation.
+   experiment that could change the recommendation. When the answer is adopted,
+   hand it off as an execution plan, a goal, and a progress ledger, using the
+   templates in `assets/report-template.md`.
 
 9. **Validate.** Run the evidence validator and recheck that substitutions are
    visible, dynamic metrics are timestamped, local claims use the pinned commit,

@@ -32,6 +32,11 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--base-dir", type=Path, default=Path.cwd())
     parser.add_argument("--max-file-bytes", type=int, default=1_000_000)
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="keep existing survey files, so manual analysis beside them is not overwritten",
+    )
     return parser.parse_args()
 
 
@@ -137,6 +142,7 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     failures = 0
     written = 0
+    skipped = 0
     for row in read_tsv(arguments.sources):
         if row.get("status") == "unavailable":
             continue
@@ -151,16 +157,20 @@ def main() -> int:
             failures += 1
             continue
         slug = repo.name
+        destination = output_dir / f"{slug}.md"
+        if arguments.skip_existing and destination.exists():
+            print(f"kept\t{destination}")
+            skipped += 1
+            continue
         try:
             text = survey(repo, row.get("requested_name") or slug, arguments.max_file_bytes)
-            destination = output_dir / f"{slug}.md"
             destination.write_text(text, encoding="utf-8")
             print(f"written\t{destination}")
             written += 1
         except Exception as error:
             print(f"error\t{row.get('id', '')}\t{truncate(str(error))}")
             failures += 1
-    print(f"surveys={written} failures={failures}")
+    print(f"surveys={written} skipped={skipped} failures={failures}")
     return 1 if failures else 0
 
 
