@@ -43,6 +43,7 @@ impl Repo {
     }
 
     /// A repository rooted at `root`, used by fixture tests.
+    #[cfg(test)]
     pub fn at(root: impl Into<PathBuf>) -> Self {
         Self { root: root.into() }
     }

@@ -522,7 +522,6 @@ bytes = "1.12"
 cargo_metadata = "0.23"
 cargo_toml = "1.0"
 brush-parser = "0.4"
-cfg-if = "1.0.5"
 chacha20poly1305 = "0.11.0"
 chardetng = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
@@ -1434,4 +1433,7 @@ ignored = [
     "component",
     "documented",
     "sea-orm-macros",
+    # Used from `#[derive(RegisterComponent)]` expansions, which cargo-machete
+    # cannot see.
+    "ui_component_registry",
 ]

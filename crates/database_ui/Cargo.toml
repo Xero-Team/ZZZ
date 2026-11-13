@@ -9,7 +9,6 @@ path = "src/database_ui.rs"
 
 [dependencies]
 anyhow.workspace = true
-async-trait.workspace = true
 chrono.workspace = true
 client.workspace = true
 credentials_provider.workspace = true

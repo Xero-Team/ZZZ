@@ -30,3 +30,7 @@ pretty_assertions = { workspace = true }
 
 [lints]
 workspace = true
+
+[package.metadata.cargo-machete]
+# Vendored third-party crate; its unused deps are upstream's to decide.
+ignored = ["async-trait", "strum_macros"]

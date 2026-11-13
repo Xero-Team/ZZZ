@@ -55,7 +55,7 @@ pub enum PdfSecurity {
     Encrypted,
 }
 
-/// A rendered page bitmap ready to be displayed by GPUI. Cheaply clonable.
+/// A rendered page bitmap ready to be displayed by GPUI. Cheaply cloneable.
 #[derive(Clone)]
 pub struct PagePreview {
     pub image: Arc<RenderImage>,
@@ -273,8 +273,7 @@ fn parse_outline(
         let title = node_dict
             .get("Title")
             .and_then(|value| value.as_str().ok())
-            .map(|string| decode_pdf_text(string.as_bytes()))
-            .unwrap_or_default();
+            .map_or_default(|string| decode_pdf_text(string.as_bytes()));
         let page_index =
             resolve_destination_page(file, node_dict, page_id_to_index, named_destinations);
 
