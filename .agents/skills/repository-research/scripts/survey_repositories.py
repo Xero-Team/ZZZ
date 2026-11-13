@@ -10,7 +10,7 @@ import re
 import tomllib
 from pathlib import Path
 
-from _common import git, is_git_repository, read_tsv, resolve_under_base, truncate
+from _common import git, is_git_repository, read_tsv, resolve_under_base, tracked_files, truncate
 
 KEYWORDS = [
     "agent", "benchmark", "browser", "cache", "checkpoint", "citation", "embed",
@@ -71,7 +71,9 @@ def extract_dependencies(repo: Path, files: list[str]) -> list[str]:
 
 
 def survey(repo: Path, display_name: str, max_file_bytes: int) -> str:
-    files = [line for line in git(repo, "ls-files").splitlines() if line]
+    files = tracked_files(repo)
+    if files and not any((repo / relative).exists() for relative in files[:50]):
+        raise RuntimeError("working tree is empty; run the survey on a checked-out clone")
     top_level = collections.Counter(Path(item).parts[0] for item in files)
     manifests = [item for item in files if Path(item).name in {"package.json", "pyproject.toml", "Cargo.toml", "go.mod", "pom.xml", "action.yml"}]
     entrypoints = [item for item in files if Path(item).name.lower() in ENTRYPOINT_NAMES]

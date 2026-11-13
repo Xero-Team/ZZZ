@@ -7,7 +7,17 @@ import argparse
 import collections
 from pathlib import Path
 
-from _common import git, is_git_repository, read_tsv, redact_url, resolve_under_base, truncate, utc_now, write_tsv
+from _common import (
+    git,
+    is_git_repository,
+    read_tsv,
+    redact_url,
+    resolve_under_base,
+    tracked_files,
+    truncate,
+    utc_now,
+    write_tsv,
+)
 
 EXTENSION_LANGUAGES = {
     ".c": "C", ".cc": "C++", ".cpp": "C++", ".cs": "C#", ".go": "Go",
@@ -65,7 +75,7 @@ def inventory(row: dict[str, str], base_dir: Path) -> dict[str, object]:
         return output
 
     try:
-        files = [line for line in git(repo, "ls-files").splitlines() if line]
+        files = tracked_files(repo)
         language_counts: collections.Counter[str] = collections.Counter()
         top_level: collections.Counter[str] = collections.Counter()
         tracked_bytes = 0

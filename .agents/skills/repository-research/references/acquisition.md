@@ -86,6 +86,12 @@ architecture work. Record that the checkout is shallow. Reading a filtered blob
 may trigger a network fetch; offline reproducibility therefore requires either
 fully materializing the cited files or archiving the final evidence set.
 
+Materializing a working tree is the expensive part of a large clone. When the
+task only needs the tree, blob hashes, or single cited files — lineage
+comparison and evidence validation both qualify — clone with `--no-checkout`
+and let `git show <commit>:<path>` fetch individual blobs. Surveys read files
+from disk and still need a checked-out clone.
+
 ## Choosing history depth
 
 Use only the history needed by the question:

@@ -82,17 +82,20 @@ def build_repository_map(rows: list[dict[str, str]], base_dir: Path) -> dict[str
 
 
 def check_commit(repo: Path, commit: str) -> str | None:
+    """Accept the checkout HEAD or any commit object present in the clone.
+
+    Shallow clones have truncated history, so ancestry cannot be proven; an
+    object that exists locally is the strongest available guarantee.
+    """
     try:
         head = git(repo, "rev-parse", "HEAD").lower()
     except RuntimeError as error:
         return str(error)
     if head.startswith(commit) or commit.startswith(head):
         return None
-    result = run_command(["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, "HEAD"], timeout=20)
-    if result.returncode == 0:
+    present = run_command(["git", "-C", str(repo), "cat-file", "-e", f"{commit}^{{commit}}"], timeout=20)
+    if present.returncode == 0:
         return None
-    if result.returncode == 1:
-        return f"commit_sha is not an ancestor of checkout HEAD {head[:12]}"
     return f"commit_sha is not present in the checkout: {commit}"
 
 
@@ -122,9 +125,12 @@ def validate_local(row: dict[str, str], repo: Path) -> tuple[list[str], bool, bo
     at_head = head.startswith(commit) or commit.startswith(head)
 
     if at_head:
-        if not candidate.is_file():
-            return [f"evidence file does not exist: {relative}"], False, False
-        text = candidate.read_text(encoding="utf-8", errors="ignore")
+        if candidate.is_file():
+            text = candidate.read_text(encoding="utf-8", errors="ignore")
+        else:
+            text = read_at_commit(repo, commit, relative)
+            if text is None:
+                return [f"evidence file does not exist: {relative}"], False, False
     else:
         text = read_at_commit(repo, commit, relative)
         if text is None:
@@ -333,7 +339,7 @@ def main() -> int:
     if stale_pins:
         warnings.insert(
             0,
-            f"{stale_pins} local claims are pinned to a revision older than checkout HEAD; "
+            f"{stale_pins} local claims are pinned to a revision other than checkout HEAD; "
             "re-read them before reusing the conclusions",
         )
 

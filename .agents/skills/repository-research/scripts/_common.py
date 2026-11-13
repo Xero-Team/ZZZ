@@ -28,7 +28,13 @@ def write_tsv(path: Path, rows: Iterable[dict[str, object]], fields: Sequence[st
     with tempfile.NamedTemporaryFile(
         "w", newline="", encoding="utf-8", dir=path.parent, delete=False
     ) as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t", extrasaction="ignore")
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=fields,
+            delimiter="\t",
+            lineterminator="\n",
+            extrasaction="ignore",
+        )
         writer.writeheader()
         for row in rows:
             writer.writerow({field: row.get(field, "") for field in fields})
@@ -75,6 +81,14 @@ def is_git_repository(path: Path) -> bool:
         return False
     result = run_command(["git", "-C", str(path), "rev-parse", "--git-dir"], timeout=20)
     return result.returncode == 0
+
+
+def tracked_files(repo: Path) -> list[str]:
+    """List tracked paths, preferring the index so uncommitted files stay visible."""
+    indexed = git(repo, "ls-files")
+    if indexed.strip():
+        return [line for line in indexed.splitlines() if line]
+    return [line for line in git(repo, "ls-tree", "-r", "--name-only", "HEAD").splitlines() if line]
 
 
 def resolve_under_base(raw_path: str, base_dir: Path) -> Path:
