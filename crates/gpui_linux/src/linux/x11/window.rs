@@ -217,9 +217,12 @@ struct RawWindow {
     visual_id: u32,
 }
 
-// Safety: The raw pointers in RawWindow point to X11 connection
-// which is valid for the window's lifetime. These are used only for
-// passing to wgpu which needs Send+Sync for surface creation.
+// SAFETY: `RawWindow` is a plain set of identifiers that owns nothing and dereferences
+// nothing; it exists so wgpu can name an X11 window and display. `Send`/`Sync` are sound
+// because the ids stay valid for as long as the window state that produced them, and every
+// consumer only forwards them to wgpu or to XCB on the protocol thread. This impl permits
+// moving the handle wrapper, not the connection: nothing here makes concurrent XCB calls
+// safe.
 unsafe impl Send for RawWindow {}
 unsafe impl Sync for RawWindow {}
 
@@ -299,6 +302,8 @@ impl rwh::HasWindowHandle for RawWindow {
         };
         let mut handle = rwh::XcbWindowHandle::new(non_zero);
         handle.visual_id = NonZeroU32::new(self.visual_id);
+        // SAFETY: the handle only names an XCB window id owned by `self`, and the `'_` in the
+        // return type ties the borrow to `&self`.
         Ok(unsafe { rwh::WindowHandle::borrow_raw(handle.into()) })
     }
 }
@@ -309,6 +314,8 @@ impl rwh::HasDisplayHandle for RawWindow {
             return Err(rwh::HandleError::Unavailable);
         };
         let handle = rwh::XcbDisplayHandle::new(Some(non_zero), self.screen_id as i32);
+        // SAFETY: the handle only names the connection owned by `self`, which the `'_` in the
+        // return type keeps borrowed for as long as the handle is alive.
         Ok(unsafe { rwh::DisplayHandle::borrow_raw(handle.into()) })
     }
 }
@@ -319,6 +326,8 @@ impl rwh::HasWindowHandle for X11Window {
             return Err(rwh::HandleError::Unavailable);
         };
         let handle = rwh::XcbWindowHandle::new(non_zero);
+        // SAFETY: the handle only names the window id owned by `self`, and the `'_` in the return
+        // type ties the borrow to `&self`.
         Ok(unsafe { rwh::WindowHandle::borrow_raw(handle.into()) })
     }
 }
@@ -335,6 +344,8 @@ impl rwh::HasDisplayHandle for X11Window {
             u64::from(state.display.id()) as i32
         };
         let handle = rwh::XcbDisplayHandle::new(Some(non_zero), screen_id);
+        // SAFETY: the handle only names the connection borrowed from `self.0.xcb`, and the `'_`
+        // in the return type ties the borrow to `&self`.
         Ok(unsafe { rwh::DisplayHandle::borrow_raw(handle.into()) })
     }
 }

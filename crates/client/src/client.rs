@@ -1032,6 +1032,11 @@ impl Client {
         if let Some(callback) = self.authenticate.read().as_ref() {
             return callback(cx);
         }
+        // The callback above is the only reader of `cx`, so builds without test support would warn
+        // about an unused parameter. This keeps the signature identical in both configurations
+        // without renaming the parameter, which `used_underscore_binding` rejects.
+        #[cfg(not(any(test, feature = "test-support")))]
+        let _ = cx;
 
         Task::ready(Err(anyhow!(
             "no stored credentials for the configured remote server"

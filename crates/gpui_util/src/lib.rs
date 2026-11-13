@@ -1,3 +1,4 @@
+use pin_project::pin_project;
 use std::{
     env,
     ops::AddAssign,
@@ -291,8 +292,9 @@ where
     }
 }
 
+#[pin_project]
 #[must_use]
-pub struct LogErrorFuture<F>(F, log::Level, core::panic::Location<'static>);
+pub struct LogErrorFuture<F>(#[pin] F, log::Level, core::panic::Location<'static>);
 
 impl<F, T, E> Future for LogErrorFuture<F>
 where
@@ -302,11 +304,10 @@ where
     type Output = Option<T>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        let level = self.1;
-        let location = self.2;
-        let this = unsafe { self.get_unchecked_mut() };
-        let inner = unsafe { Pin::new_unchecked(&mut this.0) };
-        match inner.poll(cx) {
+        let this = self.project();
+        let level = *this.1;
+        let location = *this.2;
+        match this.0.poll(cx) {
             Poll::Ready(output) => Poll::Ready(match output {
                 Ok(output) => Some(output),
                 Err(error) => {
@@ -319,8 +320,9 @@ where
     }
 }
 
+#[pin_project]
 #[must_use]
-pub struct LogErrorWithBacktraceFuture<F>(F, log::Level, core::panic::Location<'static>);
+pub struct LogErrorWithBacktraceFuture<F>(#[pin] F, log::Level, core::panic::Location<'static>);
 
 impl<F, T, E> Future for LogErrorWithBacktraceFuture<F>
 where
@@ -330,11 +332,10 @@ where
     type Output = Option<T>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        let level = self.1;
-        let location = self.2;
-        let this = unsafe { self.get_unchecked_mut() };
-        let inner = unsafe { Pin::new_unchecked(&mut this.0) };
-        match inner.poll(cx) {
+        let this = self.project();
+        let level = *this.1;
+        let location = *this.2;
+        match this.0.poll(cx) {
             Poll::Ready(output) => Poll::Ready(match output {
                 Ok(output) => Some(output),
                 Err(error) => {
@@ -347,7 +348,8 @@ where
     }
 }
 
-pub struct UnwrapFuture<F>(F);
+#[pin_project]
+pub struct UnwrapFuture<F>(#[pin] F);
 
 impl<F, T, E> Future for UnwrapFuture<F>
 where
@@ -357,10 +359,11 @@ where
     type Output = T;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        let this = unsafe { self.get_unchecked_mut() };
-        let inner = unsafe { Pin::new_unchecked(&mut this.0) };
-        match inner.poll(cx) {
-            Poll::Ready(result) => Poll::Ready(result.expect("value should be present")),
+        let this = self.project();
+        match this.0.poll(cx) {
+            // Panicking here is the documented behavior of `TryFutureExt::unwrap`: the caller asked
+            // for a `Result` that resolves to `T`, so an error has nowhere else to go.
+            Poll::Ready(result) => Poll::Ready(result.expect("future resolved to an error")),
             Poll::Pending => Poll::Pending,
         }
     }

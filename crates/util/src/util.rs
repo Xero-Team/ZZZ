@@ -261,6 +261,10 @@ pub fn increase_open_file_limit() -> Result<()> {
 
 #[cfg(unix)]
 fn load_shell_from_passwd() -> Result<()> {
+    use anyhow::Context as _;
+
+    // SAFETY: `sysconf` has no preconditions; it returns -1 when the limit is indeterminate, which
+    // the arm below turns into a fixed fallback size.
     let buflen = match unsafe { libc::sysconf(libc::_SC_GETPW_R_SIZE_MAX) } {
         n if n < 0 => 1024,
         n => n as usize,
@@ -270,7 +274,13 @@ fn load_shell_from_passwd() -> Result<()> {
     let mut pwd: std::mem::MaybeUninit<libc::passwd> = std::mem::MaybeUninit::uninit();
     let mut result: *mut libc::passwd = std::ptr::null_mut();
 
+    // SAFETY: `getuid` has no preconditions and cannot fail.
     let uid = unsafe { libc::getuid() };
+    // SAFETY: `pwd` and `result` are valid out-parameters for the duration of the call, and
+    // `buffer` has room for exactly `buflen` bytes because it was created with that capacity.
+    // `getpwuid_r` only writes through these pointers, so passing an uninitialized `MaybeUninit`
+    // and an untouched allocation is allowed; whether it actually filled them is what the two
+    // `ensure!` checks below establish.
     let status = unsafe {
         libc::getpwuid_r(
             uid,
@@ -301,11 +311,12 @@ fn load_shell_from_passwd() -> Result<()> {
         uid,
     );
 
-    let shell = unsafe {
-        std::ffi::CStr::from_ptr(entry.pw_shell)
-            .to_str()
-            .expect("path should be valid UTF-8")
-    };
+    // SAFETY: a successful `getpwuid_r` guarantees `pw_shell` points at a NUL-terminated string
+    // either inside `buffer` or at a static default, and `buffer` is still alive here, so the
+    // `&str` derived below cannot outlive the bytes it reads.
+    let shell = unsafe { std::ffi::CStr::from_ptr(entry.pw_shell) }
+        .to_str()
+        .context("passwd shell path is not valid UTF-8")?;
     let should_set_shell = std::env::var("SHELL").map_or(true, |shell_env| {
         shell_env != shell && !std::path::Path::new(&shell_env).exists()
     });
@@ -315,6 +326,8 @@ fn load_shell_from_passwd() -> Result<()> {
             "updating SHELL environment variable to value from passwd entry: {:?}",
             shell,
         );
+        // SAFETY: see the note on `load_login_shell_environment`; this write inherits its
+        // process-wide assumption about concurrent environment readers.
         unsafe { std::env::set_var("SHELL", shell) };
     }
 
@@ -385,6 +398,16 @@ pub fn get_zzz_cli_path() -> Result<PathBuf> {
         })
 }
 
+/// Populates the process environment with the values a login shell would produce.
+///
+/// This writes to the process environment from whatever thread polls the future, which in `zzz`
+/// is the background executor. That is precisely the case `std::env::set_var` is unsafe for:
+/// edition 2024 made it unsafe because a concurrent `getenv` in another thread races with the
+/// `environ` mutation. The two `set_var` calls below therefore rest on a process-wide assumption
+/// that nothing reads the environment while this function runs, which this function cannot
+/// enforce. Making it sound means returning the captured pairs instead of writing them and
+/// applying them to each spawned `Command`, the way `project::environment` already does for
+/// terminals.
 #[cfg(unix)]
 pub async fn load_login_shell_environment() -> Result<()> {
     use anyhow::Context as _;
@@ -407,6 +430,8 @@ pub async fn load_login_shell_environment() -> Result<()> {
         if name == "SHLVL" {
             continue;
         }
+        // SAFETY: see the note on `load_login_shell_environment`; this write inherits its
+        // process-wide assumption about concurrent environment readers.
         unsafe { std::env::set_var(&name, &value) };
     }
 
@@ -426,8 +451,6 @@ pub async fn load_login_shell_environment() -> Result<()> {
 pub fn set_pre_exec_to_start_new_session(
     command: &mut std::process::Command,
 ) -> &mut std::process::Command {
-    // safety: code in pre_exec should be signal safe.
-    // https://man7.org/linux/man-pages/man7/signal-safety.7.html
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -438,8 +461,10 @@ pub fn set_pre_exec_to_start_new_session(
             Ok(())
         };
 
-        // safety: code in pre_exec should be signal safe.
-        // https://man7.org/linux/man-pages/man7/signal-safety.7.html
+        // SAFETY: `pre_exec` requires the closure to only run async-signal-safe code, because it
+        // runs in the forked child before `exec`. `start_new_session` calls nothing but `setsid`,
+        // which is on the async-signal-safe list
+        // (https://man7.org/linux/man-pages/man7/signal-safety.7.html).
         unsafe {
             command.pre_exec(start_new_session);
         }

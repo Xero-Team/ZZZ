@@ -1,3 +1,4 @@
+#[cfg(any(test, feature = "test-support"))]
 use crate::transport::mock::ConnectGuard;
 use crate::{
     SshConnectionOptions,

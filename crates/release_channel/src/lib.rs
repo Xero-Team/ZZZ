@@ -280,6 +280,9 @@ mod tests {
 
     impl Drop for EnvRestore {
         fn drop(&mut self) {
+            // SAFETY: every `EnvRestore` is created inside a test that holds `ENV_LOCK` for its
+            // whole body, and the lock guard is declared before this value, so it is still held
+            // while this runs. That lock is what keeps these mutations from racing each other.
             match self.original.as_deref() {
                 Some(value) => unsafe { env::set_var(&self.name, value) },
                 None => unsafe { env::remove_var(&self.name) },
@@ -299,6 +302,8 @@ mod tests {
     fn app_version_load_uses_env_override_and_build_metadata() {
         let _lock = ENV_LOCK.lock().expect("env lock poisoned");
         let _restore = EnvRestore::new("ZZZ_APP_VERSION");
+        // SAFETY: `ENV_LOCK` is held for the whole test, so nothing else in this crate mutates or
+        // reads this variable concurrently.
         unsafe { env::set_var("ZZZ_APP_VERSION", "1.2.3") };
 
         let version = AppVersion::load(
@@ -317,6 +322,8 @@ mod tests {
     fn app_version_load_falls_back_to_package_version_without_metadata() {
         let _lock = ENV_LOCK.lock().expect("env lock poisoned");
         let _restore = EnvRestore::new("ZZZ_APP_VERSION");
+        // SAFETY: `ENV_LOCK` is held for the whole test, so nothing else in this crate mutates or
+        // reads this variable concurrently.
         unsafe { env::remove_var("ZZZ_APP_VERSION") };
 
         let version = AppVersion::load("0.9.1", None, None);
@@ -328,6 +335,8 @@ mod tests {
     fn app_version_load_ignores_invalid_env_override() {
         let _lock = ENV_LOCK.lock().expect("env lock poisoned");
         let _restore = EnvRestore::new("ZZZ_APP_VERSION");
+        // SAFETY: `ENV_LOCK` is held for the whole test, so nothing else in this crate mutates or
+        // reads this variable concurrently.
         unsafe { env::set_var("ZZZ_APP_VERSION", "not-a-version") };
 
         let version = AppVersion::load("0.9.1", None, None);

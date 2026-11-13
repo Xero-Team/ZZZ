@@ -117,9 +117,10 @@ impl WgpuRenderer {
     /// multiple windows. The first window to create a renderer will initialize the
     /// context; subsequent windows will share it.
     ///
-    /// # Safety
-    /// The caller must ensure that the window handle remains valid for the lifetime
-    /// of the returned renderer.
+    /// The surface created here borrows the window handle without owning it, so the caller has to
+    /// keep `window` and the protocol objects behind it alive for as long as the returned renderer.
+    /// The platform layer upholds this by dropping the renderer before the window, which is why this
+    /// is a safe constructor rather than an `unsafe` one.
     #[cfg(not(target_family = "wasm"))]
     pub fn new<W>(
         gpu_context: GpuContext,
@@ -148,9 +149,9 @@ impl WgpuRenderer {
             |ctx| ctx.instance.clone(),
         );
 
-        // Safety: The caller guarantees that the window handle is valid for the
-        // lifetime of this renderer. In practice, the RawWindow struct is created
-        // from the native window handles and the surface is dropped before the window.
+        // SAFETY: `target` only carries the handle obtained from `window` above, whose lifetime is
+        // the documented precondition of this constructor; wgpu stores the raw handle without
+        // taking ownership, so nothing here outlives the caller's guarantee.
         let surface = unsafe {
             instance
                 .create_surface_unsafe(target)
@@ -1323,7 +1324,21 @@ impl WgpuRenderer {
         }
     }
 
+    /// Reinterprets GPU instance structs as the raw bytes handed to the instance buffer.
+    ///
+    /// # Safety
+    ///
+    /// Every byte of `instances` must be initialized, because the returned `&[u8]` gives safe code
+    /// read access to all of them. Compiler-inserted padding is never written by a struct literal,
+    /// so a `T` with padding makes this function undefined behavior even though the bytes are never
+    /// looked at as `u8` values. The callers in `drawing.rs` therefore pass `#[repr(C)]` instance
+    /// structs that carry an explicit pad field rather than relying on the compiler's alignment
+    /// rules, and `instance_types_contain_no_padding` fails if that invariant ever stops holding.
     unsafe fn instance_bytes<T>(instances: &[T]) -> &[u8] {
+        // SAFETY: the caller guarantees every byte behind `instances` is initialized. The length is
+        // `size_of_val(instances)`, so the new slice covers exactly the memory of the original one
+        // and stays within its allocation, and the `'_` in the return type keeps that memory
+        // borrowed for as long as the result is live.
         unsafe {
             std::slice::from_raw_parts(
                 instances.as_ptr().cast::<u8>(),
@@ -1547,11 +1562,19 @@ impl WgpuRenderer {
     }
 }
 
+/// Creates a wgpu surface from a raw window handle.
+///
+/// The returned surface is `'static` because wgpu erases the handle's lifetime, so the caller has
+/// to keep `raw_window_handle` and the protocol objects it names alive for as long as the surface
+/// exists. `WgpuRenderer` upholds this by storing the surface in resources that the platform layer
+/// drops before the window.
 #[cfg(not(target_family = "wasm"))]
 fn create_surface(
     instance: &wgpu::Instance,
     raw_window_handle: raw_window_handle::RawWindowHandle,
 ) -> anyhow::Result<wgpu::Surface<'static>> {
+    // SAFETY: the surface outlives the handle only by the caller's obligation described above, which
+    // is the single requirement `create_surface_unsafe` places on its caller.
     unsafe {
         instance
             .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {

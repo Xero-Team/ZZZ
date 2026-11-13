@@ -72,7 +72,9 @@ pub trait PathExt {
             use tendril::fmt::{Format, WTF8};
             WTF8::validate(bytes)
                 .then(|| {
-                    // Safety: bytes are valid WTF-8 sequence.
+                    // SAFETY: `WTF8::validate` returning `Some` means `bytes` is well-formed WTF-8,
+                    // which is exactly the encoding `OsStr::from_encoded_bytes_unchecked` requires
+                    // on Windows.
                     Self::from(Path::new(unsafe {
                         OsStr::from_encoded_bytes_unchecked(bytes)
                     }))
@@ -204,6 +206,10 @@ pub fn strip_path_suffix<'a>(base: &'a Path, suffix: &Path) -> Option<&'a Path> 
             .last()
             .is_none_or(|last_byte| std::path::is_separator(*last_byte as char))
     {
+        // SAFETY: either the remainder is empty, or the byte dropped below is an ASCII separator.
+        // Multi-byte encoding units never contain bytes below 0x80, so cutting one ASCII byte off
+        // the end leaves a slice that still ends on a character boundary and is therefore a valid
+        // `OsStr` encoding.
         let os_str = unsafe {
             OsStr::from_encoded_bytes_unchecked(&remainder[0..remainder.len().saturating_sub(1)])
         };
@@ -214,6 +220,11 @@ pub fn strip_path_suffix<'a>(base: &'a Path, suffix: &Path) -> Option<&'a Path> 
 
 /// In memory, this is identical to `Path`. On non-Windows conversions to this type are no-ops. On
 /// windows, these conversions sanitize UNC paths by removing the `\\\\?\\` prefix.
+///
+/// `#[repr(transparent)]` is what licenses the pointer casts in this impl: `SanitizedPath` and
+/// `Path` have the same size, alignment, and `Pointee` metadata, so a `&Path`, an `Arc<Path>`, or
+/// the allocation behind either can be reinterpreted without moving or reallocating anything.
+/// `sanitized_path_layout_matches_path` fails if that stops holding.
 #[derive(Eq, PartialEq, Hash, Ord, PartialOrd)]
 #[repr(transparent)]
 pub struct SanitizedPath(Path);
@@ -228,12 +239,17 @@ impl SanitizedPath {
     }
 
     pub fn unchecked_new<T: AsRef<Path> + ?Sized>(path: &T) -> &Self {
-        // safe because `Path` and `SanitizedPath` have the same repr and Drop impl
+        // SAFETY: `SanitizedPath` is `repr(transparent)` over `Path`, so the two have identical
+        // layout and metadata, and the borrow of `path` is carried into the result by the elided
+        // lifetime.
         unsafe { mem::transmute::<&Path, &Self>(path.as_ref()) }
     }
 
     pub fn from_arc(path: Arc<Path>) -> Arc<Self> {
-        // safe because `Path` and `SanitizedPath` have the same repr and Drop impl
+        // SAFETY: `repr(transparent)` makes `SanitizedPath` and `Path` agree on both layout and
+        // `Pointee` metadata, so `Arc<Path>` and `Arc<SanitizedPath>` differ only in their type
+        // parameter: both point at an `ArcInner` with the same byte tail, the same strong/weak
+        // counts, and the same allocation layout that the destructor will later free.
         #[cfg(not(target_os = "windows"))]
         return unsafe { mem::transmute::<Arc<Path>, Arc<Self>>(path) };
 
@@ -245,7 +261,8 @@ impl SanitizedPath {
             };
             let simplified = dunce::simplified(path.as_ref());
             if simplified == path.as_ref() {
-                // safe because `Path` and `SanitizedPath` have the same repr and Drop impl
+                // SAFETY: same argument as the non-Windows branch above; this `Arc` is unchanged,
+                // so it is reused rather than rebuilt.
                 unsafe { mem::transmute::<Arc<Path>, Arc<Self>>(path) }
             } else {
                 Self::unchecked_new(simplified).into()
@@ -258,12 +275,15 @@ impl SanitizedPath {
     }
 
     pub fn cast_arc(path: Arc<Self>) -> Arc<Path> {
-        // safe because `Path` and `SanitizedPath` have the same repr and Drop impl
+        // SAFETY: inverse of the cast in `from_arc`. `repr(transparent)` keeps `ArcInner` identical
+        // in layout and metadata, so the same allocation is reused with its reference counts
+        // untouched.
         unsafe { mem::transmute::<Arc<Self>, Arc<Path>>(path) }
     }
 
     pub fn cast_arc_ref(path: &Arc<Self>) -> &Arc<Path> {
-        // safe because `Path` and `SanitizedPath` have the same repr and Drop impl
+        // SAFETY: `Arc<Self>` and `Arc<Path>` have identical layout, as in `cast_arc`; this only
+        // reborrows the existing `Arc` instead of taking ownership of it.
         unsafe { mem::transmute::<&Arc<Self>, &Arc<Path>>(path) }
     }
 
@@ -319,7 +339,8 @@ impl Display for SanitizedPath {
 impl From<&SanitizedPath> for Arc<SanitizedPath> {
     fn from(sanitized_path: &SanitizedPath) -> Self {
         let path: Arc<Path> = sanitized_path.0.into();
-        // safe because `Path` and `SanitizedPath` have the same repr and Drop impl
+        // SAFETY: `SanitizedPath` is `repr(transparent)` over `Path`, so the freshly created
+        // `Arc<Path>` can be retyped without touching the allocation, exactly as in `from_arc`.
         unsafe { mem::transmute(path) }
     }
 }
@@ -699,14 +720,15 @@ fn rsplit_file_at_dot(file: &OsStr) -> (Option<&OsStr>, Option<&OsStr>) {
         return (Some(file), None);
     }
 
-    // SAFETY: the encoding is only split at ASCII dots, so every produced
-    // `OsStr` is a boundary-aligned subslice of `file`.
+    // Splitting at an ASCII dot cannot land inside a multi-byte encoding unit.
     let mut parts = file.as_encoded_bytes().rsplitn(2, |byte| *byte == b'.');
     let after = parts.next();
     let before = parts.next();
     if before == Some(b"") {
         (Some(file), None)
     } else {
+        // SAFETY: both parts are subslices of `file` cut at an ASCII dot, so each one is a
+        // boundary-aligned and therefore valid encoding of an `OsStr`.
         (
             before.map(|part| unsafe { OsStr::from_encoded_bytes_unchecked(part) }),
             after.map(|part| unsafe { OsStr::from_encoded_bytes_unchecked(part) }),
@@ -3651,6 +3673,38 @@ mod tests {
     //         "Path matcher should match {path:?}"
     //     );
     // }
+    #[test]
+    fn sanitized_path_layout_matches_path() {
+        use std::mem::size_of;
+        use std::ptr;
+
+        // Every transmute in `SanitizedPath` relies on the two types being interchangeable in
+        // memory, including as the tail of an `Arc`. Both types are unsized, so the observable
+        // layout is the fat-pointer one.
+        assert_eq!(size_of::<&SanitizedPath>(), size_of::<&Path>());
+        assert_eq!(size_of::<Arc<SanitizedPath>>(), size_of::<Arc<Path>>());
+
+        let path = Path::new("/tmp/zzz/sanitized-path");
+        let sanitized = SanitizedPath::unchecked_new(path);
+        assert_eq!(sanitized.as_path(), path);
+        assert_eq!(
+            sanitized.parent().map(SanitizedPath::as_path),
+            Some(Path::new("/tmp/zzz"))
+        );
+
+        // Casting an `Arc` has to reuse the original allocation and its reference counts rather
+        // than copy the path. `ptr::eq` compares the data pointer and the length metadata of an
+        // unsized pointee, so this only holds if the `ArcInner` layout is unchanged.
+        let arc = SanitizedPath::new_arc(path);
+        let round_tripped = SanitizedPath::from_arc(SanitizedPath::cast_arc(arc.clone()));
+        assert!(ptr::eq(Arc::as_ptr(&round_tripped), Arc::as_ptr(&arc)));
+        assert_eq!(round_tripped.as_path(), path);
+        assert_eq!(Arc::strong_count(&arc), 2);
+
+        let from_reference = Arc::<SanitizedPath>::from(sanitized);
+        assert_eq!(from_reference.as_path(), path);
+    }
+
     #[perf]
     #[cfg(target_os = "windows")]
     fn test_sanitized_path() {

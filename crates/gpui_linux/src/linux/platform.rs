@@ -801,8 +801,16 @@ pub(super) fn get_xkb_compose_state(cx: &xkb::Context) -> Option<xkb::compose::S
     state
 }
 
+/// Reads a pipe's contents to EOF.
+///
+/// # Safety
+///
+/// `fd` must be an open file descriptor that no other owner will close; this takes ownership of it
+/// and closes it when the buffer has been read.
 #[cfg(any(feature = "wayland", feature = "x11"))]
 pub(super) unsafe fn read_fd(fd: filedescriptor::FileDescriptor) -> Result<Vec<u8>> {
+    // SAFETY: `into_raw_fd` gives up the wrapper's ownership and the `File` below becomes the sole
+    // owner, so the descriptor is closed exactly once, when `file` is dropped.
     let mut file = unsafe { File::from_raw_fd(fd.into_raw_fd()) };
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer)?;
@@ -1162,10 +1170,10 @@ mod tests {
     #[cfg(any(feature = "wayland", feature = "x11"))]
     #[test]
     fn rejects_null_xkb_context() {
-        let context = unsafe {
-            // libxkbcommon permits unref on null, matching the value returned by Context::new on failure.
-            xkb::Context::from_raw_ptr(std::ptr::null_mut())
-        };
+        // SAFETY: `from_raw_ptr` takes ownership of the pointer, and libxkbcommon permits unref on
+        // null, which is exactly the value `Context::new` yields on failure. This is the case the
+        // test exists to cover.
+        let context = unsafe { xkb::Context::from_raw_ptr(std::ptr::null_mut()) };
         let error = validate_xkb_context(context)
             .err()
             .expect("null XKB context should be rejected");

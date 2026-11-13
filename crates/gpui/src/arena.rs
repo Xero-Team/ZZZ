@@ -8,14 +8,21 @@ use std::{
     rc::Rc,
 };
 
+/// A value allocated inside an [`Arena`], plus the call that drops it in place.
 struct ArenaElement {
+    /// Points at an initialized `T` inside a chunk. It stays valid until the arena is cleared or
+    /// dropped, which is the only thing that frees the chunk it lives in.
     value: *mut u8,
+    /// Must be the `drop_in_place::<T>` matching the type that was written at `value`; the pair is
+    /// only ever created together in `Arena::alloc`.
     drop: unsafe fn(*mut u8),
 }
 
 impl Drop for ArenaElement {
     #[inline(always)]
     fn drop(&mut self) {
+        // SAFETY: `drop` and `value` were stored together by `Arena::alloc`, so this calls the
+        // destructor for exactly the type that was initialized at that address.
         unsafe { (self.drop)(self.value) };
     }
 }
@@ -50,11 +57,15 @@ impl Chunk {
     fn new(chunk_size: NonZeroUsize) -> Self {
         // this only fails if chunk_size is unreasonably huge
         let layout = alloc::Layout::from_size_align(chunk_size.get(), CHUNK_ALIGNMENT)
-            .expect("entry should be present");
+            .expect("invariant: chunk sizes come from a `usize` and a power-of-two alignment");
+        // SAFETY: `layout` has a non-zero size (`chunk_size` is `NonZeroUsize`), and the result is
+        // checked for null below, so the allocation is either valid or reported.
         let start = unsafe { alloc::alloc(layout) };
         if start.is_null() {
             handle_alloc_error(layout);
         }
+        // SAFETY: `start` begins an allocation of `chunk_size` bytes, so one past the end is a
+        // valid pointer to compute; `Chunk` keeps both ends and never dereferences `end`.
         let end = unsafe { start.add(chunk_size.get()) };
         Self {
             start,
@@ -104,7 +115,8 @@ impl Drop for Arena {
 
 impl Arena {
     pub fn new(chunk_size: usize) -> Self {
-        let chunk_size = NonZeroUsize::try_from(chunk_size).expect("conversion should succeed");
+        let chunk_size = NonZeroUsize::try_from(chunk_size)
+            .expect("invariant: a non-zero chunk size is required");
         Self {
             chunks: vec![Chunk::new(chunk_size)],
             elements: Vec::new(),
@@ -130,15 +142,31 @@ impl Arena {
 
     #[inline(always)]
     pub fn alloc<T>(&mut self, f: impl FnOnce() -> T) -> ArenaBox<T> {
+        /// Writes the value produced by `f` into `ptr` without reading what was there before.
+        ///
+        /// # Safety
+        ///
+        /// `ptr` must point at a location that is valid for a write of a whole `T` and is not
+        /// currently borrowed, and the caller must keep owning that location afterwards.
         #[inline(always)]
         unsafe fn inner_writer<T, F>(ptr: *mut T, f: F)
         where
             F: FnOnce() -> T,
         {
+            // SAFETY: the caller guarantees `ptr` is writable for a whole `T`; `f()` is evaluated
+            // here so no other reference to the location can exist while it runs.
             unsafe { ptr::write(ptr, f()) };
         }
 
-        unsafe fn drop<T>(ptr: *mut u8) {
+        /// Drops the `T` that was written at `ptr` without freeing its arena chunk.
+        ///
+        /// # Safety
+        ///
+        /// `ptr` must point at an initialized `T` that was allocated from this arena and has not
+        /// been dropped, and it must not be read after this call.
+        unsafe fn drop_value<T>(ptr: *mut u8) {
+            // SAFETY: the caller guarantees an initialized `T` lives there and has not been
+            // dropped; the chunk memory itself stays owned by the arena.
             unsafe { std::ptr::drop_in_place(ptr.cast::<T>()) };
         }
 
@@ -168,10 +196,12 @@ impl Arena {
             }
         };
 
+        // SAFETY: `Chunk::allocate` returned a non-null pointer with room for `layout.size()` bytes
+        // aligned for `T`; the arena owns that location until the element pushed below is dropped.
         unsafe { inner_writer(ptr.cast(), f) };
         self.elements.push(ArenaElement {
             value: ptr,
-            drop: drop::<T>,
+            drop: drop_value::<T>,
         });
 
         ArenaBox {
@@ -210,6 +240,8 @@ impl<T: ?Sized> Deref for ArenaBox<T> {
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
         self.validate();
+        // SAFETY: `validate` established that the arena has not been cleared since this box was
+        // created, so its chunk still holds the initialized `T`; the borrow is tied to `&self`.
         unsafe { &*self.ptr }
     }
 }
@@ -218,6 +250,8 @@ impl<T: ?Sized> DerefMut for ArenaBox<T> {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.validate();
+        // SAFETY: as in `deref`, the arena still holds the value, and `&mut self` makes this the
+        // only live reference to it.
         unsafe { &mut *self.ptr }
     }
 }

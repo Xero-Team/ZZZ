@@ -1704,6 +1704,8 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandClientStatePtr {
                         return;
                     }
                 };
+                // SAFETY: `new_from_fd` takes ownership of `fd` and closes it once the keymap has
+                // been compiled; `fd` is not used again after this call.
                 let Some(keymap) = (unsafe {
                     xkb::Keymap::new_from_fd(
                         &xkb_context,
@@ -2583,6 +2585,8 @@ impl Dispatch<wl_data_device::WlDataDevice, ()> for WaylandClientStatePtr {
                             return;
                         }
                     };
+                    // SAFETY: `pipe.write` stays open and owned by `pipe` for the duration of the
+                    // call; the borrow does not take ownership.
                     data_offer.receive(FILE_LIST_MIME_TYPE.to_owned(), unsafe {
                         BorrowedFd::borrow_raw(pipe.write.as_raw_fd())
                     });
@@ -2590,6 +2594,8 @@ impl Dispatch<wl_data_device::WlDataDevice, ()> for WaylandClientStatePtr {
                     drop(pipe.write);
 
                     let read_task = state.common.background_executor.spawn(async {
+                        // SAFETY: `fd` is the read end moved out of `pipe` above and is moved into
+                        // this task, so `read_fd` takes over the only owner and closes it.
                         let buffer = unsafe { read_fd(fd)? };
                         let text = String::from_utf8(buffer)?;
                         anyhow::Ok(text)

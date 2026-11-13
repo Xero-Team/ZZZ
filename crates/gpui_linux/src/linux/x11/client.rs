@@ -463,7 +463,8 @@ impl X11Client {
             None
         };
 
-        // Safety: Safe if xcb::Connection always returns a valid fd
+        // SAFETY: `xcb::Connection` keeps its fd open for as long as the connection is alive, and
+        // the cloned `Rc` held by the wrapper makes sure it outlives the calloop source.
         let fd = unsafe { FdWrapper::new(Rc::clone(&xcb_connection)) };
 
         handle

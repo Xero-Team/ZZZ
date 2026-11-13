@@ -618,6 +618,10 @@ fn rename_without_replace(source: &Path, target: &Path) -> io::Result<()> {
     #[cfg(target_os = "macos")]
     let result = unsafe { libc::renamex_np(source.as_ptr(), target.as_ptr(), libc::RENAME_EXCL) };
 
+    // SAFETY: `SYS_renameat2` takes `(int olddirfd, const char *oldpath, int newdirfd,
+    // const char *newpath, unsigned int flags)`, which is exactly the argument list below; getting
+    // a variadic syscall's argument types wrong is silently accepted, so the match matters. Both
+    // `CString`s are alive for the whole call, so `as_ptr()` yields valid NUL-terminated paths.
     #[cfg(target_os = "linux")]
     let result = unsafe {
         libc::syscall(

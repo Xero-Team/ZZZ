@@ -21,6 +21,10 @@ pub(crate) struct SerializedCommandInvocation {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub(crate) struct SerializedCommandUsage {
     pub(crate) command_name: String,
+    /// This is a `COUNT(1)` over `command_invocations`, narrowed to `u16`. It only fits because
+    /// `write_command_invocation_internal` prunes the table back to 1000 rows, so no single command
+    /// can be counted more than that many times. Raising that cap past `u16::MAX` would make the
+    /// `Column` impl below fail on every read of the busiest commands.
     pub(crate) invocations: u16,
     pub(crate) last_invoked: OffsetDateTime,
 }

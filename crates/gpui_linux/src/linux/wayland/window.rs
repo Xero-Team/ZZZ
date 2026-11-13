@@ -60,9 +60,12 @@ struct RawWindow {
     display: *mut c_void,
 }
 
-// Safety: The raw pointers in RawWindow point to Wayland surface/display
-// which are valid for the window's lifetime. These are used only for
-// passing to wgpu which needs Send+Sync for surface creation.
+// SAFETY: `RawWindow` is a plain pair of addresses that owns nothing and dereferences
+// nothing; it exists so wgpu can name a Wayland surface and display. `Send`/`Sync` are
+// sound because the addresses stay valid for as long as the window state that produced
+// them, and every consumer only forwards them to wgpu or to the windowing API on the
+// protocol thread. This impl permits moving the handle wrapper, not the protocol objects:
+// nothing here makes concurrent Wayland calls safe.
 unsafe impl Send for RawWindow {}
 unsafe impl Sync for RawWindow {}
 
@@ -70,6 +73,8 @@ impl rwh::HasWindowHandle for RawWindow {
     fn window_handle(&self) -> Result<rwh::WindowHandle<'_>, rwh::HandleError> {
         let window = NonNull::new(self.window).ok_or(rwh::HandleError::Unavailable)?;
         let handle = rwh::WaylandWindowHandle::new(window);
+        // SAFETY: the handle borrows the surface owned by `self`, and the `'_` in the return
+        // type ties the borrow to `&self`, so the surface cannot be destroyed while it is in use.
         Ok(unsafe { rwh::WindowHandle::borrow_raw(handle.into()) })
     }
 }
@@ -77,6 +82,8 @@ impl rwh::HasDisplayHandle for RawWindow {
     fn display_handle(&self) -> Result<rwh::DisplayHandle<'_>, rwh::HandleError> {
         let display = NonNull::new(self.display).ok_or(rwh::HandleError::Unavailable)?;
         let handle = rwh::WaylandDisplayHandle::new(display);
+        // SAFETY: the handle borrows the display owned by `self`, and the `'_` in the return type
+        // ties the borrow to `&self`.
         Ok(unsafe { rwh::DisplayHandle::borrow_raw(handle.into()) })
     }
 }
@@ -1157,6 +1164,8 @@ impl rwh::HasWindowHandle for WaylandWindow {
         let c_ptr = NonNull::new(surface).ok_or(rwh::HandleError::Unavailable)?;
         let handle = rwh::WaylandWindowHandle::new(c_ptr);
         let raw_handle = rwh::RawWindowHandle::Wayland(handle);
+        // SAFETY: the surface belongs to `self`, and the `'_` in the return type ties the borrow
+        // to `&self`, so the surface outlives the handle.
         Ok(unsafe { rwh::WindowHandle::borrow_raw(raw_handle) })
     }
 }
@@ -1175,6 +1184,8 @@ impl rwh::HasDisplayHandle for WaylandWindow {
         let c_ptr = NonNull::new(display).ok_or(rwh::HandleError::Unavailable)?;
         let handle = rwh::WaylandDisplayHandle::new(c_ptr);
         let raw_handle = rwh::RawDisplayHandle::Wayland(handle);
+        // SAFETY: the display is reached through `self`'s surface backend, and the `'_` in the
+        // return type ties the borrow to `&self`.
         Ok(unsafe { rwh::DisplayHandle::borrow_raw(raw_handle) })
     }
 }

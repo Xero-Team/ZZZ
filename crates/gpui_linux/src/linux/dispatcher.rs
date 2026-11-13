@@ -184,7 +184,8 @@ impl PlatformDispatcher for LinuxDispatcher {
 
     fn spawn_realtime(&self, f: Box<dyn FnOnce() + Send>) {
         std::thread::spawn(move || {
-            // SAFETY: always safe to call
+            // SAFETY: `pthread_self` takes no arguments and has no preconditions; it returns the
+            // identity of the calling thread.
             let thread_id = unsafe { libc::pthread_self() };
 
             let policy = libc::SCHED_FIFO;
