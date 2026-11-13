@@ -20,15 +20,13 @@ use onboarding::show_onboarding_view;
 use recent_projects::{RemoteSettings, navigate_to_positions, open_remote_project};
 use remote::{RemoteConnectionOptions, WslConnectionOptions};
 use settings::Settings;
-#[cfg(target_os = "windows")]
-use std::path::{Component, Prefix};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use ui::SharedString;
 use util::ResultExt;
-use util::paths::PathWithPosition;
+use util::paths::{PathStyle, PathWithPosition, url_path_to_path};
 use workspace::PathList;
 use workspace::item::ItemHandle;
 use workspace::{AppState, MultiWorkspace, OpenOptions, OpenResult, SerializedWorkspaceLocation};
@@ -208,18 +206,8 @@ impl OpenRequest {
 
     fn parse_local_file_path(&mut self, file: &str) {
         if let Some(decoded) = urlencoding::decode(file).log_err() {
-            // URL paths keep a `/` before a Windows drive letter (`/C:/x`), which Windows cannot open.
-            #[cfg(target_os = "windows")]
-            if let Some(path) = decoded.strip_prefix('/')
-                && matches!(
-                    Path::new(path).components().next(),
-                    Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::Disk(_))
-                )
-            {
-                self.open_paths.push(path.to_owned());
-                return;
-            }
-            self.open_paths.push(decoded.into_owned())
+            self.open_paths
+                .push(url_path_to_path(&decoded, PathStyle::local()).to_owned())
         }
     }
 

@@ -66,6 +66,7 @@ pub struct MockRemoteConnection {
     options: MockConnectionOptions,
     server_channel: Arc<ChannelClient>,
     server_cx: SendableCx,
+    path_style: parking_lot::Mutex<PathStyle>,
 }
 
 /// Wrapper to pass `AsyncApp` across thread boundaries in tests.
@@ -127,6 +128,26 @@ pub struct MockConnection;
 pub type ConnectGuard = oneshot::Sender<()>;
 
 impl MockConnection {
+    /// Makes the connection report `path_style`, as a connection to a host of another OS would.
+    pub fn set_path_style(options: &RemoteConnectionOptions, path_style: PathStyle, cx: &mut App) {
+        *Self::pending(options, cx).path_style.lock() = path_style;
+    }
+
+    fn pending<'a>(
+        options: &RemoteConnectionOptions,
+        cx: &'a App,
+    ) -> &'a Arc<MockRemoteConnection> {
+        let RemoteConnectionOptions::Mock(options) = options else {
+            panic!("this requires a mock connection");
+        };
+        let (_, connection) = cx
+            .global::<MockConnectionRegistry>()
+            .pending
+            .get(&options.id)
+            .expect("the mock connection must be configured before connecting");
+        connection
+    }
+
     /// Creates a new mock connection pair for testing.
     ///
     /// This function:
@@ -173,6 +194,7 @@ impl MockConnection {
             options: opts.clone(),
             server_channel: server_client.clone(),
             server_cx: SendableCx::new(server_cx),
+            path_style: parking_lot::Mutex::new(PathStyle::local()),
         });
 
         let (tx, rx) = oneshot::channel();
@@ -301,7 +323,7 @@ impl RemoteConnection for MockRemoteConnection {
     }
 
     fn path_style(&self) -> PathStyle {
-        PathStyle::local()
+        *self.path_style.lock()
     }
 
     fn shell(&self) -> String {
