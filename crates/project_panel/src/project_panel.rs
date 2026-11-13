@@ -4187,9 +4187,10 @@ impl ProjectPanel {
                                     notification_id.clone(),
                                     tr(
                                         cx,
-                                        "project_panel.download.progress.initial",
-                                        "Downloading 0/{} files...",
+                                        "project_panel.download.progress.current",
+                                        "Downloading {}/{} files...",
                                     )
+                                    .replacen("{}", &(index + 1).to_string(), 1)
                                     .replacen(
                                         "{}",
                                         &total_files.to_string(),
