@@ -32,10 +32,11 @@ pub const DEFAULT_BASE_IMAGE: &str =
 /// Inputs that change the toolchain image. Hashing them into the tag means an
 /// edited Dockerfile or dependency script produces a new tag instead of silently
 /// reusing a stale image.
-const IMAGE_INPUTS: [&str; 6] = [
+const IMAGE_INPUTS: [&str; 7] = [
     TOOLCHAIN_DOCKERFILE,
     "script/linux",
     "script/install-cmake",
+    "script/lib/apt.sh",
     "script/lib/github-release.sh",
     "script/freebsd-packages.py",
     "rust-toolchain.toml",

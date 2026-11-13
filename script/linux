@@ -100,8 +100,9 @@ if [[ -n $apt ]]; then
     deps+=( clang-18 libstdc++-11-dev )
   fi
 
-  $maysudo "$apt" update
-  $maysudo "$apt" install -y "${deps[@]}"
+  source "$(dirname "$0")/lib/apt.sh"
+  apt_retry $maysudo "$apt" update
+  apt_retry $maysudo "$apt" install -y "${deps[@]}"
 
   finalize
   exit 0
