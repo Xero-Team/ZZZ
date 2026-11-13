@@ -1707,7 +1707,7 @@ impl Buffer {
             }
         } else {
             file_changed = true;
-        };
+        }
 
         self.file = Some(new_file);
         if file_changed {

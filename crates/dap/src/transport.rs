@@ -391,7 +391,7 @@ impl TransportDelegate {
                 .or_else(|| response.message.clone())
             {
                 anyhow::bail!(error_message);
-            };
+            }
 
             anyhow::bail!(
                 "Received error response from adapter. Response: {:?}",
@@ -415,7 +415,7 @@ impl TransportDelegate {
                 Ok(0) => return ConnectionResult::ConnectionReset,
                 Ok(_) => {}
                 Err(e) => return ConnectionResult::Result(Err(e.into())),
-            };
+            }
 
             if buffer == "\r\n" {
                 break;
@@ -593,7 +593,7 @@ impl TcpTransport {
                     ))
             });
             process = Some(p);
-        };
+        }
 
         let timeout = connection_args
             .timeout

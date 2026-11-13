@@ -2359,7 +2359,7 @@ impl Editor {
                         editor.refresh_runnables(None, window, cx);
                     },
                 ));
-            };
+            }
 
             project_subscriptions.push(cx.subscribe_in(
                 &project.read(cx).breakpoint_store(),
@@ -3573,7 +3573,7 @@ impl Editor {
         }
         if query_range.start.buffer_id != query_range.end.buffer_id {
             return None;
-        };
+        }
         let multibuffer_snapshot = self.buffer.read(cx).snapshot(cx);
         let buffer = self.buffer.read(cx).buffer(query_range.end.buffer_id)?;
         let buffer_snapshot = buffer.read(cx).snapshot();
@@ -5131,7 +5131,7 @@ impl Editor {
                     }
                 }
             }
-        };
+        }
 
         let (word_replace_range, word_to_exclude) = if let (word_range, Some(CharKind::Word)) =
             buffer_snapshot.surrounding_word(buffer_position, None)
@@ -5415,7 +5415,7 @@ impl Editor {
                         && prev_menu.id > id
                     {
                         return;
-                    };
+                    }
 
                     // Only valid to take prev_menu because either the new menu is immediately set
                     // below, or the menu is hidden.
@@ -5435,7 +5435,7 @@ impl Editor {
                             // try to populate the documentation cache.
                             menu.preserve_markdown_cache(prev_menu);
                         }
-                    };
+                    }
 
                     menu.set_filter_results(matches, provider, window, cx);
                 }) else {
@@ -6491,7 +6491,7 @@ impl Editor {
                 true,
                 cx,
             );
-        };
+        }
     }
 
     fn show_blame_popover(
@@ -7758,7 +7758,7 @@ impl Editor {
         let menu = menu.as_ref()?;
         if !menu.visible() {
             return None;
-        };
+        }
         self.style
             .as_ref()
             .map(|style| menu.render(style, max_height_in_lines, window, cx))
@@ -11291,7 +11291,7 @@ impl Editor {
         if selections.is_empty() {
             log::warn!("There should always be at least one selection in ZZZ. This is a bug.");
             return;
-        };
+        }
 
         let clipboard_text = cx.read_from_clipboard().and_then(|item| {
             item.entries().iter().find_map(|entry| match entry {
@@ -15943,7 +15943,7 @@ impl Editor {
         let task = self.go_to_reference_before_or_after_position(Direction::Next, 1, window, cx);
         if let Some(task) = task {
             task.detach();
-        };
+        }
     }
 
     fn go_to_prev_reference(
@@ -15955,7 +15955,7 @@ impl Editor {
         let task = self.go_to_reference_before_or_after_position(Direction::Prev, 1, window, cx);
         if let Some(task) = task {
             task.detach();
-        };
+        }
     }
 
     fn go_to_symbol_by_offset(
@@ -20580,7 +20580,7 @@ impl Editor {
                 self.update_diagnostics_state(window, cx);
             }
             _ => {}
-        };
+        }
     }
 
     pub fn start_temporary_diff_override(&mut self) {
@@ -21824,7 +21824,7 @@ impl Editor {
                     }));
                 });
                 self.selection_history.mode = SelectionHistoryMode::Normal;
-            };
+            }
         }
 
         self.read_scroll_position_from_db(item_id, workspace_id, window, cx);
@@ -22116,7 +22116,7 @@ fn edit_for_markdown_paste<'a>(
 ) -> (Range<MultiBufferOffset>, Cow<'a, str>) {
     if !to_insert_is_url {
         return (range, Cow::Borrowed(to_insert));
-    };
+    }
 
     let old_text = buffer.text_for_range(range.clone()).collect::<String>();
 

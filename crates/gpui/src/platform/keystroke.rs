@@ -145,7 +145,7 @@ impl Keystroke {
                     modifiers.platform = true;
                 } else {
                     modifiers.control = true;
-                };
+                }
                 continue;
             }
 

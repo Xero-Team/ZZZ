@@ -275,7 +275,7 @@ impl SearchState {
                     match notify_rx.recv().await {
                         Ok(()) => {}
                         Err(_) => break,
-                    };
+                    }
                     while notify_rx.try_recv() == Ok(()) {
                         //
                     }
@@ -1596,7 +1596,7 @@ impl OutlinePanel {
                 if let Some(task) = task {
                     task.detach_and_log_err(cx);
                 }
-            };
+            }
 
             active_editor.update(cx, |editor, cx| {
                 buffers_to_unfold.retain(|buffer_id| editor.is_buffer_folded(*buffer_id, cx));
@@ -3058,7 +3058,7 @@ impl OutlinePanel {
                                             })
                                             .unwrap_or(0)
                                             + 1;
-                                    };
+                                    }
                                     visited_dirs
                                         .push((directory.entry.id, directory.entry.path.clone()));
                                     new_depth_map

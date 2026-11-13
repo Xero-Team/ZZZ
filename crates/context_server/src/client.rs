@@ -591,7 +591,7 @@ impl NotificationSubscriptionSet {
             handler_ids.push(id);
         } else {
             self.methods.push((method, vec![id]));
-        };
+        }
         id
     }
 

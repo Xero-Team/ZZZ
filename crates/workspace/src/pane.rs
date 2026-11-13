@@ -1681,7 +1681,7 @@ impl Pane {
             });
 
             return Task::ready(Ok(()));
-        };
+        }
 
         let active_item_id = self.active_item_id();
 
@@ -2323,7 +2323,7 @@ impl Pane {
                     .log_err();
             }
             return Ok(true);
-        };
+        }
         let Some(item_ix) = pane.read_with(cx, |pane, _| pane.index_for_item(item)) else {
             return Ok(true);
         };
@@ -3552,7 +3552,7 @@ impl Pane {
                         } else {
                             menu = menu.map(pin_tab_entries);
                         }
-                    };
+                    }
 
                     // Add custom item-specific actions
                     if !extra_actions.is_empty() {
@@ -4207,7 +4207,7 @@ impl Pane {
                             Some(())
                         })
                         .detach();
-                    };
+                    }
                 });
             })
             .log_err();
@@ -9771,7 +9771,7 @@ mod tests {
                             .unwrap()
                             .clone()
                     });
-                };
+                }
 
                 assert_item_labels_active_index(
                     &pane_before,

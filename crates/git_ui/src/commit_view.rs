@@ -758,7 +758,7 @@ impl CommitView {
                         Self::close_commit_view(commit_view, workspace, cx).await?;
                         return Err(err);
                     }
-                };
+                }
                 Self::close_commit_view(commit_view, workspace, cx).await?;
                 anyhow::Ok(())
             },
@@ -785,7 +785,7 @@ impl CommitView {
                         Self::close_commit_view(commit_view, workspace, cx).await?;
                         return Err(err);
                     }
-                };
+                }
                 Self::close_commit_view(commit_view, workspace, cx).await?;
                 anyhow::Ok(())
             },
@@ -812,7 +812,7 @@ impl CommitView {
                         Self::close_commit_view(commit_view, workspace, cx).await?;
                         return Err(err);
                     }
-                };
+                }
                 Self::close_commit_view(commit_view, workspace, cx).await?;
                 anyhow::Ok(())
             },

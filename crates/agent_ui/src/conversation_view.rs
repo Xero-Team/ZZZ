@@ -1039,65 +1039,59 @@ impl ConversationView {
                 Ok(thread) => Ok(thread),
             };
 
-            this.update_in(cx, |this, window, cx| {
-                match result {
-                    Ok(thread) => {
-                        let root_session_id = thread.read(cx).session_id().clone();
+            this.update_in(cx, |this, window, cx| match result {
+                Ok(thread) => {
+                    let root_session_id = thread.read(cx).session_id().clone();
 
-                        let conversation = cx.new(|cx| {
-                            let mut conversation = Conversation::default();
-                            conversation.register_thread(thread.clone(), cx);
-                            conversation
-                        });
+                    let conversation = cx.new(|cx| {
+                        let mut conversation = Conversation::default();
+                        conversation.register_thread(thread.clone(), cx);
+                        conversation
+                    });
 
-                        let current = this.new_thread_view(
-                            thread,
-                            conversation.clone(),
-                            resumed_without_history,
-                            initial_content,
-                            window,
-                            cx,
-                        );
+                    let current = this.new_thread_view(
+                        thread,
+                        conversation.clone(),
+                        resumed_without_history,
+                        initial_content,
+                        window,
+                        cx,
+                    );
 
-                        if this.has_pending_selections() {
-                            current.update(cx, |thread, cx| {
-                                thread.message_editor.update(cx, |editor, cx| {
-                                    for selection in std::mem::take(&mut this.pending_selections) {
-                                        editor.insert_selections(selection, window, cx);
-                                    }
-                                });
+                    if this.has_pending_selections() {
+                        current.update(cx, |thread, cx| {
+                            thread.message_editor.update(cx, |editor, cx| {
+                                for selection in std::mem::take(&mut this.pending_selections) {
+                                    editor.insert_selections(selection, window, cx);
+                                }
                             });
-                        }
-
-                        if this.focus_handle.contains_focused(window, cx) {
-                            current
-                                .read(cx)
-                                .message_editor
-                                .focus_handle(cx)
-                                .focus(window, cx);
-                        }
-
-                        this.root_session_id = Some(root_session_id.clone());
-                        this.set_server_state(
-                            ServerState::Connected(ConnectedServerState {
-                                connection,
-                                auth_state: AuthState::Ok,
-                                active_id: Some(root_session_id.clone()),
-                                threads: HashMap::from_iter([(root_session_id, current)]),
-                                conversation,
-                                _connection_entry_subscription: connection_entry_subscription,
-                            }),
-                            cx,
-                        );
+                        });
                     }
-                    Err(err) => {
-                        this.handle_load_error(
-                            LoadError::Other(err.to_string().into()),
-                            window,
-                            cx,
-                        );
+
+                    if this.focus_handle.contains_focused(window, cx) {
+                        current
+                            .read(cx)
+                            .message_editor
+                            .focus_handle(cx)
+                            .focus(window, cx);
                     }
-                };
+
+                    this.root_session_id = Some(root_session_id.clone());
+                    this.set_server_state(
+                        ServerState::Connected(ConnectedServerState {
+                            connection,
+                            auth_state: AuthState::Ok,
+                            active_id: Some(root_session_id.clone()),
+                            threads: HashMap::from_iter([(root_session_id, current)]),
+                            conversation,
+                            _connection_entry_subscription: connection_entry_subscription,
+                        }),
+                        cx,
+                    );
+                }
+                Err(err) => {
+                    this.handle_load_error(LoadError::Other(err.to_string().into()), window, cx);
+                }
             })
             .log_err();
         });
@@ -1549,7 +1543,7 @@ impl ConversationView {
         });
         if !is_current_owner {
             return;
-        };
+        }
         let is_subagent = thread.read(cx).parent_session_id().is_some();
         if !is_subagent && affects_thread_metadata(event) {
             cx.emit(RootThreadUpdated);
@@ -2319,7 +2313,7 @@ impl ConversationView {
                 if let Some(stderr) = stderr {
                     message.push_str("\n");
                     message.push_str(stderr);
-                };
+                }
                 let action_slot = stderr.is_some().then(|| {
                     self.create_copy_button(message.clone(), cx)
                         .into_any_element()

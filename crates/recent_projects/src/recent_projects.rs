@@ -2342,7 +2342,7 @@ impl RecentProjectsDelegate {
                     if let RemoteConnectionOptions::Ssh(connection) = &mut connection {
                         RemoteSettings::get_global(cx)
                             .fill_connection_options_from_settings(connection);
-                    };
+                    }
                     let paths = candidate_workspace_paths.paths().to_vec();
                     cx.spawn_in(window, async move |_, cx| {
                         open_remote_project(connection.clone(), paths, app_state, open_options, cx)

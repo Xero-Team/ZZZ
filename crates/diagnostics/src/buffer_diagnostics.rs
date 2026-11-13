@@ -294,7 +294,7 @@ impl BufferDiagnosticsEditor {
                         editor.update_excerpts(buffer, window, cx)
                     })?
                     .await?;
-            };
+            }
 
             if let Some(editor) = editor.upgrade() {
                 editor.update(cx, |editor, cx| {

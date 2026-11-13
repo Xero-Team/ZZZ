@@ -286,7 +286,7 @@ async fn stream_response_archive(
         AssetKind::Zip => {
             util::archive::extract_zip(destination_path, response).await?;
         }
-    };
+    }
     Ok(())
 }
 
@@ -308,7 +308,7 @@ async fn stream_file_archive(
         AssetKind::Zip => {
             util::archive::extract_zip(destination_path, file_archive).await?;
         }
-    };
+    }
     Ok(())
 }
 

@@ -4251,7 +4251,7 @@ impl EditorElement {
                         .max(editor_margins.gutter.full_width());
                     x_offset = x_target.min(max_offset).max(min_offset);
                 }
-            };
+            }
             if element_height_in_lines != block.height() {
                 *block_resize_offset += element_height_in_lines as i32 - block.height() as i32;
                 resized_blocks.insert(custom_block_id, element_height_in_lines);
@@ -6140,7 +6140,7 @@ impl EditorElement {
                         if new_range_started {
                             if current_range.end.next_row() == new_row {
                                 edges.bottom = px(0.);
-                            };
+                            }
                             paint_highlight(
                                 current_range.start,
                                 current_range.end,
@@ -6167,7 +6167,7 @@ impl EditorElement {
                             ..Default::default()
                         };
                         current_paint = Some((new_background, new_row..new_row, edges))
-                    };
+                    }
                 }
                 if let Some((color, range, edges)) = current_paint {
                     paint_highlight(range.start, range.end, color, edges);
@@ -6724,7 +6724,7 @@ impl EditorElement {
                     );
                 } else {
                     window.set_cursor_style(CursorStyle::IBeam, &layout.position_map.text_hitbox);
-                };
+                }
 
                 self.paint_lines_background(layout, window, cx);
                 let invisible_display_ranges = self.paint_highlights(layout, window, cx);
@@ -7951,7 +7951,7 @@ impl EditorElement {
                             Self::mouse_middle_down(editor, event, &position_map, window, cx);
                         }),
                         _ => {}
-                    };
+                    }
                 }
             }
         });

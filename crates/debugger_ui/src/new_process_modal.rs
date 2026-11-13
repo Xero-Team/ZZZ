@@ -1766,7 +1766,7 @@ pub(crate) fn resolve_path(path: &mut String) {
             std::path::MAIN_SEPARATOR,
             strip_path
         );
-    };
+    }
 }
 
 #[cfg(test)]

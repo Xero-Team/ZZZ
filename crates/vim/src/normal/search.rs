@@ -367,7 +367,7 @@ impl Vim {
         }
         if let Some(operator) = prior_operator {
             self.push_operator(operator, window, cx);
-        };
+        }
         self.search_motion(
             Motion::ZZZSearchResult {
                 prior_selections,
@@ -535,7 +535,7 @@ impl Vim {
                     let mut query = action.query.clone();
                     if query.is_empty() {
                         query = search_bar.query(cx);
-                    };
+                    }
 
                     let mut options = SearchOptions::REGEX | SearchOptions::CASE_SENSITIVE;
                     if search_bar.should_use_smartcase_search(cx) {

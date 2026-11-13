@@ -361,7 +361,7 @@ impl CosmicTextSystemState {
                 && !prefers_color_sources
             {
                 continue;
-            };
+            }
 
             let font_id = FontId(self.loaded_fonts.len());
             loaded_font_ids.push(font_id);

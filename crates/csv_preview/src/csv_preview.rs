@@ -176,13 +176,11 @@ impl CsvPreviewView {
         cx.new(|cx| {
             let subscription = cx.subscribe(
                 editor,
-                |this: &mut CsvPreviewView, _editor, event: &EditorEvent, cx| {
-                    match event {
-                        EditorEvent::Edited { .. } | EditorEvent::DirtyChanged => {
-                            this.parse_delimited_from_active_editor(true, cx);
-                        }
-                        _ => {}
-                    };
+                |this: &mut CsvPreviewView, _editor, event: &EditorEvent, cx| match event {
+                    EditorEvent::Edited { .. } | EditorEvent::DirtyChanged => {
+                        this.parse_delimited_from_active_editor(true, cx);
+                    }
+                    _ => {}
                 },
             );
             let custom_delimiter_subscription = cx.subscribe(

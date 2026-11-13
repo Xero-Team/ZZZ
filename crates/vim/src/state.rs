@@ -1415,7 +1415,7 @@ impl RegistersView {
             for (name, register) in &globals.registers {
                 if ['"', '+', '*', '%'].contains(name) {
                     continue;
-                };
+                }
                 matches.push(RegisterMatch {
                     name: *name,
                     contents: register.text.clone(),

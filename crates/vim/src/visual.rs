@@ -753,7 +753,7 @@ impl Vim {
                 s.move_with(&mut |map, selection| {
                     if line_mode {
                         selection.start = start_of_line(map, false, selection.start);
-                    };
+                    }
                     selection.collapse_to(selection.start, SelectionGoal::None)
                 });
                 if vim.mode == Mode::VisualBlock {

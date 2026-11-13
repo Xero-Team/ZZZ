@@ -347,7 +347,7 @@ impl WrappedLineLayout {
         } else {
             wrapped_line_start_index = 0;
             wrapped_line_start_x = Pixels::ZERO;
-        };
+        }
 
         let wrapped_line_end_index;
         let wrapped_line_end_x;
@@ -361,7 +361,7 @@ impl WrappedLineLayout {
         } else {
             wrapped_line_end_index = self.unwrapped_layout.len;
             wrapped_line_end_x = self.unwrapped_layout.width;
-        };
+        }
 
         let mut position_in_unwrapped_line = position;
         position_in_unwrapped_line.x += wrapped_line_start_x;

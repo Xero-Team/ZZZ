@@ -4214,7 +4214,7 @@ impl BackgroundScannerState {
                     "not building git repository for nested `.git` directory, `.git` path in the worktree: {dot_git_path:?}"
                 );
                 return;
-            };
+            }
 
             parent_dir.into()
         } else {
@@ -8150,7 +8150,7 @@ async fn discover_git_paths(dot_git_abs_path: &Arc<Path>, fs: &dyn Fs) -> (Arc<P
                 common_dir_abs_path = commondir_path.as_path().into();
             }
         }
-    };
+    }
     (repository_dir_abs_path, common_dir_abs_path)
 }
 

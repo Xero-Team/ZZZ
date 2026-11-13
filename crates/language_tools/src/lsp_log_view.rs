@@ -567,7 +567,7 @@ impl LspLogView {
 
             if let Some(server_state) = log_store.language_servers.get(&server_id) {
                 send_toggle_log_message(server_state, server_id, enabled, LogType::Rpc, cx);
-            };
+            }
         });
         if !enabled && Some(server_id) == self.current_server_id {
             self.show_logs_for_server(server_id, window, cx);

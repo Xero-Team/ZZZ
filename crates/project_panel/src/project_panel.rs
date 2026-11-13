@@ -1629,7 +1629,7 @@ impl ProjectPanel {
             {
                 return child.kind.is_dir();
             }
-        };
+        }
         false
     }
 
@@ -1844,7 +1844,7 @@ impl ProjectPanel {
                         expanded_entries.retain(|entry_id| entry_id == &id);
                     }
                     None => *expanded_entries = Default::default(),
-                };
+                }
             });
 
         self.update_visible_entries(None, false, false, window, cx);
@@ -2271,7 +2271,7 @@ impl ProjectPanel {
                     {
                         already_exists = true;
                     }
-                };
+                }
                 if already_exists {
                     edit_state.validation_state = ValidationState::Error(
                         tr(
@@ -2398,7 +2398,7 @@ impl ProjectPanel {
                     new_project_path,
                 )))
                 .collect();
-        };
+        }
 
         if refocus {
             window.focus(&self.focus_handle, cx);
@@ -2663,10 +2663,10 @@ impl ProjectPanel {
                 }
             } else {
                 return;
-            };
+            }
         } else {
             return;
-        };
+        }
 
         self.marked_entries.clear();
         self.state.edit_state = Some(EditState {

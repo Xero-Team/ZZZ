@@ -449,38 +449,30 @@ impl MarkdownPreviewView {
         let subscription = cx.subscribe_in(
             &editor,
             window,
-            |this, editor, event: &EditorEvent, window, cx| {
-                match event {
-                    EditorEvent::Edited { .. }
-                    | EditorEvent::BufferEdited { .. }
-                    | EditorEvent::DirtyChanged
-                    | EditorEvent::BuffersEdited { .. } => {
-                        this.update_markdown_from_active_editor(true, false, window, cx);
+            |this, editor, event: &EditorEvent, window, cx| match event {
+                EditorEvent::Edited { .. }
+                | EditorEvent::BufferEdited { .. }
+                | EditorEvent::DirtyChanged
+                | EditorEvent::BuffersEdited { .. } => {
+                    this.update_markdown_from_active_editor(true, false, window, cx);
+                }
+                EditorEvent::FileHandleChanged => {
+                    this.base_directory = Self::get_folder_for_active_editor(editor.read(cx), cx);
+                    this.update_markdown_from_active_editor(false, false, window, cx);
+                    cx.emit(MarkdownPreviewEvent::SourceFileHandleChanged);
+                }
+                EditorEvent::SelectionsChanged { .. } => {
+                    let (selection_start, editor_is_focused) = editor.update(cx, |editor, cx| {
+                        let index = Self::selected_source_index(editor, cx);
+                        let focused = editor.focus_handle(cx).is_focused(window);
+                        (index, focused)
+                    });
+                    if let Some(selection_start) = selection_start {
+                        this.sync_preview_to_source_index(selection_start, editor_is_focused, cx);
+                        cx.notify();
                     }
-                    EditorEvent::FileHandleChanged => {
-                        this.base_directory =
-                            Self::get_folder_for_active_editor(editor.read(cx), cx);
-                        this.update_markdown_from_active_editor(false, false, window, cx);
-                        cx.emit(MarkdownPreviewEvent::SourceFileHandleChanged);
-                    }
-                    EditorEvent::SelectionsChanged { .. } => {
-                        let (selection_start, editor_is_focused) =
-                            editor.update(cx, |editor, cx| {
-                                let index = Self::selected_source_index(editor, cx);
-                                let focused = editor.focus_handle(cx).is_focused(window);
-                                (index, focused)
-                            });
-                        if let Some(selection_start) = selection_start {
-                            this.sync_preview_to_source_index(
-                                selection_start,
-                                editor_is_focused,
-                                cx,
-                            );
-                            cx.notify();
-                        }
-                    }
-                    _ => {}
-                };
+                }
+                _ => {}
             },
         );
 

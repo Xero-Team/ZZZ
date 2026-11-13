@@ -983,7 +983,7 @@ pub mod simple_message_notification {
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     if let Some(on_click) = this.primary_on_click.as_ref() {
                                         (on_click)(window, cx)
-                                    };
+                                    }
                                     this.dismiss(cx)
                                 }));
 
@@ -1003,7 +1003,7 @@ pub mod simple_message_notification {
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     if let Some(on_click) = this.secondary_on_click.as_ref() {
                                         (on_click)(window, cx)
-                                    };
+                                    }
                                     this.dismiss(cx)
                                 }));
 

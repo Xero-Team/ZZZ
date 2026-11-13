@@ -500,7 +500,7 @@ impl Search {
                                 };
                                 if results.send(should_scan_rx).await.is_err() {
                                     return;
-                                };
+                                }
                             }
                         })
                         .await;
@@ -529,7 +529,7 @@ impl Search {
                 .is_err()
             {
                 return;
-            };
+            }
             matched += 1;
             if matched >= limit {
                 break;

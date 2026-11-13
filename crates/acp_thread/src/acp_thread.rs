@@ -2937,7 +2937,7 @@ impl AcpThread {
                 cx,
             )?;
             self.push_entry(AgentThreadEntry::ToolCall(call), cx);
-        };
+        }
 
         self.resolve_locations(id, cx);
         Ok(())

@@ -934,7 +934,7 @@ impl LanguageRegistry {
                                     }
                                 }
                             }
-                        };
+                        }
                     })
                     .detach();
 

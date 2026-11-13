@@ -380,7 +380,7 @@ impl TrustedWorktreesStore {
                         if restricted_worktrees.is_empty() {
                             self.restricted.remove(&weak_worktree_store);
                         }
-                    };
+                    }
 
                     if let Some(worktree) =
                         worktree_store.read(cx).worktree_for_id(*worktree_id, cx)

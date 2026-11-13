@@ -283,7 +283,7 @@ fn main() {
         if let Err(err) = result {
             eprintln!("Could not open log file: {}... Defaulting to stdout", err);
             zlog::init_output_stdout();
-        };
+        }
     }
     ztracing::init();
 

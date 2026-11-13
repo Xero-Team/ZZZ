@@ -98,7 +98,7 @@ impl Vim {
                         pane.activate_item(index, true, true, window, cx);
                     }
                 });
-            };
+            }
 
             item.act_as::<Editor>(cx)
                 .expect("value should be present")

@@ -3486,7 +3486,7 @@ mod test {
                 buffer.update(cx, |buffer, cx| {
                     buffer.set_language(Some(language::rust_lang()), cx);
                 })
-            };
+            }
 
             editor
         });

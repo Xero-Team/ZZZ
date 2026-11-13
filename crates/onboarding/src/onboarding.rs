@@ -496,7 +496,7 @@ pub async fn handle_import_vscode_settings(
         if result != Some(0) {
             return;
         }
-    };
+    }
 
     let Ok(result_channel) = cx.update(|_, cx| {
         let source = vscode_settings.source;

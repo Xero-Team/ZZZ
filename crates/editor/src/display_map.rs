@@ -3903,7 +3903,7 @@ pub mod tests {
 
                     assert_eq!(unmarked_snapshot.clip_point(markers[0], bias), markers[1])
                 }
-            };
+            }
         }
 
         use Bias::{Left, Right};

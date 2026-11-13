@@ -599,7 +599,7 @@ async fn build_remote_server_from_source(
             );
             log::info!("building remote binary from source for {triple} with xwin");
         }
-    };
+    }
 
     let mut command = new_command("cargo");
     command

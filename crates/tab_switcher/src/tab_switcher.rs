@@ -379,7 +379,7 @@ impl TabSwitcherDelegate {
                     })
                 }
                 _ => {}
-            };
+            }
         })
         .detach();
     }

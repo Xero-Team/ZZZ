@@ -2450,7 +2450,7 @@ fn end_of_document(
 ) -> DisplayPoint {
     if let Some(times) = maybe_times {
         return go_to_line(map, display_point, times);
-    };
+    }
     let point = map.display_point_to_point(display_point, Bias::Left);
     let mut last_point = map.buffer_snapshot().max_point();
     last_point.column = point.column;
@@ -3383,7 +3383,7 @@ fn section_motion(
             display_point = new_point;
         }
         return display_point;
-    };
+    }
 
     for _ in 0..times {
         let next_point = if is_start {

@@ -1083,7 +1083,7 @@ impl BufferSearchBar {
                 if deploy.replace_enabled && has_seed_text {
                     handle = self.replacement_editor.focus_handle(cx);
                     select_query = false;
-                };
+                }
 
                 if select_query {
                     self.select_query(window, cx);

@@ -486,12 +486,12 @@ impl<'a> Iterator for WordBreakingTokenizer<'a> {
                 while let Some(grapheme) = iter.peek().copied() {
                     if next_word_bound.is_some_and(|(i, _)| i == offset) {
                         break;
-                    };
+                    }
                     if is_grapheme_whitespace(grapheme) != is_whitespace
                         || (grapheme == "\n") != is_newline
                     {
                         break;
-                    };
+                    }
                     offset += grapheme.len();
                     grapheme_len += 1;
                     iter.next();

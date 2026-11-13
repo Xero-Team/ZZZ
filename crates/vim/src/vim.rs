@@ -357,7 +357,7 @@ pub fn init(cx: &mut App) {
                         .and_then(|c| c.checked_add(n.0))
                         .unwrap_or(count),
                 );
-            };
+            }
         });
 
         workspace.register_action(|_, _: &zzz_actions::vim::OpenDefaultKeymap, _, cx| {
@@ -1192,7 +1192,7 @@ impl Vim {
                 | Operator::Exchange
         ) {
             self.operator_stack.clear();
-        };
+        }
         self.operator_stack.push(operator);
         self.sync_vim_settings(window, cx);
     }
@@ -1322,7 +1322,7 @@ impl Vim {
                     should_extend_pending = pending.reversed
                         && !is_empty
                         && vim.extended_pending_selection_id != Some(pending.id);
-                };
+                }
 
                 if should_extend_pending {
                     let snapshot = s.display_snapshot();

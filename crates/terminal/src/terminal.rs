@@ -1830,7 +1830,7 @@ impl Terminal {
             match esc {
                 Cow::Borrowed(string) => self.input(string.as_bytes()),
                 Cow::Owned(string) => self.input(string.into_bytes()),
-            };
+            }
             true
         } else {
             false
@@ -2306,7 +2306,7 @@ impl Terminal {
                     for scroll in scrolls {
                         self.write_to_pty(scroll);
                     }
-                };
+                }
             } else if self
                 .last_content
                 .mode
@@ -2533,7 +2533,7 @@ impl Terminal {
             None => {
                 task.status.register_terminal_exit();
             }
-        };
+        }
 
         let (finished_successfully, task_line, command_line) = task_summary(task, exit_status);
         let mut lines_to_show = Vec::new();

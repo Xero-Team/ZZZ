@@ -626,14 +626,14 @@ impl PrettierStore {
                                         new_plugins.extend(not_installed_plugins.iter().cloned());
                                         installation_attempt = *attempts;
                                         needs_install = true;
-                                    };
+                                    }
                                 })?;
-                            };
+                            }
                         if installation_attempt > prettier::FAIL_THRESHOLD {
                             prettier_store.update(cx, |prettier_store, _| {
                                 if let PrettierInstallation::NotInstalled { installation_task, .. } = &mut prettier_store.default_prettier.prettier {
                                     *installation_task = None;
-                                };
+                                }
                             })?;
                             log::warn!(
                                 "Default prettier installation had failed {installation_attempt} times, not attempting again",

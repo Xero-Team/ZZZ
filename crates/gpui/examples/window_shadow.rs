@@ -87,7 +87,7 @@ impl Render for WindowShadow {
                         match resize_edge(pos, shadow_size, size) {
                             Some(edge) => window.start_window_resize(edge),
                             None => window.start_window_move(),
-                        };
+                        }
                     }),
             })
             .size_full()

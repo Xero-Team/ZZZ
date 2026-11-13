@@ -44,7 +44,7 @@ impl Vim {
                         point..point
                     }))
                 })
-            };
+            }
         });
     }
 

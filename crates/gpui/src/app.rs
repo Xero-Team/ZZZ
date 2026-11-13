@@ -1689,7 +1689,7 @@ impl App {
                 }
             }
             _ => {}
-        };
+        }
 
         self.pending_effects.push_back(effect);
     }
@@ -1992,7 +1992,7 @@ impl App {
     {
         if self.quitting {
             debug_panic!("Can't spawn on main thread after on_app_quit")
-        };
+        }
 
         let mut cx = self.to_async();
 
@@ -2010,7 +2010,7 @@ impl App {
     {
         if self.quitting {
             debug_panic!("Can't spawn on main thread after on_app_quit")
-        };
+        }
 
         let mut cx = self.to_async();
 

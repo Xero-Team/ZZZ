@@ -460,7 +460,7 @@ impl TerminalElement {
                             }
                             current_batch = Some(new_batch);
                         }
-                    };
+                    }
                 }
             }
         }

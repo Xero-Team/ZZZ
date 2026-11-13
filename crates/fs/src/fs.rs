@@ -486,7 +486,7 @@ impl FileHandle for std::fs::File {
             .is_some_and(|f| f.to_string_lossy().ends_with(" (deleted)"))
         {
             anyhow::bail!("file was deleted")
-        };
+        }
 
         Ok(new_path)
     }
@@ -2588,7 +2588,7 @@ impl FakeFs {
                             StatusCode::Deleted | StatusCode::Renamed | StatusCode::Copied => {
                                 panic!("cannot create these statuses for an existing file");
                             }
-                        };
+                        }
                         match index_status {
                             StatusCode::Modified => {
                                 let mut content = index_content.clone().expect(
@@ -2607,9 +2607,9 @@ impl FakeFs {
                             StatusCode::Renamed | StatusCode::Copied => {
                                 panic!("cannot create these statuses for an existing file");
                             }
-                        };
+                        }
                     }
-                };
+                }
 
                 if let Some(content) = index_content {
                     state.index_contents.insert(repo_path.clone(), content);

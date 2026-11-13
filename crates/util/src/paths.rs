@@ -1936,7 +1936,7 @@ impl UrlExt for url::Url {
 
                     _ => return Err(()),
                 }
-            };
+            }
 
             for segment in segments {
                 string.push('\\');

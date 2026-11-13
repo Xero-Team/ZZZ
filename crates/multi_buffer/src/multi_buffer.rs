@@ -2166,7 +2166,7 @@ impl MultiBuffer {
             if let Some(title) = self.buffer_content_title(buffer) {
                 return title;
             }
-        };
+        }
 
         "untitled".into()
     }
@@ -2415,7 +2415,7 @@ impl MultiBuffer {
                     let excerpt_end = snapshot.excerpt_offset_for_anchor(&excerpt_end_anchor);
                     start = start.min(excerpt_end);
                     end = end.min(excerpt_end);
-                };
+                }
                 last_hunk_row = Some(diff_hunk.row_range.start);
                 excerpt_edits.push(text::Edit {
                     old: start..end,
@@ -2447,7 +2447,7 @@ impl MultiBuffer {
                 let mut peek_end = range.end;
                 if range.end.row < snapshot.max_row().0 {
                     peek_end = Point::new(range.end.row + 1, 0);
-                };
+                }
                 (range.start..peek_end, excerpt_end)
             });
         let edits = self.expand_or_collapse_diff_hunks_inner(ranges, expand, cx);
@@ -2644,7 +2644,7 @@ impl MultiBuffer {
                 }
             } else {
                 new_excerpts.append(cursor.slice(&path, Bias::Right), ());
-            };
+            }
         }
         new_excerpts.append(cursor.suffix(), ());
 
@@ -3870,7 +3870,7 @@ impl MultiBufferSnapshot {
                         buffer_start = buffer_start.min(region.buffer_range.end);
                     } else {
                         buffer_start = cursor.main_buffer_position()?;
-                    };
+                    }
                     let mut buffer_end = excerpt
                         .range
                         .context
@@ -4175,7 +4175,7 @@ impl MultiBufferSnapshot {
             chunk = &[][..];
             excerpt_bytes = None;
             has_trailing_newline = false;
-        };
+        }
 
         MultiBufferBytes {
             range,
@@ -5263,7 +5263,7 @@ impl MultiBufferSnapshot {
             }
         } else {
             excerpt_offset += MultiBufferOffset(offset_in_transform);
-        };
+        }
 
         let mut excerpts = self
             .excerpts
@@ -6342,7 +6342,7 @@ impl MultiBufferSnapshot {
             move |buffer, range| {
                 if buffer.remote_id() != buffer_id {
                     return None;
-                };
+                }
                 Some(
                     buffer
                         .diagnostics_in_range(range, false)
@@ -7291,7 +7291,7 @@ where
                     end += overshoot;
                     buffer_end = excerpt.range.context.end.summary::<BD>(buffer);
                     has_trailing_newline = excerpt.has_trailing_newline;
-                };
+                }
 
                 let diff_hunk_status = inserted_hunk_info.map(|info| {
                     if info.is_logically_deleted {
@@ -7339,7 +7339,7 @@ where
                         self.excerpts.end() - self.diff_transforms.start().excerpt_dimension;
                     end = self.diff_transforms.start().output_dimension.0;
                     end += overshoot;
-                };
+                }
 
                 Some((excerpt, start..end))
             }
@@ -7915,7 +7915,7 @@ impl Iterator for MultiBufferRows<'_> {
                 });
             } else {
                 return None;
-            };
+            }
         }
 
         let overshoot = self.point - region.range.start;

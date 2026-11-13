@@ -125,7 +125,7 @@ impl Editor {
                 match Arc::get_mut(&mut display_map.semantic_token_highlights) {
                     Some(highlights) => highlights.clear(),
                     None => display_map.semantic_token_highlights = Arc::new(Default::default()),
-                };
+                }
             });
             self.semantic_token_state.update_task = Task::ready(());
             cx.notify();

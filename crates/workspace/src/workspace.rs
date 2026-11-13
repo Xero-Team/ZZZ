@@ -853,7 +853,9 @@ impl ProjectItemRegistry {
                     match project_item.await.with_context(|| {
                         format!(
                             "opening project path {:?}",
-                            entry_abs_path.as_deref().unwrap_or(&project_path.path.as_std_path())
+                            entry_abs_path
+                                .as_deref()
+                                .unwrap_or(&project_path.path.as_std_path())
                         )
                     }) {
                         Ok(project_item) => {
@@ -3201,7 +3203,7 @@ impl Workspace {
                             tx.send(path).ok();
                         }
                     }
-                };
+                }
                 anyhow::Ok(())
             })
             .detach();
@@ -5780,20 +5782,18 @@ impl Workspace {
                     item: item.boxed_clone(),
                 });
             }
-            pane::Event::Split { direction, mode } => {
-                match mode {
-                    SplitMode::ClonePane => {
-                        self.split_and_clone(pane.clone(), *direction, window, cx)
-                            .detach();
-                    }
-                    SplitMode::EmptyPane => {
-                        self.split_pane(pane.clone(), *direction, window, cx);
-                    }
-                    SplitMode::MovePane => {
-                        self.split_and_move(pane.clone(), *direction, window, cx);
-                    }
-                };
-            }
+            pane::Event::Split { direction, mode } => match mode {
+                SplitMode::ClonePane => {
+                    self.split_and_clone(pane.clone(), *direction, window, cx)
+                        .detach();
+                }
+                SplitMode::EmptyPane => {
+                    self.split_pane(pane.clone(), *direction, window, cx);
+                }
+                SplitMode::MovePane => {
+                    self.split_and_move(pane.clone(), *direction, window, cx);
+                }
+            },
             pane::Event::JoinIntoNext => {
                 self.join_pane_into_next(pane.clone(), window, cx);
             }
@@ -8357,7 +8357,7 @@ impl Render for Workspace {
                                                         cx,
                                                     );
                                                 }
-                                            };
+                                            }
                                             workspace.serialize_workspace(window, cx);
                                         }
                                     },
@@ -9831,7 +9831,7 @@ async fn open_remote_project_inner(
             Err(error) => {
                 project_path_errors.push(error);
             }
-        };
+        }
     }
 
     if project_paths_to_open.is_empty() {

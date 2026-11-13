@@ -4591,7 +4591,7 @@ impl RenderedLine {
                 line_rendered_index = ix;
                 out_of_bounds = true;
             }
-        };
+        }
         let source_index = self.source_index_for_rendered_index(line_rendered_index);
         if out_of_bounds {
             Err(source_index)

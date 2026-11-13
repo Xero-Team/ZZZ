@@ -1403,7 +1403,7 @@ impl AgentDiff {
         for editor in editors {
             if let Some(buffer) = Self::full_editor_buffer(editor.read(cx), cx) {
                 self.register_editor(weak_workspace.clone(), buffer, editor, window, cx);
-            };
+            }
         }
 
         self.update_reviewing_editors(&weak_workspace, window, cx);

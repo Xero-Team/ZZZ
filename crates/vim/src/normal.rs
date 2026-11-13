@@ -233,7 +233,7 @@ pub(crate) fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
             );
             if let Some(task) = task {
                 task.detach_and_log_err(cx);
-            };
+            }
         });
     });
 
@@ -248,7 +248,7 @@ pub(crate) fn register(editor: &mut Editor, cx: &mut Context<Vim>) {
             );
             if let Some(task) = task {
                 task.detach_and_log_err(cx);
-            };
+            }
         });
     });
 
@@ -616,7 +616,7 @@ impl Vim {
 
             if should_disable_clip {
                 editor.set_clip_at_line_ends(false, cx)
-            };
+            }
 
             editor.change_selections(
                 SelectionEffects::default().nav_history(motion.push_to_jump_list()),
@@ -633,7 +633,7 @@ impl Vim {
 
             if should_disable_clip {
                 editor.set_clip_at_line_ends(clip_at_line_ends, cx);
-            };
+            }
         });
     }
 

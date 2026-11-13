@@ -1361,6 +1361,11 @@ collapsible_if = "deny"
 single_char_pattern = "deny"
 from_over_into = "deny"
 
+# The thirteenth batch drops the trailing semicolon on `match`/`if`/block
+# statements that end a block, where the value is already `()` and the `;` only
+# adds noise around the closing brace.
+unnecessary_semicolon = "deny"
+
 # We currently do not restrict any style rules
 # as it slows down shipping code to ZZZ.
 #

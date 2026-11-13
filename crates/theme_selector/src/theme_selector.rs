@@ -319,7 +319,7 @@ fn override_global_theme(
         // The theme selection mode changed while selecting new themes (someone edited the settings
         // file on disk while we had the dialogue open), so don't do anything.
         _ => return,
-    };
+    }
 
     store.override_global(curr_theme_settings);
 }

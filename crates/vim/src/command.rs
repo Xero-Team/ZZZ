@@ -461,7 +461,7 @@ fn register_write_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
                             buffer.update(cx, |buffer, _| buffer.set_conflict());
                         }
                     });
-                };
+                }
 
                 let worktree = match filename_save_target(editor, cx) {
                     Ok(worktree) => worktree,
@@ -777,7 +777,7 @@ fn register_workspace_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
                 });
             } else {
                 return;
-            };
+            }
 
             cx.spawn_in(window, async move |editor, cx| {
                 if let Some(task) = task {
@@ -891,7 +891,7 @@ fn register_range_and_count_commands(editor: &mut Editor, cx: &mut Context<Vim>)
                 log::error!("Error selecting range: {}", err);
                 return;
             }
-        };
+        }
 
         let Some(workspace) = vim.workspace(window, cx) else {
             return;
@@ -2060,7 +2060,7 @@ pub fn command_interceptor(
             action: WrappedAction(inner.boxed_clone()),
             invert,
         }));
-    };
+    }
 
     if let Some(action) = action {
         let string = input.to_owned();
@@ -2334,7 +2334,7 @@ impl OnMatchingLines {
                     });
                 }
             });
-        };
+        }
 
         vim.update_editor(cx, |_, editor, cx| {
             let snapshot = editor.snapshot(window, cx);
@@ -2645,7 +2645,7 @@ impl ShellExec {
                 .detach();
             });
             return;
-        };
+        }
 
         let mut input_snapshot = None;
         let mut input_range = None;
@@ -2704,7 +2704,7 @@ impl ShellExec {
                 process.stdin(Stdio::piped());
             } else {
                 process.stdin(Stdio::null());
-            };
+            }
 
             let Some(mut running) = process.spawn().log_err() else {
                 vim.update_in(cx, |vim, window, cx| {
@@ -2727,7 +2727,7 @@ impl ShellExec {
                     stdin.flush().await.log_err();
                 })
                 .detach();
-            };
+            }
 
             let output = cx.background_spawn(running.output()).await;
 

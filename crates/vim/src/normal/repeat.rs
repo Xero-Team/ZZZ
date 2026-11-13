@@ -304,7 +304,7 @@ impl Vim {
             Vim::update_globals(cx, |globals, _| {
                 globals.recorded_register_for_dot = Some(next_register)
             })
-        };
+        }
 
         if mode != Some(self.mode) {
             if let Some(mode) = mode {

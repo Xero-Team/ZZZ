@@ -1059,7 +1059,7 @@ impl LspButton {
     ) {
         if self.lsp_menu.is_none() {
             return;
-        };
+        }
         let mut updated = false;
 
         // TODO `LspStore` is global and reports status from all language servers, even from the other windows.
@@ -1098,7 +1098,7 @@ impl LspButton {
                             );
                         });
                         updated = true;
-                    };
+                    }
                 }
                 Some(proto::status_update::Status::Health(health_status)) => {
                     if let Ok(health) = proto::ServerHealth::try_from(*health_status) {
@@ -1166,7 +1166,7 @@ impl LspButton {
                 updated = true;
             }
             _ => {}
-        };
+        }
 
         if updated {
             self.refresh_lsp_menu(false, window, cx);

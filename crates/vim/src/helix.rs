@@ -168,7 +168,7 @@ impl Vim {
                 if let Motion::ZZZSearchResult { new_selections, .. } = &motion {
                     s.select_anchor_ranges(new_selections.clone());
                     return;
-                };
+                }
 
                 s.move_with(&mut |map, selection| {
                     let was_reversed = selection.reversed;

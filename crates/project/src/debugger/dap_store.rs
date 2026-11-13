@@ -747,9 +747,9 @@ impl DapStore {
                                 tooltip: None,
                                 resolve_state: ResolveState::Resolved,
                             });
-                        };
+                        }
                     }
-                };
+                }
             }
 
             Ok(inlay_hints)

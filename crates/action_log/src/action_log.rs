@@ -229,7 +229,7 @@ impl ActionLog {
                 self.handle_buffer_file_changed(buffer, cx);
             }
             _ => {}
-        };
+        }
     }
 
     fn handle_buffer_edited(&mut self, buffer: Entity<Buffer>, cx: &mut Context<Self>) {

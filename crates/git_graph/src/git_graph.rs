@@ -546,7 +546,7 @@ impl QueryState {
         match self {
             Self::Confirmed((query, _)) => *self = Self::Pending(std::mem::take(query)),
             _ => {}
-        };
+        }
     }
 }
 

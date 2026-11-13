@@ -1125,7 +1125,7 @@ mod tests {
                 assert!(message.contains("/root/work/full-stack-foundations/exercises/03.loading/01.problem.loader"), "Error message should mention which project had prettier defined");
                 assert!(message.contains("/root/work/full-stack-foundations"), "Error message should mention potential candidates without prettier node_modules contents");
             },
-        };
+        }
     }
 
     #[gpui::test]

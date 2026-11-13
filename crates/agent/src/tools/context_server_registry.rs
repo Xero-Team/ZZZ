@@ -273,7 +273,7 @@ impl ContextServerRegistry {
                 }
                 cx.notify();
             }
-        };
+        }
     }
 }
 

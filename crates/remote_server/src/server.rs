@@ -111,7 +111,7 @@ pub fn run(command: Commands) -> anyhow::Result<()> {
                         println!("{commit_sha}");
                     }
                 }
-            };
+            }
             Ok(())
         }
     }

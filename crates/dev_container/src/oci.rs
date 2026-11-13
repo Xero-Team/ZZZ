@@ -175,7 +175,7 @@ where
 
     if let Err(e) = response.into_body().read_to_string(&mut output).await {
         return Err(format!("Failed to read response body from {}: {}", url, e));
-    };
+    }
 
     if !status.is_success() {
         return Err(format!(

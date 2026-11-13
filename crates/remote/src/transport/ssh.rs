@@ -1815,7 +1815,7 @@ fn build_command_posix(
             "cd {} ",
             ssh_shell_kind.sequential_and_commands_separator()
         )?;
-    };
+    }
     write!(exec, "exec env ")?;
 
     for (k, v) in input_env {
@@ -1840,7 +1840,7 @@ fn build_command_posix(
         }
     } else {
         write!(exec, "{ssh_shell} -l")?;
-    };
+    }
 
     let mut args = Vec::new();
     args.extend(ssh_options);
@@ -1926,7 +1926,7 @@ fn build_command_windows(
     } else {
         // Launch an interactive shell session
         write!(exec, "{ssh_shell}")?;
-    };
+    }
 
     let mut args = Vec::new();
     args.extend(ssh_options);

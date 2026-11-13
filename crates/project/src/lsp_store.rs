@@ -1172,7 +1172,7 @@ impl LocalLspStore {
                                                 "Failed to register server capabilities: {e:#}"
                                             );
                                         }
-                                    };
+                                    }
                                 }
                             })
                             .ok();
@@ -3226,7 +3226,7 @@ impl LocalLspStore {
                             && let Some(workspace_folder) = workspace_folder
                         {
                             state.add_workspace_folder(workspace_folder);
-                        };
+                        }
                         Some(server_id)
                     }
                 })?;
@@ -6253,7 +6253,7 @@ impl LspStore {
                                 && let Some(workspace_folder) = workspace_folder
                             {
                                 state.add_workspace_folder(workspace_folder);
-                            };
+                            }
                             Some(server_id)
                         });
 
@@ -9728,7 +9728,7 @@ impl LspStore {
                 return Task::ready(Err(anyhow!(
                     "language server for worktree and language not found"
                 )));
-            };
+            }
 
             let symbol_abs_path = match &symbol.path {
                 SymbolLocation::InProject { project_path, .. } => self
@@ -10314,7 +10314,7 @@ impl LspStore {
                                 match diagnostics_pull.await {
                                     Ok(()) => {}
                                     Err(e) => log::error!("Failed to pull diagnostics: {e:#}"),
-                                };
+                                }
                             }
                         }),
                     );

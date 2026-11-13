@@ -1003,7 +1003,7 @@ impl Window {
     ) {
         if let Some(mut inspector_element) = inspector_element {
             inspector_element.paint(self, cx);
-        };
+        }
     }
 
     /// Registers a hitbox that can be used for inspector picking mode, allowing users to select and

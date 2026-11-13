@@ -201,7 +201,7 @@ impl PaneGroup {
                     log::error!("failed to resize pane: pane was not present in the pane group");
                 }
             }
-        };
+        }
         self.mark_positions(cx);
     }
 
@@ -211,7 +211,7 @@ impl PaneGroup {
             Member::Axis(axis) => {
                 axis.reset_pane_sizes();
             }
-        };
+        }
         self.mark_positions(cx);
     }
 
@@ -219,7 +219,7 @@ impl PaneGroup {
         match &mut self.root {
             Member::Pane(_) => {}
             Member::Axis(axis) => axis.swap(from, to),
-        };
+        }
         self.mark_positions(cx);
     }
 

@@ -1170,8 +1170,10 @@ impl FileFinderDelegate {
         window: &mut Window,
         cx: &mut Context<FileFinder>,
     ) {
-        cx.subscribe_in(project, window, |file_finder, _, event, window, cx| {
-            match event {
+        cx.subscribe_in(
+            project,
+            window,
+            |file_finder, _, event, window, cx| match event {
                 project::Event::WorktreeUpdatedEntries(_, _) => {
                     file_finder.picker.update(cx, |picker, cx| {
                         picker.delegate.refresh_history(window, cx);
@@ -1184,8 +1186,8 @@ impl FileFinderDelegate {
                         .update(cx, |picker, cx| picker.refresh(window, cx))
                 }
                 _ => {}
-            };
-        })
+            },
+        )
         .detach();
     }
 

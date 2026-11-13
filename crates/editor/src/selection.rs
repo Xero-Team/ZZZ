@@ -515,7 +515,7 @@ impl Editor {
                     );
                 },
             );
-        };
+        }
 
         let tail = self.selections.newest::<Point>(&display_map).tail();
         let selection_anchor = display_map.buffer_snapshot().anchor_before(tail);
@@ -616,7 +616,7 @@ impl Editor {
                 SelectMode::All => {
                     return;
                 }
-            };
+            }
 
             if head < tail {
                 pending.start = buffer.anchor_before(head);

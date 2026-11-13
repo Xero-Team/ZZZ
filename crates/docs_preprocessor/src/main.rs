@@ -498,7 +498,7 @@ fn template_and_validate_json_snippets(
                         err.to_string(),
                     ));
                     continue;
-                };
+                }
                 let tag_range_complete = tag_start - 1..tag_end + 1;
                 offset -= tag_range_complete.len();
                 chapter.content.replace_range(tag_range_complete, "");
@@ -587,7 +587,7 @@ fn template_and_validate_json_snippets(
                 )?;
             }
             label => anyhow::bail!("Unexpected JSON code block tag: {label}"),
-        };
+        }
         Ok(())
     });
     Ok(())

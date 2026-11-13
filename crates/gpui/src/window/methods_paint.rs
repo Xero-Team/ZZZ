@@ -80,7 +80,7 @@ impl Window {
 
         if offset.is_zero() {
             return f(self);
-        };
+        }
 
         let abs_offset = self.element_offset() + offset;
         self.with_absolute_element_offset(abs_offset, f)

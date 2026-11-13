@@ -365,7 +365,7 @@ impl minidumper::ServerHandler for CrashServer {
                 }
             }
             Err(err) => log::error!("Failed to serialize crash report: {err:?}"),
-        };
+        }
 
         LoopAction::Exit
     }

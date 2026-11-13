@@ -120,7 +120,7 @@ impl Workspace {
                                     })
                             }
                             None => log::debug!("Task spawn got cancelled"),
-                        };
+                        }
                     }
                 });
             self.scheduled_tasks.push(task);

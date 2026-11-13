@@ -255,7 +255,7 @@ impl EntryViewState {
                     self.set_entry(index, Entry::CompletedPlan);
                 }
             }
-        };
+        }
     }
 
     fn set_entry(&mut self, index: usize, entry: Entry) {

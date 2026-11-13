@@ -2363,7 +2363,7 @@ impl BufferSnapshot {
         } else {
             end_point = Point::new(row_range.start, 0);
             end = start;
-        };
+        }
 
         let mut chunks = self.as_rope().chunks_in_range(start..end);
         // Move the cursor to the start of the last line if it's not empty.

@@ -204,7 +204,7 @@ impl SvgPreviewView {
                 pane.activate_item(existing_view_idx, true, true, window, cx)
             }
             None => pane.add_item(Box::new(view), activate, activate, None, window, cx),
-        };
+        }
     }
 
     pub fn open_preview_in_pane(

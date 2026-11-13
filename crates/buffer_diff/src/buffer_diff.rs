@@ -3281,7 +3281,7 @@ mod tests {
                     let blank_lines = old_lines.clone().take_while(|line| line.is_empty()).count();
                     if blank_lines == old_lines.len() {
                         break;
-                    };
+                    }
                     let unchanged_count =
                         rng.random_range((blank_lines + 1).max(1)..=old_lines.len());
                     result += &old_lines.by_ref().take(unchanged_count).fold(

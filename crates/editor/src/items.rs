@@ -140,7 +140,7 @@ impl FollowableItem for Editor {
                                 cx,
                             );
                         }
-                    };
+                    }
 
                     if let Some(title) = &state.title {
                         multibuffer = multibuffer.with_title(title.clone())

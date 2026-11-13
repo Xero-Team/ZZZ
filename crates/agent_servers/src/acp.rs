@@ -3222,7 +3222,7 @@ mod tests {
                 );
             }
             error => panic!("expected exited load error, got: {error:?}"),
-        };
+        }
     }
 
     async fn connect_fake_agent(

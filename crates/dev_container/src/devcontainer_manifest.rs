@@ -1352,7 +1352,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
             DevContainerBuildType::DockerCompose | DevContainerBuildType::None => {
                 return Err(DevContainerError::DevContainerParseFailed);
             }
-        };
+        }
 
         let mut command = self.create_docker_build()?;
 

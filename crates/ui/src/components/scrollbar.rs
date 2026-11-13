@@ -1721,7 +1721,7 @@ impl<T: ScrollableHandle> Element for ScrollbarElement<T> {
                                 scroll_handle.offset().apply_along(*axis, |_| click_offset),
                                 cx,
                             );
-                        };
+                        }
 
                         cx.stop_propagation();
                     });

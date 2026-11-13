@@ -2539,7 +2539,7 @@ impl SettingsWindow {
             self.open_and_scroll_to_navbar_entry(self.navbar_entry, None, true, window, cx);
         } else {
             self.open_first_nav_page();
-        };
+        }
     }
 
     fn change_file_in_sub_page(
@@ -3851,7 +3851,7 @@ impl SettingsWindow {
                         cx.spawn_in(window, async move |_, cx| {
                             if let Some(create_task) = create_task {
                                 create_task.await.ok()?;
-                            };
+                            }
 
                             workspace_weak
                                 .update_in(cx, |workspace, window, cx| {
@@ -3886,7 +3886,7 @@ impl SettingsWindow {
                 // Server files are not editable
                 return;
             }
-        };
+        }
     }
 
     fn current_page_index(&self) -> usize {

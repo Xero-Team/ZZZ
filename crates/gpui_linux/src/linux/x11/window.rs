@@ -1274,7 +1274,7 @@ impl X11WindowStatePtr {
             }
             let mut state = self.state.borrow_mut();
             state.input_handler = Some(input_handler);
-        };
+        }
         bounds.map(|b| b.scale(scale_factor))
     }
 

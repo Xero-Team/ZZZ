@@ -1619,7 +1619,7 @@ impl SlashCommandCompletion {
             command = Some(command_text.to_owned());
         } else if !last_command.is_empty() {
             command = Some(last_command.to_owned());
-        };
+        }
 
         Some(Self {
             source_range: prefix.len() + offset_to_line

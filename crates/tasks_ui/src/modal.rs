@@ -130,7 +130,7 @@ impl TasksModalDelegate {
             inventory.update(cx, |inventory, _| {
                 inventory.delete_previously_used(&task.id);
             })
-        };
+        }
     }
 }
 

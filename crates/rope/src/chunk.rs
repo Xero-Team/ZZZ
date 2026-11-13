@@ -115,7 +115,7 @@ impl Chunk {
     pub fn append(&mut self, slice: ChunkSlice) {
         if slice.is_empty() {
             return;
-        };
+        }
 
         let base_ix = self.text.len();
         self.chars |= slice.chars << base_ix;

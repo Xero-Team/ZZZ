@@ -947,7 +947,7 @@ impl ContextProvider for RustContextProvider {
         {
             let fragment = test_fragment(&variables, path, stem);
             variables.insert(RUST_TEST_FRAGMENT_TASK_VARIABLE, fragment);
-        };
+        }
         if let Some(test_name) =
             task_variables.get(&VariableName::Custom(Cow::Borrowed("_test_name")))
         {
@@ -1300,7 +1300,7 @@ fn target_info_from_metadata(
             }
         } else {
             manifest_path = Some((Arc::from(manifest_dir_path), candidate_path_length));
-        };
+        }
 
         for target in package.targets {
             let Some(bin_kind) = target

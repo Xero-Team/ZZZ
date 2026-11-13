@@ -1218,7 +1218,7 @@ impl BufferStore {
                 },
                 remote_id,
             );
-        };
+        }
 
         Some(())
     }

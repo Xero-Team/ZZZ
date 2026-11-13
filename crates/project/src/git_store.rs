@@ -3975,7 +3975,7 @@ impl GitStore {
                     let mut ix = entries.partition_point(|path| path < &*repo_path);
                     if ix == entries.len() {
                         return None;
-                    };
+                    }
 
                     let mut paths = Vec::new();
                     // All paths prefixed by a given repo will constitute a continuous range.
@@ -5693,7 +5693,7 @@ impl Repository {
                 }
                 Ok(RepositoryState::Remote(_)) => {}
                 Err(_) => {}
-            };
+            }
         })
         .detach();
     }
@@ -6056,7 +6056,7 @@ impl Repository {
                     log::error!("failed to get repository state: {error}");
                     return;
                 }
-            };
+            }
         })
         .detach();
 

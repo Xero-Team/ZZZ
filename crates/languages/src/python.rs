@@ -1531,7 +1531,7 @@ impl ToolchainLister for PythonToolchainProvider {
                 Some(PythonEnvironmentKind::Conda) => {
                     if toolchain.environment.manager.is_none() {
                         return vec![];
-                    };
+                    }
 
                     let manager = match conda_manager {
                         settings::CondaManager::Conda => "conda",

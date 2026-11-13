@@ -791,7 +791,7 @@ impl ThreadMetadataStore {
                 ..thread.clone()
             });
             cx.notify();
-        };
+        }
     }
 
     pub fn archive(

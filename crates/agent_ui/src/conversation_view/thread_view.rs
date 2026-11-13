@@ -1866,7 +1866,7 @@ impl ThreadView {
                     editor.set_message(user_message.chunks.clone(), window, cx);
                 }
             })
-        };
+        }
         self.message_editor.focus_handle(cx).focus(window, cx);
         cx.notify();
     }

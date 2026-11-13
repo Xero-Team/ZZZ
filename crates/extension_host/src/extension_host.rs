@@ -1449,7 +1449,7 @@ impl ExtensionStore {
             for extension in extension_entries {
                 if extension.manifest.lib.kind.is_none() {
                     continue;
-                };
+                }
 
                 let extension_path = root_dir.join(extension.manifest.id.as_ref());
                 let wasm_extension = WasmExtension::load(

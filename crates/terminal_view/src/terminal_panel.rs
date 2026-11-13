@@ -390,47 +390,44 @@ impl TerminalPanel {
                 }
                 self.serialize(cx);
             }
-            &pane::Event::Split { direction, mode } => {
-                match mode {
-                    SplitMode::ClonePane | SplitMode::EmptyPane => {
-                        let clone = matches!(mode, SplitMode::ClonePane);
-                        let new_pane = self.new_pane_with_active_terminal(clone, window, cx);
-                        let pane = pane.clone();
-                        cx.spawn_in(window, async move |panel, cx| {
-                            let Some(new_pane) = new_pane.await else {
-                                return;
-                            };
-                            panel
-                                .update_in(cx, |panel, window, cx| {
-                                    panel.center.split(&pane, &new_pane, direction, cx);
-                                    window.focus(&new_pane.focus_handle(cx), cx);
-                                })
-                                .log_err();
-                        })
-                        .detach();
-                    }
-                    SplitMode::MovePane => {
-                        let Some(item) =
-                            pane.update(cx, |pane, cx| pane.take_active_item(window, cx))
-                        else {
+            &pane::Event::Split { direction, mode } => match mode {
+                SplitMode::ClonePane | SplitMode::EmptyPane => {
+                    let clone = matches!(mode, SplitMode::ClonePane);
+                    let new_pane = self.new_pane_with_active_terminal(clone, window, cx);
+                    let pane = pane.clone();
+                    cx.spawn_in(window, async move |panel, cx| {
+                        let Some(new_pane) = new_pane.await else {
                             return;
                         };
-                        let Ok(project) = self
-                            .workspace
-                            .update(cx, |workspace, _| workspace.project().clone())
-                        else {
-                            return;
-                        };
-                        let new_pane =
-                            new_terminal_pane(self.workspace.clone(), project, false, window, cx);
-                        new_pane.update(cx, |pane, cx| {
-                            pane.add_item(item, true, true, None, window, cx);
-                        });
-                        self.center.split(&pane, &new_pane, direction, cx);
-                        window.focus(&new_pane.focus_handle(cx), cx);
-                    }
-                };
-            }
+                        panel
+                            .update_in(cx, |panel, window, cx| {
+                                panel.center.split(&pane, &new_pane, direction, cx);
+                                window.focus(&new_pane.focus_handle(cx), cx);
+                            })
+                            .log_err();
+                    })
+                    .detach();
+                }
+                SplitMode::MovePane => {
+                    let Some(item) = pane.update(cx, |pane, cx| pane.take_active_item(window, cx))
+                    else {
+                        return;
+                    };
+                    let Ok(project) = self
+                        .workspace
+                        .update(cx, |workspace, _| workspace.project().clone())
+                    else {
+                        return;
+                    };
+                    let new_pane =
+                        new_terminal_pane(self.workspace.clone(), project, false, window, cx);
+                    new_pane.update(cx, |pane, cx| {
+                        pane.add_item(item, true, true, None, window, cx);
+                    });
+                    self.center.split(&pane, &new_pane, direction, cx);
+                    window.focus(&new_pane.focus_handle(cx), cx);
+                }
+            },
             pane::Event::Focus => {
                 self.active_pane = pane.clone();
             }
@@ -1559,7 +1556,7 @@ impl Render for TerminalPanel {
                                     window,
                                     cx,
                                 );
-                            };
+                            }
                         },
                     ))
                 },

@@ -121,7 +121,7 @@ impl ReqwestClient {
             client_has_proxy = true;
         } else {
             client_has_proxy = false;
-        };
+        }
 
         let client = client
             .use_preconfigured_tls(http_client_tls::tls_config()?)

@@ -1126,7 +1126,7 @@ impl StateInner {
                     };
                     self.logical_scroll_top = None;
                 }
-            };
+            }
         }
 
         // Measure items in the leading overdraw

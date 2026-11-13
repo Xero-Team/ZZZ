@@ -1512,7 +1512,7 @@ impl SettingsObserver {
                     );
                     continue;
                 }
-            };
+            }
 
             if let Some(downstream_client) = &self.downstream_client {
                 let Some(path_v2) =

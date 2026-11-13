@@ -631,7 +631,7 @@ async fn handle_envs(
             env_vars.extend(file_envs);
         } else {
             warn!("While starting Go debug session: failed to read env file {path:?}");
-        };
+        }
     }
 
     let mut env_obj: serde_json::Map<String, Value> = serde_json::Map::new();

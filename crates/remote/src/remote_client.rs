@@ -702,7 +702,7 @@ impl RemoteClient {
                 .context("Failed to kill remote_connection process")
             {
                 failed!(error, attempts, remote_connection, delegate);
-            };
+            }
 
             let connection_options = remote_connection.connection_options();
 
@@ -747,7 +747,7 @@ impl RemoteClient {
 
             if let Err(error) = client.resync(HEARTBEAT_TIMEOUT).await {
                 failed!(error, attempts, remote_connection, delegate);
-            };
+            }
 
             State::Connected {
                 remote_connection,
@@ -1746,7 +1746,7 @@ impl ChannelClient {
                 let envelope = proto::RemoteStarted {}.into_envelope(0, None, None);
                 this.send_outgoing(envelope)
                     .context("sending remote-started handshake")?;
-            };
+            }
 
             let peer_id = PeerId { owner_id: 0, id: 0 };
             while let Some(incoming) = incoming_rx.next().await {

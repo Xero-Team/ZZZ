@@ -183,7 +183,7 @@ impl LspInlayHintData {
             self.enabled = new_hint_settings.enabled;
             self.enabled_in_settings = new_hint_settings.enabled;
             self.modifiers_override = false;
-        };
+        }
         self.invalidate_debounce = debounce_value(new_hint_settings.edit_debounce_ms);
         self.append_debounce = debounce_value(new_hint_settings.scroll_debounce_ms);
         let new_allowed_hint_kinds = new_hint_settings.enabled_inlay_hint_kinds();

@@ -1895,7 +1895,7 @@ impl GitPanel {
                 project_diff.focus_handle(cx).focus(window, cx);
                 project_diff.update(cx, |project_diff, cx| project_diff.autoscroll(cx));
                 return None;
-            };
+            }
 
             self.workspace
                 .update(cx, |workspace, cx| {
@@ -2338,7 +2338,7 @@ impl GitPanel {
             0 => return,
             1 => return self.revert_entry(&to_delete[0], window, cx),
             _ => {}
-        };
+        }
 
         let details = truncated_file_list(
             to_delete.iter().map(|entry| {

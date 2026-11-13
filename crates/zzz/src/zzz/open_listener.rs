@@ -632,7 +632,7 @@ pub async fn handle_cli_connection(
                             .log_err();
                         responses.send(CliResponse::Exit { status: 1 }).log_err();
                     }
-                };
+                }
             });
             return;
         }

@@ -604,7 +604,7 @@ impl ProjectPicker {
                                         .and_then(|connections| connections.get_mut(index.0))
                                     {
                                         server.projects.insert(RemoteProject { paths });
-                                    };
+                                    }
                                 }
                                 ServerIndex::Wsl(index) => {
                                     if let Some(server) = settings
@@ -614,7 +614,7 @@ impl ProjectPicker {
                                         .and_then(|connections| connections.get_mut(index.0))
                                     {
                                         server.projects.insert(RemoteProject { paths });
-                                    };
+                                    }
                                 }
                             }
                         });
@@ -3219,7 +3219,7 @@ impl RemoteServerProjects {
 
         if ssh_connections_changed || wsl_connections_changed {
             should_rebuild = true;
-        };
+        }
 
         if !should_rebuild && ssh_settings.read_ssh_config {
             let current_ssh_hosts: BTreeSet<SharedString> = state

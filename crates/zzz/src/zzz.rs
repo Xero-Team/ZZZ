@@ -484,18 +484,19 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
         )
         .detach();
 
-        cx.defer(move |cx| {
-            window_handle
-                .update(cx, |_, window, cx| {
-                    let sidebar =
-                        cx.new(|cx| Sidebar::new(multi_workspace_handle.clone(), window, cx));
-                    multi_workspace_handle.update(cx, |multi_workspace, cx| {
-                        multi_workspace.register_sidebar(sidebar, cx);
-                    });
-                })
-                .log_err();
-        });
-    })
+            cx.defer(move |cx| {
+                window_handle
+                    .update(cx, |_, window, cx| {
+                        let sidebar =
+                            cx.new(|cx| Sidebar::new(multi_workspace_handle.clone(), window, cx));
+                        multi_workspace_handle.update(cx, |multi_workspace, cx| {
+                            multi_workspace.register_sidebar(sidebar, cx);
+                        });
+                    })
+                    .log_err();
+            });
+        },
+    )
     .detach();
 
     cx.observe_new(move |workspace: &mut Workspace, window, cx| {
@@ -1850,7 +1851,7 @@ fn notify_settings_errors(result: settings::SettingsParseResult, is_user: bool, 
                 });
             }
         }
-    };
+    }
 }
 
 #[derive(Copy, Clone, Debug, settings::RegisterSetting)]
@@ -2597,7 +2598,7 @@ pub(crate) fn eager_load_active_theme_and_icon_theme(fs: Arc<dyn Fs>, cx: &mut A
         match reload_target {
             ReloadTarget::Theme => theme_settings::reload_theme(cx),
             ReloadTarget::IconTheme => theme_settings::reload_icon_theme(cx),
-        };
+        }
     }
 }
 

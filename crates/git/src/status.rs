@@ -442,7 +442,7 @@ impl FromStr for GitStatus {
                 let sep = entry.get(2..3)?;
                 if sep != " " {
                     return None;
-                };
+                }
                 let path = &entry[3..];
                 // The git status output includes untracked directories as well as untracked files.
                 // We do our own processing to compute the "summary" status of each directory,

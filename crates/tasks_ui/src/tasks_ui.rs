@@ -90,7 +90,7 @@ pub fn init(cx: &mut App) {
                             window,
                             cx,
                         );
-                    };
+                    }
                 });
         },
     )

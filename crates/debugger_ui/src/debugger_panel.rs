@@ -312,7 +312,7 @@ impl DebugPanel {
                                     task_context: task_context.clone(),
                                     worktree_id,
                                 });
-                            };
+                            }
                             running.resolve_scenario(
                                 scenario,
                                 task_context,
@@ -491,7 +491,7 @@ impl DebugPanel {
                     .await;
 
                 return Err(error);
-            };
+            }
 
             Ok(())
         })

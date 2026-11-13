@@ -126,7 +126,7 @@ pub fn cancel_flycheck(
                     }
                 })
                 .context("lsp ext cancel flycheck")?;
-        };
+        }
         anyhow::Ok(())
     })
 }
@@ -183,7 +183,7 @@ pub fn run_flycheck(
                     }
                 })
                 .context("lsp ext run flycheck")?;
-        };
+        }
         anyhow::Ok(())
     })
 }
@@ -232,7 +232,7 @@ pub fn clear_flycheck(
                     }
                 })
                 .context("lsp ext clear flycheck")?;
-        };
+        }
         anyhow::Ok(())
     })
 }

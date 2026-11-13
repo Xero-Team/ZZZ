@@ -418,7 +418,7 @@ impl Editor {
     pub(super) fn dismiss_diagnostics(&mut self, cx: &mut Context<Self>) {
         if matches!(self.active_diagnostics, ActiveDiagnostic::All) {
             return;
-        };
+        }
 
         let prev = mem::replace(&mut self.active_diagnostics, ActiveDiagnostic::None);
         if let ActiveDiagnostic::Group(group) = prev {

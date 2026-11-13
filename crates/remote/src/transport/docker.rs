@@ -750,7 +750,7 @@ impl RemoteConnection for DockerExecConnection {
         } else {
             inner_program.push(self.shell());
             inner_program.push("-l".to_owned());
-        };
+        }
 
         let mut docker_args = vec![
             "exec".to_owned(),
