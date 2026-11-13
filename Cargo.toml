@@ -1271,6 +1271,7 @@ manual_rem_euclid = "deny"
 manual_next_back = "deny"
 cast_enum_constructor = "deny"
 derivable_impls = "deny"
+manual_contains = "deny"
 
 # Clarity and API-consistency lints promoted once the whole workspace was fixed
 # for them. `equatable_if_let` replaces an `if let` of a literal/unit variant
