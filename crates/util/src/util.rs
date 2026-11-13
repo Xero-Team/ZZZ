@@ -2,6 +2,8 @@ pub mod archive;
 pub mod command;
 pub mod disambiguate;
 pub mod fs;
+#[cfg(target_os = "linux")]
+pub mod libc_type;
 pub mod markdown;
 pub mod path_list;
 pub mod paths;
