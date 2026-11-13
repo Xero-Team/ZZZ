@@ -681,11 +681,7 @@ impl DapStore {
             }
 
             if value.len() > LIMIT {
-                let mut index = LIMIT;
-                // If index isn't a char boundary truncate will cause a panic
-                while !value.is_char_boundary(index) {
-                    index -= 1;
-                }
+                let index = value.floor_char_boundary(LIMIT);
                 value.truncate(index);
                 value.push_str("...");
             }

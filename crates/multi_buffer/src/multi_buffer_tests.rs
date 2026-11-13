@@ -5503,17 +5503,11 @@ fn test_random_chunk_bitmaps_with_diffs(cx: &mut App, mut rng: StdRng) {
                 }
 
                 let diff_size = rng.random_range(5..1000);
-                let mut start = rng.random_range(0..snapshot.len().0);
+                let start = rng.random_range(0..snapshot.len().0);
+                let start = text.floor_char_boundary(start);
 
-                while !text.is_char_boundary(start) {
-                    start = start.saturating_sub(1);
-                }
-
-                let mut end = rng.random_range(start..snapshot.len().0.min(start + diff_size));
-
-                while !text.is_char_boundary(end) {
-                    end = end.saturating_add(1);
-                }
+                let end = rng.random_range(start..snapshot.len().0.min(start + diff_size));
+                let end = text.ceil_char_boundary(end);
                 let start_anchor = snapshot.anchor_after(MultiBufferOffset(start));
                 let end_anchor = snapshot.anchor_before(MultiBufferOffset(end));
                 ranges.push(start_anchor..end_anchor);

@@ -177,17 +177,13 @@ fn root_block_events<'a>(
 }
 
 fn snap_to_char_boundaries(source: &str, selection: Range<usize>) -> Option<Range<usize>> {
-    let mut start = selection.start.min(source.len());
-    let mut end = selection.end.min(source.len());
+    let start = selection.start.min(source.len());
+    let end = selection.end.min(source.len());
     if start >= end {
         return None;
     }
-    while start > 0 && !source.is_char_boundary(start) {
-        start -= 1;
-    }
-    while end < source.len() && !source.is_char_boundary(end) {
-        end += 1;
-    }
+    let start = source.floor_char_boundary(start);
+    let end = source.ceil_char_boundary(end);
     Some(start..end)
 }
 

@@ -7201,7 +7201,7 @@ mod tests {
         std::fs::create_dir_all(&media).expect("create cache dir");
         let file = media.join("7.jpg");
         std::fs::write(&file, b"data").expect("write cache file");
-        evict_cache_with(Some(&root), 1024, Duration::from_secs(3600));
+        evict_cache_with(Some(&root), 1024, Duration::from_hours(1));
         assert!(file.is_file());
         std::fs::remove_dir_all(&root).ok();
     }
@@ -7213,7 +7213,7 @@ mod tests {
         std::fs::create_dir_all(&media).expect("create cache dir");
         let file = media.join("7.jpg");
         std::fs::write(&file, b"data").expect("write cache file");
-        evict_cache_with(Some(&root), 0, Duration::from_secs(3600));
+        evict_cache_with(Some(&root), 0, Duration::from_hours(1));
         assert!(!file.is_file());
         std::fs::remove_dir_all(&root).ok();
     }

@@ -2882,7 +2882,7 @@ mod tests {
 
     #[test]
     fn test_mcp_oauth_provider_returns_token_when_not_expired() {
-        let far_future = SystemTime::now() + Duration::from_secs(3600);
+        let far_future = SystemTime::now() + Duration::from_hours(1);
         let session = make_test_session("valid-token", Some("rt"), Some(far_future));
         let provider = McpOAuthTokenProvider::new(
             session,

@@ -111,13 +111,8 @@ pub fn truncate_to_byte_limit(s: &str, max_bytes: usize) -> &str {
         return s;
     }
 
-    for i in (0..max_bytes).rev() {
-        if s.is_char_boundary(i) {
-            return &s[..i];
-        }
-    }
-
-    ""
+    let index = s.floor_char_boundary(max_bytes.saturating_sub(1));
+    &s[..index]
 }
 
 /// Takes a prefix of complete lines which fit within the byte limit. If the first line is longer

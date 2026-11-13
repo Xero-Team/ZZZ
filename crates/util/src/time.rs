@@ -49,7 +49,7 @@ mod tests {
         assert_eq!("0:05", format_media_duration(Duration::from_secs(5)));
         assert_eq!("1:05", format_media_duration(Duration::from_secs(65)));
         assert_eq!("59:59", format_media_duration(Duration::from_secs(3599)));
-        assert_eq!("1:00:00", format_media_duration(Duration::from_secs(3600)));
+        assert_eq!("1:00:00", format_media_duration(Duration::from_hours(1)));
         assert_eq!("1:01:01", format_media_duration(Duration::from_secs(3661)));
     }
 
@@ -59,7 +59,7 @@ mod tests {
         assert_eq!("59s", duration_alt_display(Duration::from_secs(59)));
         assert_eq!("1m 0s", duration_alt_display(Duration::from_secs(60)));
         assert_eq!("10m 0s", duration_alt_display(Duration::from_secs(600)));
-        assert_eq!("1h 0m 0s", duration_alt_display(Duration::from_secs(3600)));
+        assert_eq!("1h 0m 0s", duration_alt_display(Duration::from_hours(1)));
         assert_eq!(
             "3h 2m 1s",
             duration_alt_display(Duration::from_secs(

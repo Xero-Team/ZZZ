@@ -1164,7 +1164,7 @@ mod tests {
 
     #[test]
     fn format_timestamp_hours() {
-        assert_eq!(format_timestamp(Duration::from_secs(3600)), "1:00:00");
+        assert_eq!(format_timestamp(Duration::from_hours(1)), "1:00:00");
         assert_eq!(format_timestamp(Duration::from_secs(3661)), "1:01:01");
     }
 
