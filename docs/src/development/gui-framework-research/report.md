@@ -8,6 +8,7 @@ description: Evidence-backed analysis and staged refactoring plan for ZZZ GUI in
 - 研究日期：2026-10-03
 - 目标系统：ZZZ `main`
 - 最终基线 revision：`152a5eb983a883c69a6cc4eae082312ba75aa9f9`
+- 漂移复核：2026-11-14，仓库 HEAD 已到 `4d9899f3814cd3c759159ce9d902e85d98582879`，见 [2.4 相对当前 HEAD 的漂移](#baseline-drift)
 - 研究方式：本地源码静态分析；未安装依赖，未构建、运行或 benchmark 任何参考仓库
 - 台账：[sources.tsv](./sources.tsv)、[inventory.tsv](./inventory.tsv)、[evidence.tsv](./evidence.tsv)、[experiments.tsv](./experiments.tsv)
 - 实施：[GPUI 完整重构执行计划](./refactoring-plan.md)、[可复制的 `/goal`](./goal.md)
@@ -90,6 +91,53 @@ Tree-sitter 生成流程，`crates/gpui` 与 `ui_*` 未变化。证据、invento
 - gpui-rsx、adabraka-ui、Avalonia、OpenSwiftUI 为 MIT；gpui-toolkit 根许可证是 ISC 风格许可。[RSX-006][ADA-004][AVA-010][OSU-010][GTK-011]
 
 许可证看起来没有阻止“借鉴思想”或基于兼容条款移植小块代码，但任何直接复制仍应保留来源、copyright 与适用许可证记录。对 Zed/GPUI 同血统代码，优先通过 ZZZ 既有 upstream absorption 流程而不是从二次 fork 反向复制。
+
+### 2.4 相对当前 HEAD 的漂移 {#baseline-drift}
+
+本节记录 2026-10-03 基线之后已经落地或已经失效的结论，不改写第 1 节的原始
+判断。复核方式是重跑
+`validate_evidence.py --report ... --allow-missing-checkout`，并对照当前 HEAD
+的 crate 结构；本次**未**重新构建、运行或 benchmark ZZZ，因此下列状态均为
+静态源码判断。
+
+台账校验结果：`errors=0`、`stale_pins=42`、`missing_checkouts=68`。42 条
+ZZZ 本地 claim 固定于 `152a5eb`，仍是当前 HEAD 的祖先，判定「历史快照有效、
+结论需重读」；68 条参考仓库 claim 的 `.tmp/ui_ref/` checkout 已被清理，只能
+按台账复核，无法逐行重查。
+
+#### 已落地的结论 {#drift-landed}
+
+| 原结论                        | 当前状态                                                                                         | 证据                                                                                                                          |
+| ----------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| 1.1 缺 frame 观测             | 部分落地：`BuiltFrame` 与 phase dirty diagnostics 已存在；是否等价于 Zed 的 frame journal 未复核 | `crates/gpui/src/frame.rs`（1005 行，`frame.rs:776` 起 `BuiltFrame`）                                                         |
+| 1.2 `Window` 职责汇聚         | 已落地：拆成 `window/*.rs` 模块，`window.rs` 只保留类型、模块声明与 re-export                    | `crates/gpui/src/window.rs` 3084 行 + `window/` 8 个模块                                                                      |
+| 1.3 平台能力只能表现为 no-op  | 部分落地：`PlatformCapabilities` 可查询                                                          | `crates/gpui/src/platform.rs:550`                                                                                             |
+| 1.4 render/windowing 依赖方向 | 部分落地：crate 内 `render_api` seam，未抽出 `gpui_render`                                       | `crates/gpui/src/render_api.rs`（89 行，`RenderScene`/`RenderTarget`/`Renderer`）；EXP-004/005 `PASS` 后按决定保留内部 module |
+| 1.5 核心 accessibility 缺位   | 已落地：AccessKit 可选依赖、Element hooks、平台 adapter 回调与测试                               | `crates/gpui/src/accessibility.rs`（516 行）、`element.rs:106-117`、`platform.rs:922-934`、`crates/gpui/Cargo.toml:52`        |
+| 1.7 缺生产并发 harness        | 已落地                                                                                           | `crates/gpui/src/platform/threaded_dispatcher.rs`、`crates/gpui/src/app/bench_context.rs`；EXP-008 `PASS`                     |
+
+#### 已失效或已被推翻的结论 {#drift-obsolete}
+
+- **1.6 真实像素 headless 仍只有 macOS**：仍然成立。
+  `gpui_platform::current_headless_renderer` 只在 macOS 分支构造 renderer。
+- **1.8 `ui_input` 用进程级 `OnceLock`**：已失效。factory 改为
+  `cx.set_global(ErasedEditorFactory(..))` 的 per-application global
+  （`crates/ui_input/src/ui_input.rs:55-71`），未初始化时返回错误并使用非
+  panic 的 fallback（`crates/ui_input/src/input_field.rs:319` 起的测试）。
+- **1.8 `ui_prompt` 直接依赖 `workspace`**：已失效。
+  `crates/ui_prompt/Cargo.toml` 的 `[dependencies]` 只有 `gpui`、`markdown`、
+  `menu`、`settings`、`theme_settings`、`ui`；第 9 行的 `workspace = true`
+  属于 `[lints]`，不是依赖。台账 `ZZZ-038`、`ZZZ-039`、`ZZZ-042` 描述的是
+  2026-10-03 的状态。
+- **1.9 可选 phase-specific invalidation**：实验已否定。EXP-007 在保留原型
+  下未达到 20% phase work 下降且引入像素差异，最终决策 `REJECTED`。
+
+#### 读数变化 {#drift-metrics}
+
+- `Window`：6610 行 → `window.rs` 3084 行 + `window/*.rs`。
+- 声明 `gpui` 依赖的 workspace crate：149 → 152。
+- 报告其余编号结论（血统、参考项目分析、对照矩阵、不采用清单）是
+  2026-10-03 对参考仓库的判断；这些 checkout 已清理，本次没有重新核对。
 
 ## 3. 共同血统与独立创新 {#lineage}
 
