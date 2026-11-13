@@ -18,7 +18,10 @@ use remote::{
 };
 pub use settings::SshConnection;
 use settings::{DevContainerConnection, ExtendingVec, RegisterSetting, Settings, WslConnection};
-use util::{ResultExt, paths::{PathStyle, PathWithPosition, url_path_to_path}};
+use util::{
+    ResultExt,
+    paths::{PathStyle, PathWithPosition, url_path_to_path},
+};
 use workspace::{AppState, MultiWorkspace, OpenOptions, Workspace, find_existing_workspace};
 
 pub use remote_connection::{
