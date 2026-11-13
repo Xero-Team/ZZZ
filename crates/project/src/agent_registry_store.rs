@@ -505,14 +505,14 @@ async fn resolve_icon_path(
     };
 
     let icon_path = icons_dir.join(format!("{}.svg", entry.id));
-    if update_cache && !fs.is_file(&icon_path).await {
-        if let Err(error) = download_icon(fs.clone(), http_client, &icon_url, entry, executor).await
-        {
-            log::warn!(
-                "Failed to download ACP registry icon for {}: {error:#}",
-                entry.id
-            );
-        }
+    if update_cache
+        && !fs.is_file(&icon_path).await
+        && let Err(error) = download_icon(fs.clone(), http_client, &icon_url, entry, executor).await
+    {
+        log::warn!(
+            "Failed to download ACP registry icon for {}: {error:#}",
+            entry.id
+        );
     }
 
     if fs.is_file(&icon_path).await {

@@ -2448,14 +2448,13 @@ impl Terminal {
     pub fn kill_active_task(&mut self) {
         if let Some(task) = self.task()
             && task.status == TaskStatus::Running
+            && let TerminalType::Pty { info, .. } = &self.terminal_type
         {
-            if let TerminalType::Pty { info, .. } = &self.terminal_type {
-                // First kill the foreground process group (the command running in the shell)
-                info.kill_current_process();
-                // Then kill the shell itself so that the terminal exits properly
-                // and wait_for_completed_task can complete
-                info.kill_child_process();
-            }
+            // First kill the foreground process group (the command running in the shell)
+            info.kill_current_process();
+            // Then kill the shell itself so that the terminal exits properly
+            // and wait_for_completed_task can complete
+            info.kill_child_process();
         }
     }
 

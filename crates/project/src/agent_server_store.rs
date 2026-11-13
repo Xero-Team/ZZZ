@@ -327,10 +327,10 @@ impl AgentServerStore {
             (SharedString, watch::Sender<Option<String>>),
         > = HashMap::default();
         for (name, mut entry) in self.external_agents.drain() {
-            if let Some(version) = entry.server.version().cloned() {
-                if let Some(tx) = entry.server.take_new_version_available_tx() {
-                    old_versioned_agents.insert(name, (version, tx));
-                }
+            if let Some(version) = entry.server.version().cloned()
+                && let Some(tx) = entry.server.take_new_version_available_tx()
+            {
+                old_versioned_agents.insert(name, (version, tx));
             }
         }
 

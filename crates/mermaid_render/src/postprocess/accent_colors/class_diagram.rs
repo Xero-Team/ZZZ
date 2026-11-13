@@ -69,10 +69,10 @@ impl ClassDiagramAccents {
             }
 
             Event::End(e) if e.name().as_ref() == "g" => {
-                if let Some(entry) = self.accent_g_stack.pop() {
-                    if entry.tracks_node() {
-                        self.nodes.maybe_finish_node();
-                    }
+                if let Some(entry) = self.accent_g_stack.pop()
+                    && entry.tracks_node()
+                {
+                    self.nodes.maybe_finish_node();
                 }
                 Ok(event)
             }

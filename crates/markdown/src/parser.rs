@@ -336,22 +336,21 @@ pub(crate) fn parse_markdown_with_options(
                 if matches!(&tag, pulldown_cmark::Tag::HtmlBlock) {
                     state.push_event(range.clone(), MarkdownEvent::Start(MarkdownTag::HtmlBlock));
 
-                    if parse_html {
-                        if let Some(block) =
+                    if parse_html
+                        && let Some(block) =
                             html::html_parser::parse_html_block(&text[range.clone()], range.clone())
-                        {
-                            html_blocks.insert(range.start, block);
+                    {
+                        html_blocks.insert(range.start, block);
 
-                            while let Some((event, end_range)) = parser.next() {
-                                if event
-                                    == pulldown_cmark::Event::End(pulldown_cmark::TagEnd::HtmlBlock)
-                                {
-                                    state.push_event(
-                                        end_range,
-                                        MarkdownEvent::End(MarkdownTagEnd::HtmlBlock),
-                                    );
-                                    break;
-                                }
+                        while let Some((event, end_range)) = parser.next() {
+                            if event
+                                == pulldown_cmark::Event::End(pulldown_cmark::TagEnd::HtmlBlock)
+                            {
+                                state.push_event(
+                                    end_range,
+                                    MarkdownEvent::End(MarkdownTagEnd::HtmlBlock),
+                                );
+                                break;
                             }
                         }
                     }

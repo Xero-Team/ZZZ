@@ -798,10 +798,10 @@ impl CompletionsMenu {
                     let documentation = &completion.documentation;
 
                     let mut len = completion.label.text.chars().count();
-                    if let Some(CompletionDocumentation::SingleLine(text)) = documentation {
-                        if show_completion_documentation {
-                            len += text.chars().count();
-                        }
+                    if let Some(CompletionDocumentation::SingleLine(text)) = documentation
+                        && show_completion_documentation
+                    {
+                        len += text.chars().count();
                     }
 
                     len

@@ -670,23 +670,21 @@ impl ThreadMetadataStore {
         if metadata.session_id.is_none() {
             debug_panic!("cannot store thread metadata without a session_id");
             return;
-        };
+        }
 
         if let Some(thread) = self.threads.get(&metadata.thread_id) {
-            if thread.folder_paths() != metadata.folder_paths() {
-                if let Some(thread_ids) = self.threads_by_paths.get_mut(thread.folder_paths()) {
-                    thread_ids.remove(&metadata.thread_id);
-                }
+            if thread.folder_paths() != metadata.folder_paths()
+                && let Some(thread_ids) = self.threads_by_paths.get_mut(thread.folder_paths())
+            {
+                thread_ids.remove(&metadata.thread_id);
             }
             if thread.main_worktree_paths() != metadata.main_worktree_paths()
                 && !thread.main_worktree_paths().is_empty()
-            {
-                if let Some(thread_ids) = self
+                && let Some(thread_ids) = self
                     .threads_by_main_paths
                     .get_mut(thread.main_worktree_paths())
-                {
-                    thread_ids.remove(&metadata.thread_id);
-                }
+            {
+                thread_ids.remove(&metadata.thread_id);
             }
         }
 
@@ -1049,13 +1047,12 @@ impl ThreadMetadataStore {
             if let Some(thread_ids) = self.threads_by_paths.get_mut(thread.folder_paths()) {
                 thread_ids.remove(&thread_id);
             }
-            if !thread.main_worktree_paths().is_empty() {
-                if let Some(thread_ids) = self
+            if !thread.main_worktree_paths().is_empty()
+                && let Some(thread_ids) = self
                     .threads_by_main_paths
                     .get_mut(thread.main_worktree_paths())
-                {
-                    thread_ids.remove(&thread_id);
-                }
+            {
+                thread_ids.remove(&thread_id);
             }
         }
         self.threads.remove(&thread_id);

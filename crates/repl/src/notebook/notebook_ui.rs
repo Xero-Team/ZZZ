@@ -710,21 +710,21 @@ impl NotebookEditor {
     }
 
     fn run_and_advance(&mut self, _: &RunAndAdvance, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(cell_id) = self.cell_order.get(self.selected_cell_index).cloned() {
-            if let Some(cell) = self.cell_map.get(&cell_id) {
-                match cell {
-                    Cell::Code(_) => {
-                        self.execute_cell(cell_id, window, cx);
-                    }
-                    Cell::Markdown(markdown_cell) => {
-                        if markdown_cell.read(cx).is_editing() {
-                            markdown_cell.update(cx, |cell, cx| {
-                                cell.run(cx);
-                            });
-                        }
-                    }
-                    Cell::Raw(_) => {}
+        if let Some(cell_id) = self.cell_order.get(self.selected_cell_index).cloned()
+            && let Some(cell) = self.cell_map.get(&cell_id)
+        {
+            match cell {
+                Cell::Code(_) => {
+                    self.execute_cell(cell_id, window, cx);
                 }
+                Cell::Markdown(markdown_cell) => {
+                    if markdown_cell.read(cx).is_editing() {
+                        markdown_cell.update(cx, |cell, cx| {
+                            cell.run(cx);
+                        });
+                    }
+                }
+                Cell::Raw(_) => {}
             }
         }
 
@@ -739,23 +739,23 @@ impl NotebookEditor {
 
     fn enter_edit_mode(&mut self, _: &EnterEditMode, window: &mut Window, cx: &mut Context<Self>) {
         self.notebook_mode = NotebookMode::Edit;
-        if let Some(cell_id) = self.cell_order.get(self.selected_cell_index) {
-            if let Some(cell) = self.cell_map.get(cell_id) {
-                match cell {
-                    Cell::Code(code_cell) => {
-                        let editor = code_cell.read(cx).editor().clone();
-                        window.focus(&editor.focus_handle(cx), cx);
-                    }
-                    Cell::Markdown(markdown_cell) => {
-                        markdown_cell.update(cx, |cell, cx| {
-                            cell.set_editing(true);
-                            cx.notify();
-                        });
-                        let editor = markdown_cell.read(cx).editor().clone();
-                        window.focus(&editor.focus_handle(cx), cx);
-                    }
-                    Cell::Raw(_) => {}
+        if let Some(cell_id) = self.cell_order.get(self.selected_cell_index)
+            && let Some(cell) = self.cell_map.get(cell_id)
+        {
+            match cell {
+                Cell::Code(code_cell) => {
+                    let editor = code_cell.read(cx).editor().clone();
+                    window.focus(&editor.focus_handle(cx), cx);
                 }
+                Cell::Markdown(markdown_cell) => {
+                    markdown_cell.update(cx, |cell, cx| {
+                        cell.set_editing(true);
+                        cx.notify();
+                    });
+                    let editor = markdown_cell.read(cx).editor().clone();
+                    window.focus(&editor.focus_handle(cx), cx);
+                }
+                Cell::Raw(_) => {}
             }
         }
         cx.notify();
@@ -798,19 +798,19 @@ impl NotebookEditor {
         if !self.cell_order.is_empty() && self.selected_cell_index < self.cell_order.len() - 1 {
             self.selected_cell_index += 1;
             // focus the new cell's editor
-            if let Some(cell_id) = self.cell_order.get(self.selected_cell_index) {
-                if let Some(cell) = self.cell_map.get(cell_id) {
-                    match cell {
-                        Cell::Code(code_cell) => {
-                            let editor = code_cell.read(cx).editor();
-                            window.focus(&editor.focus_handle(cx), cx);
-                        }
-                        Cell::Markdown(markdown_cell) => {
-                            // Don't auto-enter edit mode for next markdown cell
-                            // Just select it
-                        }
-                        Cell::Raw(_) => {}
+            if let Some(cell_id) = self.cell_order.get(self.selected_cell_index)
+                && let Some(cell) = self.cell_map.get(cell_id)
+            {
+                match cell {
+                    Cell::Code(code_cell) => {
+                        let editor = code_cell.read(cx).editor();
+                        window.focus(&editor.focus_handle(cx), cx);
                     }
+                    Cell::Markdown(markdown_cell) => {
+                        // Don't auto-enter edit mode for next markdown cell
+                        // Just select it
+                    }
+                    Cell::Raw(_) => {}
                 }
             }
             cx.notify();
@@ -2098,14 +2098,13 @@ impl KernelSession for NotebookEditor {
         }
 
         // Handle cell-specific messages
-        if let Some(parent_header) = &message.parent_header {
-            if let Some(cell_id) = self.execution_requests.get(&parent_header.msg_id) {
-                if let Some(Cell::Code(cell)) = self.cell_map.get(cell_id) {
-                    cell.update(cx, |cell, cx| {
-                        cell.handle_message(message, window, cx);
-                    });
-                }
-            }
+        if let Some(parent_header) = &message.parent_header
+            && let Some(cell_id) = self.execution_requests.get(&parent_header.msg_id)
+            && let Some(Cell::Code(cell)) = self.cell_map.get(cell_id)
+        {
+            cell.update(cx, |cell, cx| {
+                cell.handle_message(message, window, cx);
+            });
         }
     }
 

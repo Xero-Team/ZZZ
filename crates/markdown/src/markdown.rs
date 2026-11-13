@@ -4842,14 +4842,13 @@ impl RenderedText {
             }
 
             // Handle gap between lines
-            if position.y > line_bounds.bottom() {
-                if let Some(next_line) = lines.peek()
-                    && position.y < next_line.layout.bounds().top()
-                    && gap_source_index.is_none()
-                {
-                    // A later table cell may contain the position, so defer the gap fallback.
-                    gap_source_index = Some(line.source_end);
-                }
+            if position.y > line_bounds.bottom()
+                && let Some(next_line) = lines.peek()
+                && position.y < next_line.layout.bounds().top()
+                && gap_source_index.is_none()
+            {
+                // A later table cell may contain the position, so defer the gap fallback.
+                gap_source_index = Some(line.source_end);
             }
         }
 

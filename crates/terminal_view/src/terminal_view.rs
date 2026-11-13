@@ -874,10 +874,10 @@ impl TerminalView {
 
     pub fn should_show_cursor(&self, focused: bool, cx: &mut Context<Self>) -> bool {
         // Hide cursor when in embedded mode and not focused (read-only output like Agent panel)
-        if let TerminalMode::Embedded { .. } = &self.mode {
-            if !focused {
-                return false;
-            }
+        if let TerminalMode::Embedded { .. } = &self.mode
+            && !focused
+        {
+            return false;
         }
 
         // For Standalone mode: always show cursor when not focused or in special modes

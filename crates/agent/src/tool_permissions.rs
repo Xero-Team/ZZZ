@@ -88,14 +88,14 @@ fn check_hardcoded_security_rules(
         }
 
         // Second: parse and check individual sub-commands (for chained commands)
-        if shell_kind.supports_posix_chaining() {
-            if let Some(commands) = extract_commands(input) {
-                for command in &commands {
-                    if matches_hardcoded_patterns(command, terminal_patterns) {
-                        return Some(ToolPermissionDecision::Deny(
-                            HARDCODED_SECURITY_DENIAL_MESSAGE.into(),
-                        ));
-                    }
+        if shell_kind.supports_posix_chaining()
+            && let Some(commands) = extract_commands(input)
+        {
+            for command in &commands {
+                if matches_hardcoded_patterns(command, terminal_patterns) {
+                    return Some(ToolPermissionDecision::Deny(
+                        HARDCODED_SECURITY_DENIAL_MESSAGE.into(),
+                    ));
                 }
             }
         }

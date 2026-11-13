@@ -501,11 +501,11 @@ pub async fn open_remote_project(
         .update(cx, |multi_workspace: &mut MultiWorkspace, _, cx| {
             let workspace = multi_workspace.workspace().clone();
             workspace.update(cx, |workspace, cx| {
-                if let Some(client) = workspace.project().read(cx).remote_client() {
-                    if let Some(extension_store) = ExtensionStore::try_global(cx) {
-                        extension_store
-                            .update(cx, |store, cx| store.register_remote_client(client, cx));
-                    }
+                if let Some(client) = workspace.project().read(cx).remote_client()
+                    && let Some(extension_store) = ExtensionStore::try_global(cx)
+                {
+                    extension_store
+                        .update(cx, |store, cx| store.register_remote_client(client, cx));
                 }
             });
         })
@@ -553,12 +553,10 @@ pub(crate) async fn determine_paths_with_positions(
     for path in &mut paths {
         if let Some(path_str) = path.to_str() {
             let path_with_position = PathWithPosition::parse_str(&path_str);
-            if path_with_position.row.is_some() {
-                if !path_exists(&remote_connection, &path).await {
-                    *path = path_with_position.path.clone();
-                    paths_with_positions.push(path_with_position);
-                    continue;
-                }
+            if path_with_position.row.is_some() && !path_exists(&remote_connection, &path).await {
+                *path = path_with_position.path.clone();
+                paths_with_positions.push(path_with_position);
+                continue;
             }
         }
         paths_with_positions.push(PathWithPosition::from_path(path.clone()))

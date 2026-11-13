@@ -63,10 +63,10 @@ pub fn init(cx: &mut App) {
                 }
             });
             workspace.register_action(|workspace, _: &Toggle, window, cx| {
-                if is_enabled_in_workspace(workspace, cx) {
-                    if !workspace.toggle_panel_focus::<TerminalPanel>(window, cx) {
-                        workspace.close_panel::<TerminalPanel>(window, cx);
-                    }
+                if is_enabled_in_workspace(workspace, cx)
+                    && !workspace.toggle_panel_focus::<TerminalPanel>(window, cx)
+                {
+                    workspace.close_panel::<TerminalPanel>(window, cx);
                 }
             });
         },

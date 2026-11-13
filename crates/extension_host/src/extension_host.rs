@@ -389,12 +389,10 @@ impl ExtensionStore {
                         if let Some(path::Component::Normal(extension_dir_name)) =
                             event_path.components().next()
                             && let Some(extension_id) = extension_dir_name.to_str()
+                            && let Err(error) = reload_tx.unbounded_send(Some(extension_id.into()))
+                            && !error.is_disconnected()
                         {
-                            if let Err(error) = reload_tx.unbounded_send(Some(extension_id.into()))
-                                && !error.is_disconnected()
-                            {
-                                log::warn!("failed to schedule extension reload: {error}");
-                            }
+                            log::warn!("failed to schedule extension reload: {error}");
                         }
                     }
                 }
@@ -423,10 +421,8 @@ impl ExtensionStore {
         };
 
         async move {
-            if reload_scheduled {
-                if let Err(error) = rx.await {
-                    log::error!("extension reload was canceled before completion: {error}");
-                }
+            if reload_scheduled && let Err(error) = rx.await {
+                log::error!("extension reload was canceled before completion: {error}");
             }
         }
     }

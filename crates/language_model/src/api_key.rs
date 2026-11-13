@@ -144,13 +144,11 @@ impl ApiKeyState {
         provider: Arc<dyn CredentialsProvider>,
         cx: &mut Context<Ent>,
     ) {
-        if url != self.url {
-            if !self.is_from_env_var() {
-                // The load itself is shared through `load_task`, so it keeps running
-                // even though nothing awaits the task returned here.
-                self.load_if_needed(url, get_this, provider, cx)
-                    .detach_and_log_err(cx);
-            }
+        if url != self.url && !self.is_from_env_var() {
+            // The load itself is shared through `load_task`, so it keeps running
+            // even though nothing awaits the task returned here.
+            self.load_if_needed(url, get_this, provider, cx)
+                .detach_and_log_err(cx);
         }
     }
 

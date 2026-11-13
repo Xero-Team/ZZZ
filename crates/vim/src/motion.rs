@@ -2592,10 +2592,10 @@ fn find_matching_c_preprocessor_directive(
                 } else {
                     return Some(line_offset);
                 }
-            } else if next_line_start.starts_with("#else") || next_line_start.starts_with("#elif") {
-                if depth == 0 {
-                    return Some(line_offset);
-                }
+            } else if (next_line_start.starts_with("#else") || next_line_start.starts_with("#elif"))
+                && depth == 0
+            {
+                return Some(line_offset);
             }
         }
     } else if line_start.starts_with("#endif") {

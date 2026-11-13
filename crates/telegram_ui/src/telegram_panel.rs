@@ -1249,14 +1249,12 @@ impl TelegramPanel {
         let text = self.composer.read(cx).text(cx);
         self.composer.update(cx, |editor, cx| {
             let mut range: Option<std::ops::Range<MultiBufferOffset>> = None;
-            if let Some(crease_id) = crease_id {
-                if let Some((_, removed)) =
+            if let Some(crease_id) = crease_id
+                && let Some((_, removed)) =
                     editor.remove_creases([crease_id], cx).into_iter().next()
-                {
-                    let snapshot = editor.buffer().read(cx).snapshot(cx);
-                    range =
-                        Some(removed.start.to_offset(&snapshot)..removed.end.to_offset(&snapshot));
-                }
+            {
+                let snapshot = editor.buffer().read(cx).snapshot(cx);
+                range = Some(removed.start.to_offset(&snapshot)..removed.end.to_offset(&snapshot));
             }
             if let Some(range) = range.or_else(|| {
                 text.find(&token)
@@ -3158,10 +3156,10 @@ impl TelegramPanel {
     }
 
     fn qr_image_for(&mut self, url: &str) -> Option<Arc<RenderImage>> {
-        if let Some((cached_url, image)) = &self.qr_cache {
-            if cached_url == url {
-                return Some(image.clone());
-            }
+        if let Some((cached_url, image)) = &self.qr_cache
+            && cached_url == url
+        {
+            return Some(image.clone());
         }
         let image = build_qr_image(url)?;
         self.qr_cache = Some((url.to_owned(), image.clone()));

@@ -2020,16 +2020,14 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
                 .await?;
             }
         }
-        if container_started {
-            if let Some(post_start_command) = &config.post_start_command {
-                self.run_remote_script_commands(
-                    devcontainer_up,
-                    &remote_folder,
-                    "post start",
-                    post_start_command,
-                )
-                .await?;
-            }
+        if container_started && let Some(post_start_command) = &config.post_start_command {
+            self.run_remote_script_commands(
+                devcontainer_up,
+                &remote_folder,
+                "post start",
+                post_start_command,
+            )
+            .await?;
         }
         if let Some(post_attach_command) = &config.post_attach_command {
             self.run_remote_script_commands(
@@ -2871,17 +2869,17 @@ fn get_remote_user_from_config(
     }
     if let Some(metadata) = &docker_config.config.labels.metadata {
         for metadatum in metadata {
-            if let Some(remote_user) = metadatum.get("remoteUser") {
-                if let Some(remote_user_str) = remote_user.as_str() {
-                    return Ok(remote_user_str.to_owned());
-                }
+            if let Some(remote_user) = metadatum.get("remoteUser")
+                && let Some(remote_user_str) = remote_user.as_str()
+            {
+                return Ok(remote_user_str.to_owned());
             }
         }
     }
-    if let Some(image_user) = &docker_config.config.image_user {
-        if !image_user.is_empty() {
-            return Ok(image_user.clone());
-        }
+    if let Some(image_user) = &docker_config.config.image_user
+        && !image_user.is_empty()
+    {
+        return Ok(image_user.clone());
     }
     Ok("root".to_owned())
 }
@@ -2896,10 +2894,10 @@ fn get_container_user_from_config(
     }
     if let Some(metadata) = &docker_config.config.labels.metadata {
         for metadatum in metadata {
-            if let Some(container_user) = metadatum.get("containerUser") {
-                if let Some(container_user_str) = container_user.as_str() {
-                    return Ok(container_user_str.to_owned());
-                }
+            if let Some(container_user) = metadatum.get("containerUser")
+                && let Some(container_user_str) = container_user.as_str()
+            {
+                return Ok(container_user_str.to_owned());
             }
         }
     }

@@ -193,25 +193,20 @@ impl EntryViewState {
                                     let multibuffer = diff.read(cx).multibuffer();
                                     if let Some((buffer_id, (ranges, _))) =
                                         selections_by_buffer.iter().next()
-                                    {
-                                        if let Some(buffer) =
+                                        && let Some(buffer) =
                                             multibuffer.read(cx).buffer(*buffer_id)
-                                        {
-                                            if let Some(range) = ranges.first() {
-                                                let point =
-                                                    buffer.read(cx).offset_to_point(range.start.0);
-                                                if let Some(path) = diff.read(cx).file_path(cx) {
-                                                    cx.emit(EntryViewEvent {
-                                                        entry_index,
-                                                        view_event: ViewEvent::OpenDiffLocation {
-                                                            path,
-                                                            position: point,
-                                                            split: *split,
-                                                        },
-                                                    });
-                                                }
-                                            }
-                                        }
+                                        && let Some(range) = ranges.first()
+                                        && let Some(path) = diff.read(cx).file_path(cx)
+                                    {
+                                        let point = buffer.read(cx).offset_to_point(range.start.0);
+                                        cx.emit(EntryViewEvent {
+                                            entry_index,
+                                            view_event: ViewEvent::OpenDiffLocation {
+                                                path,
+                                                position: point,
+                                                split: *split,
+                                            },
+                                        });
                                     }
                                 }
                             }

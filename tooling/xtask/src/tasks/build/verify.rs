@@ -147,13 +147,12 @@ fn verify_artifacts(
     // A binary that cannot report its version is not a shippable binary, and a
     // broken dynamic link shows up before `main`. Only the CLI can answer
     // without opening a window, and only a binary for this host can run here.
-    if target.platform() == Platform::host() {
-        if let Some((_, cli)) = verified
+    if target.platform() == Platform::host()
+        && let Some((_, cli)) = verified
             .iter()
             .find(|(name, path)| name.starts_with("cli") && path.is_file())
-        {
-            print_version(cli)?;
-        }
+    {
+        print_version(cli)?;
     }
 
     Ok(())

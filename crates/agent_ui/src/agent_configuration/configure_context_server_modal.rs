@@ -874,10 +874,10 @@ impl ConfigureContextServerModal {
                 let fs = workspace.app_state().fs.clone();
                 let original_server_id = self.original_server_id.clone();
                 update_settings_file(fs.clone(), cx, move |current, _| {
-                    if let Some(original_id) = original_server_id {
-                        if original_id != id {
-                            current.project.context_servers.remove(&original_id.0);
-                        }
+                    if let Some(original_id) = original_server_id
+                        && original_id != id
+                    {
+                        current.project.context_servers.remove(&original_id.0);
                     }
                     current
                         .project
@@ -1140,15 +1140,13 @@ impl ConfigureContextServerModal {
                                 server_type,
                             } = &mut this.source
                                 && *server_type != ContextServerType::Local
-                            {
-                                if let Some(new_text) =
+                                && let Some(new_text) =
                                     context_server_input(None, Some(cx)).log_err()
-                                {
-                                    *server_type = ContextServerType::Local;
-                                    editor.update(cx, |editor, cx| {
-                                        editor.set_text(new_text, window, cx);
-                                    });
-                                }
+                            {
+                                *server_type = ContextServerType::Local;
+                                editor.update(cx, |editor, cx| {
+                                    editor.set_text(new_text, window, cx);
+                                });
                             }
                         }),
                     ),
@@ -1161,15 +1159,13 @@ impl ConfigureContextServerModal {
                                 server_type,
                             } = &mut this.source
                                 && *server_type != ContextServerType::Remote
-                            {
-                                if let Some(new_text) =
+                                && let Some(new_text) =
                                     context_server_http_input(None, Some(cx)).log_err()
-                                {
-                                    *server_type = ContextServerType::Remote;
-                                    editor.update(cx, |editor, cx| {
-                                        editor.set_text(new_text, window, cx);
-                                    });
-                                }
+                            {
+                                *server_type = ContextServerType::Remote;
+                                editor.update(cx, |editor, cx| {
+                                    editor.set_text(new_text, window, cx);
+                                });
                             }
                         }),
                     ),

@@ -611,10 +611,10 @@ impl RemoteConnection for DockerExecConnection {
         cx: &mut AsyncApp,
     ) -> Task<Result<i32>> {
         // We'll try connecting anew every time we open a devcontainer, so proactively try to kill any old connections.
-        if !self.has_been_killed() {
-            if let Err(e) = self.kill_inner() {
-                return Task::ready(Err(e));
-            };
+        if !self.has_been_killed()
+            && let Err(e) = self.kill_inner()
+        {
+            return Task::ready(Err(e));
         }
 
         delegate.set_status(Some(RemoteConnectionStatus::StartingProxy), cx);

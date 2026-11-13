@@ -2554,15 +2554,14 @@ impl AcpThread {
 
         // For text chunks going to an existing Markdown block, buffer for smooth
         // streaming instead of appending all at once which may feel more choppy.
-        if let acp::ContentBlock::Text(text_content) = &chunk {
-            if let Some(markdown) =
+        if let acp::ContentBlock::Text(text_content) = &chunk
+            && let Some(markdown) =
                 self.streaming_markdown_target(message_id.as_deref(), is_thought, indented)
-            {
-                let entries_len = self.entries.len();
-                cx.emit(AcpThreadEvent::EntryUpdated(entries_len - 1));
-                self.buffer_streaming_text(&markdown, text_content.text.clone(), cx);
-                return;
-            }
+        {
+            let entries_len = self.entries.len();
+            cx.emit(AcpThreadEvent::EntryUpdated(entries_len - 1));
+            self.buffer_streaming_text(&markdown, text_content.text.clone(), cx);
+            return;
         }
 
         let language_registry = self.project.read(cx).languages().clone();
@@ -2720,12 +2719,12 @@ impl AcpThread {
         streaming_text_buffer: &mut Option<StreamingTextBuffer>,
         cx: &mut Context<Self>,
     ) {
-        if let Some(buffer) = streaming_text_buffer.take() {
-            if !buffer.pending.is_empty() {
-                buffer
-                    .target
-                    .update(cx, |markdown, cx| markdown.append(&buffer.pending, cx));
-            }
+        if let Some(buffer) = streaming_text_buffer.take()
+            && !buffer.pending.is_empty()
+        {
+            buffer
+                .target
+                .update(cx, |markdown, cx| markdown.append(&buffer.pending, cx));
         }
     }
 
@@ -3869,11 +3868,11 @@ impl AcpThread {
             };
 
             this.update(cx, |this, cx| {
-                if let Some((ix, message)) = this.user_message_mut(&user_message_id) {
-                    if let Some(checkpoint) = message.checkpoint.as_mut() {
-                        checkpoint.show = !equal;
-                        cx.emit(AcpThreadEvent::EntryUpdated(ix));
-                    }
+                if let Some((ix, message)) = this.user_message_mut(&user_message_id)
+                    && let Some(checkpoint) = message.checkpoint.as_mut()
+                {
+                    checkpoint.show = !equal;
+                    cx.emit(AcpThreadEvent::EntryUpdated(ix));
                 }
             })?;
 

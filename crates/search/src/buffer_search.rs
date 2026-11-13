@@ -1171,19 +1171,18 @@ impl BufferSearchBar {
     }
 
     fn toggle_fold_all_in_item(&self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(item) = &self.active_searchable_item {
-            if let Some(item) = item.act_as_type(TypeId::of::<Editor>(), cx)
-                && let Ok(editor) = item.downcast::<Editor>()
-            {
-                editor.update(cx, |editor, cx| {
-                    let is_collapsed = editor.has_any_buffer_folded(cx);
-                    if is_collapsed {
-                        editor.unfold_all(&UnfoldAll, window, cx);
-                    } else {
-                        editor.fold_all(&FoldAll, window, cx);
-                    }
-                })
-            }
+        if let Some(item) = &self.active_searchable_item
+            && let Some(item) = item.act_as_type(TypeId::of::<Editor>(), cx)
+            && let Ok(editor) = item.downcast::<Editor>()
+        {
+            editor.update(cx, |editor, cx| {
+                let is_collapsed = editor.has_any_buffer_folded(cx);
+                if is_collapsed {
+                    editor.unfold_all(&UnfoldAll, window, cx);
+                } else {
+                    editor.fold_all(&FoldAll, window, cx);
+                }
+            })
         }
     }
 
@@ -1798,17 +1797,14 @@ impl BufferSearchBar {
             });
         if new_index != self.active_match_index {
             self.active_match_index = new_index;
-            if !self.dismissed {
-                if let Some(searchable_item) = self.active_searchable_item.as_ref() {
-                    if let Some((matches, token)) = self
-                        .searchable_items_with_matches
-                        .get(&searchable_item.downgrade())
-                    {
-                        if !matches.is_empty() {
-                            searchable_item.update_matches(matches, new_index, *token, window, cx);
-                        }
-                    }
-                }
+            if !self.dismissed
+                && let Some(searchable_item) = self.active_searchable_item.as_ref()
+                && let Some((matches, token)) = self
+                    .searchable_items_with_matches
+                    .get(&searchable_item.downgrade())
+                && !matches.is_empty()
+            {
+                searchable_item.update_matches(matches, new_index, *token, window, cx);
             }
             cx.notify();
         }

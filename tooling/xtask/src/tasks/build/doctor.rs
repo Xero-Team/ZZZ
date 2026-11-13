@@ -237,10 +237,10 @@ fn print_report(checks: &[Check]) {
             check.detail,
             width = width
         );
-        if let Some(remedy) = &check.remedy {
-            if check.status != Status::Ok {
-                println!("{:<width$}  fix: {remedy}", "", width = width);
-            }
+        if let Some(remedy) = &check.remedy
+            && check.status != Status::Ok
+        {
+            println!("{:<width$}  fix: {remedy}", "", width = width);
         }
     }
 }

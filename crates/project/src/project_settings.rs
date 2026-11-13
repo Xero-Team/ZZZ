@@ -1020,26 +1020,25 @@ impl SettingsObserver {
         cx: &mut Context<Self>,
     ) -> Self {
         let mut user_settings_watcher = None;
-        if cx.try_global::<SettingsStore>().is_some() {
-            if let Some(upstream_client) = upstream_client {
-                let mut user_settings = None;
-                user_settings_watcher = Some(cx.observe_global::<SettingsStore>(move |_, cx| {
-                    if let Some(new_settings) = cx.global::<SettingsStore>().raw_user_settings() {
-                        if Some(new_settings) != user_settings.as_ref() {
-                            if let Ok(new_settings_string) = serde_json::to_string(new_settings) {
-                                user_settings = Some(new_settings.clone());
-                                upstream_client
-                                    .send(proto::UpdateUserSettings {
-                                        project_id: REMOTE_SERVER_PROJECT_ID,
-                                        contents: new_settings_string,
-                                    })
-                                    .log_err();
-                            }
-                        }
-                    }
-                }));
-            }
-        };
+        if cx.try_global::<SettingsStore>().is_some()
+            && let Some(upstream_client) = upstream_client
+        {
+            let mut user_settings = None;
+            user_settings_watcher = Some(cx.observe_global::<SettingsStore>(move |_, cx| {
+                if let Some(new_settings) = cx.global::<SettingsStore>().raw_user_settings()
+                    && Some(new_settings) != user_settings.as_ref()
+                    && let Ok(new_settings_string) = serde_json::to_string(new_settings)
+                {
+                    user_settings = Some(new_settings.clone());
+                    upstream_client
+                        .send(proto::UpdateUserSettings {
+                            project_id: REMOTE_SERVER_PROJECT_ID,
+                            contents: new_settings_string,
+                        })
+                        .log_err();
+                }
+            }));
+        }
 
         Self {
             worktree_store,

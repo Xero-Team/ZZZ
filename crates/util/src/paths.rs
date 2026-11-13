@@ -200,18 +200,14 @@ pub fn strip_path_suffix<'a>(base: &'a Path, suffix: &Path) -> Option<&'a Path> 
         .as_os_str()
         .as_encoded_bytes()
         .strip_suffix(suffix.as_os_str().as_encoded_bytes())
-    {
-        if remainder
+        && remainder
             .last()
             .is_none_or(|last_byte| std::path::is_separator(*last_byte as char))
-        {
-            let os_str = unsafe {
-                OsStr::from_encoded_bytes_unchecked(
-                    &remainder[0..remainder.len().saturating_sub(1)],
-                )
-            };
-            return Some(Path::new(os_str));
-        }
+    {
+        let os_str = unsafe {
+            OsStr::from_encoded_bytes_unchecked(&remainder[0..remainder.len().saturating_sub(1)])
+        };
+        return Some(Path::new(os_str));
     }
     None
 }

@@ -257,10 +257,10 @@ fn find_target(
     // The backward scan breaks on whitespace, including newlines. Without this
     // skip, the forward scan would start on the newline and immediately break
     // (since it also breaks on newlines), finding nothing on the current line.
-    if let Some(ch) = snapshot.chars_at(offset).next() {
-        if ch == '\n' {
-            offset += ch.len_utf8();
-        }
+    if let Some(ch) = snapshot.chars_at(offset).next()
+        && ch == '\n'
+    {
+        offset += ch.len_utf8();
     }
 
     let mut begin = None;

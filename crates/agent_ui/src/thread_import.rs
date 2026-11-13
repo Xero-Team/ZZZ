@@ -201,10 +201,10 @@ impl ThreadImportModal {
     }
 
     fn confirm(&mut self, _: &menu::Confirm, _window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(ix) = self.selected_index {
-            if let Some(entry) = self.agent_entries.get(ix) {
-                self.toggle_agent_checked(entry.agent_id.clone(), cx);
-            }
+        if let Some(ix) = self.selected_index
+            && let Some(entry) = self.agent_entries.get(ix)
+        {
+            self.toggle_agent_checked(entry.agent_id.clone(), cx);
         }
     }
 

@@ -160,10 +160,10 @@ impl HttpTransport {
         // If we currently have no access token, try refreshing before sending
         // the request so restored but expired sessions do not need an initial
         // 401 round-trip before they can recover.
-        if let Some(ref provider) = self.token_provider {
-            if provider.access_token().is_none() {
-                provider.try_refresh().await.unwrap_or(false);
-            }
+        if let Some(ref provider) = self.token_provider
+            && provider.access_token().is_none()
+        {
+            provider.try_refresh().await.unwrap_or(false);
         }
 
         let request = self.build_request(message.as_bytes())?;
@@ -292,11 +292,12 @@ impl HttpTransport {
                                     let message = data_buffer.join("\n");
 
                                     // Filter out ping messages and empty data
-                                    if !message.trim().is_empty() && message != "ping" {
-                                        if let Err(e) = response_tx.send(message).await {
-                                            log::error!("Failed to send SSE message: {}", e);
-                                            break;
-                                        }
+                                    if !message.trim().is_empty()
+                                        && message != "ping"
+                                        && let Err(e) = response_tx.send(message).await
+                                    {
+                                        log::error!("Failed to send SSE message: {}", e);
+                                        break;
                                     }
                                     data_buffer.clear();
                                 }
@@ -470,10 +471,8 @@ mod tests {
             self.refresh_count.fetch_add(1, Ordering::SeqCst);
 
             let refresh_succeeds = self.refresh_succeeds.load(Ordering::SeqCst);
-            if refresh_succeeds {
-                if let Some(token) = self.refreshed_token.lock().clone() {
-                    *self.token.lock() = Some(token);
-                }
+            if refresh_succeeds && let Some(token) = self.refreshed_token.lock().clone() {
+                *self.token.lock() = Some(token);
             }
 
             Ok(refresh_succeeds)

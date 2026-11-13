@@ -364,10 +364,8 @@ fn possible_open_target_internal(
         |background_fs_checks| background_fs_checks == BackgroundFsChecks::Enabled,
     );
 
-    if open_target.is_some() {
-        if !enable_background_fs_checks || is_cwd_in_worktree {
-            return Task::ready(open_target);
-        }
+    if open_target.is_some() && (!enable_background_fs_checks || is_cwd_in_worktree) {
+        return Task::ready(open_target);
     }
 
     let fs_paths_to_check = if enable_background_fs_checks {

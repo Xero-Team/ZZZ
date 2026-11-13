@@ -30,10 +30,10 @@ fn discover_examples() -> Result<Vec<String>> {
 
     for entry in std::fs::read_dir(examples_dir).context("failed to read crates/gpui/examples")? {
         let path = entry?.path();
-        if path.extension().and_then(|e| e.to_str()) == Some("rs") {
-            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                names.push(stem.to_owned());
-            }
+        if path.extension().and_then(|e| e.to_str()) == Some("rs")
+            && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
+        {
+            names.push(stem.to_owned());
         }
     }
 

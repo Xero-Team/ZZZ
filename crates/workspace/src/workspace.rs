@@ -743,18 +743,16 @@ pub fn prompt_for_open_path_and_open(
         let Some(paths) = paths.await.log_err().flatten() else {
             return;
         };
-        if !create_new_window {
-            if let Some(handle) = multi_workspace_handle {
-                if let Some(task) = handle
-                    .update(cx, |multi_workspace, window, cx| {
-                        multi_workspace.open_project(paths, OpenMode::Activate, window, cx)
-                    })
-                    .log_err()
-                {
-                    task.await.log_err();
-                }
-                return;
+        if !create_new_window && let Some(handle) = multi_workspace_handle {
+            if let Some(task) = handle
+                .update(cx, |multi_workspace, window, cx| {
+                    multi_workspace.open_project(paths, OpenMode::Activate, window, cx)
+                })
+                .log_err()
+            {
+                task.await.log_err();
             }
+            return;
         }
         if let Some(task) = this
             .update_in(cx, |this, window, cx| {
@@ -879,26 +877,23 @@ impl ProjectItemRegistry {
                         }
                         Err(e) => {
                             log::warn!("Failed to open a project item: {e:#}");
-                            if e.error_code() == ErrorCode::Internal {
-                                if let Some(abs_path) =
+                            if e.error_code() == ErrorCode::Internal
+                                && let Some(abs_path) =
                                     entry_abs_path.as_deref().filter(|_| is_file)
-                                {
-                                    if let Some(broken_project_item_view) =
-                                        cx.update(|window, cx| {
-                                            T::for_broken_project_item(
-                                                abs_path, is_local, &e, window, cx,
-                                            )
-                                        })?
-                                    {
-                                        let build_workspace_item = Box::new(
-                                            move |_: &mut Pane, _: &mut Window, cx: &mut Context<Pane>| {
-                                                cx.new(|_| broken_project_item_view).boxed_clone()
-                                            },
+                                && let Some(broken_project_item_view) =
+                                    cx.update(|window, cx| {
+                                        T::for_broken_project_item(
+                                            abs_path, is_local, &e, window, cx,
                                         )
-                                        as Box<_>;
-                                        return Ok((None, build_workspace_item));
-                                    }
-                                }
+                                    })?
+                            {
+                                let build_workspace_item = Box::new(
+                                    move |_: &mut Pane, _: &mut Window, cx: &mut Context<Pane>| {
+                                        cx.new(|_| broken_project_item_view).boxed_clone()
+                                    },
+                                )
+                                    as Box<_>;
+                                return Ok((None, build_workspace_item));
                             }
                             Err(e)
                         }
@@ -1483,12 +1478,12 @@ impl Workspace {
             .detach();
 
             cx.observe_global::<SettingsStore>(|_, cx| {
-                if ProjectSettings::get_global(cx).session.trust_all_worktrees {
-                    if let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx) {
-                        trusted_worktrees.update(cx, |trusted_worktrees, cx| {
-                            trusted_worktrees.auto_trust_all(cx);
-                        })
-                    }
+                if ProjectSettings::get_global(cx).session.trust_all_worktrees
+                    && let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx)
+                {
+                    trusted_worktrees.update(cx, |trusted_worktrees, cx| {
+                        trusted_worktrees.auto_trust_all(cx);
+                    })
                 }
             })
             .detach();
@@ -2087,26 +2082,27 @@ impl Workspace {
             // Only restore if:
             // 1. This is an empty workspace (no paths), AND
             // 2. The serialized workspace either doesn't exist or has no paths
-            if is_empty_workspace && !serialized_workspace_has_paths {
-                if let Some(default_docks) = persistence::read_default_dock_state(&kvp) {
-                    window
-                        .update(cx, |_, window, cx| {
-                            workspace.update(cx, |workspace, cx| {
-                                for (dock, serialized_dock) in [
-                                    (&workspace.right_dock, &default_docks.right),
-                                    (&workspace.left_dock, &default_docks.left),
-                                    (&workspace.bottom_dock, &default_docks.bottom),
-                                ] {
-                                    dock.update(cx, |dock, cx| {
-                                        dock.serialized_dock = Some(serialized_dock.clone());
-                                        dock.restore_state(window, cx);
-                                    });
-                                }
-                                cx.notify();
-                            });
-                        })
-                        .log_err();
-                }
+            if is_empty_workspace
+                && !serialized_workspace_has_paths
+                && let Some(default_docks) = persistence::read_default_dock_state(&kvp)
+            {
+                window
+                    .update(cx, |_, window, cx| {
+                        workspace.update(cx, |workspace, cx| {
+                            for (dock, serialized_dock) in [
+                                (&workspace.right_dock, &default_docks.right),
+                                (&workspace.left_dock, &default_docks.left),
+                                (&workspace.bottom_dock, &default_docks.bottom),
+                            ] {
+                                dock.update(cx, |dock, cx| {
+                                    dock.serialized_dock = Some(serialized_dock.clone());
+                                    dock.restore_state(window, cx);
+                                });
+                            }
+                            cx.notify();
+                        });
+                    })
+                    .log_err();
             }
 
             window
@@ -5317,23 +5313,22 @@ impl Workspace {
             new_pane
         };
 
-        if action.clone {
-            if self
+        if action.clone
+            && self
                 .active_pane
                 .read(cx)
                 .active_item()
                 .is_some_and(|item| item.can_split(cx))
-            {
-                clone_active_item(
-                    self.database_id(),
-                    &self.active_pane,
-                    &destination,
-                    action.focus,
-                    window,
-                    cx,
-                );
-                return;
-            }
+        {
+            clone_active_item(
+                self.database_id(),
+                &self.active_pane,
+                &destination,
+                action.focus,
+                window,
+                cx,
+            );
+            return;
         }
         move_active_item(
             &self.active_pane,
@@ -5588,23 +5583,22 @@ impl Workspace {
                 new_pane
             };
 
-        if action.clone {
-            if self
+        if action.clone
+            && self
                 .active_pane
                 .read(cx)
                 .active_item()
                 .is_some_and(|item| item.can_split(cx))
-            {
-                clone_active_item(
-                    self.database_id(),
-                    &self.active_pane,
-                    &destination,
-                    action.focus,
-                    window,
-                    cx,
-                );
-                return;
-            }
+        {
+            clone_active_item(
+                self.database_id(),
+                &self.active_pane,
+                &destination,
+                action.focus,
+                window,
+                cx,
+            );
+            return;
         }
         move_active_item(
             &self.active_pane,
@@ -5709,12 +5703,11 @@ impl Workspace {
         // panels like AgentPanel that don't implement `pane()` but can still be zoomed.
         let dock_to_preserve = self.all_docks().iter().find_map(|dock| {
             let dock_read = dock.read(cx);
-            if let Some(panel) = dock_read.active_panel() {
-                if panel.pane(cx).is_some_and(|dock_pane| dock_pane == pane)
-                    || panel.panel_focus_handle(cx).contains_focused(window, cx)
-                {
-                    return Some(dock_read.position());
-                }
+            if let Some(panel) = dock_read.active_panel()
+                && (panel.pane(cx).is_some_and(|dock_pane| dock_pane == pane)
+                    || panel.panel_focus_handle(cx).contains_focused(window, cx))
+            {
+                return Some(dock_read.position());
             }
             None
         });
@@ -7028,22 +7021,22 @@ impl Workspace {
             }
         }
 
-        if self.left_dock.read(cx).is_open() {
-            if let Some(active_panel) = self.left_dock.read(cx).active_panel() {
-                context.set("left_dock", active_panel.panel_key());
-            }
+        if self.left_dock.read(cx).is_open()
+            && let Some(active_panel) = self.left_dock.read(cx).active_panel()
+        {
+            context.set("left_dock", active_panel.panel_key());
         }
 
-        if self.right_dock.read(cx).is_open() {
-            if let Some(active_panel) = self.right_dock.read(cx).active_panel() {
-                context.set("right_dock", active_panel.panel_key());
-            }
+        if self.right_dock.read(cx).is_open()
+            && let Some(active_panel) = self.right_dock.read(cx).active_panel()
+        {
+            context.set("right_dock", active_panel.panel_key());
         }
 
-        if self.bottom_dock.read(cx).is_open() {
-            if let Some(active_panel) = self.bottom_dock.read(cx).active_panel() {
-                context.set("bottom_dock", active_panel.panel_key());
-            }
+        if self.bottom_dock.read(cx).is_open()
+            && let Some(active_panel) = self.bottom_dock.read(cx).active_panel()
+        {
+            context.set("bottom_dock", active_panel.panel_key());
         }
 
         context
@@ -7358,40 +7351,38 @@ impl Workspace {
                 |workspace: &mut Workspace, action: &pane::ActivateNextItem, window, cx| {
                     if let Some(active_dock) = workspace.active_dock(window, cx) {
                         let dock = active_dock.read(cx);
-                        if let Some(active_panel) = dock.active_panel() {
-                            if active_panel.pane(cx).is_none() {
-                                let mut recent_pane: Option<Entity<Pane>> = None;
-                                let mut recent_timestamp = 0;
-                                for pane_handle in workspace.panes() {
-                                    let pane = pane_handle.read(cx);
-                                    for entry in pane.activation_history() {
-                                        if entry.timestamp > recent_timestamp {
-                                            recent_timestamp = entry.timestamp;
-                                            recent_pane = Some(pane_handle.clone());
-                                        }
+                        if let Some(active_panel) = dock.active_panel()
+                            && active_panel.pane(cx).is_none()
+                        {
+                            let mut recent_pane: Option<Entity<Pane>> = None;
+                            let mut recent_timestamp = 0;
+                            for pane_handle in workspace.panes() {
+                                let pane = pane_handle.read(cx);
+                                for entry in pane.activation_history() {
+                                    if entry.timestamp > recent_timestamp {
+                                        recent_timestamp = entry.timestamp;
+                                        recent_pane = Some(pane_handle.clone());
                                     }
                                 }
+                            }
 
-                                if let Some(pane) = recent_pane {
-                                    let wrap_around = action.wrap_around;
-                                    pane.update(cx, |pane, cx| {
-                                        let current_index = pane.active_item_index();
-                                        let items_len = pane.items_len();
-                                        if items_len > 0 {
-                                            let next_index = if current_index + 1 < items_len {
-                                                current_index + 1
-                                            } else if wrap_around {
-                                                0
-                                            } else {
-                                                return;
-                                            };
-                                            pane.activate_item(
-                                                next_index, false, false, window, cx,
-                                            );
-                                        }
-                                    });
-                                    return;
-                                }
+                            if let Some(pane) = recent_pane {
+                                let wrap_around = action.wrap_around;
+                                pane.update(cx, |pane, cx| {
+                                    let current_index = pane.active_item_index();
+                                    let items_len = pane.items_len();
+                                    if items_len > 0 {
+                                        let next_index = if current_index + 1 < items_len {
+                                            current_index + 1
+                                        } else if wrap_around {
+                                            0
+                                        } else {
+                                            return;
+                                        };
+                                        pane.activate_item(next_index, false, false, window, cx);
+                                    }
+                                });
+                                return;
                             }
                         }
                     }
@@ -7402,40 +7393,38 @@ impl Workspace {
                 |workspace: &mut Workspace, action: &pane::ActivatePreviousItem, window, cx| {
                     if let Some(active_dock) = workspace.active_dock(window, cx) {
                         let dock = active_dock.read(cx);
-                        if let Some(active_panel) = dock.active_panel() {
-                            if active_panel.pane(cx).is_none() {
-                                let mut recent_pane: Option<Entity<Pane>> = None;
-                                let mut recent_timestamp = 0;
-                                for pane_handle in workspace.panes() {
-                                    let pane = pane_handle.read(cx);
-                                    for entry in pane.activation_history() {
-                                        if entry.timestamp > recent_timestamp {
-                                            recent_timestamp = entry.timestamp;
-                                            recent_pane = Some(pane_handle.clone());
-                                        }
+                        if let Some(active_panel) = dock.active_panel()
+                            && active_panel.pane(cx).is_none()
+                        {
+                            let mut recent_pane: Option<Entity<Pane>> = None;
+                            let mut recent_timestamp = 0;
+                            for pane_handle in workspace.panes() {
+                                let pane = pane_handle.read(cx);
+                                for entry in pane.activation_history() {
+                                    if entry.timestamp > recent_timestamp {
+                                        recent_timestamp = entry.timestamp;
+                                        recent_pane = Some(pane_handle.clone());
                                     }
                                 }
+                            }
 
-                                if let Some(pane) = recent_pane {
-                                    let wrap_around = action.wrap_around;
-                                    pane.update(cx, |pane, cx| {
-                                        let current_index = pane.active_item_index();
-                                        let items_len = pane.items_len();
-                                        if items_len > 0 {
-                                            let prev_index = if current_index > 0 {
-                                                current_index - 1
-                                            } else if wrap_around {
-                                                items_len.saturating_sub(1)
-                                            } else {
-                                                return;
-                                            };
-                                            pane.activate_item(
-                                                prev_index, false, false, window, cx,
-                                            );
-                                        }
-                                    });
-                                    return;
-                                }
+                            if let Some(pane) = recent_pane {
+                                let wrap_around = action.wrap_around;
+                                pane.update(cx, |pane, cx| {
+                                    let current_index = pane.active_item_index();
+                                    let items_len = pane.items_len();
+                                    if items_len > 0 {
+                                        let prev_index = if current_index > 0 {
+                                            current_index - 1
+                                        } else if wrap_around {
+                                            items_len.saturating_sub(1)
+                                        } else {
+                                            return;
+                                        };
+                                        pane.activate_item(prev_index, false, false, window, cx);
+                                    }
+                                });
+                                return;
                             }
                         }
                     }
@@ -7446,15 +7435,15 @@ impl Workspace {
                 |workspace: &mut Workspace, action: &pane::CloseActiveItem, window, cx| {
                     if let Some(active_dock) = workspace.active_dock(window, cx) {
                         let dock = active_dock.read(cx);
-                        if let Some(active_panel) = dock.active_panel() {
-                            if active_panel.pane(cx).is_none() {
-                                let active_pane = workspace.active_pane().clone();
-                                active_pane.update(cx, |pane, cx| {
-                                    pane.close_active_item(action, window, cx)
-                                        .detach_and_log_err(cx);
-                                });
-                                return;
-                            }
+                        if let Some(active_panel) = dock.active_panel()
+                            && active_panel.pane(cx).is_none()
+                        {
+                            let active_pane = workspace.active_pane().clone();
+                            active_pane.update(cx, |pane, cx| {
+                                pane.close_active_item(action, window, cx)
+                                    .detach_and_log_err(cx);
+                            });
+                            return;
                         }
                     }
                     cx.propagate();
@@ -7633,11 +7622,11 @@ impl Workspace {
             cx.emit(Event::ZoomChanged);
         }
 
-        if let Some(maximized) = self.maximized_pane.take() {
-            if maximized.upgrade().as_ref() == Some(&self.active_pane) {
-                cx.notify();
-                return;
-            }
+        if let Some(maximized) = self.maximized_pane.take()
+            && maximized.upgrade().as_ref() == Some(&self.active_pane)
+        {
+            cx.notify();
+            return;
         }
 
         self.maximized_pane = Some(self.active_pane.downgrade());

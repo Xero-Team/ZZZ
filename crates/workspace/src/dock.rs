@@ -1608,17 +1608,17 @@ impl Render for PanelButtons {
                                         IconPosition::Start,
                                         None,
                                         move |window, cx| {
-                                            if !currently_flexible {
-                                                if let Some(ws) = workspace_for_flex.upgrade() {
-                                                    ws.update(cx, |workspace, cx| {
-                                                        workspace.toggle_dock_panel_flexible_size(
-                                                            &dock_for_flex,
-                                                            panel_for_flex.as_ref(),
-                                                            window,
-                                                            cx,
-                                                        );
-                                                    });
-                                                }
+                                            if !currently_flexible
+                                                && let Some(ws) = workspace_for_flex.upgrade()
+                                            {
+                                                ws.update(cx, |workspace, cx| {
+                                                    workspace.toggle_dock_panel_flexible_size(
+                                                        &dock_for_flex,
+                                                        panel_for_flex.as_ref(),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                });
                                             }
                                         },
                                     );
@@ -1631,17 +1631,17 @@ impl Render for PanelButtons {
                                         IconPosition::Start,
                                         None,
                                         move |window, cx| {
-                                            if currently_flexible {
-                                                if let Some(ws) = workspace_for_fixed.upgrade() {
-                                                    ws.update(cx, |workspace, cx| {
-                                                        workspace.toggle_dock_panel_flexible_size(
-                                                            &dock_for_fixed,
-                                                            panel_for_fixed.as_ref(),
-                                                            window,
-                                                            cx,
-                                                        );
-                                                    });
-                                                }
+                                            if currently_flexible
+                                                && let Some(ws) = workspace_for_fixed.upgrade()
+                                            {
+                                                ws.update(cx, |workspace, cx| {
+                                                    workspace.toggle_dock_panel_flexible_size(
+                                                        &dock_for_fixed,
+                                                        panel_for_fixed.as_ref(),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                });
                                             }
                                         },
                                     );

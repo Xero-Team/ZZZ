@@ -1641,11 +1641,11 @@ impl Buffer {
                     this.encoding = encoding_used;
                     this.has_bom = has_bom;
                     let transaction = this.finalize_last_transaction().cloned();
-                    if let Some(ref txn) = transaction {
-                        if old_encoding != encoding_used || old_has_bom != has_bom {
-                            this.reload_with_encoding_txns
-                                .insert(txn.id, (old_encoding, old_has_bom));
-                        }
+                    if let Some(ref txn) = transaction
+                        && (old_encoding != encoding_used || old_has_bom != has_bom)
+                    {
+                        this.reload_with_encoding_txns
+                            .insert(txn.id, (old_encoding, old_has_bom));
                     }
                     tx.send(transaction).ok();
                     this.has_conflict = false;
@@ -1857,8 +1857,9 @@ impl Buffer {
         if let Err(error) = self.parse_status.0.send(ParseStatus::Parsing) {
             log::debug!("no parse status observers for buffer: {error}");
         }
-        if may_block && let Some(sync_parse_timeout) = self.sync_parse_timeout {
-            if matches!(
+        if may_block
+            && let Some(sync_parse_timeout) = self.sync_parse_timeout
+            && matches!(
                 syntax_snapshot.reparse_with_timeout(
                     &text,
                     language_registry.clone(),
@@ -1866,11 +1867,11 @@ impl Buffer {
                     sync_parse_timeout,
                 ),
                 Ok(())
-            ) {
-                self.did_finish_parsing(syntax_snapshot, Some(Duration::from_millis(300)), cx);
-                self.reparse = None;
-                return;
-            }
+            )
+        {
+            self.did_finish_parsing(syntax_snapshot, Some(Duration::from_millis(300)), cx);
+            self.reparse = None;
+            return;
         }
 
         let parse_task = cx.background_spawn({
@@ -2952,14 +2953,13 @@ impl Buffer {
         if was_dirty != is_dirty {
             cx.emit(BufferEvent::DirtyChanged);
         }
-        if was_dirty && !is_dirty {
-            if let Some(file) = self.file.as_ref() {
-                if matches!(file.disk_state(), DiskState::Present { .. })
-                    && file.disk_state().mtime() != self.saved_mtime
-                {
-                    cx.emit(BufferEvent::ReloadNeeded);
-                }
-            }
+        if was_dirty
+            && !is_dirty
+            && let Some(file) = self.file.as_ref()
+            && matches!(file.disk_state(), DiskState::Present { .. })
+            && file.disk_state().mtime() != self.saved_mtime
+        {
+            cx.emit(BufferEvent::ReloadNeeded);
         }
         cx.notify();
     }
@@ -4232,10 +4232,10 @@ impl BufferSnapshot {
                 if cursor.goto_previous_sibling() {
                     let layer_result = cursor.node();
 
-                    if let Some(previous_result) = &result {
-                        if previous_result.byte_range().end < layer_result.byte_range().end {
-                            continue;
-                        }
+                    if let Some(previous_result) = &result
+                        && previous_result.byte_range().end < layer_result.byte_range().end
+                    {
+                        continue;
                     }
                     result = Some(layer_result);
                     break;
@@ -4283,10 +4283,10 @@ impl BufferSnapshot {
                 if cursor.goto_next_sibling() {
                     let layer_result = cursor.node();
 
-                    if let Some(previous_result) = &result {
-                        if previous_result.byte_range().start > layer_result.byte_range().start {
-                            continue;
-                        }
+                    if let Some(previous_result) = &result
+                        && previous_result.byte_range().start > layer_result.byte_range().start
+                    {
+                        continue;
                     }
                     result = Some(layer_result);
                     break;
@@ -6161,10 +6161,11 @@ pub(crate) fn trailing_whitespace_ranges(
             if i == 0 && trimmed_line_len == 0 {
                 trailing_whitespace_range.start = prev_chunk_trailing_whitespace_range.start;
             }
-            if let Some(row) = prev_row {
-                if !prev_line_trailing_whitespace_range.is_empty() && is_row_included(row) {
-                    ranges.push(prev_line_trailing_whitespace_range);
-                }
+            if let Some(row) = prev_row
+                && !prev_line_trailing_whitespace_range.is_empty()
+                && is_row_included(row)
+            {
+                ranges.push(prev_line_trailing_whitespace_range);
             }
 
             prev_row = Some(current_row);

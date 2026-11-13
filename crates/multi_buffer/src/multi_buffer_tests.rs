@@ -5441,50 +5441,50 @@ fn test_random_chunk_bitmaps_with_diffs(cx: &mut App, mut rng: StdRng) {
     multibuffer.update(cx, |multibuffer, cx| {
         let snapshot = multibuffer.snapshot(cx);
         for buffer_id in snapshot.all_buffer_ids() {
-            if rng.random_bool(0.7) {
-                if let Some(buffer_handle) = multibuffer.buffer(buffer_id) {
-                    let buffer_text = buffer_handle.read(cx).text();
-                    let mut base_text = String::new();
+            if rng.random_bool(0.7)
+                && let Some(buffer_handle) = multibuffer.buffer(buffer_id)
+            {
+                let buffer_text = buffer_handle.read(cx).text();
+                let mut base_text = String::new();
 
-                    for line in buffer_text.lines() {
-                        if rng.random_bool(0.3) {
-                            continue;
-                        }
-                        if rng.random_bool(0.3) {
-                            let line_len = rng.random_range(0..50);
-                            let modified_line = RandomCharIter::new(&mut rng)
-                                .take(line_len)
-                                .collect::<String>();
-                            base_text.push_str(&modified_line);
-                            base_text.push('\n');
-                        } else {
-                            base_text.push_str(line);
-                            base_text.push('\n');
-                        }
+                for line in buffer_text.lines() {
+                    if rng.random_bool(0.3) {
+                        continue;
                     }
-
-                    if rng.random_bool(0.5) {
-                        let extra_lines = rng.random_range(1..5);
-                        for _ in 0..extra_lines {
-                            let line_len = rng.random_range(0..50);
-                            let extra_line = RandomCharIter::new(&mut rng)
-                                .take(line_len)
-                                .collect::<String>();
-                            base_text.push_str(&extra_line);
-                            base_text.push('\n');
-                        }
+                    if rng.random_bool(0.3) {
+                        let line_len = rng.random_range(0..50);
+                        let modified_line = RandomCharIter::new(&mut rng)
+                            .take(line_len)
+                            .collect::<String>();
+                        base_text.push_str(&modified_line);
+                        base_text.push('\n');
+                    } else {
+                        base_text.push_str(line);
+                        base_text.push('\n');
                     }
-
-                    let diff = cx.new(|cx| {
-                        BufferDiff::new_with_base_text(
-                            &base_text,
-                            &buffer_handle.read(cx).text_snapshot(),
-                            cx,
-                        )
-                    });
-                    diffs.push(diff.clone());
-                    multibuffer.add_diff(diff, cx);
                 }
+
+                if rng.random_bool(0.5) {
+                    let extra_lines = rng.random_range(1..5);
+                    for _ in 0..extra_lines {
+                        let line_len = rng.random_range(0..50);
+                        let extra_line = RandomCharIter::new(&mut rng)
+                            .take(line_len)
+                            .collect::<String>();
+                        base_text.push_str(&extra_line);
+                        base_text.push('\n');
+                    }
+                }
+
+                let diff = cx.new(|cx| {
+                    BufferDiff::new_with_base_text(
+                        &base_text,
+                        &buffer_handle.read(cx).text_snapshot(),
+                        cx,
+                    )
+                });
+                diffs.push(diff.clone());
+                multibuffer.add_diff(diff, cx);
             }
         }
     });

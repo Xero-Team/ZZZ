@@ -427,10 +427,10 @@ fn deserialize_npm_info_from_response(data: &[u8]) -> Result<NpmInfo, serde_json
     let value: serde_json::Value = serde_json::from_slice(data)?;
 
     // npm >= 12 returns an array with one object: [ { ... } ]
-    if let serde_json::Value::Array(arr) = &value {
-        if arr.len() == 1 {
-            return NpmInfo::deserialize(&arr[0]);
-        }
+    if let serde_json::Value::Array(arr) = &value
+        && arr.len() == 1
+    {
+        return NpmInfo::deserialize(&arr[0]);
     }
 
     // npm <= v11 returns a bare JSON object: { ... }
@@ -1310,10 +1310,10 @@ fn npm_command_env(node_binary: Option<&Path>) -> HashMap<String, String> {
         command_env.insert("PATH".into(), env_path.to_string_lossy().into_owned());
     }
 
-    if let Ok(node_ca_certs) = env::var(NODE_CA_CERTS_ENV_VAR) {
-        if !node_ca_certs.is_empty() {
-            command_env.insert(NODE_CA_CERTS_ENV_VAR.to_owned(), node_ca_certs);
-        }
+    if let Ok(node_ca_certs) = env::var(NODE_CA_CERTS_ENV_VAR)
+        && !node_ca_certs.is_empty()
+    {
+        command_env.insert(NODE_CA_CERTS_ENV_VAR.to_owned(), node_ca_certs);
     }
 
     #[cfg(windows)]

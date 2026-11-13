@@ -1584,14 +1584,14 @@ impl ToolchainLister for PythonToolchainProvider {
                     | PythonEnvironmentKind::UvWorkspace
                     | PythonEnvironmentKind::Poetry,
                 ) => {
-                    if let Some(activation_scripts) = &toolchain.activation_scripts {
-                        if let Some(activate_script_path) = activation_scripts.get(&shell) {
-                            let activate_keyword = shell.activate_keyword();
-                            if let Some(quoted) =
-                                shell.try_quote(&activate_script_path.to_string_lossy())
-                            {
-                                activation_script.push(format!("{activate_keyword} {quoted}"));
-                            }
+                    if let Some(activation_scripts) = &toolchain.activation_scripts
+                        && let Some(activate_script_path) = activation_scripts.get(&shell)
+                    {
+                        let activate_keyword = shell.activate_keyword();
+                        if let Some(quoted) =
+                            shell.try_quote(&activate_script_path.to_string_lossy())
+                        {
+                            activation_script.push(format!("{activate_keyword} {quoted}"));
                         }
                     }
                 }

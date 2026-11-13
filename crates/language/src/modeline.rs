@@ -223,11 +223,11 @@ static VIM_MODELINE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
 /// 2. Second form: vim: set ft=rust ts=4 sw=4 et:
 fn parse_vim_modeline(line: &str, settings: &mut ModelineSettings) {
     for re in VIM_MODELINE_PATTERNS.iter() {
-        if let Some(captures) = re.captures(line) {
-            if let Some(options) = captures.get(1) {
-                parse_vim_settings(options.as_str().trim(), settings);
-                break;
-            }
+        if let Some(captures) = re.captures(line)
+            && let Some(options) = captures.get(1)
+        {
+            parse_vim_settings(options.as_str().trim(), settings);
+            break;
         }
     }
 }

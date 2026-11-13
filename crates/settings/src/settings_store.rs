@@ -1158,10 +1158,10 @@ impl SettingsStore {
                 return Ok(());
             }
         }
-        if let LocalSettingsPath::InWorktree(directory_path) = &path {
-            if zzz_settings_changed {
-                self.recompute_values(Some((root_id, &directory_path)), cx);
-            }
+        if let LocalSettingsPath::InWorktree(directory_path) = &path
+            && zzz_settings_changed
+        {
+            self.recompute_values(Some((root_id, &directory_path)), cx);
         }
         Ok(())
     }
@@ -1255,21 +1255,21 @@ impl SettingsStore {
                         .expect("LspSettings should be an object")
                         .clone();
 
-                    if let Some(properties) = base_lsp_settings.get_mut("properties") {
-                        if let Some(properties_object) = properties.as_object_mut() {
-                            properties_object.insert(
+                    if let Some(properties) = base_lsp_settings.get_mut("properties")
+                        && let Some(properties_object) = properties.as_object_mut()
+                    {
+                        properties_object.insert(
                             "initialization_options".to_owned(),
                             serde_json::json!({
                                 "$ref": format!("{LSP_SETTINGS_SCHEMA_URL_PREFIX}{adapter_name}/initialization_options")
                             }),
                         );
-                            properties_object.insert(
+                        properties_object.insert(
                             "settings".to_owned(),
                             serde_json::json!({
                                 "$ref": format!("{LSP_SETTINGS_SCHEMA_URL_PREFIX}{adapter_name}/settings")
                             }),
                         );
-                        }
                     }
 
                     lsp_properties.insert(
@@ -1658,8 +1658,8 @@ impl<T: Settings> AnySettingValue for SettingValue<T> {
             vfs_path,
         }) = path
         {
-            if let Some(vfs_path) = vfs_path.as_ref() {
-                if let Some((_, _, _, value)) = self
+            if let Some(vfs_path) = vfs_path.as_ref()
+                && let Some((_, _, _, value)) = self
                     .local_values
                     .iter()
                     .filter(|(_, _, settings_vfs_path, _)| {
@@ -1675,9 +1675,8 @@ impl<T: Settings> AnySettingValue for SettingValue<T> {
                             .as_ref()
                             .map_or(0, |path| path.provider_path().component_count())
                     })
-                {
-                    return value;
-                }
+            {
+                return value;
             }
             for (settings_root_id, settings_path, settings_vfs_path, value) in
                 self.local_values.iter().rev()

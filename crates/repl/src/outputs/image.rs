@@ -87,16 +87,16 @@ impl ImageView {
         };
 
         let mut scale: f32 = 1.0;
-        if let Some(max_width) = max_width {
-            if width > max_width {
-                scale = scale.min(max_width / width);
-            }
+        if let Some(max_width) = max_width
+            && width > max_width
+        {
+            scale = scale.min(max_width / width);
         }
 
-        if let Some(max_height) = max_height {
-            if height > max_height {
-                scale = scale.min(max_height / height);
-            }
+        if let Some(max_height) = max_height
+            && height > max_height
+        {
+            scale = scale.min(max_height / height);
         }
 
         if scale < 1.0 {

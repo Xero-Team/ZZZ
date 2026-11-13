@@ -805,11 +805,12 @@ impl Editor {
 
         self.blink_manager.update(cx, BlinkManager::pause_blinking);
 
-        if local && !self.suppress_selection_callback {
-            if let Some(callback) = self.on_local_selections_changed.as_ref() {
-                let cursor_position = self.selections.newest::<Point>(&display_map).head();
-                callback(cursor_position, window, cx);
-            }
+        if local
+            && !self.suppress_selection_callback
+            && let Some(callback) = self.on_local_selections_changed.as_ref()
+        {
+            let cursor_position = self.selections.newest::<Point>(&display_map).head();
+            callback(cursor_position, window, cx);
         }
 
         cx.emit(EditorEvent::SelectionsChanged { local });
@@ -884,10 +885,10 @@ impl Editor {
             self.selection_history.push(state.history_entry);
         }
 
-        if state.changed || state.effects.unfold {
-            if let Some(autoscroll) = state.effects.scroll {
-                self.request_autoscroll(autoscroll, cx);
-            }
+        if (state.changed || state.effects.unfold)
+            && let Some(autoscroll) = state.effects.scroll
+        {
+            self.request_autoscroll(autoscroll, cx);
         }
 
         if state.changed {

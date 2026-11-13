@@ -1176,10 +1176,10 @@ impl GitStore {
                             .or_insert_with(|| cx.new(|_| BufferGitState::new(git_store)));
 
                         diff_state.update(cx, |state, _| {
-                            if let Some(oid) = oid {
-                                if let Some(content) = content {
-                                    state.oid_texts.insert(oid, content);
-                                }
+                            if let Some(oid) = oid
+                                && let Some(content) = content
+                            {
+                                state.oid_texts.insert(oid, content);
                             }
                             state.oid_diffs.insert(oid, buffer_diff.downgrade());
                         });
@@ -1979,16 +1979,15 @@ impl GitStore {
             if worktree_ids
                 .iter()
                 .any(|worktree_id| event_paths.contains(&PathTrust::Worktree(*worktree_id)))
+                && let Some(repo) = self.repositories.get(repo_id)
             {
-                if let Some(repo) = self.repositories.get(repo_id) {
-                    let repository_state = repo.read(cx).repository_state.clone();
-                    cx.background_spawn(async move {
-                        if let Ok(RepositoryState::Local(state)) = repository_state.await {
-                            state.backend.set_trusted(is_trusted);
-                        }
-                    })
-                    .detach();
-                }
+                let repository_state = repo.read(cx).repository_state.clone();
+                cx.background_spawn(async move {
+                    if let Ok(RepositoryState::Local(state)) = repository_state.await {
+                        state.backend.set_trusted(is_trusted);
+                    }
+                })
+                .detach();
             }
         }
     }
@@ -3002,13 +3001,12 @@ impl GitStore {
                 let error = response.error.clone();
                 let is_loading = response.is_loading;
 
-                if is_loading {
-                    if let Some(graph_data) = repository
+                if is_loading
+                    && let Some(graph_data) = repository
                         .initial_graph_data
                         .get_mut(&(log_source.clone(), log_order))
-                    {
-                        graph_data.subscribers.push(subscriber_sender);
-                    }
+                {
+                    graph_data.subscribers.push(subscriber_sender);
                 }
 
                 (cached_commits, error, is_loading)
@@ -3106,16 +3104,15 @@ impl GitStore {
             while let Ok(sha) = request_rx.recv().await {
                 shas.push(sha.to_string());
 
-                if shas.len() >= CHUNK_SIZE {
-                    if response_tx
+                if shas.len() >= CHUNK_SIZE
+                    && response_tx
                         .send(Ok(proto::SearchCommitsResponse {
                             shas: mem::take(&mut shas),
                         }))
                         .await
                         .is_err()
-                    {
-                        return;
-                    }
+                {
+                    return;
                 }
             }
 
@@ -4239,10 +4236,8 @@ impl BufferGitState {
 
         self.oid_diffs.retain(|oid, weak| {
             let alive = weak.upgrade().is_some();
-            if !alive {
-                if let Some(oid) = oid {
-                    self.oid_texts.remove(oid);
-                }
+            if !alive && let Some(oid) = oid {
+                self.oid_texts.remove(oid);
             }
             alive
         });
@@ -4552,12 +4547,11 @@ impl RepositorySnapshot {
                             current_new_entry = new_statuses.next();
                         }
                         Ordering::Equal => {
-                            if new_entry.status != old_entry.status
-                                || new_entry.diff_stat != old_entry.diff_stat
+                            if (new_entry.status != old_entry.status
+                                || new_entry.diff_stat != old_entry.diff_stat)
+                                && let Some(entry) = new_entry.to_proto()
                             {
-                                if let Some(entry) = new_entry.to_proto() {
-                                    updated_statuses.push(entry);
-                                }
+                                updated_statuses.push(entry);
                             }
                             current_old_entry = old_statuses.next();
                             current_new_entry = new_statuses.next();

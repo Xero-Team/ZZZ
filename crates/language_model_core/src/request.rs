@@ -186,21 +186,18 @@ impl<'de> Deserialize<'de> for LanguageModelToolResultContent {
             // Check for wrapped Text variant: { "text": "..." }
             if let Some((_key, value)) = obj.iter().find(|(k, _)| k.to_lowercase() == "text")
                 && obj.len() == 1
+                && let Some(text) = value.as_str()
             {
-                if let Some(text) = value.as_str() {
-                    return Ok(Self::Text(Arc::from(text)));
-                }
+                return Ok(Self::Text(Arc::from(text)));
             }
 
             // Check for wrapped Image variant: { "image": { "source": "...", "size": ... } }
             if let Some((_key, value)) = obj.iter().find(|(k, _)| k.to_lowercase() == "image")
                 && obj.len() == 1
+                && let Some(image_obj) = value.as_object()
+                && let Some(image) = LanguageModelImage::from_json(image_obj)
             {
-                if let Some(image_obj) = value.as_object()
-                    && let Some(image) = LanguageModelImage::from_json(image_obj)
-                {
-                    return Ok(Self::Image(image));
-                }
+                return Ok(Self::Image(image));
             }
 
             // Try as direct Image

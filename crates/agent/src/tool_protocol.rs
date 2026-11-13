@@ -120,43 +120,44 @@ impl ToolPermissionContext {
 
         // For terminal commands with multiple pipeline commands, use DropdownWithPatterns
         // to let users individually select which command patterns to always allow.
-        if tool_name == TerminalTool::NAME && shell_supports_always_allow {
-            if let Some(input) = input_values.first() {
-                let all_patterns = extract_all_terminal_patterns(input);
-                if all_patterns.len() > 1 {
-                    let mut choices = Vec::new();
-                    choices.push(acp_thread::PermissionOptionChoice {
-                        allow: acp::PermissionOption::new(
-                            acp::PermissionOptionId::new(format!("always_allow:{}", tool_name)),
-                            format!("Always for {}", tool_name.replace('_', " ")),
-                            acp::PermissionOptionKind::AllowAlways,
-                        ),
-                        deny: acp::PermissionOption::new(
-                            acp::PermissionOptionId::new(format!("always_deny:{}", tool_name)),
-                            format!("Always for {}", tool_name.replace('_', " ")),
-                            acp::PermissionOptionKind::RejectAlways,
-                        ),
-                        sub_patterns: vec![],
-                    });
-                    choices.push(acp_thread::PermissionOptionChoice {
-                        allow: acp::PermissionOption::new(
-                            acp::PermissionOptionId::new("allow"),
-                            "Only this time",
-                            acp::PermissionOptionKind::AllowOnce,
-                        ),
-                        deny: acp::PermissionOption::new(
-                            acp::PermissionOptionId::new("deny"),
-                            "Only this time",
-                            acp::PermissionOptionKind::RejectOnce,
-                        ),
-                        sub_patterns: vec![],
-                    });
-                    return acp_thread::PermissionOptions::DropdownWithPatterns {
-                        choices,
-                        patterns: all_patterns,
-                        tool_name: tool_name.clone(),
-                    };
-                }
+        if tool_name == TerminalTool::NAME
+            && shell_supports_always_allow
+            && let Some(input) = input_values.first()
+        {
+            let all_patterns = extract_all_terminal_patterns(input);
+            if all_patterns.len() > 1 {
+                let mut choices = Vec::new();
+                choices.push(acp_thread::PermissionOptionChoice {
+                    allow: acp::PermissionOption::new(
+                        acp::PermissionOptionId::new(format!("always_allow:{}", tool_name)),
+                        format!("Always for {}", tool_name.replace('_', " ")),
+                        acp::PermissionOptionKind::AllowAlways,
+                    ),
+                    deny: acp::PermissionOption::new(
+                        acp::PermissionOptionId::new(format!("always_deny:{}", tool_name)),
+                        format!("Always for {}", tool_name.replace('_', " ")),
+                        acp::PermissionOptionKind::RejectAlways,
+                    ),
+                    sub_patterns: vec![],
+                });
+                choices.push(acp_thread::PermissionOptionChoice {
+                    allow: acp::PermissionOption::new(
+                        acp::PermissionOptionId::new("allow"),
+                        "Only this time",
+                        acp::PermissionOptionKind::AllowOnce,
+                    ),
+                    deny: acp::PermissionOption::new(
+                        acp::PermissionOptionId::new("deny"),
+                        "Only this time",
+                        acp::PermissionOptionKind::RejectOnce,
+                    ),
+                    sub_patterns: vec![],
+                });
+                return acp_thread::PermissionOptions::DropdownWithPatterns {
+                    choices,
+                    patterns: all_patterns,
+                    tool_name: tool_name.clone(),
+                };
             }
         }
 

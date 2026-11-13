@@ -909,10 +909,10 @@ async fn test_extension_store_with_test_extension(cx: &mut TestAppContext) {
         5,
         async {
             while let Some(event) = project_events.next().await {
-                if let project::Event::LanguageServerBufferRegistered { buffer_id, .. } = event {
-                    if buffer_id == buffer_remote_id {
-                        return;
-                    }
+                if let project::Event::LanguageServerBufferRegistered { buffer_id, .. } = event
+                    && buffer_id == buffer_remote_id
+                {
+                    return;
                 }
             }
 

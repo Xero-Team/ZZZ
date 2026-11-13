@@ -1058,16 +1058,16 @@ fn handle_url_click(
                     let source_index =
                         markdown.update(cx, |markdown, cx| markdown.scroll_to_heading(&slug, cx));
 
-                    if let Some(source_index) = source_index {
-                        if let Some(editor) = active_editor {
-                            MarkdownPreviewView::change_selection_to_source_index(
-                                &editor,
-                                source_index,
-                                true,
-                                window,
-                                cx,
-                            );
-                        }
+                    if let Some(source_index) = source_index
+                        && let Some(editor) = active_editor
+                    {
+                        MarkdownPreviewView::change_selection_to_source_index(
+                            &editor,
+                            source_index,
+                            true,
+                            window,
+                            cx,
+                        );
                     }
                 }
             });

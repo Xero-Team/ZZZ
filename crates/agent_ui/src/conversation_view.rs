@@ -505,10 +505,10 @@ fn resolve_outcome_from_selection(
     };
 
     // When in per-command pattern mode, use the checked patterns.
-    if let Some(thread_view::PermissionSelection::SelectedPatterns(checked)) = selection {
-        if let Some(outcome) = options.build_outcome_for_checked_patterns(checked, is_allow) {
-            return Some(outcome);
-        }
+    if let Some(thread_view::PermissionSelection::SelectedPatterns(checked)) = selection
+        && let Some(outcome) = options.build_outcome_for_checked_patterns(checked, is_allow)
+    {
+        return Some(outcome);
     }
 
     // Use the selected granularity choice ("Always for terminal" or "Only this time").
@@ -1345,15 +1345,14 @@ impl ConversationView {
     }
 
     fn handle_load_error(&mut self, err: LoadError, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(view) = self.root_thread_view() {
-            if view
+        if let Some(view) = self.root_thread_view()
+            && view
                 .read(cx)
                 .message_editor
                 .focus_handle(cx)
                 .is_focused(window)
-            {
-                self.focus_handle.focus(window, cx)
-            }
+        {
+            self.focus_handle.focus(window, cx)
         }
         self.set_server_state(ServerState::LoadError { error: err }, cx);
     }
@@ -1734,15 +1733,14 @@ impl ConversationView {
                 }
             }
             AcpThreadEvent::LoadError(error) => {
-                if let Some(view) = self.root_thread_view() {
-                    if view
+                if let Some(view) = self.root_thread_view()
+                    && view
                         .read(cx)
                         .message_editor
                         .focus_handle(cx)
                         .is_focused(window)
-                    {
-                        self.focus_handle.focus(window, cx)
-                    }
+                {
+                    self.focus_handle.focus(window, cx)
                 }
                 self.set_server_state(
                     ServerState::LoadError {

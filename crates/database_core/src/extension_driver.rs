@@ -407,10 +407,10 @@ fn read_responses(stdout: smol::process::ChildStdout, pending: Pending) {
                     continue;
                 }
             };
-            if let Some(sender) = pending.lock().remove(&response.id) {
-                if let Err(error) = sender.try_send(Ok(response)) {
-                    log::warn!("failed to deliver extension driver response: {error}");
-                }
+            if let Some(sender) = pending.lock().remove(&response.id)
+                && let Err(error) = sender.try_send(Ok(response))
+            {
+                log::warn!("failed to deliver extension driver response: {error}");
             }
         }
     });

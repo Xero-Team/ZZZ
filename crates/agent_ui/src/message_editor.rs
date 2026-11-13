@@ -698,29 +698,29 @@ impl MessageEditor {
         available_commands: &[acp::AvailableCommand],
         agent_id: &AgentId,
     ) -> Result<()> {
-        if let Some(parsed_command) = SlashCommandCompletion::try_parse(text, 0) {
-            if let Some(command_name) = parsed_command.command {
-                // Check if this command is in the list of available commands from the server
-                let is_supported = available_commands
-                    .iter()
-                    .any(|cmd| cmd.name == command_name);
+        if let Some(parsed_command) = SlashCommandCompletion::try_parse(text, 0)
+            && let Some(command_name) = parsed_command.command
+        {
+            // Check if this command is in the list of available commands from the server
+            let is_supported = available_commands
+                .iter()
+                .any(|cmd| cmd.name == command_name);
 
-                if !is_supported {
-                    return Err(anyhow!(
-                        "The /{} command is not supported by {}.\n\nAvailable commands: {}",
-                        command_name,
-                        agent_id,
-                        if available_commands.is_empty() {
-                            "none".to_owned()
-                        } else {
-                            available_commands
-                                .iter()
-                                .map(|cmd| format!("/{}", cmd.name))
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        }
-                    ));
-                }
+            if !is_supported {
+                return Err(anyhow!(
+                    "The /{} command is not supported by {}.\n\nAvailable commands: {}",
+                    command_name,
+                    agent_id,
+                    if available_commands.is_empty() {
+                        "none".to_owned()
+                    } else {
+                        available_commands
+                            .iter()
+                            .map(|cmd| format!("/{}", cmd.name))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    }
+                ));
             }
         }
         Ok(())

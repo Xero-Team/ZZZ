@@ -3961,21 +3961,21 @@ impl SettingsWindow {
     ) -> bool {
         for page in &self.pages {
             for (item_index, item) in page.items.iter().enumerate() {
-                if let SettingsPageItem::SubPageLink(sub_page_link) = item {
-                    if sub_page_link.json_path == Some(json_path) {
-                        let section_header = page
-                            .items
-                            .iter()
-                            .take(item_index)
-                            .rev()
-                            .find_map(|item| item.header_text().map(|text| text.resolve(cx)))
-                            .unwrap_or_else(|| {
-                                app_i18n::tr(cx, "settings_ui.common.settings", "Settings").into()
-                            });
+                if let SettingsPageItem::SubPageLink(sub_page_link) = item
+                    && sub_page_link.json_path == Some(json_path)
+                {
+                    let section_header = page
+                        .items
+                        .iter()
+                        .take(item_index)
+                        .rev()
+                        .find_map(|item| item.header_text().map(|text| text.resolve(cx)))
+                        .unwrap_or_else(|| {
+                            app_i18n::tr(cx, "settings_ui.common.settings", "Settings").into()
+                        });
 
-                        self.push_sub_page(sub_page_link.clone(), section_header, window, cx);
-                        return true;
-                    }
+                    self.push_sub_page(sub_page_link.clone(), section_header, window, cx);
+                    return true;
                 }
             }
         }
@@ -4002,22 +4002,21 @@ impl SettingsWindow {
                     }
                     _ => None,
                 };
-                if item_json_path == Some(json_path) {
-                    if let Some(navbar_entry_index) = self
+                if item_json_path == Some(json_path)
+                    && let Some(navbar_entry_index) = self
                         .navbar_entries
                         .iter()
                         .position(|e| e.page_index == page_index && e.is_root)
-                    {
-                        self.open_and_scroll_to_navbar_entry(
-                            navbar_entry_index,
-                            None,
-                            false,
-                            window,
-                            cx,
-                        );
-                        self.scroll_to_content_item(item_index, window, cx);
-                        return true;
-                    }
+                {
+                    self.open_and_scroll_to_navbar_entry(
+                        navbar_entry_index,
+                        None,
+                        false,
+                        window,
+                        cx,
+                    );
+                    self.scroll_to_content_item(item_index, window, cx);
+                    return true;
                 }
             }
         }

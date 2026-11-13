@@ -1068,10 +1068,10 @@ impl SyntaxSnapshot {
         iter::from_fn(move || {
             while let Some(layer) = cursor.item() {
                 let mut info = None;
-                if let SyntaxLayerContent::Parsed { language, .. } = &layer.content {
-                    if include_hidden || !language.config.hidden {
-                        info = Some(language);
-                    }
+                if let SyntaxLayerContent::Parsed { language, .. } = &layer.content
+                    && (include_hidden || !language.config.hidden)
+                {
+                    info = Some(language);
                 }
                 cursor.next();
                 if info.is_some() {

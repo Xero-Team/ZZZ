@@ -226,18 +226,16 @@ fn parse_cat_file_commit(sha: Oid, content: &str) -> Option<CommitData> {
                 if let Ok(oid) = Oid::from_str(parent_sha.trim()) {
                     parents.push(oid);
                 }
-            } else if let Some(author_line) = line.strip_prefix("author ") {
-                if let Some((name_email, _timestamp_tz)) = author_line.rsplit_once(' ') {
-                    if let Some((name_email, timestamp_str)) = name_email.rsplit_once(' ') {
-                        if let Ok(ts) = timestamp_str.parse::<i64>() {
-                            commit_timestamp = ts;
-                        }
-                        if let Some((name, email)) = name_email.rsplit_once(" <") {
-                            author_name = SharedString::from(name.to_owned());
-                            author_email =
-                                SharedString::from(email.trim_end_matches('>').to_owned());
-                        }
-                    }
+            } else if let Some(author_line) = line.strip_prefix("author ")
+                && let Some((name_email, _timestamp_tz)) = author_line.rsplit_once(' ')
+                && let Some((name_email, timestamp_str)) = name_email.rsplit_once(' ')
+            {
+                if let Ok(ts) = timestamp_str.parse::<i64>() {
+                    commit_timestamp = ts;
+                }
+                if let Some((name, email)) = name_email.rsplit_once(" <") {
+                    author_name = SharedString::from(name.to_owned());
+                    author_email = SharedString::from(email.trim_end_matches('>').to_owned());
                 }
             }
         } else {
@@ -394,14 +392,13 @@ impl Worktree {
             let name_anchor_dir = path_style
                 .file_name(name_anchor_path)
                 .and_then(|name| name.to_str());
-            if name_anchor_dir == Some(dir_name) {
-                if let Some(parent_name) = path_style
+            if name_anchor_dir == Some(dir_name)
+                && let Some(parent_name) = path_style
                     .parent(&self.path)
                     .and_then(|parent| path_style.file_name(parent))
                     .and_then(|name| name.to_str())
-                {
-                    return parent_name.to_owned();
-                }
+            {
+                return parent_name.to_owned();
             }
         }
 
@@ -3036,10 +3033,10 @@ impl GitRepository for RealGitRepository {
                 let local_branch_exists =
                     |branch: &str| refs.contains_key(format!("refs/heads/{branch}").as_str());
 
-                if let Ok(default_branch) = git.run(&["config", "init.defaultBranch"]).await {
-                    if local_branch_exists(&default_branch) {
-                        return Ok(Some(default_branch.into()));
-                    }
+                if let Ok(default_branch) = git.run(&["config", "init.defaultBranch"]).await
+                    && local_branch_exists(&default_branch)
+                {
+                    return Ok(Some(default_branch.into()));
                 }
 
                 if local_branch_exists("main") {

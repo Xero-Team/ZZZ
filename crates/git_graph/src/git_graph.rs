@@ -993,26 +993,24 @@ impl GraphData {
                         segments,
                         ..
                     } = state
-                    {
-                        if let Some(CommitLineSegment::Curve {
+                        && let Some(CommitLineSegment::Curve {
                             to_column,
                             curve_kind: CurveKind::Merge,
                             ..
                         }) = segments.first_mut()
+                    {
+                        let curve_row = *starting_row + 1;
+                        let would_overlap = if lane_column != commit_lane && curve_row < commit_row
                         {
-                            let curve_row = *starting_row + 1;
-                            let would_overlap =
-                                if lane_column != commit_lane && curve_row < commit_row {
-                                    self.commits[curve_row..commit_row]
-                                        .iter()
-                                        .any(|c| c.lane == commit_lane)
-                                } else {
-                                    false
-                                };
+                            self.commits[curve_row..commit_row]
+                                .iter()
+                                .any(|c| c.lane == commit_lane)
+                        } else {
+                            false
+                        };
 
-                            if would_overlap {
-                                *to_column = lane_column;
-                            }
+                        if would_overlap {
+                            *to_column = lane_column;
                         }
                     }
 
@@ -1581,10 +1579,10 @@ impl GitGraph {
 
         cx.subscribe(&git_store, |this, _, event, cx| match event {
             GitStoreEvent::RepositoryUpdated(updated_repo_id, repo_event, _) => {
-                if this.repo_id == *updated_repo_id {
-                    if let Some(repository) = this.get_repository(cx) {
-                        this.on_repository_event(repository, repo_event, cx);
-                    }
+                if this.repo_id == *updated_repo_id
+                    && let Some(repository) = this.get_repository(cx)
+                {
+                    this.on_repository_event(repository, repo_event, cx);
                 }
             }
             _ => {}

@@ -1420,12 +1420,12 @@ impl FileFinderDelegate {
                 let mut expect_worktree = available_worktree.first().cloned();
                 for worktree in &available_worktree {
                     let worktree_root = worktree.read(cx).root_name();
-                    if worktree_count > 1 {
-                        if let Ok(suffix) = query_path.strip_prefix(worktree_root) {
-                            query_path = Cow::Owned(suffix.to_owned());
-                            expect_worktree = Some(worktree.clone());
-                            break;
-                        }
+                    if worktree_count > 1
+                        && let Ok(suffix) = query_path.strip_prefix(worktree_root)
+                    {
+                        query_path = Cow::Owned(suffix.to_owned());
+                        expect_worktree = Some(worktree.clone());
+                        break;
                     }
                 }
 

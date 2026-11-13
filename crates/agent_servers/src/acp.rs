@@ -1650,52 +1650,52 @@ impl AgentConnection for AcpConnection {
             let (modes, config_options) =
                 config_state(response.modes, response.config_options);
 
-            if let Some(default_mode) = self.default_mode.clone() {
-                if let Some(modes) = modes.as_ref() {
-                    let mut modes_ref = modes.borrow_mut();
-                    let has_mode = modes_ref
+            if let Some(default_mode) = self.default_mode.clone()
+                && let Some(modes) = modes.as_ref()
+            {
+                let mut modes_ref = modes.borrow_mut();
+                let has_mode = modes_ref
+                    .available_modes
+                    .iter()
+                    .any(|mode| mode.id == default_mode);
+
+                if has_mode {
+                    let initial_mode_id = modes_ref.current_mode_id.clone();
+
+                    cx.spawn({
+                        let default_mode = default_mode.clone();
+                        let session_id = response.session_id.clone();
+                        let modes = modes.clone();
+                        let conn = self.connection.clone();
+                        async move |_| {
+                            let result = into_foreground_future(
+                                conn.send_request(acp::SetSessionModeRequest::new(
+                                    session_id,
+                                    default_mode,
+                                )),
+                            )
+                            .await
+                            .log_err();
+
+                            if result.is_none() {
+                                modes.borrow_mut().current_mode_id = initial_mode_id;
+                            }
+                        }
+                    })
+                    .detach();
+
+                    modes_ref.current_mode_id = default_mode;
+                } else {
+                    let available_modes = modes_ref
                         .available_modes
                         .iter()
-                        .any(|mode| mode.id == default_mode);
+                        .map(|mode| format!("- `{}`: {}", mode.id, mode.name))
+                        .collect::<Vec<_>>()
+                        .join("\n");
 
-                    if has_mode {
-                        let initial_mode_id = modes_ref.current_mode_id.clone();
-
-                        cx.spawn({
-                            let default_mode = default_mode.clone();
-                            let session_id = response.session_id.clone();
-                            let modes = modes.clone();
-                            let conn = self.connection.clone();
-                            async move |_| {
-                                let result = into_foreground_future(
-                                    conn.send_request(acp::SetSessionModeRequest::new(
-                                        session_id,
-                                        default_mode,
-                                    )),
-                                )
-                                .await
-                                .log_err();
-
-                                if result.is_none() {
-                                    modes.borrow_mut().current_mode_id = initial_mode_id;
-                                }
-                            }
-                        })
-                        .detach();
-
-                        modes_ref.current_mode_id = default_mode;
-                    } else {
-                        let available_modes = modes_ref
-                            .available_modes
-                            .iter()
-                            .map(|mode| format!("- `{}`: {}", mode.id, mode.name))
-                            .collect::<Vec<_>>()
-                            .join("\n");
-
-                        log::warn!(
-                            "`{default_mode}` is not valid {name} mode. Available options:\n{available_modes}",
-                        );
-                    }
+                    log::warn!(
+                        "`{default_mode}` is not valid {name} mode. Available options:\n{available_modes}",
+                    );
                 }
             }
 
@@ -4248,20 +4248,18 @@ fn handle_session_notification(
     if let acp::SessionUpdate::CurrentModeUpdate(acp::CurrentModeUpdate {
         current_mode_id, ..
     }) = &notification.update
+        && let Some(session_modes) = &session_modes
     {
-        if let Some(session_modes) = &session_modes {
-            session_modes.borrow_mut().current_mode_id = current_mode_id.clone();
-        }
+        session_modes.borrow_mut().current_mode_id = current_mode_id.clone();
     }
 
     if let acp::SessionUpdate::ConfigOptionUpdate(acp::ConfigOptionUpdate {
         config_options, ..
     }) = &notification.update
+        && let Some((config_opts_cell, tx_cell)) = &config_opts_data
     {
-        if let Some((config_opts_cell, tx_cell)) = &config_opts_data {
-            *config_opts_cell.borrow_mut() = config_options.clone();
-            tx_cell.borrow_mut().send(()).log_err();
-        }
+        *config_opts_cell.borrow_mut() = config_options.clone();
+        tx_cell.borrow_mut().send(()).log_err();
     }
 
     if let acp::SessionUpdate::SessionInfoUpdate(info_update) = &notification.update
@@ -4271,42 +4269,40 @@ fn handle_session_notification(
     }
 
     // Register the terminal before forwarding the tool call so its content can resolve it.
-    if let acp::SessionUpdate::ToolCall(tc) = &notification.update {
-        if let Some(meta) = &tc.meta {
-            if let Some(terminal_info) = meta.get("terminal_info") {
-                if let Some(id_str) = terminal_info.get("terminal_id").and_then(|v| v.as_str()) {
-                    let terminal_id = acp::TerminalId::new(id_str);
-                    let cwd = terminal_info
-                        .get("cwd")
-                        .and_then(|v| v.as_str().map(PathBuf::from));
+    if let acp::SessionUpdate::ToolCall(tc) = &notification.update
+        && let Some(meta) = &tc.meta
+        && let Some(terminal_info) = meta.get("terminal_info")
+        && let Some(id_str) = terminal_info.get("terminal_id").and_then(|v| v.as_str())
+    {
+        let terminal_id = acp::TerminalId::new(id_str);
+        let cwd = terminal_info
+            .get("cwd")
+            .and_then(|v| v.as_str().map(PathBuf::from));
 
-                    thread
-                        .update(cx, |thread, cx| {
-                            let builder = TerminalBuilder::new_display_only(
-                                CursorShape::default(),
-                                AlternateScroll::On,
-                                None,
-                                0,
-                                cx.background_executor(),
-                                thread.project().read(cx).path_style(cx),
-                            )?;
-                            let lower = cx.new(|cx| builder.subscribe(cx));
-                            thread.on_terminal_provider_event(
-                                TerminalProviderEvent::Created {
-                                    terminal_id,
-                                    label: tc.title.clone(),
-                                    cwd,
-                                    output_byte_limit: None,
-                                    terminal: lower,
-                                },
-                                cx,
-                            );
-                            anyhow::Ok(())
-                        })
-                        .log_err();
-                }
-            }
-        }
+        thread
+            .update(cx, |thread, cx| {
+                let builder = TerminalBuilder::new_display_only(
+                    CursorShape::default(),
+                    AlternateScroll::On,
+                    None,
+                    0,
+                    cx.background_executor(),
+                    thread.project().read(cx).path_style(cx),
+                )?;
+                let lower = cx.new(|cx| builder.subscribe(cx));
+                thread.on_terminal_provider_event(
+                    TerminalProviderEvent::Created {
+                        terminal_id,
+                        label: tc.title.clone(),
+                        cwd,
+                        output_byte_limit: None,
+                        terminal: lower,
+                    },
+                    cx,
+                );
+                anyhow::Ok(())
+            })
+            .log_err();
     }
 
     if let Err(err) = thread
@@ -4322,54 +4318,53 @@ fn handle_session_notification(
     }
 
     // Apply output after forwarding the update so the terminal entry already exists.
-    if let acp::SessionUpdate::ToolCallUpdate(tcu) = &notification.update {
-        if let Some(meta) = &tcu.meta {
-            if let Some(term_out) = meta.get("terminal_output") {
-                if let Some(id_str) = term_out.get("terminal_id").and_then(|v| v.as_str()) {
-                    let terminal_id = acp::TerminalId::new(id_str);
-                    if let Some(s) = term_out.get("data").and_then(|v| v.as_str()) {
-                        let data = s.as_bytes().to_vec();
-                        thread
-                            .update(cx, |thread, cx| {
-                                thread.on_terminal_provider_event(
-                                    TerminalProviderEvent::Output { terminal_id, data },
-                                    cx,
-                                );
-                            })
-                            .log_err();
-                    }
-                }
-            }
+    if let acp::SessionUpdate::ToolCallUpdate(tcu) = &notification.update
+        && let Some(meta) = &tcu.meta
+    {
+        if let Some(term_out) = meta.get("terminal_output")
+            && let Some(id_str) = term_out.get("terminal_id").and_then(|v| v.as_str())
+            && let Some(data) = term_out.get("data").and_then(|v| v.as_str())
+        {
+            let terminal_id = acp::TerminalId::new(id_str);
+            let data = data.as_bytes().to_vec();
+            thread
+                .update(cx, |thread, cx| {
+                    thread.on_terminal_provider_event(
+                        TerminalProviderEvent::Output { terminal_id, data },
+                        cx,
+                    );
+                })
+                .log_err();
+        }
 
-            if let Some(term_exit) = meta.get("terminal_exit") {
-                if let Some(id_str) = term_exit.get("terminal_id").and_then(|v| v.as_str()) {
-                    let terminal_id = acp::TerminalId::new(id_str);
-                    let status = acp::TerminalExitStatus::new()
-                        .exit_code(
-                            term_exit
-                                .get("exit_code")
-                                .and_then(|v| v.as_u64())
-                                .map(|i| i as u32),
-                        )
-                        .signal(
-                            term_exit
-                                .get("signal")
-                                .and_then(|v| v.as_str().map(|s| s.to_owned())),
-                        );
+        if let Some(term_exit) = meta.get("terminal_exit")
+            && let Some(id_str) = term_exit.get("terminal_id").and_then(|v| v.as_str())
+        {
+            let terminal_id = acp::TerminalId::new(id_str);
+            let status = acp::TerminalExitStatus::new()
+                .exit_code(
+                    term_exit
+                        .get("exit_code")
+                        .and_then(|v| v.as_u64())
+                        .map(|i| i as u32),
+                )
+                .signal(
+                    term_exit
+                        .get("signal")
+                        .and_then(|v| v.as_str().map(|s| s.to_owned())),
+                );
 
-                    thread
-                        .update(cx, |thread, cx| {
-                            thread.on_terminal_provider_event(
-                                TerminalProviderEvent::Exit {
-                                    terminal_id,
-                                    status,
-                                },
-                                cx,
-                            );
-                        })
-                        .log_err();
-                }
-            }
+            thread
+                .update(cx, |thread, cx| {
+                    thread.on_terminal_provider_event(
+                        TerminalProviderEvent::Exit {
+                            terminal_id,
+                            status,
+                        },
+                        cx,
+                    );
+                })
+                .log_err();
         }
     }
 }

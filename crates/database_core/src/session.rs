@@ -271,18 +271,15 @@ impl QuerySession {
                 .iter()
                 .all(|(key, value)| self.applied_edits.get(key) == Some(value))
         });
-        if fully_applied {
-            if let Some(result_set) = &mut self.result_set {
-                for ((row_index, column_index), value) in
-                    std::mem::take(&mut result_set.pending_edits)
+        if fully_applied && let Some(result_set) = &mut self.result_set {
+            for ((row_index, column_index), value) in std::mem::take(&mut result_set.pending_edits)
+            {
+                if let Some(cell) = result_set
+                    .rows
+                    .get_mut(row_index)
+                    .and_then(|row| row.0.get_mut(column_index))
                 {
-                    if let Some(cell) = result_set
-                        .rows
-                        .get_mut(row_index)
-                        .and_then(|row| row.0.get_mut(column_index))
-                    {
-                        *cell = value;
-                    }
+                    *cell = value;
                 }
             }
         }

@@ -5834,13 +5834,12 @@ impl BackgroundScanner {
                     && abs_path
                         .as_path()
                         .ends_with(Path::new(DOT_GIT).join(REPO_EXCLUDE))
-                {
-                    if let Some(repository) = snapshot.git_repositories.values().find(|repo| {
+                    && let Some(repository) = snapshot.git_repositories.values().find(|repo| {
                         repo.common_dir_abs_path.join(REPO_EXCLUDE) == abs_path.as_path()
-                    }) {
-                        work_dirs_needing_exclude_update
-                            .push(repository.work_directory_abs_path.clone());
-                    }
+                    })
+                {
+                    work_dirs_needing_exclude_update
+                        .push(repository.work_directory_abs_path.clone());
                 }
             }
 

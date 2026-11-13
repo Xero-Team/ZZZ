@@ -11,16 +11,16 @@ pub fn migrate_experimental_sweep_mercury(value: &mut Value) -> Result<()> {
 }
 
 fn migrate_one(obj: &mut serde_json::Map<String, Value>) {
-    if let Some(edit_predictions) = obj.get_mut("edit_predictions") {
-        if let Some(edit_predictions_obj) = edit_predictions.as_object_mut() {
-            migrate_provider_field(edit_predictions_obj, "provider");
-        }
+    if let Some(edit_predictions) = obj.get_mut("edit_predictions")
+        && let Some(edit_predictions_obj) = edit_predictions.as_object_mut()
+    {
+        migrate_provider_field(edit_predictions_obj, "provider");
     }
 
-    if let Some(features) = obj.get_mut("features") {
-        if let Some(features_obj) = features.as_object_mut() {
-            migrate_provider_field(features_obj, "edit_prediction_provider");
-        }
+    if let Some(features) = obj.get_mut("features")
+        && let Some(features_obj) = features.as_object_mut()
+    {
+        migrate_provider_field(features_obj, "edit_prediction_provider");
     }
 }
 

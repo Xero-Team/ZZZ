@@ -1653,15 +1653,14 @@ impl Element for Div {
     #[cfg(feature = "accessibility")]
     fn register_a11y_actions(&mut self, node_id: accesskit::NodeId, window: &mut Window) {
         if let Some(focus_handle) = self.interactivity.tracked_focus_handle.clone() {
-            if focus_handle.is_focused(window) {
-                if let Err(error) = window
+            if focus_handle.is_focused(window)
+                && let Err(error) = window
                     .interaction
                     .next_frame
                     .accessibility_builder
                     .set_focus(node_id)
-                {
-                    log::error!("failed to map semantic focus: {error:?}");
-                }
+            {
+                log::error!("failed to map semantic focus: {error:?}");
             }
             window
                 .interaction
@@ -2556,11 +2555,12 @@ impl Interactivity {
                 let was_hovered = hover_state
                     .as_ref()
                     .is_some_and(|state| state.borrow().element);
-                if phase == DispatchPhase::Capture && hovered != was_hovered {
-                    if let Some(hover_state) = &hover_state {
-                        hover_state.borrow_mut().element = hovered;
-                        cx.notify(current_view);
-                    }
+                if phase == DispatchPhase::Capture
+                    && hovered != was_hovered
+                    && let Some(hover_state) = &hover_state
+                {
+                    hover_state.borrow_mut().element = hovered;
+                    cx.notify(current_view);
                 }
             });
         }
@@ -3167,35 +3167,33 @@ impl Interactivity {
             }
         }
 
-        if let Some(hitbox) = hitbox {
-            if let Some(drag) = cx.active_drag.take() {
-                let mut can_drop = true;
-                if let Some(can_drop_predicate) = &self.can_drop_predicate {
-                    can_drop = can_drop_predicate(drag.value.as_ref(), window, cx);
-                }
-
-                if can_drop {
-                    for (state_type, group_drag_style) in &self.group_drag_over_styles {
-                        if let Some(group_hitbox_id) =
-                            GroupHitboxes::get(&group_drag_style.group, cx)
-                            && *state_type == drag.value.as_ref().type_id()
-                            && group_hitbox_id.is_hovered(window)
-                        {
-                            style.refine(&group_drag_style.style);
-                        }
-                    }
-
-                    for (state_type, build_drag_over_style) in &self.drag_over_styles {
-                        if *state_type == drag.value.as_ref().type_id() && hitbox.is_hovered(window)
-                        {
-                            style.refine(&build_drag_over_style(drag.value.as_ref(), window, cx));
-                        }
-                    }
-                }
-
-                style.mouse_cursor = drag.cursor_style;
-                cx.active_drag = Some(drag);
+        if let Some(hitbox) = hitbox
+            && let Some(drag) = cx.active_drag.take()
+        {
+            let mut can_drop = true;
+            if let Some(can_drop_predicate) = &self.can_drop_predicate {
+                can_drop = can_drop_predicate(drag.value.as_ref(), window, cx);
             }
+
+            if can_drop {
+                for (state_type, group_drag_style) in &self.group_drag_over_styles {
+                    if let Some(group_hitbox_id) = GroupHitboxes::get(&group_drag_style.group, cx)
+                        && *state_type == drag.value.as_ref().type_id()
+                        && group_hitbox_id.is_hovered(window)
+                    {
+                        style.refine(&group_drag_style.style);
+                    }
+                }
+
+                for (state_type, build_drag_over_style) in &self.drag_over_styles {
+                    if *state_type == drag.value.as_ref().type_id() && hitbox.is_hovered(window) {
+                        style.refine(&build_drag_over_style(drag.value.as_ref(), window, cx));
+                    }
+                }
+            }
+
+            style.mouse_cursor = drag.cursor_style;
+            cx.active_drag = Some(drag);
         }
 
         if let Some(element_state) = element_state {

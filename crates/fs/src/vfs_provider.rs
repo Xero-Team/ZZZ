@@ -534,11 +534,11 @@ impl FsProviderCore {
                     metadata,
                 },
             );
-            if entries.len() > page_limit {
-                if let Some(last_key) = entries.last_key_value().map(|(key, _)| key.clone()) {
-                    entries.remove(&last_key);
-                    has_more = true;
-                }
+            if entries.len() > page_limit
+                && let Some(last_key) = entries.last_key_value().map(|(key, _)| key.clone())
+            {
+                entries.remove(&last_key);
+                has_more = true;
             }
         }
         let next_cursor = if has_more {

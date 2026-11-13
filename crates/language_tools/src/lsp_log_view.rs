@@ -244,10 +244,10 @@ impl LspLogView {
         cx.on_release(|log_view, cx| {
             log_view.log_store.update(cx, |log_store, cx| {
                 for (server_id, state) in &log_store.language_servers {
-                    if let Some(log_kind) = state.toggled_log_kind {
-                        if let Some(log_type) = log_type(log_kind) {
-                            send_toggle_log_message(state, *server_id, false, log_type, cx);
-                        }
+                    if let Some(log_kind) = state.toggled_log_kind
+                        && let Some(log_type) = log_type(log_kind)
+                    {
+                        send_toggle_log_message(state, *server_id, false, log_type, cx);
                     }
                 }
             });
@@ -639,11 +639,11 @@ impl LspLogView {
         self.editor.read(cx).focus_handle(cx).focus(window, cx);
         self.log_store.update(cx, |log_store, cx| {
             let state = log_store.get_language_server_state(server_id)?;
-            if let Some(log_kind) = state.toggled_log_kind.take() {
-                if let Some(log_type) = log_type(log_kind) {
-                    send_toggle_log_message(state, server_id, false, log_type, cx);
-                }
-            };
+            if let Some(log_kind) = state.toggled_log_kind.take()
+                && let Some(log_type) = log_type(log_kind)
+            {
+                send_toggle_log_message(state, server_id, false, log_type, cx);
+            }
             Some(())
         });
     }

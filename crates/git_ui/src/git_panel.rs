@@ -2075,12 +2075,12 @@ impl GitPanel {
                 .update(cx, |repo, _| repo.add_path_to_gitignore(&repo_path, false));
 
             cx.spawn(async move |_, cx| {
-                if let Err(e) = receiver.await? {
-                    if let Some(workspace) = workspace.upgrade() {
-                        cx.update(|cx| {
-                            show_error_toast(workspace, "add to .gitignore", e, cx);
-                        });
-                    }
+                if let Err(e) = receiver.await?
+                    && let Some(workspace) = workspace.upgrade()
+                {
+                    cx.update(|cx| {
+                        show_error_toast(workspace, "add to .gitignore", e, cx);
+                    });
                 }
                 anyhow::Ok(())
             })
@@ -2113,12 +2113,12 @@ impl GitPanel {
             });
 
             cx.spawn(async move |_, cx| {
-                if let Err(e) = receiver.await? {
-                    if let Some(workspace) = workspace.upgrade() {
-                        cx.update(|cx| {
-                            show_error_toast(workspace, "add to .git/info/exclude", e, cx);
-                        });
-                    }
+                if let Err(e) = receiver.await?
+                    && let Some(workspace) = workspace.upgrade()
+                {
+                    cx.update(|cx| {
+                        show_error_toast(workspace, "add to .git/info/exclude", e, cx);
+                    });
                 }
                 anyhow::Ok(())
             })
@@ -2618,12 +2618,11 @@ impl GitPanel {
                 }
             }
         };
-        if let Some(anchor) = clear_anchor {
-            if let Some(op) = self.bulk_staging.clone()
-                && op.anchor == anchor
-            {
-                self.bulk_staging = None;
-            }
+        if let Some(anchor) = clear_anchor
+            && let Some(op) = self.bulk_staging.clone()
+            && op.anchor == anchor
+        {
+            self.bulk_staging = None;
         }
         if let Some(anchor) = set_anchor {
             self.set_bulk_staging_anchor(anchor, cx);
@@ -4213,11 +4212,10 @@ impl GitPanel {
              logical_indices: Option<&mut Vec<usize>>| {
                 if let Some(estimate) =
                     this.width_estimate_for_list_entry(is_tree_view, &entry, path_style)
+                    && estimate > max_width_estimate
                 {
-                    if estimate > max_width_estimate {
-                        max_width_estimate = estimate;
-                        max_width_item_index = Some(this.entries.len());
-                    }
+                    max_width_estimate = estimate;
+                    max_width_item_index = Some(this.entries.len());
                 }
 
                 if let Some(repo_path) = entry.status_entry().map(|status| status.repo_path.clone())
@@ -5843,21 +5841,20 @@ impl GitPanel {
             return;
         };
 
-        if self._repo_subscriptions.is_empty() {
-            self._repo_subscriptions.push(cx.subscribe(
+        if self.repo_subscriptions.is_empty() {
+            self.repo_subscriptions.push(cx.subscribe(
                 &active_repository,
                 |this, _repo, event, cx| {
                     if matches!(
                         event,
                         RepositoryEvent::GraphEvent(_, _) | RepositoryEvent::TagsChanged
-                    ) {
-                        if this.active_tab == GitPanelTab::History {
-                            this.fetch_commit_history_entries(cx);
-                        }
+                    ) && this.active_tab == GitPanelTab::History
+                    {
+                        this.fetch_commit_history_entries(cx);
                     }
                 },
             ));
-            self._repo_subscriptions
+            self.repo_subscriptions
                 .push(cx.observe(&active_repository, |_this, _repo, cx| {
                     cx.notify();
                 }));

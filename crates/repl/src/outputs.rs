@@ -686,10 +686,10 @@ impl ExecutionView {
                         self.pending_input = None;
                         if self.outputs.is_empty() {
                             cx.emit(ExecutionViewFinishedEmpty);
-                        } else if ReplSettings::get_global(cx).inline_output {
-                            if let Some(small_text) = self.get_small_inline_output(cx) {
-                                cx.emit(ExecutionViewFinishedSmall(small_text));
-                            }
+                        } else if ReplSettings::get_global(cx).inline_output
+                            && let Some(small_text) = self.get_small_inline_output(cx)
+                        {
+                            cx.emit(ExecutionViewFinishedSmall(small_text));
                         }
                     }
                     ExecutionState::Unknown => self.status = ExecutionStatus::Unknown,

@@ -28,10 +28,9 @@ impl Editor {
         let mut tail = head;
         if (self.cursor_shape == CursorShape::Block || self.cursor_shape == CursorShape::Hollow)
             && head < buffer_snapshot.len()
+            && let Some(tail_ch) = buffer_snapshot.chars_at(tail).next()
         {
-            if let Some(tail_ch) = buffer_snapshot.chars_at(tail).next() {
-                tail += tail_ch.len_utf8();
-            }
+            tail += tail_ch.len_utf8();
         }
         let task = cx.background_spawn({
             let buffer_snapshot = buffer_snapshot.clone();

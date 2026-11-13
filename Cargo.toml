@@ -1349,6 +1349,11 @@ case_sensitive_file_extension_comparisons = "deny"
 # control flow reads at a single indentation level.
 collapsible_else_if = "deny"
 
+# The eleventh batch merges nested `if`/`if let` pairs into a single `if` with a
+# let chain, so the guard reads as one condition instead of a staircase of
+# one-line blocks.
+collapsible_if = "deny"
+
 # We currently do not restrict any style rules
 # as it slows down shipping code to ZZZ.
 #

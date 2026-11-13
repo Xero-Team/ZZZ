@@ -465,16 +465,16 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
                 let active_workspace = this.workspace().clone();
                 let source_workspace = source_workspace.clone();
                 active_workspace.update(cx, |workspace, cx| {
-                    if let Some(ref source) = source_workspace {
-                        if let Some(panel) = workspace.panel::<agent_ui::AgentPanel>(cx) {
-                            panel.update(cx, |panel, cx| {
-                                panel.initialize_from_source_workspace_if_needed(
-                                    source.clone(),
-                                    window,
-                                    cx,
-                                );
-                            });
-                        }
+                    if let Some(ref source) = source_workspace
+                        && let Some(panel) = workspace.panel::<agent_ui::AgentPanel>(cx)
+                    {
+                        panel.update(cx, |panel, cx| {
+                            panel.initialize_from_source_workspace_if_needed(
+                                source.clone(),
+                                window,
+                                cx,
+                            );
+                        });
                     }
 
                     ensure_agent_panel_for_workspace(workspace, source_workspace, window, cx)
@@ -1610,20 +1610,14 @@ fn quit(_: &Quit, cx: &mut App) {
                         })
                     })
                     .log_err()
+                    && !should_close.await?
                 {
-                    if !should_close.await? {
-                        window
-                            .update(cx, |multi_workspace, window, cx| {
-                                multi_workspace.activate(
-                                    originally_active.clone(),
-                                    None,
-                                    window,
-                                    cx,
-                                );
-                            })
-                            .log_err();
-                        return Ok(());
-                    }
+                    window
+                        .update(cx, |multi_workspace, window, cx| {
+                            multi_workspace.activate(originally_active.clone(), None, window, cx);
+                        })
+                        .log_err();
+                    return Ok(());
                 }
             }
 

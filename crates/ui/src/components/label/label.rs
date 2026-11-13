@@ -262,31 +262,31 @@ impl LabelCommon for Label {
 
 impl RenderOnce for Label {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        if self.render_code_spans {
-            if let Some((stripped, code_ranges)) = parse_backtick_spans(&self.label) {
-                let buffer_font_family = theme::theme_settings(cx).buffer_font(cx).family.clone();
-                let background_color = cx.theme().colors().element_background;
+        if self.render_code_spans
+            && let Some((stripped, code_ranges)) = parse_backtick_spans(&self.label)
+        {
+            let buffer_font_family = theme::theme_settings(cx).buffer_font(cx).family.clone();
+            let background_color = cx.theme().colors().element_background;
 
-                let highlights = code_ranges.iter().map(|range| {
-                    (
-                        range.clone(),
-                        HighlightStyle {
-                            background_color: Some(background_color),
-                            ..Default::default()
-                        },
-                    )
-                });
+            let highlights = code_ranges.iter().map(|range| {
+                (
+                    range.clone(),
+                    HighlightStyle {
+                        background_color: Some(background_color),
+                        ..Default::default()
+                    },
+                )
+            });
 
-                let font_overrides = code_ranges
-                    .iter()
-                    .map(|range| (range.clone(), buffer_font_family.clone()));
+            let font_overrides = code_ranges
+                .iter()
+                .map(|range| (range.clone(), buffer_font_family.clone()));
 
-                return self.base.child(
-                    StyledText::new(stripped)
-                        .with_highlights(highlights)
-                        .with_font_family_overrides(font_overrides),
-                );
-            }
+            return self.base.child(
+                StyledText::new(stripped)
+                    .with_highlights(highlights)
+                    .with_font_family_overrides(font_overrides),
+            );
         }
         self.base.child(self.label)
     }

@@ -64,23 +64,21 @@ impl LspStore {
                 .unwrap_or_default()
         });
 
-        if let Some(lsp_data) = self.current_lsp_data(buffer_id) {
-            if let Some(cached_colors) = &lsp_data.document_colors {
-                if !version_queried_for.changed_since(&lsp_data.buffer_version) {
-                    let has_different_servers =
-                        current_language_servers.is_some_and(|current_language_servers| {
-                            current_language_servers
-                                != cached_colors.colors.keys().copied().collect()
-                        });
-                    if !has_different_servers {
-                        return Some(
-                            Task::ready(Ok(DocumentColors {
-                                colors: cached_colors.colors.values().flatten().cloned().collect(),
-                            }))
-                            .shared(),
-                        );
-                    }
-                }
+        if let Some(lsp_data) = self.current_lsp_data(buffer_id)
+            && let Some(cached_colors) = &lsp_data.document_colors
+            && !version_queried_for.changed_since(&lsp_data.buffer_version)
+        {
+            let has_different_servers =
+                current_language_servers.is_some_and(|current_language_servers| {
+                    current_language_servers != cached_colors.colors.keys().copied().collect()
+                });
+            if !has_different_servers {
+                return Some(
+                    Task::ready(Ok(DocumentColors {
+                        colors: cached_colors.colors.values().flatten().cloned().collect(),
+                    }))
+                    .shared(),
+                );
             }
         }
 

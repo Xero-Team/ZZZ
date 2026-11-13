@@ -70,10 +70,9 @@ fn main() {
     while let Some(argument) = args.next() {
         if argument == "--pid-file"
             && let Some(path) = args.next()
+            && let Err(error) = std::fs::write(&path, std::process::id().to_string())
         {
-            if let Err(error) = std::fs::write(&path, std::process::id().to_string()) {
-                eprintln!("mock database driver: failed to write {path}: {error}");
-            }
+            eprintln!("mock database driver: failed to write {path}: {error}");
         }
     }
     let output: Output = Arc::new(Mutex::new(std::io::stdout()));

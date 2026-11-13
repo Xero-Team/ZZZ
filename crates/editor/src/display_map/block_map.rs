@@ -897,12 +897,12 @@ impl BlockMap {
             companion_edits_in_my_space.sort_by_key(|edit| edit.old.start);
             let mut merged_edits: Vec<WrapEdit> = Vec::new();
             for edit in companion_edits_in_my_space {
-                if let Some(last) = merged_edits.last_mut() {
-                    if edit.old.start <= last.old.end {
-                        last.old.end = last.old.end.max(edit.old.end);
-                        last.new.end = last.new.end.max(edit.new.end);
-                        continue;
-                    }
+                if let Some(last) = merged_edits.last_mut()
+                    && edit.old.start <= last.old.end
+                {
+                    last.old.end = last.old.end.max(edit.old.end);
+                    last.new.end = last.new.end.max(edit.new.end);
+                    continue;
                 }
                 merged_edits.push(edit);
             }
@@ -2124,16 +2124,14 @@ impl BlockMapWriter<'_> {
             ranges.extend(multi_buffer_snapshot.range_for_buffer(buffer_id));
             if let Some(companion) = &self.companion
                 && companion.inverse.is_some()
+                && let Some(diff) = multi_buffer_snapshot.diff_for_buffer_id(buffer_id)
             {
-                if let Some(diff) = multi_buffer_snapshot.diff_for_buffer_id(buffer_id) {
-                    let companion_buffer_id =
-                        if companion.companion.is_rhs(companion.display_map_id) {
-                            diff.base_text().remote_id()
-                        } else {
-                            diff.buffer_id()
-                        };
-                    companion_buffer_ids.insert(companion_buffer_id);
-                }
+                let companion_buffer_id = if companion.companion.is_rhs(companion.display_map_id) {
+                    diff.base_text().remote_id()
+                } else {
+                    diff.buffer_id()
+                };
+                companion_buffer_ids.insert(companion_buffer_id);
             }
         }
         ranges.sort_unstable_by_key(|range| range.start);

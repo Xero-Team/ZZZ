@@ -792,10 +792,10 @@ impl Fs for RealFs {
     }
 
     async fn rename(&self, source: &Path, target: &Path, options: RenameOptions) -> Result<()> {
-        if options.create_parents {
-            if let Some(parent) = target.parent() {
-                self.create_dir(parent).await?;
-            }
+        if options.create_parents
+            && let Some(parent) = target.parent()
+        {
+            self.create_dir(parent).await?;
         }
 
         if options.overwrite {
@@ -3085,10 +3085,10 @@ impl Fs for FakeFs {
         let old_path = normalize_path(old_path);
         let new_path = normalize_path(new_path);
 
-        if options.create_parents {
-            if let Some(parent) = new_path.parent() {
-                self.create_dir(parent).await?;
-            }
+        if options.create_parents
+            && let Some(parent) = new_path.parent()
+        {
+            self.create_dir(parent).await?;
         }
 
         let mut state = self.state.lock();

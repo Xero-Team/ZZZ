@@ -2299,10 +2299,10 @@ impl WorkspaceDb {
         for (id, paths, _identity_paths_hint, remote_connection_id, session_id, _, timestamp) in
             self.recent_workspaces()?
         {
-            if let Some(session_id) = session_id.as_deref() {
-                if session_id == current_session_id || Some(session_id) == last_session_id {
-                    continue;
-                }
+            if let Some(session_id) = session_id.as_deref()
+                && (session_id == current_session_id || Some(session_id) == last_session_id)
+            {
+                continue;
             }
 
             if let Some(remote_connection_id) = remote_connection_id {

@@ -342,10 +342,8 @@ impl WgpuRenderer {
             )?;
         // Adapter selection configures the surface with this same configuration when it
         // creates the context, so only configure it here when that did not happen.
-        if !context_configured_surface {
-            if let Some(surface) = &surface {
-                surface.configure(&context.device, &surface_config);
-            }
+        if !context_configured_surface && let Some(surface) = &surface {
+            surface.configure(&context.device, &surface_config);
         }
 
         let surface_format = surface_config.format;

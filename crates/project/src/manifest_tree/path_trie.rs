@@ -93,16 +93,16 @@ impl<Label: Ord + Clone> RootPathTrie<Label> {
                 && (callback)(&current.worktree_relative_path, &current.labels).is_break()
             {
                 return;
-            };
+            }
             current = match current.children.get(key) {
                 Some(child) => child,
                 None => return,
             };
         }
-        if !current.labels.is_empty() {
-            if callback(&current.worktree_relative_path, &current.labels).is_break() {
-                return;
-            }
+        if !current.labels.is_empty()
+            && callback(&current.worktree_relative_path, &current.labels).is_break()
+        {
+            return;
         }
     }
 

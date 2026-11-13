@@ -616,13 +616,13 @@ fn merge_live_thread_info(
     }
 
     for thread in threads.iter_mut() {
-        if let Some(session_id) = thread.metadata.session_id.clone() {
-            if let Some(&info) = live_info_by_session.get(&session_id) {
-                let status = info.status;
-                let thread_id = thread.metadata.thread_id;
-                thread.apply_active_info(info);
-                new_live_statuses.insert(session_id, (status, thread_id));
-            }
+        if let Some(session_id) = thread.metadata.session_id.clone()
+            && let Some(&info) = live_info_by_session.get(&session_id)
+        {
+            let status = info.status;
+            let thread_id = thread.metadata.thread_id;
+            thread.apply_active_info(info);
+            new_live_statuses.insert(session_id, (status, thread_id));
         }
 
         let session_id = &thread.metadata.session_id;
@@ -1147,11 +1147,11 @@ impl Sidebar {
             workspace,
             window,
             |this, _workspace, event: &workspace::Event, window, cx| {
-                if let workspace::Event::PanelAdded(view) = event {
-                    if let Ok(agent_panel) = view.clone().downcast::<AgentPanel>() {
-                        this.subscribe_to_agent_panel(&agent_panel, window, cx);
-                        this.update_entries(cx);
-                    }
+                if let workspace::Event::PanelAdded(view) = event
+                    && let Ok(agent_panel) = view.clone().downcast::<AgentPanel>()
+                {
+                    this.subscribe_to_agent_panel(&agent_panel, window, cx);
+                    this.update_entries(cx);
                 }
             },
         )
@@ -3388,26 +3388,25 @@ impl Sidebar {
             .log_err()
             .is_some();
 
-        if activated {
-            if let Some(target_sidebar) = target_window
+        if activated
+            && let Some(target_sidebar) = target_window
                 .read(cx)
                 .ok()
                 .and_then(|multi_workspace| {
                     multi_workspace.sidebar().map(|sidebar| sidebar.to_any())
                 })
                 .and_then(|sidebar| sidebar.downcast::<Self>().ok())
-            {
-                target_sidebar.update(cx, |sidebar, cx| {
-                    sidebar.pending_thread_activation = Some(metadata_thread_id);
-                    sidebar.active_entry = Some(ActiveEntry {
-                        thread_id: metadata_thread_id,
-                        session_id: target_session_id.clone(),
-                        workspace: workspace_for_entry.clone(),
-                    });
-                    sidebar.record_thread_access(&metadata_thread_id);
-                    sidebar.update_entries(cx);
+        {
+            target_sidebar.update(cx, |sidebar, cx| {
+                sidebar.pending_thread_activation = Some(metadata_thread_id);
+                sidebar.active_entry = Some(ActiveEntry {
+                    thread_id: metadata_thread_id,
+                    session_id: target_session_id.clone(),
+                    workspace: workspace_for_entry.clone(),
                 });
-            }
+                sidebar.record_thread_access(&metadata_thread_id);
+                sidebar.update_entries(cx);
+            });
         }
     }
 
@@ -3866,18 +3865,17 @@ impl Sidebar {
             None => None,
         };
 
-        if let Some(header_ix) = header_ix {
-            if let Some(ListEntry::ProjectHeader { key, .. }) = self.contents.entries.get(header_ix)
-            {
-                let key = key.clone();
-                if self.is_group_collapsed(&key, cx) {
-                    self.set_group_expanded(&key, true, cx);
-                } else {
-                    self.selection = Some(header_ix);
-                    self.set_group_expanded(&key, false, cx);
-                }
-                self.update_entries(cx);
+        if let Some(header_ix) = header_ix
+            && let Some(ListEntry::ProjectHeader { key, .. }) = self.contents.entries.get(header_ix)
+        {
+            let key = key.clone();
+            if self.is_group_collapsed(&key, cx) {
+                self.set_group_expanded(&key, true, cx);
+            } else {
+                self.selection = Some(header_ix);
+                self.set_group_expanded(&key, false, cx);
             }
+            self.update_entries(cx);
         }
     }
 
@@ -4300,26 +4298,22 @@ impl Sidebar {
             // The user is looking at a different thread/draft. Clear the
             // archived thread from its workspace's panel so that switching
             // to that workspace later doesn't show a stale thread.
-            if let Some(folder_paths) = thread_folder_paths {
-                if let Some(workspace) = self
+            if let Some(folder_paths) = thread_folder_paths
+                && let Some(workspace) = self
                     .multi_workspace
                     .upgrade()
                     .and_then(|mw| mw.read(cx).workspace_for_paths(folder_paths, None, cx))
-                {
-                    if let Some(panel) = workspace.read(cx).panel::<AgentPanel>(cx) {
-                        let panel_shows_archived = panel
-                            .read(cx)
-                            .active_conversation_view()
-                            .map(|cv| cv.read(cx).parent_id())
-                            .is_some_and(|live_thread_id| {
-                                thread_id.is_some_and(|id| id == live_thread_id)
-                            });
-                        if panel_shows_archived {
-                            panel.update(cx, |panel, cx| {
-                                panel.clear_base_view(window, cx);
-                            });
-                        }
-                    }
+                && let Some(panel) = workspace.read(cx).panel::<AgentPanel>(cx)
+            {
+                let panel_shows_archived = panel
+                    .read(cx)
+                    .active_conversation_view()
+                    .map(|cv| cv.read(cx).parent_id())
+                    .is_some_and(|live_thread_id| thread_id.is_some_and(|id| id == live_thread_id));
+                if panel_shows_archived {
+                    panel.update(cx, |panel, cx| {
+                        panel.clear_base_view(window, cx);
+                    });
                 }
             }
             return;
@@ -4330,20 +4324,20 @@ impl Sidebar {
         // `rebuild_contents` will reconcile `active_entry` once the thread
         // finishes loading.
 
-        if let Some(metadata) = neighbor {
-            if let Some(workspace) = self.multi_workspace.upgrade().and_then(|mw| {
+        if let Some(metadata) = neighbor
+            && let Some(workspace) = self.multi_workspace.upgrade().and_then(|mw| {
                 mw.read(cx)
                     .workspace_for_paths(metadata.folder_paths(), None, cx)
-            }) {
-                self.active_entry = Some(ActiveEntry {
-                    thread_id: metadata.thread_id,
-                    session_id: metadata.session_id.clone(),
-                    workspace: workspace.clone(),
-                });
-                self.activate_workspace(&workspace, window, cx);
-                Self::load_agent_thread_in_workspace(&workspace, metadata, true, window, cx);
-                return;
-            }
+            })
+        {
+            self.active_entry = Some(ActiveEntry {
+                thread_id: metadata.thread_id,
+                session_id: metadata.session_id.clone(),
+                workspace: workspace.clone(),
+            });
+            self.activate_workspace(&workspace, window, cx);
+            Self::load_agent_thread_in_workspace(&workspace, metadata, true, window, cx);
+            return;
         }
 
         // No neighbor or its workspace isn't open — just clear the
@@ -4353,12 +4347,12 @@ impl Sidebar {
                 .multi_workspace
                 .upgrade()
                 .and_then(|mw| mw.read(cx).workspace_for_paths(folder_paths, None, cx));
-            if let Some(workspace) = workspace {
-                if let Some(panel) = workspace.read(cx).panel::<AgentPanel>(cx) {
-                    panel.update(cx, |panel, cx| {
-                        panel.clear_base_view(window, cx);
-                    });
-                }
+            if let Some(workspace) = workspace
+                && let Some(panel) = workspace.read(cx).panel::<AgentPanel>(cx)
+            {
+                panel.update(cx, |panel, cx| {
+                    panel.clear_base_view(window, cx);
+                });
             }
         }
     }
@@ -4433,11 +4427,11 @@ impl Sidebar {
             }
 
             if let Err(error) = thread_worktree_archive::remove_root(root.clone(), cx).await {
-                if let Some(&(id, ref completed_root)) = completed_persists.last() {
-                    if completed_root.root_path == root.root_path {
-                        thread_worktree_archive::rollback_persist(id, completed_root, cx).await;
-                        completed_persists.pop();
-                    }
+                if let Some(&(id, ref completed_root)) = completed_persists.last()
+                    && completed_root.root_path == root.root_path
+                {
+                    thread_worktree_archive::rollback_persist(id, completed_root, cx).await;
+                    completed_persists.pop();
                 }
                 for &(id, ref completed_root) in completed_persists.iter().rev() {
                     thread_worktree_archive::rollback_persist(id, completed_root, cx).await;
@@ -4686,12 +4680,12 @@ impl Sidebar {
                     Self::load_agent_thread_in_workspace(workspace, metadata, true, window, cx);
                 }
                 ThreadSwitcherEvent::Dismissed => {
-                    if let Some(mw) = weak_multi_workspace.upgrade() {
-                        if let Some(original_ws) = &original_workspace {
-                            mw.update(cx, |mw, cx| {
-                                mw.activate(original_ws.clone(), None, window, cx);
-                            });
-                        }
+                    if let Some(mw) = weak_multi_workspace.upgrade()
+                        && let Some(original_ws) = &original_workspace
+                    {
+                        mw.update(cx, |mw, cx| {
+                            mw.activate(original_ws.clone(), None, window, cx);
+                        });
                     }
                     if let Some(metadata) = &original_metadata {
                         if let Some(original_ws) = &original_workspace {

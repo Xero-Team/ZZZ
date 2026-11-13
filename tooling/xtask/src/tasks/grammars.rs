@@ -380,20 +380,20 @@ fn strip_optimization_pragmas(parser_path: &Path) -> Result<()> {
     while index < lines.len() {
         let line = lines[index];
 
-        if starts_conditional_directive(line) {
-            if let Some(end) = conditional_block_end(&lines, index) {
-                let block = &lines[index..=end];
-                let is_directive_only = block.iter().all(|line| {
-                    let line = line.trim();
-                    line.is_empty() || line.starts_with('#')
-                });
-                let has_optimization_pragma = block.iter().any(|line| is_optimization_pragma(line));
-                if is_directive_only && has_optimization_pragma {
-                    output.push_str(STRIPPED_OPTIMIZATION_PRAGMA_NOTE);
-                    output.push('\n');
-                    index = end + 1;
-                    continue;
-                }
+        if starts_conditional_directive(line)
+            && let Some(end) = conditional_block_end(&lines, index)
+        {
+            let block = &lines[index..=end];
+            let is_directive_only = block.iter().all(|line| {
+                let line = line.trim();
+                line.is_empty() || line.starts_with('#')
+            });
+            let has_optimization_pragma = block.iter().any(|line| is_optimization_pragma(line));
+            if is_directive_only && has_optimization_pragma {
+                output.push_str(STRIPPED_OPTIMIZATION_PRAGMA_NOTE);
+                output.push('\n');
+                index = end + 1;
+                continue;
             }
         }
 

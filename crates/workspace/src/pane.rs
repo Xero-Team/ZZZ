@@ -740,10 +740,9 @@ impl Pane {
             }
         } else if self.should_display_welcome_page
             && let Some(welcome_page) = self.welcome_page.as_ref()
+            && self.focus_handle.is_focused(window)
         {
-            if self.focus_handle.is_focused(window) {
-                welcome_page.read(cx).focus_handle(cx).focus(window, cx);
-            }
+            welcome_page.read(cx).focus_handle(cx).focus(window, cx);
         }
     }
 

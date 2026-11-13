@@ -1778,10 +1778,10 @@ impl EditorElement {
             }
 
             if let Some(collaboration_hub) = &editor.collaboration_hub {
-                if editor.leader_id == Some(CollaboratorId::Agent) {
-                    if let Some((local_selection_style, _)) = selections.first_mut() {
-                        *local_selection_style = cx.theme().players().agent();
-                    }
+                if editor.leader_id == Some(CollaboratorId::Agent)
+                    && let Some((local_selection_style, _)) = selections.first_mut()
+                {
+                    *local_selection_style = cx.theme().players().agent();
                 }
 
                 let mut remote_selections = HashMap::default();
@@ -1991,9 +1991,9 @@ impl EditorElement {
                         .iter()
                         .any(|range| range.start <= cursor_position && cursor_position < range.end);
 
-                    if selection.cursor_shape == CursorShape::Block && !is_cursor_in_redacted_range
-                    {
-                        if let Some(text) = snapshot.grapheme_at(cursor_position).or_else(|| {
+                    if selection.cursor_shape == CursorShape::Block
+                        && !is_cursor_in_redacted_range
+                        && let Some(text) = snapshot.grapheme_at(cursor_position).or_else(|| {
                             if snapshot.is_empty() {
                                 snapshot.placeholder_text().and_then(|s| {
                                     s.graphemes(true).next().map(|s| s.to_owned().into())
@@ -2001,51 +2001,51 @@ impl EditorElement {
                             } else {
                                 None
                             }
-                        }) {
-                            let is_ascii_whitespace_only =
-                                text.as_ref().chars().all(|c| c.is_ascii_whitespace());
-                            let len = text.len();
+                        })
+                    {
+                        let is_ascii_whitespace_only =
+                            text.as_ref().chars().all(|c| c.is_ascii_whitespace());
+                        let len = text.len();
 
-                            let mut font = cursor_row_layout
-                                .font_id_for_index(cursor_column)
-                                .and_then(|cursor_font_id| {
-                                    window.text_system().get_font_for_id(cursor_font_id)
-                                })
-                                .unwrap_or(self.style.text.font());
-                            font.features = self.style.text.font_features.clone();
+                        let mut font = cursor_row_layout
+                            .font_id_for_index(cursor_column)
+                            .and_then(|cursor_font_id| {
+                                window.text_system().get_font_for_id(cursor_font_id)
+                            })
+                            .unwrap_or(self.style.text.font());
+                        font.features = self.style.text.font_features.clone();
 
-                            // Invert the text color for the block cursor. Ensure that the text
-                            // color is opaque enough to be visible against the background color.
-                            //
-                            // 0.75 is an arbitrary threshold to determine if the background color is
-                            // opaque enough to use as a text color.
-                            //
-                            // TODO: In the future we should ensure themes have a `text_inverse` color.
-                            let color = if cx.theme().colors().editor_background.a < 0.75 {
-                                match cx.theme().appearance {
-                                    Appearance::Dark => Hsla::black(),
-                                    Appearance::Light => Hsla::white(),
-                                }
-                            } else {
-                                cx.theme().colors().editor_background
-                            };
-
-                            let shaped = window.text_system().shape_line(
-                                text,
-                                cursor_row_layout.font_size,
-                                &[TextRun {
-                                    len,
-                                    font,
-                                    color,
-                                    ..Default::default()
-                                }],
-                                None,
-                            );
-                            if !is_ascii_whitespace_only {
-                                block_width = block_width.max(shaped.width);
+                        // Invert the text color for the block cursor. Ensure that the text
+                        // color is opaque enough to be visible against the background color.
+                        //
+                        // 0.75 is an arbitrary threshold to determine if the background color is
+                        // opaque enough to use as a text color.
+                        //
+                        // TODO: In the future we should ensure themes have a `text_inverse` color.
+                        let color = if cx.theme().colors().editor_background.a < 0.75 {
+                            match cx.theme().appearance {
+                                Appearance::Dark => Hsla::black(),
+                                Appearance::Light => Hsla::white(),
                             }
-                            block_text = Some(shaped);
+                        } else {
+                            cx.theme().colors().editor_background
+                        };
+
+                        let shaped = window.text_system().shape_line(
+                            text,
+                            cursor_row_layout.font_size,
+                            &[TextRun {
+                                len,
+                                font,
+                                color,
+                                ..Default::default()
+                            }],
+                            None,
+                        );
+                        if !is_ascii_whitespace_only {
+                            block_width = block_width.max(shaped.width);
                         }
+                        block_text = Some(shaped);
                     }
 
                     let x = cursor_character_x - scroll_pixel_position.x.into();
@@ -6246,17 +6246,17 @@ impl EditorElement {
             };
 
             let mut line_indicator_width = 0.;
-            if let Some(requested_line_width) = settings.visible_line_width(indent_guide.active) {
-                if let Some(color) = line_color {
-                    window.paint_quad(fill(
-                        window.pixel_snap_bounds(Bounds {
-                            origin: indent_guide.origin,
-                            size: size(px(requested_line_width as f32), indent_guide.length),
-                        }),
-                        color,
-                    ));
-                    line_indicator_width = requested_line_width as f32;
-                }
+            if let Some(requested_line_width) = settings.visible_line_width(indent_guide.active)
+                && let Some(color) = line_color
+            {
+                window.paint_quad(fill(
+                    window.pixel_snap_bounds(Bounds {
+                        origin: indent_guide.origin,
+                        size: size(px(requested_line_width as f32), indent_guide.length),
+                    }),
+                    color,
+                ));
+                line_indicator_width = requested_line_width as f32;
             }
 
             if let Some(color) = background_color {
@@ -8367,12 +8367,11 @@ pub fn render_breadcrumb_text(
                                         editor.update(cx, |editor, cx| {
                                             editor.target_file_abs_path(cx)
                                         })
-                                    }) {
-                                        if let Some(path_str) = abs_path.to_str() {
-                                            cx.write_to_clipboard(ClipboardItem::new_string(
-                                                path_str.to_owned(),
-                                            ));
-                                        }
+                                    }) && let Some(path_str) = abs_path.to_str()
+                                    {
+                                        cx.write_to_clipboard(ClipboardItem::new_string(
+                                            path_str.to_owned(),
+                                        ));
                                     }
                                 }
                             })

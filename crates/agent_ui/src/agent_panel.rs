@@ -1217,24 +1217,23 @@ impl AgentPanel {
 
                 if terminal_to_restore.is_none()
                     && let Some(thread_info) = last_active_thread
+                    && let Some(session_id_str) = &thread_info.session_id
                 {
-                    if let Some(session_id_str) = &thread_info.session_id {
-                        let agent = thread_info.agent_type.clone();
-                        let session_id: acp::SessionId = session_id_str.clone().into();
-                        panel.update(cx, |panel, cx| {
-                            panel.selected_agent = agent.clone();
-                            panel.load_agent_thread(
-                                agent,
-                                session_id,
-                                thread_info.work_dirs.as_ref().map(|dirs| PathList::deserialize(dirs)),
-                                thread_info.title.as_ref().map(|t| t.clone().into()),
-                                false,
-                                "agent_panel",
-                                window,
-                                cx,
-                            );
-                        });
-                    }
+                    let agent = thread_info.agent_type.clone();
+                    let session_id: acp::SessionId = session_id_str.clone().into();
+                    panel.update(cx, |panel, cx| {
+                        panel.selected_agent = agent.clone();
+                        panel.load_agent_thread(
+                            agent,
+                            session_id,
+                            thread_info.work_dirs.as_ref().map(|dirs| PathList::deserialize(dirs)),
+                            thread_info.title.as_ref().map(|t| t.clone().into()),
+                            false,
+                            "agent_panel",
+                            window,
+                            cx,
+                        );
+                    });
                 }
 
                 let draft_prompt = serialized_panel
@@ -1420,10 +1419,9 @@ impl AgentPanel {
         if workspace
             .panel::<Self>(cx)
             .is_some_and(|panel| panel.read(cx).enabled(cx))
+            && !workspace.toggle_panel_focus::<Self>(window, cx)
         {
-            if !workspace.toggle_panel_focus::<Self>(window, cx) {
-                workspace.close_panel::<Self>(window, cx);
-            }
+            workspace.close_panel::<Self>(window, cx);
         }
     }
 
@@ -2334,13 +2332,13 @@ impl AgentPanel {
         let Some(draft) = self.ensure_draft(source, window, cx) else {
             return;
         };
-        if let BaseView::AgentThread { conversation_view } = &self.base_view {
-            if conversation_view.entity_id() == draft.entity_id() {
-                if focus {
-                    self.activation_focus_handle(cx).focus(window, cx);
-                }
-                return;
+        if let BaseView::AgentThread { conversation_view } = &self.base_view
+            && conversation_view.entity_id() == draft.entity_id()
+        {
+            if focus {
+                self.activation_focus_handle(cx).focus(window, cx);
             }
+            return;
         }
         self.set_base_view(
             BaseView::AgentThread {
@@ -3048,11 +3046,11 @@ impl AgentPanel {
             .chain(self.retained_threads.values());
 
         for conversation_view in conversation_views {
-            if *thread_id == conversation_view.read(cx).thread_id {
-                if let Some(thread_view) = conversation_view.read(cx).root_thread_view() {
-                    thread_view.update(cx, |view, cx| view.cancel_generation(cx));
-                    return true;
-                }
+            if *thread_id == conversation_view.read(cx).thread_id
+                && let Some(thread_view) = conversation_view.read(cx).root_thread_view()
+            {
+                thread_view.update(cx, |view, cx| view.cancel_generation(cx));
+                return true;
             }
         }
         false
@@ -3346,12 +3344,12 @@ impl AgentPanel {
         };
 
         // Check if the active view already has this session.
-        if let BaseView::AgentThread { conversation_view } = &self.base_view {
-            if has_session(conversation_view) {
-                self.clear_overlay_state();
-                cx.emit(AgentPanelEvent::ActiveViewChanged);
-                return;
-            }
+        if let BaseView::AgentThread { conversation_view } = &self.base_view
+            && has_session(conversation_view)
+        {
+            self.clear_overlay_state();
+            cx.emit(AgentPanelEvent::ActiveViewChanged);
+            return;
         }
 
         // Check if a retained thread has this session — promote it.
@@ -3360,16 +3358,16 @@ impl AgentPanel {
             .iter()
             .find(|(_, cv)| has_session(cv))
             .map(|(id, _)| *id);
-        if let Some(thread_id) = retained_key {
-            if let Some(conversation_view) = self.retained_threads.remove(&thread_id) {
-                self.set_base_view(
-                    BaseView::AgentThread { conversation_view },
-                    focus,
-                    window,
-                    cx,
-                );
-                return;
-            }
+        if let Some(thread_id) = retained_key
+            && let Some(conversation_view) = self.retained_threads.remove(&thread_id)
+        {
+            self.set_base_view(
+                BaseView::AgentThread { conversation_view },
+                focus,
+                window,
+                cx,
+            );
+            return;
         }
 
         // Threads persisted while the in-tree native agent existed store its

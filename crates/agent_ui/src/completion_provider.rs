@@ -1225,10 +1225,10 @@ impl<T: PromptCompletionProviderDelegate> PromptCompletionProvider<T> {
                     let mut matches = recent_task.await;
                     matches.extend(entries);
 
-                    if let Some(branch_diff_task) = branch_diff_task {
-                        if let Some(branch_diff_match) = branch_diff_task.await {
-                            matches.push(Match::BranchDiff(branch_diff_match));
-                        }
+                    if let Some(branch_diff_task) = branch_diff_task
+                        && let Some(branch_diff_match) = branch_diff_task.await
+                    {
+                        matches.push(Match::BranchDiff(branch_diff_match));
                     }
 
                     matches
@@ -1579,12 +1579,11 @@ impl PromptCompletion {
         offset_to_line: usize,
         supported_modes: &[PromptContextType],
     ) -> Option<Self> {
-        if line.contains('@') {
-            if let Some(mention) =
+        if line.contains('@')
+            && let Some(mention) =
                 MentionCompletion::try_parse(line, offset_to_line, supported_modes)
-            {
-                return Some(Self::Mention(mention));
-            }
+        {
+            return Some(Self::Mention(mention));
         }
         SlashCommandCompletion::try_parse(line, offset_to_line).map(Self::SlashCommand)
     }

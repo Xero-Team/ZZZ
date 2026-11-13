@@ -1061,17 +1061,16 @@ impl ContextProvider for BasicContextProvider {
             }
         }
 
-        if let Some(worktree_id) = location.buffer.read(cx).file().map(|f| f.worktree_id(cx)) {
-            if let Some(path) = self
+        if let Some(worktree_id) = location.buffer.read(cx).file().map(|f| f.worktree_id(cx))
+            && let Some(path) = self
                 .git_store
                 .read(cx)
                 .original_repo_path_for_worktree(worktree_id, cx)
-            {
-                task_variables.insert(
-                    VariableName::MainGitWorktree,
-                    path.to_string_lossy().into_owned(),
-                );
-            }
+        {
+            task_variables.insert(
+                VariableName::MainGitWorktree,
+                path.to_string_lossy().into_owned(),
+            );
         }
 
         if let Some(current_file) = current_file {

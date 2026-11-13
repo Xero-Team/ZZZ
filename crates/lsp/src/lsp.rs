@@ -675,14 +675,14 @@ impl LanguageServer {
 
         while let Some(msg) = input_handler.incoming_messages.next().await {
             if msg.method == <notification::Cancel as notification::Notification>::METHOD {
-                if let Some(params) = msg.params {
-                    if let Ok(cancel_params) = serde_json::from_value::<CancelParams>(params) {
-                        let id = match cancel_params.id {
-                            NumberOrString::Number(id) => RequestId::Int(id),
-                            NumberOrString::String(id) => RequestId::Str(id),
-                        };
-                        pending_respond_tasks.lock().remove(&id);
-                    }
+                if let Some(params) = msg.params
+                    && let Ok(cancel_params) = serde_json::from_value::<CancelParams>(params)
+                {
+                    let id = match cancel_params.id {
+                        NumberOrString::Number(id) => RequestId::Int(id),
+                        NumberOrString::String(id) => RequestId::Str(id),
+                    };
+                    pending_respond_tasks.lock().remove(&id);
                 }
                 continue;
             }

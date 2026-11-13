@@ -532,10 +532,10 @@ impl Drop for EngineHandle {
             .engine
             .lock()
             .unwrap_or_else(|error| error.into_inner());
-        if let Some(thread) = engine.thread.take() {
-            if thread.join().is_err() {
-                log::warn!("telegram engine thread panicked during shutdown");
-            }
+        if let Some(thread) = engine.thread.take()
+            && thread.join().is_err()
+        {
+            log::warn!("telegram engine thread panicked during shutdown");
         }
     }
 }
@@ -1564,10 +1564,10 @@ impl EngineState {
 
     async fn logout(&mut self) {
         self.stop_qr();
-        if let Some(client) = self.client.clone() {
-            if let Err(error) = client.sign_out().await {
-                log::warn!("failed to sign out of Telegram: {error}");
-            }
+        if let Some(client) = self.client.clone()
+            && let Err(error) = client.sign_out().await
+        {
+            log::warn!("failed to sign out of Telegram: {error}");
         }
         if let Err(error) = self.store.clear() {
             log::warn!("failed to clear the Telegram session: {error:#}");
@@ -2770,14 +2770,13 @@ impl EngineState {
             {
                 message.send_state = SendState::Failed;
             }
-        } else if let Some(entry) = self.histories.get_mut(&chat_id) {
-            if let Some(message) = entry
+        } else if let Some(entry) = self.histories.get_mut(&chat_id)
+            && let Some(message) = entry
                 .messages
                 .iter_mut()
                 .find(|message| message.local_id == Some(local_id))
-            {
-                message.send_state = SendState::Failed;
-            }
+        {
+            message.send_state = SendState::Failed;
         }
         if let EngineError::SlowMode { seconds } = &error {
             let seconds = (*seconds).min(u64::from(u32::MAX)) as u32;
@@ -4459,17 +4458,19 @@ impl EngineState {
             self.schedule_chats_refresh();
         }
 
-        if selected && !outgoing && !actively_viewing && !self.view.topics.is_empty() {
-            if let Some(topic) = self
+        if selected
+            && !outgoing
+            && !actively_viewing
+            && !self.view.topics.is_empty()
+            && let Some(topic) = self
                 .view
                 .topics
                 .iter_mut()
                 .find(|topic| topic.id == message_topic_id)
-            {
-                topic.unread_count = topic.unread_count.saturating_add(1);
-                if mentioned {
-                    topic.unread_mentions = topic.unread_mentions.saturating_add(1);
-                }
+        {
+            topic.unread_count = topic.unread_count.saturating_add(1);
+            if mentioned {
+                topic.unread_mentions = topic.unread_mentions.saturating_add(1);
             }
         }
 
@@ -4485,10 +4486,10 @@ impl EngineState {
             self.upsert_history_message(snapshot);
             self.sort_history();
             self.cache_selected_history();
-            if let Some(newest_known) = newest_known {
-                if incoming_id > newest_known.saturating_add(1) {
-                    self.schedule_gap_fill(source_chat_id, newest_known, incoming_id);
-                }
+            if let Some(newest_known) = newest_known
+                && incoming_id > newest_known.saturating_add(1)
+            {
+                self.schedule_gap_fill(source_chat_id, newest_known, incoming_id);
             }
         }
         self.refresh_visible_chats();
@@ -6420,11 +6421,11 @@ async fn download_media_file(
     message_id: i32,
     path: PathBuf,
 ) -> Result<Option<PathBuf>, EngineError> {
-    if let Some(parent) = path.parent() {
-        if let Err(error) = std::fs::create_dir_all(parent) {
-            log::warn!("failed to create the Telegram media directory: {error}");
-            return Err(EngineError::Other);
-        }
+    if let Some(parent) = path.parent()
+        && let Err(error) = std::fs::create_dir_all(parent)
+    {
+        log::warn!("failed to create the Telegram media directory: {error}");
+        return Err(EngineError::Other);
     }
     let mut attempt = 0;
     let mut rejected_reference: Option<Vec<u8>> = None;
@@ -6493,11 +6494,11 @@ async fn download_thumbnail_file(
         return Ok(None);
     };
     let cached = tokio::task::spawn_blocking(move || {
-        if let Some(parent) = path.parent() {
-            if let Err(error) = std::fs::create_dir_all(parent) {
-                log::warn!("failed to create the Telegram thumbnail directory: {error}");
-                return Err(EngineError::Other);
-            }
+        if let Some(parent) = path.parent()
+            && let Err(error) = std::fs::create_dir_all(parent)
+        {
+            log::warn!("failed to create the Telegram thumbnail directory: {error}");
+            return Err(EngineError::Other);
         }
         if let Err(error) = std::fs::write(&path, &bytes) {
             log::warn!("failed to cache a Telegram thumbnail: {error}");
@@ -6591,10 +6592,10 @@ fn media_extension(media: &MediaSnapshot) -> String {
     if let Some(extension) = media.file_name.as_deref().and_then(file_extension) {
         return extension;
     }
-    if let Some(mime) = media.mime_type.as_deref() {
-        if let Some(extension) = mime_extension(mime, media.kind) {
-            return extension;
-        }
+    if let Some(mime) = media.mime_type.as_deref()
+        && let Some(extension) = mime_extension(mime, media.kind)
+    {
+        return extension;
     }
     match media.kind {
         MediaKind::Photo => "jpg".to_owned(),
@@ -6686,10 +6687,8 @@ fn evict_cache_with(root: Option<&Path>, max_bytes: u64, max_age: Duration) {
         let expired = modified
             .and_then(|modified| now.duration_since(modified).ok())
             .is_some_and(|age| age > max_age);
-        if expired {
-            if let Err(error) = std::fs::remove_file(path) {
-                log::debug!("failed to evict a Telegram cache file: {error}");
-            }
+        if expired && let Err(error) = std::fs::remove_file(path) {
+            log::debug!("failed to evict a Telegram cache file: {error}");
         }
     }
     entries.retain(|(path, _)| path.is_file());

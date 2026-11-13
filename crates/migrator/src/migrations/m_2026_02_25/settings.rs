@@ -107,10 +107,10 @@ fn migrate_builtin_entry(
             if let Some(command) = old_obj.get("command") {
                 custom_obj.insert("command".to_owned(), command.clone());
             }
-            if let Some(args) = old_obj.get("args") {
-                if !args.as_array().is_some_and(|a| a.is_empty()) {
-                    custom_obj.insert("args".to_owned(), args.clone());
-                }
+            if let Some(args) = old_obj.get("args")
+                && !args.as_array().is_some_and(|a| a.is_empty())
+            {
+                custom_obj.insert("args".to_owned(), args.clone());
             }
         } else {
             // ignore_system_version: false — the user wants the binary from $PATH

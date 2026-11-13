@@ -286,20 +286,19 @@ impl Editor {
             };
 
             rows_with_any_lens.insert(MultiBufferRow(position.to_point(snapshot).row));
-            if let project::LspAction::CodeLens(lens) = &action.lsp_action {
-                if let Some(title) = lens
+            if let project::LspAction::CodeLens(lens) = &action.lsp_action
+                && let Some(title) = lens
                     .command
                     .as_ref()
                     .map(|cmd| SharedString::from(&cmd.title))
-                {
-                    titled_lenses.push((
-                        position,
-                        CodeLensItem {
-                            title,
-                            action: action.clone(),
-                        },
-                    ));
-                }
+            {
+                titled_lenses.push((
+                    position,
+                    CodeLensItem {
+                        title,
+                        action: action.clone(),
+                    },
+                ));
             }
         }
 

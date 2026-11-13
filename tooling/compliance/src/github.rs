@@ -341,11 +341,11 @@ pub mod graph_ql {
 
     impl<T> GraphQLResponse<T> {
         pub fn into_data(self) -> Result<T> {
-            if let Some(errors) = &self.errors {
-                if !errors.is_empty() {
-                    let messages: String = errors.iter().map(|e| e.message.as_str()).join("; ");
-                    anyhow::bail!("GraphQL error: {messages}");
-                }
+            if let Some(errors) = &self.errors
+                && !errors.is_empty()
+            {
+                let messages: String = errors.iter().map(|e| e.message.as_str()).join("; ");
+                anyhow::bail!("GraphQL error: {messages}");
             }
 
             self.data.context("GraphQL response contained no data")

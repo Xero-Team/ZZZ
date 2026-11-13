@@ -320,16 +320,16 @@ impl ConnectionDialog {
         self.message = None;
         cx.notify();
         let task = cx.spawn(async move |this, cx| {
-            if !typed_password.is_empty() {
-                if let Err(error) = credentials.write(&key, typed_password.as_bytes(), cx).await {
-                    this.update(cx, |this, cx| {
-                        this.busy = false;
-                        this.message = Some((error.to_string().into(), MessageKind::Error));
-                        cx.notify();
-                    })
-                    .ok();
-                    return;
-                }
+            if !typed_password.is_empty()
+                && let Err(error) = credentials.write(&key, typed_password.as_bytes(), cx).await
+            {
+                this.update(cx, |this, cx| {
+                    this.busy = false;
+                    this.message = Some((error.to_string().into(), MessageKind::Error));
+                    cx.notify();
+                })
+                .ok();
+                return;
             }
             let completion = cx.update(|cx| persist_connection(&config, cx));
             let saved = match completion.await {

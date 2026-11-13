@@ -469,13 +469,13 @@ impl Member {
                     };
                 }
 
-                if let Some(maximized) = maximized {
-                    if maximized.upgrade().as_ref() != Some(pane) {
-                        return PaneRenderResult {
-                            element: div().into_any(),
-                            contains_active_pane: false,
-                        };
-                    }
+                if let Some(maximized) = maximized
+                    && maximized.upgrade().as_ref() != Some(pane)
+                {
+                    return PaneRenderResult {
+                        element: div().into_any(),
+                        contains_active_pane: false,
+                    };
                 }
 
                 let decoration = render_cx.decorate(pane, cx);
@@ -873,19 +873,12 @@ impl PaneAxis {
         window: &mut Window,
         cx: &mut App,
     ) -> PaneRenderResult {
-        if let Some(maximized) = maximized {
-            if let Some(maximized_pane) = maximized.upgrade() {
-                for member in &self.members {
-                    if member.contains_pane(&maximized_pane) {
-                        return member.render(
-                            basis,
-                            zoomed,
-                            Some(maximized),
-                            render_cx,
-                            window,
-                            cx,
-                        );
-                    }
+        if let Some(maximized) = maximized
+            && let Some(maximized_pane) = maximized.upgrade()
+        {
+            for member in &self.members {
+                if member.contains_pane(&maximized_pane) {
+                    return member.render(basis, zoomed, Some(maximized), render_cx, window, cx);
                 }
             }
         }

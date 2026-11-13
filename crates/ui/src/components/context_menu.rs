@@ -302,12 +302,12 @@ impl ContextMenu {
                     this.ignore_blur_until = None;
                 }
 
-                if this.main_menu.is_none() {
-                    if let SubmenuState::Open(open_submenu) = &this.submenu_state {
-                        let submenu_focus = open_submenu.entity.read(cx).focus_handle.clone();
-                        if submenu_focus.contains_focused(window, cx) {
-                            return;
-                        }
+                if this.main_menu.is_none()
+                    && let SubmenuState::Open(open_submenu) = &this.submenu_state
+                {
+                    let submenu_focus = open_submenu.entity.read(cx).focus_handle.clone();
+                    if submenu_focus.contains_focused(window, cx) {
+                        return;
                     }
                 }
 
@@ -379,12 +379,12 @@ impl ContextMenu {
                         this.ignore_blur_until = None;
                     }
 
-                    if this.main_menu.is_none() {
-                        if let SubmenuState::Open(open_submenu) = &this.submenu_state {
-                            let submenu_focus = open_submenu.entity.read(cx).focus_handle.clone();
-                            if submenu_focus.contains_focused(window, cx) {
-                                return;
-                            }
+                    if this.main_menu.is_none()
+                        && let SubmenuState::Open(open_submenu) = &this.submenu_state
+                    {
+                        let submenu_focus = open_submenu.entity.read(cx).focus_handle.clone();
+                        if submenu_focus.contains_focused(window, cx) {
+                            return;
                         }
                     }
 
@@ -461,13 +461,12 @@ impl ContextMenu {
                             this.ignore_blur_until = None;
                         }
 
-                        if this.main_menu.is_none() {
-                            if let SubmenuState::Open(open_submenu) = &this.submenu_state {
-                                let submenu_focus =
-                                    open_submenu.entity.read(cx).focus_handle.clone();
-                                if submenu_focus.contains_focused(window, cx) {
-                                    return;
-                                }
+                        if this.main_menu.is_none()
+                            && let SubmenuState::Open(open_submenu) = &this.submenu_state
+                        {
+                            let submenu_focus = open_submenu.entity.read(cx).focus_handle.clone();
+                            if submenu_focus.contains_focused(window, cx) {
+                                return;
                             }
                         }
 
@@ -1969,11 +1968,11 @@ impl ContextMenu {
                                 this.clear_selected();
                                 window.focus(&this.focus_handle.clone(), cx);
 
-                                if let SubmenuState::Open(open_submenu) = &this.submenu_state {
-                                    if open_submenu.item_index != ix {
-                                        this.close_submenu(false, cx);
-                                        cx.notify();
-                                    }
+                                if let SubmenuState::Open(open_submenu) = &this.submenu_state
+                                    && open_submenu.item_index != ix
+                                {
+                                    this.close_submenu(false, cx);
+                                    cx.notify();
                                 }
                             }
                         }))
@@ -2020,12 +2019,11 @@ impl ContextMenu {
                                             if matches!(
                                                 &parent.submenu_state,
                                                 SubmenuState::Open(_)
-                                            ) {
-                                                if !parent.padded_submenu_bounds().is_some_and(
-                                                    |bounds| bounds.contains(&mouse_pos),
-                                                ) {
-                                                    parent.close_submenu(true, cx);
-                                                }
+                                            ) && !parent
+                                                .padded_submenu_bounds()
+                                                .is_some_and(|bounds| bounds.contains(&mouse_pos))
+                                            {
+                                                parent.close_submenu(true, cx);
                                             }
                                         });
                                     }
@@ -2275,12 +2273,11 @@ impl Render for ContextMenu {
                         }))
                         .on_mouse_down_out(cx.listener(
                             |this, event: &MouseDownEvent, window, cx| {
-                                if matches!(&this.submenu_state, SubmenuState::Open(_)) {
-                                    if let Some(padded_bounds) = this.padded_submenu_bounds() {
-                                        if padded_bounds.contains(&event.position) {
-                                            return;
-                                        }
-                                    }
+                                if matches!(&this.submenu_state, SubmenuState::Open(_))
+                                    && let Some(padded_bounds) = this.padded_submenu_bounds()
+                                    && padded_bounds.contains(&event.position)
+                                {
+                                    return;
                                 }
 
                                 if let Some(parent) = &this.main_menu {

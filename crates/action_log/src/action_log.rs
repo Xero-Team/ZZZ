@@ -87,23 +87,22 @@ impl ActionLog {
 
     fn update_file_read_time(&mut self, buffer: &Entity<Buffer>, cx: &App) {
         let buffer = buffer.read(cx);
-        if let Some(file) = buffer.file() {
-            if let Some(local_file) = file.as_local() {
-                if let Some(mtime) = file.disk_state().mtime() {
-                    let abs_path = local_file.abs_path(cx);
-                    self.file_read_times.insert(abs_path, mtime);
-                }
-            }
+        if let Some(file) = buffer.file()
+            && let Some(local_file) = file.as_local()
+            && let Some(mtime) = file.disk_state().mtime()
+        {
+            let abs_path = local_file.abs_path(cx);
+            self.file_read_times.insert(abs_path, mtime);
         }
     }
 
     fn remove_file_read_time(&mut self, buffer: &Entity<Buffer>, cx: &App) {
         let buffer = buffer.read(cx);
-        if let Some(file) = buffer.file() {
-            if let Some(local_file) = file.as_local() {
-                let abs_path = local_file.abs_path(cx);
-                self.file_read_times.remove(&abs_path);
-            }
+        if let Some(file) = buffer.file()
+            && let Some(local_file) = file.as_local()
+        {
+            let abs_path = local_file.abs_path(cx);
+            self.file_read_times.remove(&abs_path);
         }
     }
 

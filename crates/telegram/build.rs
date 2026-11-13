@@ -25,23 +25,23 @@ fn main() {
     let mut api_id = std::env::var(API_ID_VAR).ok();
     let mut api_hash = std::env::var(API_HASH_VAR).ok();
 
-    if api_id.is_none() || api_hash.is_none() {
-        if let Ok(iter) = dotenvy::from_path_iter(&env_file) {
-            for (key, value) in iter.flatten() {
-                match key.as_str() {
-                    API_ID_VAR if api_id.is_none() => api_id = Some(value),
-                    API_HASH_VAR if api_hash.is_none() => api_hash = Some(value),
-                    _ => {}
-                }
+    if (api_id.is_none() || api_hash.is_none())
+        && let Ok(iter) = dotenvy::from_path_iter(&env_file)
+    {
+        for (key, value) in iter.flatten() {
+            match key.as_str() {
+                API_ID_VAR if api_id.is_none() => api_id = Some(value),
+                API_HASH_VAR if api_hash.is_none() => api_hash = Some(value),
+                _ => {}
             }
         }
     }
 
-    if api_id.is_none() || api_hash.is_none() {
-        if let Some((file_id, file_hash)) = read_credentials_file(&root) {
-            api_id = api_id.or(file_id);
-            api_hash = api_hash.or(file_hash);
-        }
+    if (api_id.is_none() || api_hash.is_none())
+        && let Some((file_id, file_hash)) = read_credentials_file(&root)
+    {
+        api_id = api_id.or(file_id);
+        api_hash = api_hash.or(file_hash);
     }
 
     if let Some(api_id) = api_id {

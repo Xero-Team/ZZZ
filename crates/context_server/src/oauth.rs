@@ -45,14 +45,14 @@ fn require_https_or_loopback(url: &Url) -> Result<()> {
     if url.scheme() == "https" {
         return Ok(());
     }
-    if url.scheme() == "http" {
-        if let Some(host) = url.host() {
-            match host {
-                url::Host::Ipv4(ip) if ip.is_loopback() => return Ok(()),
-                url::Host::Ipv6(ip) if ip.is_loopback() => return Ok(()),
-                url::Host::Domain(d) if d.eq_ignore_ascii_case("localhost") => return Ok(()),
-                _ => {}
-            }
+    if url.scheme() == "http"
+        && let Some(host) = url.host()
+    {
+        match host {
+            url::Host::Ipv4(ip) if ip.is_loopback() => return Ok(()),
+            url::Host::Ipv6(ip) if ip.is_loopback() => return Ok(()),
+            url::Host::Domain(d) if d.eq_ignore_ascii_case("localhost") => return Ok(()),
+            _ => {}
         }
     }
     bail!(
@@ -90,17 +90,16 @@ fn validate_oauth_url(url: &Url) -> Result<()> {
             url::Host::Ipv6(ip) => {
                 // Check for IPv4-mapped IPv6 addresses (::ffff:a.b.c.d) which
                 // could bypass the IPv4 checks above.
-                if let Some(mapped_v4) = ip.to_ipv4_mapped() {
-                    if mapped_v4.is_private()
+                if let Some(mapped_v4) = ip.to_ipv4_mapped()
+                    && (mapped_v4.is_private()
                         || mapped_v4.is_link_local()
                         || mapped_v4.is_broadcast()
-                        || mapped_v4.is_unspecified()
-                    {
-                        bail!(
-                            "OAuth endpoint must not point to private/reserved IP: ::ffff:{}",
-                            mapped_v4
-                        );
-                    }
+                        || mapped_v4.is_unspecified())
+                {
+                    bail!(
+                        "OAuth endpoint must not point to private/reserved IP: ::ffff:{}",
+                        mapped_v4
+                    );
                 }
 
                 if ip.is_unspecified() || ip.is_multicast() {
@@ -390,13 +389,13 @@ pub fn protected_resource_metadata_urls(server_url: &Url) -> Vec<Url> {
     let base = format!("{}://{}", server_url.scheme(), server_url.authority());
 
     let path = server_url.path().trim_start_matches('/');
-    if !path.is_empty() {
-        if let Ok(url) = Url::parse(&format!(
+    if !path.is_empty()
+        && let Ok(url) = Url::parse(&format!(
             "{}/.well-known/oauth-protected-resource/{}",
             base, path
-        )) {
-            urls.push(url);
-        }
+        ))
+    {
+        urls.push(url);
     }
 
     if let Ok(url) = Url::parse(&format!("{}/.well-known/oauth-protected-resource", base)) {
@@ -482,10 +481,10 @@ pub fn select_scopes(
     www_authenticate: &WwwAuthenticate,
     resource_metadata: &ProtectedResourceMetadata,
 ) -> Vec<String> {
-    if let Some(ref scopes) = www_authenticate.scope {
-        if !scopes.is_empty() {
-            return scopes.clone();
-        }
+    if let Some(ref scopes) = www_authenticate.scope
+        && !scopes.is_empty()
+    {
+        return scopes.clone();
     }
     resource_metadata
         .scopes_supported
@@ -1408,10 +1407,10 @@ impl OAuthTokenProvider for McpOAuthTokenProvider {
                     let mut session = self.session.lock();
                     session.tokens = new_tokens;
 
-                    if let Some(ref tx) = self.token_refresh_tx {
-                        if tx.unbounded_send(session.clone()).is_err() {
-                            log::debug!("OAuth session refresh receiver was dropped");
-                        }
+                    if let Some(ref tx) = self.token_refresh_tx
+                        && tx.unbounded_send(session.clone()).is_err()
+                    {
+                        log::debug!("OAuth session refresh receiver was dropped");
                     }
                 }
 

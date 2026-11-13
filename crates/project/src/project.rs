@@ -4329,12 +4329,10 @@ impl Project {
 
         if let Some(file) = buffer.read(cx).file()
             && let Some(dir) = file.path().parent()
+            && let Some(joined) = path_style.join(&*dir.display(path_style), path)
+            && let Some(joined) = RelPath::new(joined.as_ref(), path_style).ok()
         {
-            if let Some(joined) = path_style.join(&*dir.display(path_style), path)
-                && let Some(joined) = RelPath::new(joined.as_ref(), path_style).ok()
-            {
-                candidates.push(joined.into_arc());
-            }
+            candidates.push(joined.into_arc());
         }
 
         let buffer_worktree_id = buffer.read(cx).file().map(|file| file.worktree_id(cx));
@@ -4473,10 +4471,10 @@ impl Project {
         let released_tx = std::sync::Arc::new(Mutex::new(Some(released_tx)));
         let release_subscription =
             cx.observe_release(&worktree, move |_project, _released_worktree, _cx| {
-                if let Some(released_tx) = released_tx.lock().take() {
-                    if released_tx.send(()).is_err() {
-                        log::debug!("worktree release waiter was dropped");
-                    }
+                if let Some(released_tx) = released_tx.lock().take()
+                    && released_tx.send(()).is_err()
+                {
+                    log::debug!("worktree release waiter was dropped");
                 }
             });
 
@@ -4737,13 +4735,13 @@ impl Project {
 
             for worktree in worktree_store.visible_worktrees(cx) {
                 let worktree = worktree.read(cx);
-                if let Ok(rel_path) = RelPath::new(path, path_style) {
-                    if let Some(entry) = worktree.entry_for_path(&rel_path) {
-                        return Some(ProjectPath {
-                            worktree_id: worktree.id(),
-                            path: entry.path.clone(),
-                        });
-                    }
+                if let Ok(rel_path) = RelPath::new(path, path_style)
+                    && let Some(entry) = worktree.entry_for_path(&rel_path)
+                {
+                    return Some(ProjectPath {
+                        worktree_id: worktree.id(),
+                        path: entry.path.clone(),
+                    });
                 }
             }
         }

@@ -490,10 +490,10 @@ pub fn avatar_initials(title: &str) -> String {
             }
         }
     }
-    if initials.is_empty() {
-        if let Some(character) = title.chars().next() {
-            initials.extend(character.to_uppercase());
-        }
+    if initials.is_empty()
+        && let Some(character) = title.chars().next()
+    {
+        initials.extend(character.to_uppercase());
     }
     initials
 }

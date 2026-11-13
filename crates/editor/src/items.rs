@@ -1114,14 +1114,13 @@ impl Item for Editor {
             .next()
             .is_some();
 
-        if !has_folds {
-            if let Some(workspace_id) = workspace.database_id()
-                && let Some(file_path) = self.buffer().read(cx).as_singleton().and_then(|buffer| {
-                    project::File::from_dyn(buffer.read(cx).file()).map(|file| file.abs_path(cx))
-                })
-            {
-                self.load_folds_from_db(workspace_id, file_path, window, cx);
-            }
+        if !has_folds
+            && let Some(workspace_id) = workspace.database_id()
+            && let Some(file_path) = self.buffer().read(cx).as_singleton().and_then(|buffer| {
+                project::File::from_dyn(buffer.read(cx).file()).map(|file| file.abs_path(cx))
+            })
+        {
+            self.load_folds_from_db(workspace_id, file_path, window, cx);
         }
     }
 
@@ -2284,10 +2283,8 @@ fn path_for_file<'a>(
     // The full_path method allocates, so avoid calling it if height is zero.
     if height > 0 {
         let mut full_path = file.full_path(cx);
-        if !include_filename {
-            if !full_path.pop() {
-                return None;
-            }
+        if !include_filename && !full_path.pop() {
+            return None;
         }
         Some(full_path.to_string_lossy().into_owned().into())
     } else {

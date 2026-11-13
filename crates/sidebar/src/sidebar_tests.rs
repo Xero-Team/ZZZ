@@ -9523,14 +9523,14 @@ mod property_test {
         let mut duplicates: Vec<(acp::SessionId, String)> = Vec::new();
 
         for entry in &sidebar.contents.entries {
-            if let Some(session_id) = entry.session_id() {
-                if !seen.insert(session_id.clone()) {
-                    let title = match entry {
-                        ListEntry::Thread(thread) => thread.metadata.display_title().to_string(),
-                        _ => "<unknown>".to_string(),
-                    };
-                    duplicates.push((session_id.clone(), title));
-                }
+            if let Some(session_id) = entry.session_id()
+                && !seen.insert(session_id.clone())
+            {
+                let title = match entry {
+                    ListEntry::Thread(thread) => thread.metadata.display_title().to_string(),
+                    _ => "<unknown>".to_string(),
+                };
+                duplicates.push((session_id.clone(), title));
             }
         }
 

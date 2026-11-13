@@ -1041,10 +1041,10 @@ where
 
     fn add_text_dim(&mut self, summary: &Self::TextDimension) {
         self.key.add_text_dim(&summary.key);
-        if let Some(value) = &mut self.value {
-            if let Some(other_value) = summary.value.as_ref() {
-                value.add_text_dim(other_value);
-            }
+        if let Some(value) = &mut self.value
+            && let Some(other_value) = summary.value.as_ref()
+        {
+            value.add_text_dim(other_value);
         }
     }
 
@@ -1775,13 +1775,12 @@ impl MultiBuffer {
         sorted.sort_by_key(|range| range.context.start);
         let mut merged_ranges: Vec<ExcerptRange<Point>> = Vec::new();
         for range in sorted {
-            if let Some(last_range) = merged_ranges.last_mut() {
-                if last_range.context.end >= range.context.start
-                    || last_range.context.end.row + 1 == range.context.start.row
-                {
-                    last_range.context.end = range.context.end.max(last_range.context.end);
-                    continue;
-                }
+            if let Some(last_range) = merged_ranges.last_mut()
+                && (last_range.context.end >= range.context.start
+                    || last_range.context.end.row + 1 == range.context.start.row)
+            {
+                last_range.context.end = range.context.end.max(last_range.context.end);
+                continue;
             }
             merged_ranges.push(range.clone());
         }

@@ -197,13 +197,11 @@ impl FeatureFlagStore {
         if let Some(requested) = FeatureFlagsSettings::get_global(cx)
             .overrides
             .get(descriptor.name)
-        {
-            if let Some(variant) = (descriptor.variants)()
+            && let Some(variant) = (descriptor.variants)()
                 .into_iter()
                 .find(|v| v.override_key == requested.as_str())
-            {
-                return variant.override_key;
-            }
+        {
+            return variant.override_key;
         }
 
         if (cfg!(debug_assertions) || self.staff)

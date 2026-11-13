@@ -583,8 +583,8 @@ pub async fn await_and_rollback_on_failure(
             git_remove_failed = true;
         }
 
-        if git_remove_failed {
-            if let Err(fs_err) = fs
+        if git_remove_failed
+            && let Err(fs_err) = fs
                 .remove_dir(
                     &path,
                     fs::RemoveOptions {
@@ -593,11 +593,10 @@ pub async fn await_and_rollback_on_failure(
                     },
                 )
                 .await
-            {
-                let msg = format!("{}: failed to remove directory: {fs_err}", path.display());
-                log::error!("{}", msg);
-                rollback_failures.push(msg);
-            }
+        {
+            let msg = format!("{}: failed to remove directory: {fs_err}", path.display());
+            log::error!("{}", msg);
+            rollback_failures.push(msg);
         }
     }
     let mut error_message = format!("Failed to create worktree: {err}");
@@ -1184,19 +1183,18 @@ async fn open_worktree_workspace(
                 let mut paths_to_open: Vec<PathBuf> = Vec::new();
                 let mut seen = HashSet::default();
                 for path in previous_state.open_file_paths {
-                    if let Some(remapped) = remap_path(path) {
-                        if remapped_active_path.as_ref() != Some(&remapped)
-                            && seen.insert(remapped.clone())
-                        {
-                            paths_to_open.push(remapped);
-                        }
+                    if let Some(remapped) = remap_path(path)
+                        && remapped_active_path.as_ref() != Some(&remapped)
+                        && seen.insert(remapped.clone())
+                    {
+                        paths_to_open.push(remapped);
                     }
                 }
 
-                if let Some(active) = &remapped_active_path {
-                    if seen.insert(active.clone()) {
-                        paths_to_open.push(active.clone());
-                    }
+                if let Some(active) = &remapped_active_path
+                    && seen.insert(active.clone())
+                {
+                    paths_to_open.push(active.clone());
                 }
 
                 if !paths_to_open.is_empty() {

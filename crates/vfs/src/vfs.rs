@@ -706,10 +706,10 @@ impl NativePath {
             }
         }
         for (component_index, component) in self.path.components.iter().enumerate() {
-            if component_index > 0 || matches!(self.root, NativePathRoot::Posix) {
-                if bytes.last().copied() != Some(b'/') {
-                    bytes.push(b'/');
-                }
+            if (component_index > 0 || matches!(self.root, NativePathRoot::Posix))
+                && bytes.last().copied() != Some(b'/')
+            {
+                bytes.push(b'/');
             }
             bytes.extend_from_slice(component.as_bytes());
         }

@@ -1768,10 +1768,9 @@ impl OutlinePanel {
                 entries,
                 ..
             }) = &cached.entry
+                && let Some(last) = entries.last()
             {
-                if let Some(last) = entries.last() {
-                    to_uncollapse.insert(CollapsedEntry::Dir(*worktree_id, last.id));
-                }
+                to_uncollapse.insert(CollapsedEntry::Dir(*worktree_id, last.id));
             }
         }
 

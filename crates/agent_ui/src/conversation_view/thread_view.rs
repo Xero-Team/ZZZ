@@ -1076,11 +1076,10 @@ impl ThreadView {
                     && self.thread.read(cx).supports_truncate(cx)
                     && user_message.id.is_some()
                     && !self.is_subagent()
+                    && editor.read(cx).text(cx).as_str() == user_message.content.to_markdown(cx)
                 {
-                    if editor.read(cx).text(cx).as_str() == user_message.content.to_markdown(cx) {
-                        self.editing_message = None;
-                        cx.notify();
-                    }
+                    self.editing_message = None;
+                    cx.notify();
                 }
             }
             ViewEvent::MessageEditorEvent(_editor, MessageEditorEvent::SendImmediately) => {}
@@ -1189,14 +1188,14 @@ impl ThreadView {
             .take()
             .map(|started| started.elapsed());
         self.turn_fields.last_turn_tokens = self.turn_fields.turn_tokens.take();
-        self.turn_fields._turn_timer_task = None;
+        self.turn_fields.turn_timer_task = None;
     }
 
     pub fn update_turn_tokens(&mut self, cx: &App) {
-        if let Some(usage) = self.thread.read(cx).token_usage() {
-            if let Some(tokens) = &mut self.turn_fields.turn_tokens {
-                *tokens += usage.output_tokens;
-            }
+        if let Some(usage) = self.thread.read(cx).token_usage()
+            && let Some(tokens) = &mut self.turn_fields.turn_tokens
+        {
+            *tokens += usage.output_tokens;
         }
     }
 
@@ -2383,12 +2382,10 @@ impl ThreadView {
             .update(cx, |action_log, cx| action_log.reject_all_edits(cx))
             .detach();
 
-        if has_changes {
-            if let Some(workspace) = self.workspace.upgrade() {
-                workspace.update(cx, |workspace, cx| {
-                    crate::ui::show_undo_reject_toast(workspace, action_log, cx);
-                });
-            }
+        if has_changes && let Some(workspace) = self.workspace.upgrade() {
+            workspace.update(cx, |workspace, cx| {
+                crate::ui::show_undo_reject_toast(workspace, action_log, cx);
+            });
         }
     }
 
@@ -5831,12 +5828,11 @@ impl ThreadView {
                 cx.notify();
             }
         } else if self.auto_expanded_thinking_block.is_some() {
-            if thinking_display == ThinkingBlockDisplay::Auto {
-                if let Some(key) = self.auto_expanded_thinking_block {
-                    if !self.user_toggled_thinking_blocks.contains(&key) {
-                        self.expanded_thinking_blocks.remove(&key);
-                    }
-                }
+            if thinking_display == ThinkingBlockDisplay::Auto
+                && let Some(key) = self.auto_expanded_thinking_block
+                && !self.user_toggled_thinking_blocks.contains(&key)
+            {
+                self.expanded_thinking_blocks.remove(&key);
             }
             self.auto_expanded_thinking_block = None;
             cx.notify();
@@ -5959,10 +5955,8 @@ impl ThreadView {
             .entry(entry_ix)
             .and_then(|entry| entry.scroll_handle_for_assistant_message_chunk(chunk_ix));
 
-        if should_auto_scroll {
-            if let Some(ref handle) = scroll_handle {
-                handle.scroll_to_bottom();
-            }
+        if should_auto_scroll && let Some(ref handle) = scroll_handle {
+            handle.scroll_to_bottom();
         }
 
         let panel_bg = cx.theme().colors().panel_background;
@@ -8960,15 +8954,14 @@ impl ThreadView {
     ) -> Option<SharedString> {
         if matches!(status, ToolCallStatus::Failed) {
             tool_call.content.iter().find_map(|content| {
-                if let ToolCallContent::ContentBlock(block) = content {
-                    if let Some(source) = block.text_content(cx).filter(|source| !source.is_empty())
-                    {
-                        if source == "User canceled" {
-                            return None;
-                        }
-
-                        return Some(SharedString::from(source));
+                if let ToolCallContent::ContentBlock(block) = content
+                    && let Some(source) = block.text_content(cx).filter(|source| !source.is_empty())
+                {
+                    if source == "User canceled" {
+                        return None;
                     }
+
+                    return Some(SharedString::from(source));
                 }
                 None
             })

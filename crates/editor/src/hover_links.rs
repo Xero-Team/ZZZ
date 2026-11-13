@@ -866,17 +866,17 @@ pub(crate) async fn find_file(
         let parsed_path = parsed.path.to_string_lossy();
 
         // Try resolving just the path portion (without :row:col).
-        if parsed.row.is_some() {
-            if let Some(existing_path) = check_path(&parsed_path, &project, buffer, cx).await {
-                return Some((
-                    make_range(pattern_range),
-                    ResolvedFileTarget {
-                        resolved_path: existing_path,
-                        row: parsed.row,
-                        column: parsed.column,
-                    },
-                ));
-            }
+        if parsed.row.is_some()
+            && let Some(existing_path) = check_path(&parsed_path, &project, buffer, cx).await
+        {
+            return Some((
+                make_range(pattern_range),
+                ResolvedFileTarget {
+                    resolved_path: existing_path,
+                    row: parsed.row,
+                    column: parsed.column,
+                },
+            ));
         }
 
         // Try with language-specific suffixes.
@@ -974,14 +974,14 @@ fn link_pattern_file_candidates(candidate: &str) -> Vec<(String, Range<usize>)> 
 
     // Extract markdown link destination: [title](path) or ](path) -> path
     // This also handles bare (path) wrapping.
-    if let Some(captures) = MD_LINK_REGEX.captures(candidate) {
-        if let Some(link) = captures.get(1) {
-            let link_str = link.as_str().to_owned();
-            let link_range = link.range();
-            // Avoid duplicate if punctuation trimming already found this
-            if !candidates.iter().any(|(s, _)| s == &link_str) {
-                candidates.push((link_str, link_range));
-            }
+    if let Some(captures) = MD_LINK_REGEX.captures(candidate)
+        && let Some(link) = captures.get(1)
+    {
+        let link_str = link.as_str().to_owned();
+        let link_range = link.range();
+        // Avoid duplicate if punctuation trimming already found this
+        if !candidates.iter().any(|(s, _)| s == &link_str) {
+            candidates.push((link_str, link_range));
         }
     }
 

@@ -174,43 +174,42 @@ pub fn find_configs_in_snapshot(snapshot: &Snapshot) -> Vec<DevContainerConfig> 
     let devcontainer_dir_path =
         RelPath::unix(".devcontainer").expect("invariant: hardcoded path literal is valid");
 
-    if let Some(devcontainer_entry) = snapshot.entry_for_path(devcontainer_dir_path) {
-        if devcontainer_entry.is_dir() {
-            log::debug!("find_configs_in_snapshot: Scanning .devcontainer directory");
-            let devcontainer_json_path = RelPath::unix(".devcontainer/devcontainer.json")
-                .expect("invariant: hardcoded path literal is valid");
-            for entry in snapshot.child_entries(devcontainer_dir_path) {
-                log::debug!(
-                    "find_configs_in_snapshot: Found entry: {:?}, is_file: {}, is_dir: {}",
-                    entry.path.as_unix_str(),
-                    entry.is_file(),
-                    entry.is_dir()
-                );
+    if let Some(devcontainer_entry) = snapshot.entry_for_path(devcontainer_dir_path)
+        && devcontainer_entry.is_dir()
+    {
+        log::debug!("find_configs_in_snapshot: Scanning .devcontainer directory");
+        let devcontainer_json_path = RelPath::unix(".devcontainer/devcontainer.json")
+            .expect("invariant: hardcoded path literal is valid");
+        for entry in snapshot.child_entries(devcontainer_dir_path) {
+            log::debug!(
+                "find_configs_in_snapshot: Found entry: {:?}, is_file: {}, is_dir: {}",
+                entry.path.as_unix_str(),
+                entry.is_file(),
+                entry.is_dir()
+            );
 
-                if entry.is_file() && entry.path.as_ref() == devcontainer_json_path {
-                    log::debug!("find_configs_in_snapshot: Found default devcontainer.json");
-                    configs.push(DevContainerConfig::default_config());
-                } else if entry.is_dir() {
-                    let subfolder_name = entry.path.file_name().map_or_default(|n| n.to_owned());
+            if entry.is_file() && entry.path.as_ref() == devcontainer_json_path {
+                log::debug!("find_configs_in_snapshot: Found default devcontainer.json");
+                configs.push(DevContainerConfig::default_config());
+            } else if entry.is_dir() {
+                let subfolder_name = entry.path.file_name().map_or_default(|n| n.to_owned());
 
-                    let config_json_path =
-                        format!("{}/devcontainer.json", entry.path.as_unix_str());
-                    if let Ok(rel_config_path) = RelPath::unix(&config_json_path) {
-                        if snapshot.entry_for_path(rel_config_path).is_some() {
-                            log::debug!(
-                                "find_configs_in_snapshot: Found config in subfolder: {}",
-                                subfolder_name
-                            );
-                            configs.push(DevContainerConfig {
-                                name: subfolder_name,
-                                config_path: PathBuf::from(&config_json_path),
-                            });
-                        } else {
-                            log::debug!(
-                                "find_configs_in_snapshot: Subfolder {} has no devcontainer.json",
-                                subfolder_name
-                            );
-                        }
+                let config_json_path = format!("{}/devcontainer.json", entry.path.as_unix_str());
+                if let Ok(rel_config_path) = RelPath::unix(&config_json_path) {
+                    if snapshot.entry_for_path(rel_config_path).is_some() {
+                        log::debug!(
+                            "find_configs_in_snapshot: Found config in subfolder: {}",
+                            subfolder_name
+                        );
+                        configs.push(DevContainerConfig {
+                            name: subfolder_name,
+                            config_path: PathBuf::from(&config_json_path),
+                        });
+                    } else {
+                        log::debug!(
+                            "find_configs_in_snapshot: Subfolder {} has no devcontainer.json",
+                            subfolder_name
+                        );
                     }
                 }
             }

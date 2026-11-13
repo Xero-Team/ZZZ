@@ -774,15 +774,13 @@ impl RecentProjects {
 
             if let Some(ProjectPickerEntry::RecentProject(hit)) =
                 picker.delegate.filtered_entries.get(ix)
+                && let Some(workspace) = picker.delegate.workspaces.get(hit.candidate_id)
+                && matches!(workspace.location, SerializedWorkspaceLocation::Local)
             {
-                if let Some(workspace) = picker.delegate.workspaces.get(hit.candidate_id) {
-                    if matches!(workspace.location, SerializedWorkspaceLocation::Local) {
-                        let paths_to_add = workspace.paths.paths().to_vec();
-                        picker
-                            .delegate
-                            .add_paths_to_project(paths_to_add, window, cx);
-                    }
-                }
+                let paths_to_add = workspace.paths.paths().to_vec();
+                picker
+                    .delegate
+                    .add_paths_to_project(paths_to_add, window, cx);
             }
         });
     }
@@ -2246,18 +2244,16 @@ fn open_local_project(
             let Some(paths) = paths.await.log_err().flatten() else {
                 return;
             };
-            if !create_new_window {
-                if let Some(handle) = multi_workspace_handle {
-                    if let Some(task) = handle
-                        .update(cx, |multi_workspace, window, cx| {
-                            multi_workspace.open_project(paths, OpenMode::Activate, window, cx)
-                        })
-                        .log_err()
-                    {
-                        task.await.log_err();
-                    }
-                    return;
+            if !create_new_window && let Some(handle) = multi_workspace_handle {
+                if let Some(task) = handle
+                    .update(cx, |multi_workspace, window, cx| {
+                        multi_workspace.open_project(paths, OpenMode::Activate, window, cx)
+                    })
+                    .log_err()
+                {
+                    task.await.log_err();
                 }
+                return;
             }
             if let Some(task) = workspace
                 .update_in(cx, |workspace, window, cx| {

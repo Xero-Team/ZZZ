@@ -514,10 +514,9 @@ pub async fn open_paths_with_positions(
             multi_workspace.workspace().update(cx, |workspace, cx| {
                 MultiDiffView::open(diff_paths.to_vec(), workspace, window, cx)
             })
-        }) {
-            if let Some(diff_view) = diff_view.await.log_err() {
-                items.push(Some(Ok(Box::new(diff_view))));
-            }
+        }) && let Some(diff_view) = diff_view.await.log_err()
+        {
+            items.push(Some(Ok(Box::new(diff_view))));
         }
     } else {
         let workspace_weak = multi_workspace.read_with(cx, |multi_workspace, _cx| {
@@ -562,10 +561,9 @@ pub async fn open_paths_with_positions(
                     window,
                     cx,
                 )
-            }) {
-                if let Some(diff_view) = diff_view.await.log_err() {
-                    items.push(Some(Ok(Box::new(diff_view))))
-                }
+            }) && let Some(diff_view) = diff_view.await.log_err()
+            {
+                items.push(Some(Ok(Box::new(diff_view))))
             }
         }
     }

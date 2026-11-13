@@ -965,10 +965,10 @@ impl HoverState {
                 popover_bounds.push(bounds);
             }
         }
-        if let Some(diagnostic_popover) = &self.diagnostic_popover {
-            if let Some(bounds) = diagnostic_popover.last_bounds.get() {
-                popover_bounds.push(bounds);
-            }
+        if let Some(diagnostic_popover) = &self.diagnostic_popover
+            && let Some(bounds) = diagnostic_popover.last_bounds.get()
+        {
+            popover_bounds.push(bounds);
         }
 
         if popover_bounds.is_empty() {
@@ -981,10 +981,10 @@ impl HoverState {
             .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap_or(px(f32::MAX));
 
-        if let Some(closest_distance) = self.closest_mouse_distance {
-            if distance > closest_distance + px(4.0) {
-                return false;
-            }
+        if let Some(closest_distance) = self.closest_mouse_distance
+            && distance > closest_distance + px(4.0)
+        {
+            return false;
         }
 
         self.closest_mouse_distance =

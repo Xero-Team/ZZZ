@@ -370,10 +370,10 @@ impl ThreadsArchiveView {
         self.list_state.reset(items.len());
         self.items = items;
 
-        if let Some(ix) = self.hovered_index {
-            if ix >= self.items.len() || !self.is_selectable_item(ix) {
-                self.hovered_index = None;
-            }
+        if let Some(ix) = self.hovered_index
+            && (ix >= self.items.len() || !self.is_selectable_item(ix))
+        {
+            self.hovered_index = None;
         }
 
         self.list_state.scroll_to(saved_scroll);

@@ -2882,12 +2882,11 @@ impl ProjectPanel {
                                 .buffer_store()
                                 .read(cx)
                                 .buffer_id_for_project_path(&project_path)
+                                && let Some(buffer) = project.buffer_for_id(*buffer_id, cx)
                             {
-                                if let Some(buffer) = project.buffer_for_id(*buffer_id, cx) {
-                                    buffer.update(cx, |buffer, cx| {
-                                        drop(buffer.reload(cx));
-                                    });
-                                }
+                                buffer.update(cx, |buffer, cx| {
+                                    drop(buffer.reload(cx));
+                                });
                             }
                         })
                     })
@@ -2925,24 +2924,24 @@ impl ProjectPanel {
                 repository.update(cx, |repo, _| repo.add_path_to_gitignore(&repo_path, is_dir));
 
             cx.spawn(async move |_, cx| {
-                if let Err(e) = receiver.await? {
-                    if let Some(workspace) = workspace.upgrade() {
-                        cx.update(|cx| {
-                            let message = tr(
-                                cx,
-                                "project_panel.gitignore.failed",
-                                "Failed to add to .gitignore: {}",
-                            )
-                            .replacen("{}", &e.to_string(), 1);
-                            let toast = StatusToast::new(message, cx, |this, _| {
-                                this.icon(Icon::new(IconName::XCircle).color(Color::Error))
-                                    .dismiss_button(true)
-                            });
-                            workspace.update(cx, |workspace, cx| {
-                                workspace.toggle_status_toast(toast, cx);
-                            });
+                if let Err(e) = receiver.await?
+                    && let Some(workspace) = workspace.upgrade()
+                {
+                    cx.update(|cx| {
+                        let message = tr(
+                            cx,
+                            "project_panel.gitignore.failed",
+                            "Failed to add to .gitignore: {}",
+                        )
+                        .replacen("{}", &e.to_string(), 1);
+                        let toast = StatusToast::new(message, cx, |this, _| {
+                            this.icon(Icon::new(IconName::XCircle).color(Color::Error))
+                                .dismiss_button(true)
                         });
-                    }
+                        workspace.update(cx, |workspace, cx| {
+                            workspace.toggle_status_toast(toast, cx);
+                        });
+                    });
                 }
                 anyhow::Ok(())
             })
@@ -2977,24 +2976,24 @@ impl ProjectPanel {
             });
 
             cx.spawn(async move |_, cx| {
-                if let Err(e) = receiver.await? {
-                    if let Some(workspace) = workspace.upgrade() {
-                        cx.update(|cx| {
-                            let message = tr(
-                                cx,
-                                "project_panel.git_info_exclude.failed",
-                                "Failed to add to .git/info/exclude: {}",
-                            )
-                            .replacen("{}", &e.to_string(), 1);
-                            let toast = StatusToast::new(message, cx, |this, _| {
-                                this.icon(Icon::new(IconName::XCircle).color(Color::Error))
-                                    .dismiss_button(true)
-                            });
-                            workspace.update(cx, |workspace, cx| {
-                                workspace.toggle_status_toast(toast, cx);
-                            });
+                if let Err(e) = receiver.await?
+                    && let Some(workspace) = workspace.upgrade()
+                {
+                    cx.update(|cx| {
+                        let message = tr(
+                            cx,
+                            "project_panel.git_info_exclude.failed",
+                            "Failed to add to .git/info/exclude: {}",
+                        )
+                        .replacen("{}", &e.to_string(), 1);
+                        let toast = StatusToast::new(message, cx, |this, _| {
+                            this.icon(Icon::new(IconName::XCircle).color(Color::Error))
+                                .dismiss_button(true)
                         });
-                    }
+                        workspace.update(cx, |workspace, cx| {
+                            workspace.toggle_status_toast(toast, cx);
+                        });
+                    });
                 }
                 anyhow::Ok(())
             })
@@ -4152,9 +4151,35 @@ impl ProjectPanel {
         let notification_id =
             workspace::notifications::NotificationId::Named("download-progress".into());
         cx.spawn_in(window, async move |this, cx| {
-            if let Ok(Ok(Some(mut paths))) = destination_dir.await {
-                if let Some(dest_dir) = paths.pop() {
-                    // Show initial toast
+            if let Ok(Ok(Some(mut paths))) = destination_dir.await
+                && let Some(dest_dir) = paths.pop()
+            {
+                // Show initial toast
+                workspace
+                    .update(cx, |workspace, cx| {
+                        workspace.show_toast(
+                            workspace::Toast::new(
+                                notification_id.clone(),
+                                tr(
+                                    cx,
+                                    "project_panel.download.progress.initial",
+                                    "Downloading 0/{} files...",
+                                )
+                                .replacen(
+                                    "{}",
+                                    &total_files.to_string(),
+                                    1,
+                                ),
+                            ),
+                            cx,
+                        );
+                    })
+                    .log_err();
+
+                for (index, (worktree_id, entry_path, relative_path)) in
+                    files_to_download.into_iter().enumerate()
+                {
+                    // Update progress toast
                     workspace
                         .update(cx, |workspace, cx| {
                             workspace.show_toast(
@@ -4176,74 +4201,39 @@ impl ProjectPanel {
                         })
                         .log_err();
 
-                    for (index, (worktree_id, entry_path, relative_path)) in
-                        files_to_download.into_iter().enumerate()
+                    let destination_path = dest_dir.join(&relative_path);
+
+                    // Create parent directories if needed
+                    if let Some(parent) = destination_path.parent()
+                        && !parent.exists()
                     {
-                        // Update progress toast
-                        workspace
-                            .update(cx, |workspace, cx| {
-                                workspace.show_toast(
-                                    workspace::Toast::new(
-                                        notification_id.clone(),
-                                        tr(
-                                            cx,
-                                            "project_panel.download.progress.current",
-                                            "Downloading {}/{} files...",
-                                        )
-                                        .replacen("{}", &(index + 1).to_string(), 1)
-                                        .replacen(
-                                            "{}",
-                                            &total_files.to_string(),
-                                            1,
-                                        ),
-                                    ),
-                                    cx,
-                                );
-                            })
-                            .log_err();
-
-                        let destination_path = dest_dir.join(&relative_path);
-
-                        // Create parent directories if needed
-                        if let Some(parent) = destination_path.parent() {
-                            if !parent.exists() {
-                                fs.create_dir(parent).await.log_err();
-                            }
-                        }
-
-                        let download_task = this.update(cx, |this, cx| {
-                            let project = this.project.clone();
-                            project.update(cx, |project, cx| {
-                                project.download_file(worktree_id, entry_path, destination_path, cx)
-                            })
-                        });
-                        if let Ok(task) = download_task {
-                            task.await.log_err();
-                        }
+                        fs.create_dir(parent).await.log_err();
                     }
 
-                    // Show completion toast
-                    workspace
-                        .update(cx, |workspace, cx| {
-                            workspace.show_toast(
-                                workspace::Toast::new(
-                                    notification_id.clone(),
-                                    tr(
-                                        cx,
-                                        "project_panel.download.complete",
-                                        "Downloaded {} files",
-                                    )
-                                    .replacen(
-                                        "{}",
-                                        &total_files.to_string(),
-                                        1,
-                                    ),
-                                ),
-                                cx,
-                            );
+                    let download_task = this.update(cx, |this, cx| {
+                        let project = this.project.clone();
+                        project.update(cx, |project, cx| {
+                            project.download_file(worktree_id, entry_path, destination_path, cx)
                         })
-                        .log_err();
+                    });
+                    if let Ok(task) = download_task {
+                        task.await.log_err();
+                    }
                 }
+
+                // Show completion toast
+                workspace
+                    .update(cx, |workspace, cx| {
+                        workspace.show_toast(
+                            workspace::Toast::new(
+                                notification_id.clone(),
+                                tr(cx, "project_panel.download.complete", "Downloaded {} files")
+                                    .replacen("{}", &total_files.to_string(), 1),
+                            ),
+                            cx,
+                        );
+                    })
+                    .log_err();
             }
         })
         .detach();
@@ -4724,10 +4714,10 @@ impl ProjectPanel {
     fn external_paths_from_system_clipboard(&self, cx: &App) -> Option<ExternalPaths> {
         let clipboard_item = cx.read_from_clipboard()?;
         for entry in clipboard_item.entries() {
-            if let GpuiClipboardEntry::ExternalPaths(paths) = entry {
-                if !paths.paths().is_empty() {
-                    return Some(paths.clone());
-                }
+            if let GpuiClipboardEntry::ExternalPaths(paths) = entry
+                && !paths.paths().is_empty()
+            {
+                return Some(paths.clone());
             }
         }
         None
@@ -5594,15 +5584,13 @@ impl ProjectPanel {
                             .await
                             .map_err(|err| explain_move_error(err, names.as_ref()))
                             .notify_workspace_async_err(workspace.clone(), &mut *cx)
-                        {
-                            if let (Some(old_path), Some(worktree_id)) =
+                            && let (Some(old_path), Some(worktree_id)) =
                                 (old_paths.get(&entry_id), destination_worktree_id)
-                            {
-                                changes.push(Change::Renamed(
-                                    old_path.clone(),
-                                    (worktree_id, new_entry.path).into(),
-                                ));
-                            }
+                        {
+                            changes.push(Change::Renamed(
+                                old_path.clone(),
+                                (worktree_id, new_entry.path).into(),
+                            ));
                         }
                     }
                     project_panel
@@ -6261,12 +6249,11 @@ impl ProjectPanel {
         // Since root will always have empty relative path
         let active_entry_id =
             self.current_drag_entry_id(&drag_state.active_selection, drag_state, cx);
-        if let Some(entry_path) = self.project.read(cx).path_for_entry(active_entry_id, cx) {
-            if let Some(parent_path) = entry_path.path.parent() {
-                if !parent_path.is_empty() {
-                    return true;
-                }
-            }
+        if let Some(entry_path) = self.project.read(cx).path_for_entry(active_entry_id, cx)
+            && let Some(parent_path) = entry_path.path.parent()
+            && !parent_path.is_empty()
+        {
+            return true;
         }
 
         // If parent is empty, check if different worktree
@@ -6274,10 +6261,9 @@ impl ProjectPanel {
             .project
             .read(cx)
             .worktree_id_for_entry(last_root_id, cx)
+            && drag_state.active_selection.worktree_id != last_root_worktree_id
         {
-            if drag_state.active_selection.worktree_id != last_root_worktree_id {
-                return true;
-            }
+            return true;
         }
 
         false
@@ -7122,20 +7108,20 @@ impl ProjectPanel {
                         .on_mouse_down(
                             MouseButton::Left,
                             cx.listener(move |this, _, _, cx| {
-                                if let Some(folds) = this.state.ancestors.get_mut(&entry_id) {
-                                    if folds.set_active_index(index) {
-                                        cx.notify();
-                                    }
+                                if let Some(folds) = this.state.ancestors.get_mut(&entry_id)
+                                    && folds.set_active_index(index)
+                                {
+                                    cx.notify();
                                 }
                             }),
                         )
                         .on_mouse_down(
                             MouseButton::Right,
                             cx.listener(move |this, _, _, cx| {
-                                if let Some(folds) = this.state.ancestors.get_mut(&entry_id) {
-                                    if folds.set_active_index(index) {
-                                        cx.notify();
-                                    }
+                                if let Some(folds) = this.state.ancestors.get_mut(&entry_id)
+                                    && folds.set_active_index(index)
+                                {
+                                    cx.notify();
                                 }
                             }),
                         )

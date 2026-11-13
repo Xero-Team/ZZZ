@@ -475,20 +475,20 @@ impl TrustedWorktreesStore {
             );
         }
 
-        if let Some(store_data) = self.worktree_stores.get(&weak_worktree_store) {
-            if let Some((upstream_client, upstream_project_id)) = &store_data.upstream_client {
-                let trusted_paths = trusted_paths
-                    .iter()
-                    .map(|trusted_path| trusted_path.to_proto())
-                    .collect::<Vec<_>>();
-                if !trusted_paths.is_empty() {
-                    upstream_client
-                        .send(proto::TrustWorktrees {
-                            project_id: upstream_project_id.0,
-                            trusted_paths,
-                        })
-                        .log_err();
-                }
+        if let Some(store_data) = self.worktree_stores.get(&weak_worktree_store)
+            && let Some((upstream_client, upstream_project_id)) = &store_data.upstream_client
+        {
+            let trusted_paths = trusted_paths
+                .iter()
+                .map(|trusted_path| trusted_path.to_proto())
+                .collect::<Vec<_>>();
+            if !trusted_paths.is_empty() {
+                upstream_client
+                    .send(proto::TrustWorktrees {
+                        project_id: upstream_project_id.0,
+                        trusted_paths,
+                    })
+                    .log_err();
             }
         }
         cx.emit(TrustedWorktreesEvent::Trusted(

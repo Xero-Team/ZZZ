@@ -519,25 +519,23 @@ impl BufferDiagnosticsEditor {
                     })
                     .collect();
 
-                if was_empty {
-                    if let Some(anchor_range) = anchor_ranges.first() {
-                        let range_to_select = anchor_range.start..anchor_range.start;
+                if was_empty && let Some(anchor_range) = anchor_ranges.first() {
+                    let range_to_select = anchor_range.start..anchor_range.start;
 
-                        buffer_diagnostics_editor.editor.update(cx, |editor, cx| {
-                            editor.change_selections(Default::default(), window, cx, |selection| {
-                                selection.select_anchor_ranges([range_to_select])
-                            })
-                        });
+                    buffer_diagnostics_editor.editor.update(cx, |editor, cx| {
+                        editor.change_selections(Default::default(), window, cx, |selection| {
+                            selection.select_anchor_ranges([range_to_select])
+                        })
+                    });
 
-                        // If the `BufferDiagnosticsEditor` is currently
-                        // focused, move focus to its editor.
-                        if buffer_diagnostics_editor.focus_handle.is_focused(window) {
-                            buffer_diagnostics_editor
-                                .editor
-                                .read(cx)
-                                .focus_handle(cx)
-                                .focus(window, cx);
-                        }
+                    // If the `BufferDiagnosticsEditor` is currently
+                    // focused, move focus to its editor.
+                    if buffer_diagnostics_editor.focus_handle.is_focused(window) {
+                        buffer_diagnostics_editor
+                            .editor
+                            .read(cx)
+                            .focus_handle(cx)
+                            .focus(window, cx);
                     }
                 }
 

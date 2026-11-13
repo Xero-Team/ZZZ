@@ -1286,10 +1286,10 @@ impl Dispatch<zwp_linux_dmabuf_feedback_v1::ZwpLinuxDmabufFeedbackV1, ()> for Dm
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        if let zwp_linux_dmabuf_feedback_v1::Event::MainDevice { device } = event {
-            if let Ok(bytes) = <[u8; 8]>::try_from(device.as_slice()) {
-                state.device = Some(u64::from_ne_bytes(bytes));
-            }
+        if let zwp_linux_dmabuf_feedback_v1::Event::MainDevice { device } = event
+            && let Ok(bytes) = <[u8; 8]>::try_from(device.as_slice())
+        {
+            state.device = Some(u64::from_ne_bytes(bytes));
         }
     }
 }

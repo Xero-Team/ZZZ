@@ -127,12 +127,11 @@ fn transfer_progress_channel() -> (
             .saturating_mul(100)
             .checked_div(progress.total_bytes)
             .unwrap_or(0);
-        if last_percent.swap(percent, Ordering::Relaxed) != percent {
-            if let Err(error) = progress_sender.unbounded_send(progress)
-                && !error.is_disconnected()
-            {
-                log::warn!("failed to report transfer progress: {error}");
-            }
+        if last_percent.swap(percent, Ordering::Relaxed) != percent
+            && let Err(error) = progress_sender.unbounded_send(progress)
+            && !error.is_disconnected()
+        {
+            log::warn!("failed to report transfer progress: {error}");
         }
     });
     (progress_callback, progress_receiver)

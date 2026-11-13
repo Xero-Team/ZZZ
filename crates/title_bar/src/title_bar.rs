@@ -175,17 +175,16 @@ pub struct TitleBar {
 
 impl Render for TitleBar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.multi_workspace.is_none() {
-            if let Some(mw) = self
+        if self.multi_workspace.is_none()
+            && let Some(mw) = self
                 .workspace
                 .upgrade()
                 .and_then(|ws| ws.read(cx).multi_workspace().cloned())
-            {
-                self.multi_workspace = Some(mw.clone());
-                self.platform_titlebar.update(cx, |titlebar, _cx| {
-                    titlebar.set_multi_workspace(mw);
-                });
-            }
+        {
+            self.multi_workspace = Some(mw.clone());
+            self.platform_titlebar.update(cx, |titlebar, _cx| {
+                titlebar.set_multi_workspace(mw);
+            });
         }
 
         let title_bar_settings = *TitleBarSettings::get_global(cx);
