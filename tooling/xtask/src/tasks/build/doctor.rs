@@ -551,17 +551,19 @@ fn check_dmg_toolchain(checks: &mut Vec<Check>) {
     });
 }
 
-/// The macOS bundler refuses anything but Zed's cargo-bundle fork, because the
-/// upstream release cannot assemble a deployable bundle.
+/// The macOS bundler needs cargo-bundle 0.12 or newer: older releases cannot
+/// assemble a deployable `.app`, so the check enforces that floor rather than
+/// any particular fork.
 fn check_cargo_bundle(checks: &mut Vec<Check>) {
+    const MINIMUM: (u64, u64) = (0, 12);
     let version = probe("cargo", &["bundle", "--help"]).unwrap_or_default();
-    let fork = version.contains("zed");
+    let supported = cargo_bundle_version(&version).is_some_and(|found| found >= MINIMUM);
 
     checks.push(Check {
         name: "cargo-bundle".to_owned(),
         category: "cross",
         required: false,
-        status: if fork {
+        status: if supported {
             Status::Ok
         } else if version.is_empty() {
             Status::Missing
@@ -573,12 +575,20 @@ fn check_cargo_bundle(checks: &mut Vec<Check>) {
         } else {
             version
         },
-        remedy: (!fork).then(|| {
-            "cargo install --locked --git https://github.com/zed-industries/cargo-bundle \
-             --rev 2be2669 cargo-bundle"
-                .to_owned()
-        }),
+        remedy: (!supported)
+            .then(|| "cargo install --locked cargo-bundle --version 0.12.0".to_owned()),
     });
+}
+
+/// Extracts `major.minor` from cargo-bundle's help banner, which opens with
+/// `cargo-bundle vX.Y.Z`.
+fn cargo_bundle_version(help: &str) -> Option<(u64, u64)> {
+    let rest = help.strip_prefix("cargo-bundle ")?.trim_start_matches('v');
+    let mut fields = rest
+        .split(|character: char| !character.is_ascii_digit())
+        .filter(|field| !field.is_empty())
+        .map(|field| field.parse().ok());
+    Some((fields.next()??, fields.next()??))
 }
 
 fn check_macos_sdk(checks: &mut Vec<Check>) {

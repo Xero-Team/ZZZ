@@ -234,14 +234,14 @@ fn cargo_bundle(context: &Context) -> Result<PathBuf> {
 
     let mut command = Command::new("cargo");
     command
-        // cargo-bundle reads the bundle metadata from the root package, so it
-        // runs from `crates/zzz`; from the workspace root it fails with "No
-        // root package found" because the root is a virtual manifest.
+        // cargo-bundle reads the bundle metadata from the package it bundles,
+        // so it runs from `crates/zzz` (the workspace root is a virtual
+        // manifest) and names that package explicitly.
         .current_dir(context.workspace.join("crates/zzz"))
         .arg("bundle")
         .args(context.profile_flag())
         .args(["--target", context.target.triple()])
-        .args(["--select-workspace-root", "--bin", "zzz"])
+        .args(["--package", "zzz", "--bin", "zzz"])
         .env("CARGO_BUNDLE_SKIP_BUILD", "true")
         .env("CARGO_TARGET_DIR", &context.target_dir)
         .env("ZZZ_RELEASE_CHANNEL", context.channel.as_str())
@@ -273,18 +273,18 @@ fn cargo_bundle(context: &Context) -> Result<PathBuf> {
     Ok(path)
 }
 
-/// Prepares the manifest text `cargo-bundle` reads. Zed's cargo-bundle fork
-/// looks only at `package.metadata.bundle` / `package.metadata.bundle.bin.zzz`,
-/// so for a named release channel we promote that channel's `bundle-<channel>`
-/// tables into those names. The `dev` channel is already the default and needs
-/// no edit.
+/// Prepares the manifest text `cargo-bundle` reads. It looks only at
+/// `package.metadata.bundle` / `package.metadata.bundle.bin.zzz`, so for a
+/// named release channel we promote that channel's `bundle-<channel>` tables
+/// into those names. The `dev` channel is already the default and needs no
+/// edit.
 ///
 /// The manifest also declares the `dev` tables under the promoted names, so they
 /// have to be parked under an inert name first: a plain promotion would leave
-/// two `[package.metadata.bundle]` tables (and two `...bin.zzz` tables), and
-/// `cargo metadata` would fail with `duplicate key`. The parked tables live only
-/// in the temporary file; `ManifestGuard` restores the original as soon as
-/// cargo-bundle finishes.
+/// two `[package.metadata.bundle]` tables (and two `...bin.zzz` and `...osx`
+/// tables), and `cargo metadata` would fail with `duplicate key`. The parked
+/// tables live only in the temporary file; `ManifestGuard` restores the original
+/// as soon as cargo-bundle finishes.
 fn promote_channel_tables(original: &str, channel: Channel, manifest: &Path) -> Result<String> {
     if channel == Channel::Dev {
         return Ok(original.to_owned());
@@ -297,12 +297,20 @@ fn promote_channel_tables(original: &str, channel: Channel, manifest: &Path) -> 
 
     Ok(original
         .replace(
-            "[package.metadata.bundle]",
-            "[package.metadata.bundle-dev-parked]",
+            "[package.metadata.bundle.bin.zzz.osx]",
+            "[package.metadata.bundle-dev-parked.bin.zzz.osx]",
         )
         .replace(
             "[package.metadata.bundle.bin.zzz]",
             "[package.metadata.bundle-dev-parked.bin.zzz]",
+        )
+        .replace(
+            "[package.metadata.bundle.osx]",
+            "[package.metadata.bundle-dev-parked.osx]",
+        )
+        .replace(
+            "[package.metadata.bundle]",
+            "[package.metadata.bundle-dev-parked]",
         )
         .replace(&from, "package.metadata.bundle"))
 }
@@ -947,15 +955,27 @@ version = "1.0.0"
 name = "ZZZ Dev"
 identifier = "dev.zzz.ZZZ-Dev"
 
+[package.metadata.bundle.osx]
+url_schemes = ["zzz-dev"]
+
 [package.metadata.bundle.bin.zzz]
 name = "ZZZ Dev"
+
+[package.metadata.bundle.bin.zzz.osx]
+url_schemes = ["zzz-dev"]
 
 [package.metadata.bundle-stable]
 name = "ZZZ"
 identifier = "dev.zzz.ZZZ"
 
+[package.metadata.bundle-stable.osx]
+url_schemes = ["zzz"]
+
 [package.metadata.bundle-stable.bin.zzz]
 name = "ZZZ"
+
+[package.metadata.bundle-stable.bin.zzz.osx]
+url_schemes = ["zzz"]
 
 [package.metadata.bundle-nightly]
 name = "ZZZ Nightly"
@@ -978,10 +998,26 @@ name = "ZZZ Nightly"
             metadata["bundle"]["bin"]["zzz"]["name"].as_str(),
             Some("ZZZ")
         );
+        assert_eq!(
+            metadata["bundle"]["osx"]["url_schemes"][0].as_str(),
+            Some("zzz")
+        );
+        assert_eq!(
+            metadata["bundle"]["bin"]["zzz"]["osx"]["url_schemes"][0].as_str(),
+            Some("zzz")
+        );
         // The dev tables were parked, not deleted or left colliding.
         assert_eq!(
             metadata["bundle-dev-parked"]["name"].as_str(),
             Some("ZZZ Dev")
+        );
+        assert_eq!(
+            metadata["bundle-dev-parked"]["osx"]["url_schemes"][0].as_str(),
+            Some("zzz-dev")
+        );
+        assert_eq!(
+            metadata["bundle-dev-parked"]["bin"]["zzz"]["osx"]["url_schemes"][0].as_str(),
+            Some("zzz-dev")
         );
         // The promoted channel's own name is gone; unrelated channels stay.
         assert!(metadata.get("bundle-stable").is_none());

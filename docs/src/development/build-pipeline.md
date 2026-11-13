@@ -248,7 +248,7 @@ writes them as root instead, and removing `target/container` then needs `sudo`.
 Both work; only the file ownership differs.
 
 The image covers the Linux build, the macOS cross build (zig, `cargo-zigbuild`,
-Zed's `cargo-bundle`, `hfsprogs`, libdmg-hfsplus, and a macOS SDK), and PGO
+`cargo-bundle`, `hfsprogs`, libdmg-hfsplus, and a macOS SDK), and PGO
 (llvm-profdata, Xvfb, a software rasterizer). The image pins SDK 14.5 so the
 image tag keeps describing all of its inputs. Cross-building outside the image
 goes through `script/ensure-macos-sdk`, which resolves the newest release

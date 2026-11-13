@@ -37,7 +37,7 @@ Clone the [ZZZ repository](https://github.com/Xero-Team/ZZZ).
   ```
 
 - For release bundles, make the pinned packaging tools available on `PATH`:
-  `cargo-bundle v0.6.1-zed`, `cargo-zigbuild`, and `dmg-license`. The bundle
+  `cargo-bundle v0.12.0`, `cargo-zigbuild`, and `dmg-license`. The bundle
   script does not install tools or run an unpinned global `npm install`.
 
 ## Building ZZZ from Source

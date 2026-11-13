@@ -11,7 +11,7 @@
 # image.
 #
 # The image covers the Linux release build, the macOS cross build (zig,
-# cargo-zigbuild, Zed's cargo-bundle, hfsprogs, libdmg-hfsplus, and the macOS
+# cargo-zigbuild, cargo-bundle, hfsprogs, libdmg-hfsplus, and the macOS
 # SDK), the FreeBSD cross build (both 14.5 sysroots, clang/lld wrappers, and
 # the two rust-std targets), and PGO (llvm-profdata, Xvfb, a software
 # rasterizer). A plan that asks for a Windows target also builds the msvc-wine
@@ -128,8 +128,8 @@ RUN curl --fail --silent --show-error --location \
     && ln -s /opt/zig/zig /usr/local/bin/zig \
     && rm /tmp/zig.tar.xz
 
-# The macOS cross path assembles the `.app` with `cargo-bundle` (Zed's fork)
-# and wraps it in a DMG with libdmg-hfsplus. `mkfs.hfsplus` is installed above.
+# The macOS cross path assembles the `.app` with `cargo-bundle` and wraps it in
+# a DMG with libdmg-hfsplus. `mkfs.hfsplus` is installed above.
 #
 # libdmg-hfsplus predates OpenSSL 1.1: it stores an `HMAC_CTX` by value and
 # resets it with `HMAC_CTX_init`, neither of which OpenSSL 3 (what Ubuntu 22.04
@@ -154,13 +154,10 @@ RUN git clone https://github.com/planetbeing/libdmg-hfsplus /tmp/libdmg-hfsplus 
     && cd / \
     && rm -rf /tmp/libdmg-hfsplus
 
-# `cargo xtask bundle` refuses any other cargo-bundle, because the upstream
-# release cannot produce a deployable bundle.
-ARG CARGO_BUNDLE_REV=2be2669972dff3ddd4daf89a2cb29d2d06cad7c7
-RUN cargo install --locked \
-        --git https://github.com/zed-industries/cargo-bundle \
-        --rev "${CARGO_BUNDLE_REV}" \
-        cargo-bundle
+# The macOS cross path bundles the `.app` with the upstream `cargo-bundle`
+# release; 0.12 is the floor `cargo xtask doctor` enforces.
+ARG CARGO_BUNDLE_VERSION=0.12.0
+RUN cargo install --locked cargo-bundle --version "${CARGO_BUNDLE_VERSION}"
 
 # The SDK is part of the cross toolchain, so it is pinned and verified here
 # instead of being downloaded into the container's disposable /tmp on every
