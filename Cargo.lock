@@ -10075,6 +10075,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mobile_dev"
+version = "0.1.0"
+dependencies = [
+ "gpui",
+ "i18n",
+ "ui",
+ "util",
+ "workspace",
+]
+
+[[package]]
 name = "moka"
 version = "0.12.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -22561,6 +22572,7 @@ dependencies = [
  "migrator",
  "mimalloc",
  "miniprofiler_ui",
+ "mobile_dev",
  "node_runtime",
  "notifications",
  "office_preview",

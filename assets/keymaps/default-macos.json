@@ -709,6 +709,7 @@
       "ctrl-alt-shift-j": "toolbox::OpenJsonPrettier",
       "ctrl-alt-shift-k": "project_bookmarks::ToggleProjectBookmarks",
       "ctrl-alt-shift-m": "workspace_modes::CycleMode",
+      "ctrl-alt-shift-e": "mobile_dev::ToggleMobileDevices",
       "ctrl-alt-shift-d": "docker::ToggleDockerPanel",
       "cmd-ctrl-w": "git::Worktree",
       "ctrl-~": "workspace::NewTerminal",

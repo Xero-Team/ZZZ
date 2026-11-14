@@ -4074,6 +4074,10 @@
     "docker.start": "Start",
     "docker.stop": "Stop",
     "docker.no_containers": "No containers.",
-    "docker.unavailable": "Docker is unavailable"
+    "docker.unavailable": "Docker is unavailable",
+    "mobile_dev.title": "Devices",
+    "mobile_dev.refresh": "Refresh",
+    "mobile_dev.no_devices": "No devices connected.",
+    "mobile_dev.unavailable": "adb is unavailable"
   }
 }

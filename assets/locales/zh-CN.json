@@ -4074,6 +4074,10 @@
     "docker.start": "启动",
     "docker.stop": "停止",
     "docker.no_containers": "没有容器。",
-    "docker.unavailable": "Docker 不可用"
+    "docker.unavailable": "Docker 不可用",
+    "mobile_dev.title": "设备",
+    "mobile_dev.refresh": "刷新",
+    "mobile_dev.no_devices": "没有已连接的设备。",
+    "mobile_dev.unavailable": "adb 不可用"
   }
 }
