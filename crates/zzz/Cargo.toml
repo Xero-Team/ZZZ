@@ -165,6 +165,7 @@ profiling.workspace = true
 project.workspace = true
 project_panel.workspace = true
 project_symbols.workspace = true
+project_bookmarks.workspace = true
 prompt_store.workspace = true
 recent_files.workspace = true
 recent_projects.workspace = true

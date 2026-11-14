@@ -707,6 +707,7 @@
       "ctrl-alt-shift-i": "idea_import::ImportIdeaProject",
       "shift shift": "search_everywhere::Toggle",
       "ctrl-alt-shift-j": "toolbox::OpenJsonPrettier",
+      "ctrl-alt-shift-k": "project_bookmarks::ToggleProjectBookmarks",
       "cmd-ctrl-w": "git::Worktree",
       "ctrl-~": "workspace::NewTerminal",
       "cmd-s": "workspace::Save",

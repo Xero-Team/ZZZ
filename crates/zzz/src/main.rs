@@ -662,6 +662,7 @@ fn main() {
         snippets_ui::init(cx);
         search::init(cx);
         search_everywhere::init(cx);
+        project_bookmarks::init(cx);
         toolbox::init(cx);
         cx.set_global(workspace::PaneSearchBarCallbacks {
             setup_search_bar: |languages, toolbar, window, cx| {

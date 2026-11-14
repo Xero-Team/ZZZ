@@ -1,0 +1,40 @@
+[package]
+name = "project_bookmarks"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "AGPL-3.0-or-later"
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/project_bookmarks.rs"
+doctest = false
+
+[dependencies]
+editor.workspace = true
+futures.workspace = true
+fuzzy_nucleo.workspace = true
+gpui.workspace = true
+i18n.workspace = true
+language.workspace = true
+picker.workspace = true
+project.workspace = true
+text.workspace = true
+ui.workspace = true
+util.workspace = true
+workspace.workspace = true
+
+[dev-dependencies]
+fs = { workspace = true, features = ["test-support"] }
+gpui = { workspace = true, features = ["test-support"] }
+i18n.workspace = true
+menu.workspace = true
+project = { workspace = true, features = ["test-support"] }
+serde_json.workspace = true
+theme.workspace = true
+theme_settings.workspace = true
+util = { workspace = true, features = ["test-support"] }
+workspace = { workspace = true, features = ["test-support"] }
+zlog.workspace = true
