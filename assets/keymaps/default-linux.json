@@ -651,6 +651,7 @@
       "ctrl-alt-shift-j": "toolbox::OpenJsonPrettier",
       "ctrl-alt-shift-k": "project_bookmarks::ToggleProjectBookmarks",
       "ctrl-alt-shift-m": "workspace_modes::CycleMode",
+      "ctrl-alt-shift-p": "pr_ui::TogglePullRequestsPanel",
       "ctrl-alt-shift-e": "mobile_dev::ToggleMobileDevices",
       "ctrl-alt-shift-d": "docker::ToggleDockerPanel",
       "alt-ctrl-shift-w": "git::Worktree",

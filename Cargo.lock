@@ -12761,6 +12761,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "pr_ui"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gpui",
+ "i18n",
+ "project",
+ "serde_json",
+ "ui",
+ "util",
+ "workspace",
+]
+
+[[package]]
 name = "precomputed-hash"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -22583,6 +22597,7 @@ dependencies = [
  "paths",
  "pdf_viewer",
  "picker",
+ "pr_ui",
  "pretty_assertions",
  "profiling",
  "project",

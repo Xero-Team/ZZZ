@@ -4078,6 +4078,17 @@
     "mobile_dev.title": "Devices",
     "mobile_dev.refresh": "Refresh",
     "mobile_dev.no_devices": "No devices connected.",
-    "mobile_dev.unavailable": "adb is unavailable"
+    "mobile_dev.unavailable": "adb is unavailable",
+    "pr_ui.title": "Pull requests",
+    "pr_ui.refresh": "Refresh",
+    "pr_ui.open": "Open",
+    "pr_ui.back": "Back",
+    "pr_ui.draft": "Draft",
+    "pr_ui.loading": "Loading pull requests…",
+    "pr_ui.loading_diff": "Loading diff…",
+    "pr_ui.none": "No open pull requests.",
+    "pr_ui.no_diff": "This pull request has no diff.",
+    "pr_ui.no_project": "Open a project to list pull requests.",
+    "pr_ui.unavailable": "GitHub CLI is unavailable"
   }
 }

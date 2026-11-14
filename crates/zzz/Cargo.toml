@@ -164,6 +164,7 @@ parking_lot.workspace = true
 paths.workspace = true
 pdf_viewer.workspace = true
 picker.workspace = true
+pr_ui.workspace = true
 profiling.workspace = true
 project.workspace = true
 project_panel.workspace = true

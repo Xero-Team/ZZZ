@@ -4078,6 +4078,17 @@
     "mobile_dev.title": "设备",
     "mobile_dev.refresh": "刷新",
     "mobile_dev.no_devices": "没有已连接的设备。",
-    "mobile_dev.unavailable": "adb 不可用"
+    "mobile_dev.unavailable": "adb 不可用",
+    "pr_ui.title": "拉取请求",
+    "pr_ui.refresh": "刷新",
+    "pr_ui.open": "打开",
+    "pr_ui.back": "返回",
+    "pr_ui.draft": "草稿",
+    "pr_ui.loading": "正在加载拉取请求…",
+    "pr_ui.loading_diff": "正在加载差异…",
+    "pr_ui.none": "没有打开的拉取请求。",
+    "pr_ui.no_diff": "该拉取请求没有差异。",
+    "pr_ui.no_project": "请打开一个项目以列出拉取请求。",
+    "pr_ui.unavailable": "GitHub CLI 不可用"
   }
 }
