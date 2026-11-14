@@ -135,30 +135,8 @@ impl FileFinder {
     ) -> Task<()> {
         let project = workspace.project().clone();
 
-        let currently_opened_path = workspace.active_item(cx).and_then(|item| {
-            let project = project.read(cx);
-            let project_path = item.project_path(cx)?;
-            let resource_id = item.resource_id(cx);
-            let abs_path = project
-                .worktree_for_id(project_path.worktree_id, cx)?
-                .read(cx)
-                .absolutize(&project_path.path);
-            Some(FoundPath::new(project_path, abs_path).with_resource_id(resource_id))
-        });
+        let (currently_opened_path, history_items) = Self::history_items(workspace, cx);
 
-        let history_items = workspace
-            .recent_navigation_history(Some(MAX_RECENT_SELECTIONS), cx)
-            .into_iter()
-            .filter_map(|(project_path, abs_path)| {
-                let resource_id = project
-                    .read(cx)
-                    .entry_for_path(&project_path, cx)
-                    .and_then(|entry| entry.resource_id);
-                let path = FoundPath::new(project_path, abs_path?).with_resource_id(resource_id);
-                let is_file = path.is_file(&project.read(cx), cx);
-                Some(cx.background_spawn(async move { is_file.await.then_some(path) }))
-            })
-            .collect::<Vec<_>>();
         cx.spawn_in(window, async move |workspace, cx| {
             let history_items = join_all(history_items).await.into_iter().flatten();
 
@@ -183,6 +161,37 @@ impl FileFinder {
                 })
                 .log_err();
         })
+    }
+
+    fn history_items(
+        workspace: &Workspace,
+        cx: &App,
+    ) -> (Option<FoundPath>, Vec<Task<Option<FoundPath>>>) {
+        let project = workspace.project().read(cx);
+
+        let currently_opened_path = workspace.active_item(cx).and_then(|item| {
+            let project_path = item.project_path(cx)?;
+            let resource_id = item.resource_id(cx);
+            let abs_path = project
+                .worktree_for_id(project_path.worktree_id, cx)?
+                .read(cx)
+                .absolutize(&project_path.path);
+            Some(FoundPath::new(project_path, abs_path).with_resource_id(resource_id))
+        });
+
+        let history_items = workspace
+            .recent_navigation_history(Some(MAX_RECENT_SELECTIONS), cx)
+            .into_iter()
+            .filter_map(|(project_path, abs_path)| {
+                let resource_id = project
+                    .entry_for_path(&project_path, cx)
+                    .and_then(|entry| entry.resource_id);
+                let path = FoundPath::new(project_path, abs_path?).with_resource_id(resource_id);
+                let is_file = path.is_file(project, cx);
+                Some(cx.background_spawn(async move { is_file.await.then_some(path) }))
+            })
+            .collect::<Vec<_>>();
+        (currently_opened_path, history_items)
     }
 
     fn seed_query(
@@ -1142,6 +1151,52 @@ impl FileFinderDelegate {
         cx: &mut Context<FileFinder>,
     ) -> Self {
         Self::subscribe_to_updates(&project, window, cx);
+        Self::new_unsubscribed(
+            file_finder,
+            workspace,
+            project,
+            currently_opened_path,
+            history_items,
+            separate_history,
+            cx,
+        )
+    }
+
+    /// Builds a delegate that owns no `FileFinder` modal, for embedders such as
+    /// search-everywhere that render its matches themselves.
+    pub fn new_detached(workspace: &Workspace, cx: &mut App) -> Task<Self> {
+        let (currently_opened_path, history_items) = FileFinder::history_items(workspace, cx);
+        let weak_workspace = workspace.weak_handle();
+        let project = workspace.project().clone();
+        cx.spawn(async move |cx| {
+            let history_items = join_all(history_items)
+                .await
+                .into_iter()
+                .flatten()
+                .collect();
+            cx.update(|cx| {
+                Self::new_unsubscribed(
+                    WeakEntity::new_invalid(),
+                    weak_workspace,
+                    project,
+                    currently_opened_path,
+                    history_items,
+                    false,
+                    cx,
+                )
+            })
+        })
+    }
+
+    fn new_unsubscribed(
+        file_finder: WeakEntity<FileFinder>,
+        workspace: WeakEntity<Workspace>,
+        project: Entity<Project>,
+        currently_opened_path: Option<FoundPath>,
+        history_items: Vec<FoundPath>,
+        separate_history: bool,
+        cx: &mut App,
+    ) -> Self {
         Self {
             file_finder,
             workspace,

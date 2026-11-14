@@ -661,6 +661,7 @@ fn main() {
         tasks_ui::init(cx);
         snippets_ui::init(cx);
         search::init(cx);
+        search_everywhere::init(cx);
         cx.set_global(workspace::PaneSearchBarCallbacks {
             setup_search_bar: |languages, toolbar, window, cx| {
                 let search_bar = cx.new(|cx| search::BufferSearchBar::new(languages, window, cx));

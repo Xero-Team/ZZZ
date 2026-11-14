@@ -644,6 +644,7 @@
       "ctrl-shift-alt-o": ["projects::OpenRemote", { "from_existing_connection": false }],
       "shift-alt-b": "branches::OpenRecent",
       "ctrl-alt-shift-i": "idea_import::ImportIdeaProject",
+      "shift shift": "search_everywhere::Toggle",
       "shift-alt-w": "git::Worktree",
       "shift-alt-enter": "toast::RunAction",
       "ctrl-shift-`": "workspace::NewTerminal",
