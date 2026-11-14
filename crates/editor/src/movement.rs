@@ -259,24 +259,72 @@ pub fn previous_word_start(
     skip_punctuation: bool,
 ) -> DisplayPoint {
     let raw_point = point.to_point(map);
-    let classifier = map.buffer_snapshot().char_classifier_at(raw_point);
+    let buffer_snapshot = map.buffer_snapshot();
+    let classifier = buffer_snapshot.char_classifier_at(raw_point);
+    let cursor_offset = raw_point.to_offset(buffer_snapshot);
+    let cursor_char = buffer_snapshot.chars_at(cursor_offset).next();
 
     let mut is_first_iteration = true;
-    find_preceding_boundary_display_point(map, point, FindRange::MultiLine, &mut |left, right| {
-        if skip_punctuation
-            && is_first_iteration
-            && classifier.is_punctuation(right)
-            && !classifier.is_punctuation(left)
-            && left != '\n'
-        {
+    let word_start = find_preceding_boundary_display_point(
+        map,
+        point,
+        FindRange::MultiLine,
+        &mut |left, right| {
+            if skip_punctuation
+                && is_first_iteration
+                && classifier.is_punctuation(right)
+                && !classifier.is_punctuation(left)
+                && left != '\n'
+                && (!classifier.is_whitespace(left)
+                    || cursor_char.is_some_and(|character| {
+                        !classifier.is_whitespace(character) && character != '\n'
+                    }))
+            {
+                is_first_iteration = false;
+                return false;
+            }
             is_first_iteration = false;
-            return false;
-        }
-        is_first_iteration = false;
 
-        (classifier.kind(left) != classifier.kind(right) && !classifier.is_whitespace(right))
-            || left == '\n'
-    })
+            (classifier.kind(left) != classifier.kind(right) && !classifier.is_whitespace(right))
+                || left == '\n'
+        },
+    );
+
+    if !skip_punctuation {
+        return word_start;
+    }
+
+    let word_start_offset = word_start.to_point(map).to_offset(buffer_snapshot);
+    let mut chars_before_word = buffer_snapshot.reversed_chars_at(word_start_offset);
+    let Some(punctuation) = chars_before_word
+        .next()
+        .filter(|character| classifier.is_punctuation(*character))
+    else {
+        return word_start;
+    };
+
+    let punctuation_is_single = chars_before_word
+        .next()
+        .is_none_or(|character| !classifier.is_punctuation(character));
+    let punctuation_prefixes_word = buffer_snapshot
+        .chars_at(word_start_offset)
+        .next()
+        .is_some_and(|character| classifier.is_word(character));
+    let cursor_is_at_word_end = buffer_snapshot
+        .reversed_chars_at(cursor_offset)
+        .next()
+        .is_some_and(|character| classifier.is_word(character))
+        && cursor_char.is_none_or(|character| !classifier.is_word(character));
+
+    // Skip-punctuation movement treats a single punctuation prefix as part of the following word.
+    // Include it when moving back from the word's end so `|@word` and `@word|` are symmetric.
+    if cursor_is_at_word_end && punctuation_is_single && punctuation_prefixes_word {
+        let mut punctuation_offset = word_start_offset;
+        punctuation_offset -= punctuation.len_utf8();
+        punctuation_offset.to_display_point(map)
+    } else {
+        word_start
+    }
 }
 
 /// Returns a position of the previous word boundary, where a word character is defined as either
@@ -444,7 +492,7 @@ pub fn next_word_end(
         if skip_punctuation
             && is_first_iteration
             && classifier.is_punctuation(left)
-            && !classifier.is_punctuation(right)
+            && classifier.is_word(right)
             && right != '\n'
         {
             is_first_iteration = false;
@@ -1149,6 +1197,39 @@ mod tests {
             let actual = match movement {
                 WordMovement::PreviousStart => previous_word_start(&snapshot, start, false),
                 WordMovement::NextEnd => next_word_end(&snapshot, start, false),
+            };
+            assert_eq!(actual, expected, "{movement:?} failed for {marked_text:?}");
+        }
+    }
+
+    #[gpui::test]
+    fn test_word_movement_skipping_punctuation(cx: &mut gpui::App) {
+        init_test(cx);
+
+        let cases = [
+            (WordMovement::PreviousStart, "foo ˇ.ˇ bar"),
+            (WordMovement::PreviousStart, "ˇfoo @ˇbar"),
+            (WordMovement::PreviousStart, "foo ˇ@barˇ baz"),
+            (WordMovement::PreviousStart, "foo @ˇbˇar"),
+            (WordMovement::PreviousStart, "foo ..ˇbarˇ baz"),
+            (WordMovement::PreviousStart, "ˇ.helloˇ"),
+            (WordMovement::PreviousStart, "[2001:4860:4860::8888ˇ] ˇ"),
+            (WordMovement::NextEnd, "foo ˇ.ˇ bar"),
+            (WordMovement::NextEnd, "fooˇ.ˇ bar"),
+            (WordMovement::NextEnd, "foo ˇ@barˇ baz"),
+            (WordMovement::NextEnd, "[2001:4860:4860::8888ˇ]ˇ "),
+        ];
+
+        for (movement, marked_text) in cases {
+            let (snapshot, display_points) = marked_display_snapshot(marked_text, cx);
+            assert_eq!(display_points.len(), 2, "{marked_text:?}");
+            let (start, expected) = match movement {
+                WordMovement::PreviousStart => (display_points[1], display_points[0]),
+                WordMovement::NextEnd => (display_points[0], display_points[1]),
+            };
+            let actual = match movement {
+                WordMovement::PreviousStart => previous_word_start(&snapshot, start, true),
+                WordMovement::NextEnd => next_word_end(&snapshot, start, true),
             };
             assert_eq!(actual, expected, "{movement:?} failed for {marked_text:?}");
         }
