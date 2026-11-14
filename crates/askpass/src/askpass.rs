@@ -86,6 +86,9 @@ const ASKPASS_SCRIPT_NAME: &str = if cfg!(target_os = "windows") {
     "askpass.sh"
 };
 
+#[cfg(not(target_os = "windows"))]
+const GPG_WRAPPER_SCRIPT_NAME: &str = "gpg-wrapper.sh";
+
 impl AskPassSession {
     /// This will create a new AskPassSession.
     /// You must retain this session until the master process exits.
@@ -202,12 +205,23 @@ impl AskPassSession {
     pub fn script_path(&self) -> impl AsRef<OsStr> {
         self.askpass_task.script_path()
     }
+
+    /// Path to a script suitable for git's `gpg.program`, routing GnuPG
+    /// passphrase prompts through ZZZ's askpass UI. `None` if unavailable.
+    pub fn gpg_wrapper_path(&self) -> Option<&std::path::Path> {
+        #[cfg(not(target_os = "windows"))]
+        return self.askpass_task.gpg_wrapper_path();
+        #[cfg(target_os = "windows")]
+        return None;
+    }
 }
 
 pub struct PasswordProxy {
     _task: Task<()>,
     #[cfg(not(target_os = "windows"))]
     askpass_script_path: std::path::PathBuf,
+    #[cfg(not(target_os = "windows"))]
+    gpg_wrapper_script_path: Option<std::path::PathBuf>,
     #[cfg(target_os = "windows")]
     askpass_helper: String,
 }
@@ -237,6 +251,24 @@ impl PasswordProxy {
         let askpass_program = ASKPASS_PROGRAM.get_or_init(|| current_exec);
         // Create an askpass script that communicates back to this process.
         let askpass_script = generate_askpass_script(shell_kind, askpass_program, &askpass_socket)?;
+
+        // Create a gpg wrapper script that routes GnuPG passphrase prompts through
+        // the same socket (and thus through ZZZ's askpass UI). This only works on
+        // Unix where we control the pinentry via loopback mode. The path is
+        // computed before the socket task takes ownership of `temp_dir`; the file
+        // itself is written below.
+        #[cfg(not(target_os = "windows"))]
+        let (gpg_wrapper_script_path, gpg_wrapper_script) =
+            match generate_gpg_wrapper_script(askpass_program, &askpass_socket) {
+                Ok(script) => (
+                    Some(temp_dir.path().join(GPG_WRAPPER_SCRIPT_NAME)),
+                    Some(script),
+                ),
+                Err(error) => {
+                    log::warn!("could not create gpg askpass wrapper: {error:#}");
+                    (None, None)
+                }
+            };
         // Holding on to the task keeps the accept loop (and the temp dir it owns)
         // alive for as long as this proxy exists.
         let task = executor.spawn(async move {
@@ -304,10 +336,37 @@ impl PasswordProxy {
             askpass_script_path.display()
         );
 
+        // Write the gpg wrapper script computed above and mark it executable.
+        #[cfg(not(target_os = "windows"))]
+        let gpg_wrapper_script_path =
+            if let Some((path, script)) = gpg_wrapper_script_path.zip(gpg_wrapper_script) {
+                match async {
+                    fs::write(&path, script)
+                        .await
+                        .with_context(|| format!("creating gpg wrapper script at {path:?}"))?;
+                    make_file_executable(&path).await.with_context(|| {
+                        format!("marking gpg wrapper script executable at {path:?}")
+                    })?;
+                    anyhow::Ok(())
+                }
+                .await
+                {
+                    Ok(()) => Some(path),
+                    Err(error) => {
+                        log::warn!("could not write gpg askpass wrapper: {error:#}");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
         Ok(Self {
             _task: task,
             #[cfg(not(target_os = "windows"))]
             askpass_script_path,
+            #[cfg(not(target_os = "windows"))]
+            gpg_wrapper_script_path,
             #[cfg(target_os = "windows")]
             askpass_helper,
         })
@@ -322,6 +381,11 @@ impl PasswordProxy {
         {
             &self.askpass_helper
         }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn gpg_wrapper_path(&self) -> Option<&std::path::Path> {
+        self.gpg_wrapper_script_path.as_deref()
     }
 }
 /// The main function for when ZZZ is running in netcat mode for use in askpass.
@@ -427,6 +491,98 @@ fn generate_askpass_script(
     ))
 }
 
+/// Generates a wrapper script suitable for git's `gpg.program` that routes
+/// GnuPG passphrase prompts through ZZZ's askpass UI.
+#[inline]
+#[cfg(not(target_os = "windows"))]
+fn generate_gpg_wrapper_script(
+    askpass_program: &std::path::Path,
+    askpass_socket: &std::path::Path,
+) -> Result<String> {
+    let shell_kind = ShellKind::Posix;
+    let gpg_program = find_gpg_program().context("could not find a gpg binary on PATH")?;
+    let gpg_program = gpg_program
+        .to_str()
+        .context("gpg program is on a non-utf8 path")?;
+    let gpg_program = shell_kind
+        .try_quote_prefix_aware(gpg_program)
+        .context("Failed to shell-escape gpg program path")?;
+
+    let askpass_program = shell_kind.prepend_command_prefix(
+        askpass_program
+            .to_str()
+            .context("Askpass program is on a non-utf8 path")?,
+    );
+    let askpass_program = shell_kind
+        .try_quote_prefix_aware(&askpass_program)
+        .context("Failed to shell-escape Askpass program path")?;
+    let askpass_socket = askpass_socket
+        .try_shell_safe(shell_kind)
+        .context("Failed to shell-escape Askpass socket path")?;
+
+    let prompt = shell_kind
+        .try_quote_prefix_aware("Enter passphrase for your Git signing key:")
+        .context("Failed to shell-escape gpg passphrase prompt")?;
+
+    Ok(render_gpg_wrapper_script(
+        &gpg_program,
+        &askpass_program,
+        &askpass_socket,
+        &prompt,
+    ))
+}
+
+/// Renders the `gpg.program` wrapper. Split out from
+/// [`generate_gpg_wrapper_script`] so argument classification can be checked
+/// without a `gpg` binary on `PATH`.
+#[cfg(not(target_os = "windows"))]
+fn render_gpg_wrapper_script(
+    gpg_program: &str,
+    askpass_program: &str,
+    askpass_socket: &str,
+    prompt: &str,
+) -> String {
+    // The wrapper only prompts for a passphrase when git asks gpg to *sign*
+    // (for example `gpg -bsau <key>`). Other invocations, `--verify` in
+    // particular, run gpg unchanged so no spurious modal appears. When signing,
+    // the passphrase is handed to gpg on fd 3 in loopback mode, so no
+    // pinentry/terminal is required.
+    format!(
+        r#"#!/bin/sh
+for arg in "$@"; do
+    case "$arg" in
+        # Long-form signing options.
+        --sign|--detach-sign|--clearsign|--clear-sign) is_signing=1 ;;
+        # Skip other long options so flags like `--status-fd` don't match below.
+        --*) ;;
+        # Short-flag clusters containing `s`, e.g. git's `-bsau`.
+        -*s*) is_signing=1 ;;
+    esac
+done
+
+# Not a signing request: run gpg as-is, leaving its prompting untouched.
+if [ -z "${{is_signing}}" ]; then
+    exec {gpg_program} "$@"
+fi
+
+# Signing: ask ZZZ for the passphrase, then hand it to gpg on fd 3.
+passphrase=$(printf '%s\0' {prompt} | {askpass_program} --askpass={askpass_socket} 2>/dev/null)
+exec {gpg_program} --pinentry-mode loopback --passphrase-fd 3 "$@" 3<<EOF
+${{passphrase}}
+EOF
+"#
+    )
+}
+
+/// Finds the real `gpg` (or `gpg2`) executable on `PATH`.
+#[inline]
+#[cfg(not(target_os = "windows"))]
+fn find_gpg_program() -> Option<std::path::PathBuf> {
+    ["gpg", "gpg2"]
+        .into_iter()
+        .find_map(|candidate| which::which(candidate).ok())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -465,5 +621,23 @@ mod tests {
             assert!(script.contains("printf '%s\\0' \"$@\""));
             assert!(script.contains("2> /dev/null"));
         }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn gpg_wrapper_script_only_prompts_when_signing() {
+        let script = render_gpg_wrapper_script(
+            "'/usr/bin/gpg'",
+            "'/opt/zzz/bin/zzz'",
+            "'/tmp/zzz askpass.sock'",
+            "'Enter passphrase for your Git signing key:'",
+        );
+
+        assert!(script.starts_with("#!/bin/sh\n"));
+        assert!(script.contains("--sign|--detach-sign|--clearsign|--clear-sign) is_signing=1"));
+        assert!(script.contains("-*s*) is_signing=1"));
+        assert!(script.contains("exec '/usr/bin/gpg' \"$@\""));
+        assert!(script.contains("--pinentry-mode loopback --passphrase-fd 3"));
+        assert!(script.contains("'/opt/zzz/bin/zzz' --askpass='/tmp/zzz askpass.sock'"));
     }
 }
