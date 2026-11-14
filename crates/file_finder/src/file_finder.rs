@@ -36,6 +36,7 @@ use std::{
         Arc,
         atomic::{self, AtomicBool},
     },
+    time::Duration,
 };
 use ui::{
     ButtonLike, Checkbox, CommonAnimationExt, ContextMenu, HighlightedLabel, Indicator, KeyBinding,
@@ -412,6 +413,7 @@ impl FileFinder {
 }
 
 const MAX_SEED_QUERY_LENGTH: usize = 100;
+const WORKTREE_UPDATE_REFRESH_DEBOUNCE: Duration = Duration::from_millis(200);
 
 fn sanitize_file_query(selection: &str) -> Option<String> {
     let query = selection.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -473,6 +475,7 @@ pub struct FileFinderDelegate {
     focus_handle: FocusHandle,
     include_ignored: Option<bool>,
     include_ignored_refresh: Task<()>,
+    debounce_next_refresh: bool,
 }
 
 /// Use a custom ordering for file finder: the regular one
@@ -1162,6 +1165,7 @@ impl FileFinderDelegate {
             focus_handle: cx.focus_handle(),
             include_ignored: FileFinderSettings::get_global(cx).include_ignored,
             include_ignored_refresh: Task::ready(()),
+            debounce_next_refresh: false,
         }
     }
 
@@ -1176,6 +1180,7 @@ impl FileFinderDelegate {
             |file_finder, _, event, window, cx| match event {
                 project::Event::WorktreeUpdatedEntries(_, _) => {
                     file_finder.picker.update(cx, |picker, cx| {
+                        picker.delegate.debounce_next_refresh = true;
                         picker.delegate.refresh_history(window, cx);
                         picker.refresh(window, cx);
                     })
@@ -2036,6 +2041,7 @@ impl PickerDelegate for FileFinderDelegate {
         window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Task<()> {
+        let debounce_refresh = std::mem::take(&mut self.debounce_next_refresh);
         let raw_query = raw_query.trim();
 
         let raw_query = match &raw_query.get(0..2) {
@@ -2101,6 +2107,11 @@ impl PickerDelegate for FileFinderDelegate {
             let path = query.path_position.path.clone();
 
             cx.spawn_in(window, async move |this, cx| {
+                if debounce_refresh {
+                    cx.background_executor()
+                        .timer(WORKTREE_UPDATE_REFRESH_DEBOUNCE)
+                        .await;
+                }
                 maybe!(async move {
                     let is_absolute_path = path.is_absolute();
                     let did_resolve_abs_path = is_absolute_path
