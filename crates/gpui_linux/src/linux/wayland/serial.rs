@@ -10,14 +10,27 @@ pub(crate) enum SerialKind {
     KeyPress,
 }
 
-#[derive(Debug)]
-struct SerialData {
-    serial: u32,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct Serial(u32);
+
+impl Serial {
+    pub(super) fn as_raw(self) -> u32 {
+        self.0
+    }
 }
 
-impl SerialData {
-    fn new(value: u32) -> Self {
-        Self { serial: value }
+/// A serial that Wayland compositors accept as the trigger for a selection
+/// (clipboard or primary selection) ownership request.
+///
+/// Only the kinds emitted by the same device source as pointer and keyboard
+/// input qualify; an input-method or data-device serial must never be reused
+/// for `set_selection`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct SelectionSerial(Serial);
+
+impl SelectionSerial {
+    pub(super) fn as_raw(self) -> u32 {
+        self.0.as_raw()
     }
 }
 
@@ -37,7 +50,8 @@ struct Press {
 #[derive(Debug)]
 /// Helper for tracking of different serial kinds.
 pub(crate) struct SerialTracker {
-    serials: HashMap<SerialKind, SerialData>,
+    serials: HashMap<SerialKind, Serial>,
+    selection_serial: Option<SelectionSerial>,
     latest_press: Option<Press>,
 }
 
@@ -45,6 +59,7 @@ impl SerialTracker {
     pub fn new() -> Self {
         Self {
             serials: HashMap::default(),
+            selection_serial: None,
             latest_press: None,
         }
     }
@@ -61,14 +76,19 @@ impl SerialTracker {
         value: u32,
         focused_surface: Option<wl_surface::WlSurface>,
     ) {
+        let serial = Serial(value);
+
         if matches!(&kind, SerialKind::KeyPress | SerialKind::MousePress) {
+            // Selection ownership must cite the most recent key or mouse press, in
+            // arrival order rather than numeric order: serials roll over.
+            self.selection_serial = Some(SelectionSerial(serial));
             self.latest_press = Some(Press {
                 serial: value,
                 focused_surface,
             });
         }
 
-        self.serials.insert(kind, SerialData::new(value));
+        self.serials.insert(kind, serial);
     }
 
     /// Returns the latest press if a still-alive surface had focus when it arrived.
@@ -84,30 +104,81 @@ impl SerialTracker {
         })
     }
 
-    /// Returns the latest tracked serial of the provided [`SerialKind`]
+    /// Returns the latest tracked serial of the provided [`SerialKind`].
     ///
-    /// Will return 0 if not tracked.
-    pub fn get(&self, kind: SerialKind) -> u32 {
-        self.serials
-            .get(&kind)
-            .map_or(0, |serial_data| serial_data.serial)
+    /// Returns a serial with a raw value of 0 if the kind has not been tracked.
+    pub fn get(&self, kind: SerialKind) -> Serial {
+        self.serials.get(&kind).copied().unwrap_or(Serial(0))
     }
 
-    /// Returns the most recent serial across all tracked kinds.
+    /// Returns the serial a selection ownership request may cite, or `None` if no
+    /// key or mouse press serial has been received yet.
     ///
-    /// Wayland compositor serial numbers are monotonically increasing, so the
-    /// highest value is always the most recently received one. This is the
-    /// correct serial to use for [`set_selection`] when the triggering event
-    /// may have been a mouse press rather than a key press: using 0 (the
-    /// default when a kind has never been seen) causes compositors to silently
-    /// reject the request.
-    ///
-    /// Returns 0 only if no serial of any kind has been received yet.
-    pub fn get_latest(&self) -> u32 {
-        self.serials
-            .values()
-            .map(|serial_data| serial_data.serial)
-            .max()
-            .unwrap_or(0)
+    /// Wayland compositors silently reject `set_selection` for a serial that did
+    /// not come from pointer or keyboard input, so unrelated kinds such as
+    /// [`SerialKind::InputMethod`] and [`SerialKind::DataDevice`] are excluded.
+    pub fn selection_serial(&self) -> Option<SelectionSerial> {
+        self.selection_serial
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn raw_selection_serial(serial_tracker: &SerialTracker) -> Option<u32> {
+        serial_tracker
+            .selection_serial()
+            .map(SelectionSerial::as_raw)
+    }
+
+    #[test]
+    fn test_selection_serial_ignores_unrelated_serial_kinds() {
+        let mut serial_tracker = SerialTracker::new();
+        serial_tracker.update(SerialKind::MousePress, 3783);
+        serial_tracker.update(SerialKind::InputMethod, 5011);
+        serial_tracker.update(SerialKind::KeyPress, 3787);
+        serial_tracker.update(SerialKind::MouseEnter, 6000);
+        serial_tracker.update(SerialKind::DataDevice, 7000);
+
+        assert_eq!(raw_selection_serial(&serial_tracker), Some(3787));
+    }
+
+    #[test]
+    fn test_selection_serial_uses_mouse_press_without_key_press() {
+        let mut serial_tracker = SerialTracker::new();
+        serial_tracker.update(SerialKind::MousePress, 3783);
+
+        assert_eq!(raw_selection_serial(&serial_tracker), Some(3783));
+    }
+
+    #[test]
+    fn test_selection_serial_uses_event_arrival_order_across_rollover() {
+        let mut serial_tracker = SerialTracker::new();
+        serial_tracker.update(SerialKind::KeyPress, 0xffff_fff0);
+        serial_tracker.update(SerialKind::MousePress, 0x0000_0010);
+
+        assert_eq!(raw_selection_serial(&serial_tracker), Some(0x0000_0010));
+    }
+
+    #[test]
+    fn test_selection_serial_is_unavailable_without_eligible_input() {
+        let mut serial_tracker = SerialTracker::new();
+
+        assert_eq!(raw_selection_serial(&serial_tracker), None);
+
+        serial_tracker.update(SerialKind::InputMethod, 5011);
+        serial_tracker.update(SerialKind::MouseEnter, 6000);
+        serial_tracker.update(SerialKind::DataDevice, 7000);
+
+        assert_eq!(raw_selection_serial(&serial_tracker), None);
+    }
+
+    #[test]
+    fn test_zero_is_a_valid_selection_serial() {
+        let mut serial_tracker = SerialTracker::new();
+        serial_tracker.update(SerialKind::KeyPress, 0);
+
+        assert_eq!(raw_selection_serial(&serial_tracker), Some(0));
     }
 }

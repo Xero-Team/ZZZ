@@ -1623,7 +1623,7 @@ impl PlatformWindow for WaylandWindow {
         if let Some(toplevel) = state.surface_state.toplevel() {
             toplevel.show_window_menu(
                 &state.globals.seat,
-                serial,
+                serial.as_raw(),
                 f32::from(position.x) as i32,
                 f32::from(position.y) as i32,
             );
@@ -1634,7 +1634,7 @@ impl PlatformWindow for WaylandWindow {
         let state = self.borrow();
         let serial = state.client.get_serial(SerialKind::MousePress);
         if let Some(toplevel) = state.surface_state.toplevel() {
-            toplevel._move(&state.globals.seat, serial);
+            toplevel._move(&state.globals.seat, serial.as_raw());
         }
     }
 
@@ -1643,7 +1643,7 @@ impl PlatformWindow for WaylandWindow {
         if let Some(toplevel) = state.surface_state.toplevel() {
             toplevel.resize(
                 &state.globals.seat,
-                state.client.get_serial(SerialKind::MousePress),
+                state.client.get_serial(SerialKind::MousePress).as_raw(),
                 edge.to_xdg(),
             )
         }
