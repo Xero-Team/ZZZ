@@ -201,6 +201,8 @@ members = [
     "crates/watch",
     "crates/which_key",
     "crates/workspace",
+    "crates/workspace_modes",
+    "crates/workspace_chrome",
     "crates/worktree",
     "crates/worktree_benchmarks",
     "crates/zzz",
@@ -470,6 +472,8 @@ which_key = { path = "crates/which_key" }
 
 watch = { path = "crates/watch" }
 workspace = { path = "crates/workspace" }
+workspace_modes = { path = "crates/workspace_modes" }
+workspace_chrome = { path = "crates/workspace_chrome" }
 worktree = { path = "crates/worktree" }
 zzz_actions = { path = "crates/zzz_actions" }
 zzz_credentials_provider = { path = "crates/zzz_credentials_provider" }

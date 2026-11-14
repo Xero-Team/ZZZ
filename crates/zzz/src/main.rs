@@ -643,6 +643,7 @@ fn main() {
 
         audio::init(cx);
         workspace::init(app_state.clone(), cx);
+        workspace_modes::init(cx);
         if WorkspaceSettings::get_global(cx).use_system_prompts
             && cfg!(not(any(target_os = "linux", target_os = "freebsd")))
         {

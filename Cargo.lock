@@ -17379,6 +17379,7 @@ dependencies = [
  "util",
  "windows 0.62.2",
  "workspace",
+ "workspace_chrome",
  "zzz_actions",
 ]
 
@@ -21333,6 +21334,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "workspace_chrome"
+version = "0.1.0"
+dependencies = [
+ "gpui",
+ "i18n",
+ "ui",
+ "workspace_modes",
+]
+
+[[package]]
+name = "workspace_modes"
+version = "0.1.0"
+dependencies = [
+ "db",
+ "gpui",
+ "i18n",
+ "util",
+ "workspace",
+]
+
+[[package]]
 name = "worktree"
 version = "0.1.0"
 dependencies = [
@@ -22504,6 +22526,7 @@ dependencies = [
  "windows 0.62.2",
  "windows_resources",
  "workspace",
+ "workspace_modes",
  "zlog",
  "zlog_settings",
  "ztracing",

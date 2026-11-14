@@ -647,6 +647,7 @@
       "shift shift": "search_everywhere::Toggle",
       "ctrl-alt-shift-j": "toolbox::OpenJsonPrettier",
       "ctrl-alt-shift-k": "project_bookmarks::ToggleProjectBookmarks",
+      "ctrl-alt-shift-m": "workspace_modes::CycleMode",
       "shift-alt-w": "git::Worktree",
       "shift-alt-enter": "toast::RunAction",
       "ctrl-shift-`": "workspace::NewTerminal",

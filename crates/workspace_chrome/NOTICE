@@ -1,0 +1,9 @@
+This crate adapts the mode control from Glass
+(https://github.com/Glass-HQ/Glass-v1) at
+e8ec0832b4f47b9e1420730c7d5bf7f3bd83eda9.
+
+Upstream license: GNU General Public License version 3 or later.
+The full license text is in the repository root LICENSE-GPL file.
+
+Adapted file:
+- src/workspace_chrome.rs

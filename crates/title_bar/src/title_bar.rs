@@ -302,6 +302,8 @@ impl Render for TitleBar {
                 .into_any_element(),
         );
 
+        children.push(workspace_chrome::ModeControl::new().into_any_element());
+
         let status = self.client.status();
         let status = &*status.borrow();
 

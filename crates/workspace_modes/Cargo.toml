@@ -1,0 +1,20 @@
+[package]
+name = "workspace_modes"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "AGPL-3.0-or-later"
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/workspace_modes.rs"
+doctest = false
+
+[dependencies]
+db.workspace = true
+gpui.workspace = true
+i18n.workspace = true
+util.workspace = true
+workspace.workspace = true

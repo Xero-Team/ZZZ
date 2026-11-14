@@ -217,6 +217,7 @@ vim_mode_setting.workspace = true
 watch.workspace = true
 which_key.workspace = true
 workspace.workspace = true
+workspace_modes.workspace = true
 zzz_actions.workspace = true
 zzz_env_vars.workspace = true
 zlog.workspace = true
