@@ -245,8 +245,13 @@ def check_lineage(
             except RuntimeError as error:
                 warnings.append(f"{prefix}: {error}")
                 continue
-            if not (current.startswith(head) or head.startswith(current)):
-                warnings.append(f"{prefix}: {side} matches no checkout HEAD; the lineage row is stale")
+            if current.startswith(head) or head.startswith(current):
+                continue
+            present = run_command(
+                ["git", "-C", str(repo), "cat-file", "-e", f"{head}^{{commit}}"], timeout=20
+            )
+            if present.returncode != 0:
+                warnings.append(f"{prefix}: {side} is not present in the checkout; the row cannot be checked")
     if unpinned:
         warnings.append(f"{unpinned} lineage rows lack head pins; they cannot be re-checked against checkouts")
     return errors, warnings, len(rows)

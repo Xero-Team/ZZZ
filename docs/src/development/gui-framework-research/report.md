@@ -152,6 +152,29 @@ ZZZ 本地 claim 固定于 `152a5eb`，仍是当前 HEAD 的祖先，判定「�
 - [inventory.tsv](./inventory.tsv) 与 [repository-state.tsv](./repository-state.tsv)
   仍是 2026-10-03 的快照；它们记录的是当次研究的仓库状态，本次没有重写。
 
+### 2.5 关键 claim 在当前 HEAD 的复核 {#head-recheck}
+
+2026-11-14 对第 1 节依赖的关键 claim 逐条重读源码，结果以新 ID 追加到
+[evidence.tsv](./evidence.tsv)，固定在 `6ea4514656`。其余 claim 仍固定在
+2026-10-03 的 `152a5eb`，没有改动。
+
+| Claim     | 原结论                         | 当前 HEAD 证据                                                         | 判定     |
+| --------- | ------------------------------ | ---------------------------------------------------------------------- | -------- |
+| [ZZZ-046] | 1.1 缺 frame 观测              | `frame.rs:776` 的 `BuiltFrame` 持有 scene、atlas epoch、交互与文本快照 | 部分落地 |
+| [ZZZ-047] | 1.2 `Window` 职责汇聚          | `window.rs:64-71` 只保留模块声明，逻辑移入 `window/*.rs`               | 已落地   |
+| [ZZZ-048] | 1.3 平台能力不可查询           | `platform.rs:550` 的 `PlatformCapabilities`                            | 部分落地 |
+| [ZZZ-049] | 1.4 renderer 依赖方向          | `render_api.rs:26-30` 的 `Renderer`/`RenderTarget` seam                | 部分落地 |
+| [ZZZ-050] | 1.5 核心 accessibility 缺位    | `element.rs:106-117` 的 role、properties、action hooks                 | 已落地   |
+| [ZZZ-051] | 1.6 headless 只有 macOS        | `gpui_platform.rs:65-77` 仅 macOS 分支构造 renderer                    | 缺口仍在 |
+| [ZZZ-052] | 1.7 缺生产并发 harness         | `platform/threaded_dispatcher.rs:24` 的 `ThreadedDispatcher`           | 已落地   |
+| [ZZZ-053] | 1.8 `ui_input` 全局 `OnceLock` | `ui_input.rs:55-72` 改为 per-app global，缺注册时返回错误              | 已修复   |
+| [ZZZ-054] | 1.8 `ui_prompt` 依赖 workspace | `ui_prompt/Cargo.toml:17-23` 无 workspace 依赖                         | 已修复   |
+| [ZZZ-055] | 4.3 `cached` 重放仍是 opt-in   | `view.rs:50` 的 `AnyView::cached`                                      | 保持不变 |
+| [ZZZ-056] | 1.10 不应替换 Taffy            | `gpui/Cargo.toml:102` 固定 `taffy = "=0.15.1"`                         | 保持不变 |
+
+“部分落地”表示机制存在但覆盖范围未达到原建议的完整程度，例如 render seam
+仍留在 `gpui` crate 内、没有抽成独立 crate。
+
 ## 3. 共同血统与独立创新 {#lineage}
 
 ### 3.1 血统关系 {#lineage-map}

@@ -69,10 +69,10 @@ python .agents/skills/repository-research/scripts/validate_evidence.py \
 ```
 
 It rejects unknown repository IDs, non-integer counts, and rows where
-`common_paths` does not equal `byte_identical + changed_common_paths`. A row
-whose `head_a` or `head_b` matches no checkout `HEAD` is reported as stale, and
-rows without head pins are counted as unrecheckable rather than treated as
-current.
+`common_paths` does not equal `byte_identical + changed_common_paths`. A head pin
+that the checkout no longer contains is reported, so a lineage ledger is not
+silently read against a replaced corpus; a pin that exists locally but is not
+the current `HEAD` is accepted, because the ledger records one revision.
 
 ## Reporting
 
