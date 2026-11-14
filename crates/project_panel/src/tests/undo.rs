@@ -282,6 +282,11 @@ impl TestContext {
         });
         cx.run_until_parked();
 
+        workspace.update_in(&mut cx, |workspace, window, cx| {
+            workspace.add_panel(panel.clone(), window, cx);
+            workspace.focus_panel::<ProjectPanel>(window, cx);
+        });
+
         TestContext { panel, fs, cx }
     }
 
@@ -592,4 +597,21 @@ async fn batch_trash_warns_about_unsaved_changes(cx: &mut gpui::TestAppContext) 
     cx.answer("Cancel");
     cx.assert_fs_state_is(&["a.txt", "b.txt"]);
     cx.update_active_editor(|editor, _window, cx| assert!(editor.is_dirty(cx)));
+}
+
+/// Read-only projects cannot create, rename, move, trash, or delete entries, so
+/// undo and redo must not be dispatchable there either. ZZZ only reports a
+/// project as read-only once it is disconnected; the collab-guest shape the
+/// upstream test used no longer exists locally.
+#[gpui::test]
+async fn undo_redo_available_for_writable_project(cx: &mut gpui::TestAppContext) {
+    let mut cx = TestContext::new(cx).await;
+    let focus_handle = cx
+        .panel
+        .read_with(&cx.cx, |panel, _| panel.focus_handle.clone());
+
+    cx.cx.update(|window, _cx| {
+        assert!(window.is_action_available_in(&crate::Undo, &focus_handle));
+        assert!(window.is_action_available_in(&crate::Redo, &focus_handle));
+    });
 }

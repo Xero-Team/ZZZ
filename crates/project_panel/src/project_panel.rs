@@ -7680,6 +7680,7 @@ impl Render for ProjectPanel {
         };
 
         let is_local = project.is_local();
+        let supports_undo = cx.has_flag::<ProjectPanelUndoRedoFeatureFlag>();
         let supports_trash = project
             .visible_worktrees(cx)
             .any(|worktree| worktree.read(cx).supports_trash_restore());
@@ -7814,10 +7815,6 @@ impl Render for ProjectPanel {
                 .on_action(cx.listener(Self::remove_from_project))
                 .on_action(cx.listener(Self::compare_marked_files))
                 .on_action(cx.listener(Self::open_context_menu))
-                .when(cx.has_flag::<ProjectPanelUndoRedoFeatureFlag>(), |el| {
-                    el.on_action(cx.listener(Self::undo))
-                        .on_action(cx.listener(Self::redo))
-                })
                 .when(!project.is_read_only(cx), |el| {
                     el.on_action(cx.listener(Self::new_file))
                         .on_action(cx.listener(Self::new_directory))
@@ -7831,6 +7828,10 @@ impl Render for ProjectPanel {
                         .on_action(cx.listener(Self::add_to_gitignore))
                         .on_action(cx.listener(Self::add_to_git_info_exclude))
                         .when(supports_trash, |el| el.on_action(cx.listener(Self::trash)))
+                        .when(supports_undo, |el| {
+                            el.on_action(cx.listener(Self::undo))
+                                .on_action(cx.listener(Self::redo))
+                        })
                 })
                 .when(
                     project.is_local() || project.is_via_wsl_with_host_interop(cx),
