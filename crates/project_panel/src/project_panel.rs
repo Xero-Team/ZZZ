@@ -646,6 +646,17 @@ enum DeleteEntryOutcome {
     Failed,
 }
 
+enum RemovalKind {
+    Trash,
+    Delete,
+}
+
+struct RemovalPrompt {
+    message: String,
+    detail: Option<String>,
+    confirmation_label: String,
+}
+
 impl ProjectPanel {
     pub fn new(
         project: Entity<Project>,
@@ -3003,6 +3014,130 @@ impl ProjectPanel {
         });
     }
 
+    /// Builds the confirmation prompt shared by direct removal and undo/redo.
+    ///
+    /// The `names` slice must contain every path being removed, and this
+    /// function will apply markdown formatting and display truncation. The
+    /// `dirty_buffers` parameter should be the number of those paths that have
+    /// unsaved changes.
+    fn build_removal_prompt<S>(
+        kind: RemovalKind,
+        names: &[S],
+        dirty_buffers: usize,
+        cx: &App,
+    ) -> RemovalPrompt
+    where
+        S: AsRef<str>,
+    {
+        let trash = matches!(kind, RemovalKind::Trash);
+        let confirmation_label = if trash {
+            tr(cx, "project_panel.delete.trash", "Trash")
+        } else {
+            tr(cx, "project_panel.delete.delete", "Delete")
+        };
+
+        let message = match names {
+            [name] => {
+                let unsaved_warning = if dirty_buffers > 0 {
+                    tr(
+                        cx,
+                        "project_panel.delete.unsaved_single",
+                        "\n\nIt has unsaved changes, which will be lost.",
+                    )
+                } else {
+                    String::new()
+                };
+
+                let (key, fallback) = if trash {
+                    (
+                        "project_panel.delete.trash_single_prompt",
+                        "Do you want to trash {}?{}",
+                    )
+                } else {
+                    (
+                        "project_panel.delete.delete_single_prompt",
+                        "Are you sure you want to permanently delete {}?{}",
+                    )
+                };
+
+                tr(cx, key, fallback)
+                    .replacen("{}", &MarkdownInlineCode(name.as_ref()).to_string(), 1)
+                    .replacen("{}", &unsaved_warning, 1)
+            }
+            _ => {
+                const CUTOFF_POINT: usize = 10;
+                let mut listed_names = names
+                    .iter()
+                    .take(CUTOFF_POINT)
+                    .map(|name| MarkdownInlineCode(name.as_ref()).to_string())
+                    .collect::<Vec<_>>();
+                let omitted_count = names.len().saturating_sub(CUTOFF_POINT);
+                if omitted_count == 1 {
+                    listed_names.push(tr(
+                        cx,
+                        "project_panel.delete.one_file_not_shown",
+                        ".. 1 file not shown",
+                    ));
+                } else if omitted_count > 1 {
+                    listed_names.push(
+                        tr(
+                            cx,
+                            "project_panel.delete.files_not_shown",
+                            ".. {} files not shown",
+                        )
+                        .replacen("{}", &omitted_count.to_string(), 1),
+                    );
+                }
+
+                let unsaved_warning = match dirty_buffers {
+                    0 => String::new(),
+                    1 => tr(
+                        cx,
+                        "project_panel.delete.unsaved_one_of_many",
+                        "\n\n1 of these has unsaved changes, which will be lost.",
+                    ),
+                    dirty_buffers => tr(
+                        cx,
+                        "project_panel.delete.unsaved_many",
+                        "\n\n{} of these have unsaved changes, which will be lost.",
+                    )
+                    .replacen("{}", &dirty_buffers.to_string(), 1),
+                };
+
+                let (key, fallback) = if trash {
+                    (
+                        "project_panel.delete.trash_multi_prompt",
+                        "Do you want to trash the following {} files?\n{}{}",
+                    )
+                } else {
+                    (
+                        "project_panel.delete.delete_multi_prompt",
+                        "Are you sure you want to permanently delete the following {} files?\n{}{}",
+                    )
+                };
+
+                tr(cx, key, fallback)
+                    .replacen("{}", &names.len().to_string(), 1)
+                    .replacen("{}", &listed_names.join("\n"), 1)
+                    .replacen("{}", &unsaved_warning, 1)
+            }
+        };
+
+        let detail = (!trash).then(|| {
+            tr(
+                cx,
+                "project_panel.delete.detail_irreversible",
+                "This cannot be undone.",
+            )
+        });
+
+        RemovalPrompt {
+            message,
+            detail,
+            confirmation_label,
+        }
+    }
+
     fn remove(
         &mut self,
         trash: bool,
@@ -3038,126 +3173,22 @@ impl ProjectPanel {
             let answer = if skip_prompt {
                 None
             } else {
-                let operation = if trash {
-                    tr(cx, "project_panel.delete.trash", "Trash")
+                let names = file_paths
+                    .iter()
+                    .map(|(_, _, name)| name.as_str())
+                    .collect::<Vec<_>>();
+                let removal_kind = if trash {
+                    RemovalKind::Trash
                 } else {
-                    tr(cx, "project_panel.delete.delete", "Delete")
+                    RemovalKind::Delete
                 };
-                let prompt = match file_paths.first() {
-                    Some((_, _, path)) if file_paths.len() == 1 => {
-                        let unsaved_warning = if dirty_buffers > 0 {
-                            tr(
-                                cx,
-                                "project_panel.delete.unsaved_single",
-                                "\n\nIt has unsaved changes, which will be lost.",
-                            )
-                        } else {
-                            String::new()
-                        };
-
-                        let key = if trash {
-                            "project_panel.delete.trash_single_prompt"
-                        } else {
-                            "project_panel.delete.delete_single_prompt"
-                        };
-                        let fallback = if trash {
-                            "Do you want to trash {}?{}"
-                        } else {
-                            "Are you sure you want to permanently delete {}?{}"
-                        };
-
-                        tr(cx, key, fallback)
-                            .replacen("{}", &MarkdownInlineCode(path).to_string(), 1)
-                            .replacen("{}", &unsaved_warning, 1)
-                    }
-                    _ => {
-                        const CUTOFF_POINT: usize = 10;
-                        let names = if file_paths.len() > CUTOFF_POINT {
-                            let truncated_path_counts = file_paths.len() - CUTOFF_POINT;
-                            let mut paths = file_paths
-                                .iter()
-                                .map(|(_, _, path)| MarkdownInlineCode(path).to_string())
-                                .take(CUTOFF_POINT)
-                                .collect::<Vec<String>>();
-                            paths.truncate(CUTOFF_POINT);
-                            if truncated_path_counts == 1 {
-                                paths.push(tr(
-                                    cx,
-                                    "project_panel.delete.one_file_not_shown",
-                                    ".. 1 file not shown",
-                                ));
-                            } else {
-                                paths.push(
-                                    tr(
-                                        cx,
-                                        "project_panel.delete.files_not_shown",
-                                        ".. {} files not shown",
-                                    )
-                                    .replacen(
-                                        "{}",
-                                        &truncated_path_counts.to_string(),
-                                        1,
-                                    ),
-                                );
-                            }
-                            paths
-                        } else {
-                            file_paths
-                                .iter()
-                                .map(|(_, _, path)| MarkdownInlineCode(path).to_string())
-                                .collect()
-                        };
-                        let unsaved_warning = if dirty_buffers == 0 {
-                            String::new()
-                        } else if dirty_buffers == 1 {
-                            tr(
-                                cx,
-                                "project_panel.delete.unsaved_one_of_many",
-                                "\n\n1 of these has unsaved changes, which will be lost.",
-                            )
-                        } else {
-                            tr(
-                                cx,
-                                "project_panel.delete.unsaved_many",
-                                "\n\n{} of these have unsaved changes, which will be lost.",
-                            )
-                            .replacen(
-                                "{}",
-                                &dirty_buffers.to_string(),
-                                1,
-                            )
-                        };
-
-                        let key = if trash {
-                            "project_panel.delete.trash_multi_prompt"
-                        } else {
-                            "project_panel.delete.delete_multi_prompt"
-                        };
-                        let fallback = if trash {
-                            "Do you want to trash the following {} files?\n{}{}"
-                        } else {
-                            "Are you sure you want to permanently delete the following {} files?\n{}{}"
-                        };
-
-                        tr(cx, key, fallback)
-                            .replacen("{}", &file_paths.len().to_string(), 1)
-                            .replacen("{}", &names.join("\n"), 1)
-                            .replacen("{}", &unsaved_warning, 1)
-                    }
-                };
-                let detail = (!trash).then(|| {
-                    tr(
-                        cx,
-                        "project_panel.delete.detail_irreversible",
-                        "This cannot be undone.",
-                    )
-                });
+                let prompt = Self::build_removal_prompt(removal_kind, &names, dirty_buffers, cx);
                 let cancel = tr(cx, "prompt.common.cancel", "Cancel");
                 Some(window.prompt(
                     PromptLevel::Info,
-                    &prompt,
-                    detail.as_deref(),
-                    &[operation.as_str(), cancel.as_str()],
+                    &prompt.message,
+                    prompt.detail.as_deref(),
+                    &[prompt.confirmation_label.as_str(), cancel.as_str()],
                     cx,
                 ))
             };
