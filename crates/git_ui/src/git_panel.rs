@@ -10631,6 +10631,71 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn test_solo_diff_exposes_editor_to_buffer_search(cx: &mut TestAppContext) {
+        use editor::SplittableEditor;
+        use std::any::TypeId;
+        use workspace::item::Item as _;
+
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.background_executor.clone());
+        fs.insert_tree(
+            path!("/project"),
+            json!({
+                ".git": {},
+                "tracked": "tracked\n",
+            }),
+        )
+        .await;
+
+        fs.set_head_and_index_for_repo(
+            path!("/project/.git").as_ref(),
+            &[("tracked", "old tracked\n".into())],
+        );
+
+        let project = Project::test(fs.clone(), [Path::new(path!("/project"))], cx).await;
+        let window_handle =
+            cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+        let workspace = window_handle
+            .read_with(cx, |mw, _| mw.workspace().clone())
+            .unwrap();
+        let cx = &mut VisualTestContext::from_window(window_handle.into(), cx);
+        let panel = workspace.update_in(cx, GitPanel::new);
+        await_git_panel_entries(&panel, cx).await;
+
+        let entry_index = panel.read_with(cx, |panel, _| {
+            panel
+                .entries
+                .iter()
+                .position(|entry| entry.status_entry().is_some())
+                .expect("the git panel should list the tracked file")
+        });
+        panel.update_in(cx, |panel, window, cx| {
+            panel.selected_entry = Some(entry_index);
+            panel.open_solo_diff(&menu::SecondaryConfirm, window, cx);
+        });
+        cx.run_until_parked();
+
+        workspace.read_with(cx, |workspace, cx| {
+            let solo_diff = workspace
+                .items_of_type::<SoloDiffView>(cx)
+                .next()
+                .expect("the solo diff should be open");
+
+            let searchable = solo_diff
+                .read(cx)
+                .as_searchable(&solo_diff, cx)
+                .expect("SoloDiffView should expose its editor to buffer search");
+            assert!(
+                searchable
+                    .act_as_type(TypeId::of::<SplittableEditor>(), cx)
+                    .is_some(),
+                "the searchable item should be the solo diff's split editor"
+            );
+        });
+    }
+
+    #[gpui::test]
     async fn test_tree_view_reveals_collapsed_parent_on_select_entry_by_path(
         cx: &mut TestAppContext,
     ) {
