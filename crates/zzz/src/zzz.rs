@@ -1880,10 +1880,10 @@ fn init_global_config_error_notifications(cx: &mut App) {
                     _ => return,
                 };
                 let id = NotificationId::Named(format!("invalid-global-{file_kind}-file").into());
-                let result = match event {
-                    SettingsObserverEvent::GlobalTasksUpdated(result)
-                    | SettingsObserverEvent::GlobalDebugScenariosUpdated(result) => result,
-                    _ => return,
+                let (SettingsObserverEvent::GlobalTasksUpdated(result)
+                | SettingsObserverEvent::GlobalDebugScenariosUpdated(result)) = event
+                else {
+                    return;
                 };
                 match result {
                     Ok(_) => dismiss_app_notification(&id, cx),
