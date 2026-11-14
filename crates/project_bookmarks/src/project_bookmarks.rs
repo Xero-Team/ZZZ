@@ -21,7 +21,6 @@ actions!(
     project_bookmarks,
     [
         /// Toggles the project bookmarks search.
-        #[action(name = "Toggle")]
         ToggleProjectBookmarks,
     ]
 );

@@ -87,15 +87,33 @@ struct ActiveMode {
 
 impl Global for ActiveMode {}
 
+impl Default for ActiveMode {
+    fn default() -> Self {
+        Self {
+            mode: ModeId::Editor,
+            editor_docks: Vec::new(),
+        }
+    }
+}
+
+/// Reads the layout mode without requiring [`init`] to have run, so widgets like
+/// the title bar's mode control can be rendered in the tests and windows that
+/// never install the mode actions. A missing global means "no mode switching is
+/// installed", which is the same arrangement as Editor mode.
 pub fn active_mode(cx: &App) -> ModeId {
-    cx.global::<ActiveMode>().mode
+    cx.try_global::<ActiveMode>()
+        .map_or(ModeId::Editor, |state| state.mode)
+}
+
+fn active_mode_mut(cx: &mut App) -> &mut ActiveMode {
+    if cx.try_global::<ActiveMode>().is_none() {
+        cx.set_global(ActiveMode::default());
+    }
+    cx.global_mut::<ActiveMode>()
 }
 
 pub fn init(cx: &mut App) {
-    cx.set_global(ActiveMode {
-        mode: ModeId::Editor,
-        editor_docks: Vec::new(),
-    });
+    cx.set_global(ActiveMode::default());
 
     cx.observe_new(|workspace: &mut Workspace, window, cx| {
         if let Some(window) = window {
@@ -147,7 +165,7 @@ fn switch(
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) {
-    let previous = cx.global::<ActiveMode>().mode;
+    let previous = active_mode(cx);
     if previous == mode {
         return;
     }
@@ -158,7 +176,7 @@ fn switch(
         .collect::<Vec<_>>();
 
     if previous == ModeId::Editor {
-        cx.global_mut::<ActiveMode>().editor_docks = open_positions.clone();
+        active_mode_mut(cx).editor_docks = open_positions.clone();
     }
 
     // Collapse every open dock, then open only the ones the target mode wants.
@@ -168,7 +186,9 @@ fn switch(
 
     let target_positions: Vec<DockPosition> = match mode {
         ModeId::Editor => {
-            let saved = cx.global::<ActiveMode>().editor_docks.clone();
+            let saved = cx
+                .try_global::<ActiveMode>()
+                .map_or_else(Vec::new, |state| state.editor_docks.clone());
             if saved.is_empty() {
                 vec![DockPosition::Left, DockPosition::Right]
             } else {
@@ -185,7 +205,7 @@ fn switch(
         }
     }
 
-    cx.global_mut::<ActiveMode>().mode = mode;
+    active_mode_mut(cx).mode = mode;
 
     let key = mode_key(workspace);
     let value = mode.as_str().to_owned();
