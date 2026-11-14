@@ -706,6 +706,7 @@
       "cmd-ctrl-b": "branches::OpenRecent",
       "ctrl-alt-shift-i": "idea_import::ImportIdeaProject",
       "shift shift": "search_everywhere::Toggle",
+      "ctrl-alt-shift-j": "toolbox::OpenJsonPrettier",
       "cmd-ctrl-w": "git::Worktree",
       "ctrl-~": "workspace::NewTerminal",
       "cmd-s": "workspace::Save",

@@ -645,6 +645,7 @@
       "shift-alt-b": "branches::OpenRecent",
       "ctrl-alt-shift-i": "idea_import::ImportIdeaProject",
       "shift shift": "search_everywhere::Toggle",
+      "ctrl-alt-shift-j": "toolbox::OpenJsonPrettier",
       "shift-alt-w": "git::Worktree",
       "shift-alt-enter": "toast::RunAction",
       "ctrl-shift-`": "workspace::NewTerminal",

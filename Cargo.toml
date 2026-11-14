@@ -184,6 +184,7 @@ members = [
     "crates/time_format",
     "crates/title_bar",
     "crates/toolchain_selector",
+    "crates/toolbox",
     "crates/typst_preview",
     "crates/ui",
     "crates/ui_input",
@@ -452,6 +453,7 @@ time_format = { path = "crates/time_format" }
 platform_title_bar = { path = "crates/platform_title_bar" }
 title_bar = { path = "crates/title_bar" }
 toolchain_selector = { path = "crates/toolchain_selector" }
+toolbox = { path = "crates/toolbox" }
 typst_preview = { path = "crates/typst_preview" }
 ui = { path = "crates/ui" }
 ui_input = { path = "crates/ui_input" }

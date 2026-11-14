@@ -17566,6 +17566,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "009dbb7700f11c55ef83aebbe4c0e9cf1f1ac0844bd8d6f00dc38f302026e13a"
 
 [[package]]
+name = "toolbox"
+version = "0.1.0"
+dependencies = [
+ "editor",
+ "gpui",
+ "i18n",
+ "language",
+ "serde_json",
+ "ui",
+ "workspace",
+]
+
+[[package]]
 name = "toolchain_selector"
 version = "0.1.0"
 dependencies = [
@@ -22446,6 +22459,7 @@ dependencies = [
  "theme_settings",
  "time",
  "title_bar",
+ "toolbox",
  "toolchain_selector",
  "tracing",
  "typst_preview",
