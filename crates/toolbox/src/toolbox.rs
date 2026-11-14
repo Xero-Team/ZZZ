@@ -188,7 +188,7 @@ impl JsonPrettierPanel {
                 &tr(
                     cx,
                     "toolbox.json.placeholder",
-                    "Paste JSON here, or open a file's contents and copy them in.",
+                    "Paste JSON here, or copy a file's contents in.",
                 ),
                 window,
                 cx,
