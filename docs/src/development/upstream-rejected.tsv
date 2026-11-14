@@ -525,7 +525,6 @@ sha	class	reason_code	note	source
 9e9b13c5	C	absent-api	Requires upstream Markdown code-chip machinery absent from ZZZ.	upstream-sync-2026-09-02.md
 9f164a0d	C	philosophy	Native agent Chat Completions share.	upstream-sync-2026-08-18.md
 9f63850f7a	C	philosophy	Effort-specific thinking controls touch the absent `language_models`, `copilot_chat`, and `cloud_llm_client`.	upstream-sync-2026-10-16.md
-a034d870	C	diverged	Canceled worktree leak; tests conflict.	upstream-sync-2026-08-18.md
 a12e3c06	C	untriaged	Feature-flag removal is coupled to upstream project-panel flag policy.	upstream-sync-2026-08-07.md
 a1510de5	C	philosophy	Native agent permission runtime.	upstream-sync-2026-08-07.md
 a1860ac1	C	philosophy	Hosted Claude pricing docs.	upstream-sync-2026-08-18.md
@@ -694,7 +693,6 @@ d36a706614	C	absent-api	Implements ACP v2 background work (paused tool calls, ba
 d38a754e1b	C	absent-api	Adds ACP v2 session deletion on top of the absent v2 session state machine.	upstream-sync-2026-10-21.md
 d3ccd57194	C	untriaged	Sidebar/`ThreadItem` theme colors; the local sidebar renders new-thread menus and thread entries differently, so the hunk is not isolatable.	upstream-sync-2026-09-30.md
 d3e54c97	C	absent-api	Requires the absent `fs_embed!` architecture; ZZZ uses direct rust-embed paths.	upstream-sync-2026-09-02.md
-d4010e91	C	unisolatable	Project-panel undo trash confirm unisolatable.	upstream-sync-2026-08-18.md
 d401423073	C	philosophy	Removes collab extension endpoints now served by Cloud. ZZZ has no `crates/collab` and no Cloud endpoints.	upstream-sync-2026-10-29.md
 d4cd310e	C	absent-api	Modifies the deleted upstream action-profiler module.	upstream-sync-2026-08-27.md
 d528c665e1	C	unisolatable	JSONL/NDJSON preview depends on the unabsorbed `TabularFormat` parser refactor.	upstream-sync-2026-09-24.md
@@ -743,7 +741,6 @@ e0f913b0	C	untriaged	Targets upstream `tabular_data_preview`, replaced locally b
 e231594b6b	C	diverged	Adds configurable date formats and per-view date styles across 23 files, including a new `git_ui/src/git_timestamp.rs`, a `git.date_style` settings family, `settings_ui` page data, and every diverged blame, tooltip, graph, stash, and panel call site. ZZZ already localizes timestamps through `time_format::format_localized_timestamp` with a fixed `TimestampFormat` and has no `EditorSettings::file_diff` family to extend, so the settings plumbing would be a rewrite.	upstream-sync-2026-11-10.md
 e2c4075c	C	untriaged	Community PR-board reopen handling.	upstream-sync-2026-09-06.md
 e39fb7c2e0	C	untriaged	Renames `ScrollWheelEvent` and adds iOS trackpad scrolling against `gestures.rs` and `element/mouse.rs`, files ZZZ has consolidated or removed.	upstream-sync-2026-10-20.md
-e4671f71	C	diverged	Malformed-task toast conflicts in `zzz.rs`.	upstream-sync-2026-08-18.md
 e4ac280d	C	philosophy	Subscription provider extraction.	upstream-sync-2026-08-07.md
 e4d73588	C	untriaged	Guild `REVIEWERS.conl` removal.	upstream-sync-2026-09-18.md
 e5221fa2	C	philosophy	Native `spawn_agent` subagent model selection; the native agent tools are absent.	upstream-sync-2026-09-24.md
@@ -786,7 +783,6 @@ eec3376016	C	absent-api	The capability check needs `Anchor::buffer_id`, absent f
 eee7501970	C	diverged	Removes Agent checkpoints across `acp_thread`, `agent`, `git`, and `project`. ZZZ keeps them for thread restore and worktree archives; the removal is unisolatable on the diverged thread model.	upstream-sync-2026-10-27.md
 eef824cce5	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 ef075910	C	unisolatable	Web font ownership rewrite is coupled to upstream examples and has no independent ZZZ web caller; local examples are intentionally removed.	upstream-sync-2026-09-02.md
-ef376006f3	C	untriaged	Adds a `tab_switcher.show_file_preview` setting; depends on the upstream `selected_file_project_path` shape.	upstream-sync-2026-10-13.md
 ef50ad95	C	untriaged	GitHub CLA/draft pull-request cleanup automation.	upstream-sync-2026-08-27.md
 efed1f245a	C	absent-api	FIM stop-sequence handling in the absent `edit_prediction` crate.	upstream-sync-2026-10-10.md
 f0685e0a	C	diverged	Parent-revision blame; git/proto conflict.	upstream-sync-2026-08-18.md

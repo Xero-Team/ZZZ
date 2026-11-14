@@ -2497,6 +2497,7 @@ Window::set_input_region method & self , region : Option < & [Bounds < Pixels >]
 Window::set_key_context method & mut self , context : KeyContext
 Window::set_modifiers method & mut self , modifiers : Modifiers
 Window::set_rem_size method & mut self , rem_size : impl Into < Pixels >
+Window::set_scale_factor method & mut self , scale_factor : f32
 Window::set_tabbing_identifier method & self , tabbing_identifier : Option < String >
 Window::set_tooltip method & mut self , tooltip : AnyTooltip -> TooltipId
 Window::set_traffic_light_position method & self , position : Point < Pixels >
