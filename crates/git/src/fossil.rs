@@ -5,8 +5,8 @@
 //! Copyright the fzed contributors.
 //!
 //! This file is distributed under the GNU General Public License v3.0 or later,
-//! the same terms as the rest of the ZZZ `git` crate. See `NOTICE` at the
-//! repository root for the upstream attribution.
+//! the same terms as the rest of the ZZZ `git` crate. See `crates/git/NOTICE`
+//! for the upstream attribution.
 //!
 //! ZZZ keeps this backend deliberately read-only: it detects a Fossil checkout,
 //! opens it, and reports status and diffs. Every Fossil check-in, sync, stash,
@@ -215,16 +215,18 @@ impl GitRepository for FossilRepository {
         let fossil = self.fossil_binary();
         self.executor
             .spawn(async move {
-                let mut remote_urls = fossil
-                    .run(&["remote", "list"])
-                    .await
-                    .map(|output| {
-                        parse_fossil_remote_list(&output)
-                            .into_iter()
-                            .map(|remote| (remote.name, remote.url))
-                            .collect::<HashMap<_, _>>()
-                    })
-                    .unwrap_or_default();
+                let mut remote_urls = match fossil.run(&["remote", "list"]).await {
+                    Ok(output) => parse_fossil_remote_list(&output)
+                        .into_iter()
+                        .map(|remote| (remote.name, remote.url))
+                        .collect::<HashMap<_, _>>(),
+                    // A checkout without any configured remote is the normal case
+                    // for a single-user repository, so it is not an error.
+                    Err(error) => {
+                        log::debug!("could not list Fossil remotes: {error:#}");
+                        HashMap::default()
+                    }
+                };
 
                 if !remote_urls.contains_key("default")
                     && let Ok(output) = fossil.run(&["remote"]).await
@@ -1241,6 +1243,11 @@ impl FossilBinary {
         self.run_raw_with_env(args, None).await
     }
 
+    // `GitBinary` is the wrapper the lint points at, but it applies Git-only
+    // hardening flags (`-c core.fsmonitor=false` and friends) that Fossil would
+    // reject. `FossilBinary` is the equivalent wrapper for this backend: it owns
+    // the binary path, the working directory and the command lock.
+    #[allow(clippy::disallowed_methods)]
     async fn run_raw_with_env<S>(
         &self,
         args: &[S],

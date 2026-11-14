@@ -171,8 +171,7 @@ impl DockerPanel {
     }
 
     fn render_row(&self, container: &Container, cx: &mut Context<Self>) -> impl IntoElement {
-        let id = container.id.clone();
-        let start_id = id.clone();
+        let start_id = container.id.clone();
         let running = container.running;
         let (action_label, button_style) = if running {
             (tr(cx, "docker.stop", "Stop"), ButtonStyle::Subtle)

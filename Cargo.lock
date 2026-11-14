@@ -12767,6 +12767,7 @@ dependencies = [
  "anyhow",
  "gpui",
  "i18n",
+ "log",
  "project",
  "serde_json",
  "ui",

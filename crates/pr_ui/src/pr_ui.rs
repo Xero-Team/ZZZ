@@ -125,9 +125,15 @@ impl PullRequest {
     }
 
     fn parse_list(stdout: &str) -> Vec<Self> {
-        serde_json::from_str::<Vec<Value>>(stdout)
-            .map(|values| values.iter().filter_map(Self::from_json).collect())
-            .unwrap_or_default()
+        match serde_json::from_str::<Vec<Value>>(stdout) {
+            Ok(values) => values.iter().filter_map(Self::from_json).collect(),
+            // `gh` prints its own diagnostics (not JSON) when it is not
+            // authenticated or cannot resolve the repository.
+            Err(error) => {
+                log::debug!("could not parse `gh pr list` output: {error}");
+                Vec::new()
+            }
+        }
     }
 }
 

@@ -77,8 +77,7 @@ impl Device {
             return None;
         }
         let model = fields
-            .filter_map(|field| field.strip_prefix("model:"))
-            .next()
+            .find_map(|field| field.strip_prefix("model:"))
             .map(str::to_owned);
         Some(Self {
             serial: serial.to_owned(),
