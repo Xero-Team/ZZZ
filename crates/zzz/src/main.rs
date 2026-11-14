@@ -627,6 +627,7 @@ fn main() {
         recent_files::init(cx);
         recent_projects::init(cx);
         dev_container::init(cx);
+        idea_import::init(cx);
 
         Assets.load_fonts(cx).log_err();
         #[cfg(target_os = "linux")]

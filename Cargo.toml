@@ -84,6 +84,7 @@ members = [
     "crates/icons",
     "crates/image_viewer",
     "crates/i18n",
+    "crates/idea_import",
     "crates/input_latency_ui",
     "crates/inspector_ui",
     "crates/install_cli",
@@ -337,6 +338,7 @@ html_to_markdown = { path = "crates/html_to_markdown" }
 http_client = { path = "crates/http_client" }
 http_client_tls = { path = "crates/http_client_tls" }
 i18n = { path = "crates/i18n" }
+idea_import = { path = "crates/idea_import" }
 icons = { path = "crates/icons" }
 image_viewer = { path = "crates/image_viewer" }
 audio_viewer = { path = "crates/audio_viewer" }

@@ -130,6 +130,7 @@ image_viewer.workspace = true
 audio_viewer = { workspace = true, features = ["accessibility"] }
 video_viewer.workspace = true
 i18n.workspace = true
+idea_import.workspace = true
 input_latency_ui.workspace = true
 inspector_ui.workspace = true
 install_cli.workspace = true

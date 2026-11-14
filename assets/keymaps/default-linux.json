@@ -646,6 +646,7 @@
       // "alt-ctrl-shift-o": ["projects::OpenRemote", { "from_existing_connection": true }],
       "alt-ctrl-shift-o": ["projects::OpenRemote", { "from_existing_connection": false }],
       "alt-ctrl-shift-b": "branches::OpenRecent",
+      "ctrl-alt-shift-i": "idea_import::ImportIdeaProject",
       "alt-ctrl-shift-w": "git::Worktree",
       "alt-shift-enter": "toast::RunAction",
       "ctrl-~": "workspace::NewTerminal",

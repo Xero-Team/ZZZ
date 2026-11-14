@@ -704,6 +704,7 @@
       "ctrl-cmd-o": ["projects::OpenRemote", { "from_existing_connection": false }],
       "ctrl-cmd-shift-o": ["projects::OpenRemote", { "from_existing_connection": true }],
       "cmd-ctrl-b": "branches::OpenRecent",
+      "ctrl-alt-shift-i": "idea_import::ImportIdeaProject",
       "cmd-ctrl-w": "git::Worktree",
       "ctrl-~": "workspace::NewTerminal",
       "cmd-s": "workspace::Save",

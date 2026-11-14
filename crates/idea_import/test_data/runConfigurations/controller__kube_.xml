@@ -1,0 +1,16 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="controller [kube]" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="app" />
+    <working_directory value="$PROJECT_DIR$" />
+    <parameters value="--platform-config hack/platform.yaml --kubeconfig-path $USER_HOME$/.kube/config" />
+    <envs>
+      <env name="APP_ENV" value="dev" />
+    </envs>
+    <go_parameters value="-tags=kube -race" />
+    <kind value="PACKAGE" />
+    <package value="github.com/acme/app/cmd/controller" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$/cmd/controller/main.go" />
+    <method v="2" />
+  </configuration>
+</component>
