@@ -5570,11 +5570,11 @@ impl Repository {
         &mut self,
         commit: String,
         reset_mode: ResetMode,
-        _cx: &mut App,
+        cx: &mut Context<Self>,
     ) -> oneshot::Receiver<Result<()>> {
         let id = self.id;
 
-        self.send_job("reset", None, move |git_repo, _| async move {
+        let receiver = self.send_job("reset", None, move |git_repo, _| async move {
             match git_repo {
                 RepositoryState::Local(LocalRepositoryState {
                     backend,
@@ -5597,7 +5597,23 @@ impl Repository {
                     Ok(())
                 }
             }
-        })
+        });
+
+        let scan_updates_tx =
+            self.git_store()
+                .and_then(|git_store| match &git_store.read(cx).state {
+                    GitStoreState::Local { downstream, .. } => Some(
+                        downstream
+                            .as_ref()
+                            .map(|downstream| downstream.updates_tx.clone()),
+                    ),
+                    _ => None,
+                });
+        if let Some(updates_tx) = scan_updates_tx {
+            self.schedule_scan(updates_tx, cx);
+        }
+
+        receiver
     }
 
     pub fn show(&mut self, commit: String) -> oneshot::Receiver<Result<CommitDetails>> {
