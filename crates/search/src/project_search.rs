@@ -2160,7 +2160,7 @@ impl ProjectSearchBar {
     fn focus_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(search_view) = self.active_project_search.as_ref() {
             search_view.update(cx, |search_view, cx| {
-                search_view.query_editor.focus_handle(cx).focus(window, cx);
+                search_view.focus_query_editor(window, cx);
             });
         }
     }
@@ -3007,7 +3007,7 @@ pub mod tests {
     use super::*;
     use editor::{DisplayPoint, display_map::DisplayRow};
     use gpui::{Action, TestAppContext, VisualTestContext, WindowHandle};
-    use language::{FakeLspAdapter, rust_lang};
+    use language::{FakeLspAdapter, Point as BufferPoint, rust_lang};
     use pretty_assertions::assert_eq;
     use project::{FakeFs, Fs};
     use serde_json::json;
@@ -5258,6 +5258,78 @@ pub mod tests {
                 });
             })
             .expect("unable to update search view");
+    }
+
+    #[gpui::test]
+    async fn test_focus_search_selects_existing_query(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.background_executor.clone());
+        fs.insert_tree(
+            path!("/dir"),
+            json!({
+                "one.rs": "const ONE: usize = 1;\n",
+            }),
+        )
+        .await;
+        let project = Project::test(fs, [path!("/dir").as_ref()], cx).await;
+        let window = cx.add_window(|window, cx| MultiWorkspace::test_new(project, window, cx));
+        let workspace = window
+            .read_with(cx, |mw, _| mw.workspace().clone())
+            .expect("window should contain a workspace");
+        let cx = &mut VisualTestContext::from_window(window.into(), cx);
+        let search_bar = window.build_entity(cx, |_, _| ProjectSearchBar::new());
+
+        workspace.update_in(cx, |workspace, window, cx| {
+            let pane = workspace.active_pane();
+            pane.update(cx, |pane, cx| {
+                pane.toolbar()
+                    .update(cx, |toolbar, cx| toolbar.add_item(search_bar.clone(), window, cx))
+            });
+            ProjectSearchView::deploy_search(
+                workspace,
+                &workspace::DeploySearch::default(),
+                window,
+                cx,
+            )
+        });
+
+        let search_view = cx.read(|cx| {
+            workspace
+                .read(cx)
+                .active_item(cx)
+                .and_then(|item| item.downcast::<ProjectSearchView>())
+                .expect("project search view should be active after deploying the search")
+        });
+
+        let query = "ONE";
+        search_view.update_in(cx, |search_view, window, cx| {
+            search_view.query_editor.update(cx, |query_editor, cx| {
+                query_editor.set_text(query, window, cx)
+            });
+            search_view.search(cx);
+        });
+        cx.run_until_parked();
+
+        search_bar.update_in(cx, |search_bar, window, cx| {
+            search_bar.focus_search(window, cx);
+        });
+
+        search_view.update_in(cx, |search_view, window, cx| {
+            assert!(
+                search_view.query_editor.focus_handle(cx).is_focused(window),
+                "refocusing the search bar should focus the query editor",
+            );
+            search_view.query_editor.update(cx, |query_editor, cx| {
+                let display_map = query_editor.display_map.update(cx, |map, cx| map.snapshot(cx));
+                let selection = query_editor.selections.newest::<BufferPoint>(&display_map);
+                assert_eq!(
+                    selection.start..selection.end,
+                    BufferPoint::new(0, 0)..BufferPoint::new(0, query.len() as u32),
+                    "refocusing the search bar should select the whole existing query",
+                );
+            });
+        });
     }
 
     #[perf]
