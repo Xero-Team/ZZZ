@@ -26,7 +26,6 @@ markdown.workspace = true
 project.workspace = true
 quick-xml.workspace = true
 settings.workspace = true
-smallvec.workspace = true
 ui.workspace = true
 util.workspace = true
 workspace.workspace = true

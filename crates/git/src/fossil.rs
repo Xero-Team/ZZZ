@@ -1216,7 +1216,7 @@ impl FossilBinary {
 
     async fn run<S>(&self, args: &[S]) -> Result<String>
     where
-        S: AsRef<OsStr>,
+        S: AsRef<OsStr> + Sync,
     {
         let mut stdout = self.run_raw(args).await?;
         if stdout.ends_with('\n') {
@@ -1227,7 +1227,7 @@ impl FossilBinary {
 
     async fn run_with_env<S>(&self, args: &[S], env: &HashMap<String, String>) -> Result<String>
     where
-        S: AsRef<OsStr>,
+        S: AsRef<OsStr> + Sync,
     {
         let mut stdout = self.run_raw_with_env(args, Some(env)).await?;
         if stdout.ends_with('\n') {
@@ -1238,7 +1238,7 @@ impl FossilBinary {
 
     async fn run_raw<S>(&self, args: &[S]) -> Result<String>
     where
-        S: AsRef<OsStr>,
+        S: AsRef<OsStr> + Sync,
     {
         self.run_raw_with_env(args, None).await
     }
@@ -1254,7 +1254,7 @@ impl FossilBinary {
         env: Option<&HashMap<String, String>>,
     ) -> Result<String>
     where
-        S: AsRef<OsStr>,
+        S: AsRef<OsStr> + Sync,
     {
         // Fossil keeps its checkout state in a single SQLite database, so commands
         // against one checkout must not interleave.

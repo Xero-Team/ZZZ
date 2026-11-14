@@ -13,7 +13,6 @@ path = "src/docker.rs"
 doctest = false
 
 [dependencies]
-anyhow.workspace = true
 gpui.workspace = true
 i18n.workspace = true
 serde_json.workspace = true
