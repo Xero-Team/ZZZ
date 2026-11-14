@@ -832,7 +832,10 @@ async fn test_editorconfig_support(cx: &mut gpui::TestAppContext) {
             max_line_length = 120
         [*.js]
             tab_width = 10
+            trim_trailing_whitespace = false
             max_line_length = off
+        [*.json]
+            trim_trailing_whitespace = true
         "#,
         ".ZZZ": {
             "settings.json": r#"{
@@ -842,6 +845,17 @@ async fn test_editorconfig_support(cx: &mut gpui::TestAppContext) {
                 "remove_trailing_whitespace_on_save": false,
                 "preferred_line_length": 64,
                 "soft_wrap": "editor_width",
+                "languages": {
+                    "JavaScript": {
+                        "remove_trailing_whitespace_on_save": true,
+                    },
+                    "JSON": {
+                        "remove_trailing_whitespace_on_save": true,
+                    },
+                    "Markdown": {
+                        "remove_trailing_whitespace_on_save": true,
+                    },
+                },
             }"#,
         },
         "a.rs": "fn a() {\n    A\n}",
@@ -871,6 +885,7 @@ async fn test_editorconfig_support(cx: &mut gpui::TestAppContext) {
             "e.rs": "fn e() {\n    E\n}",
         },
         "README.json": "tabs are better\n",
+        "README.md": "spaces are meaningful  \n",
     }));
 
     let path = dir.path();
@@ -881,6 +896,7 @@ async fn test_editorconfig_support(cx: &mut gpui::TestAppContext) {
     let language_registry = project.read_with(cx, |project, _| project.languages().clone());
     language_registry.add(js_lang());
     language_registry.add(json_lang());
+    language_registry.add(markdown_lang());
     language_registry.add(rust_lang());
 
     let worktree = project.update(cx, |project, cx| project.worktrees(cx).next().unwrap());
@@ -903,11 +919,14 @@ async fn test_editorconfig_support(cx: &mut gpui::TestAppContext) {
     let settings_d = settings_for("d/d.rs", cx).await;
     let settings_e = settings_for("e/e.rs", cx).await;
     let settings_readme = settings_for("README.json", cx).await;
+    let settings_markdown = settings_for("README.md", cx).await;
     // .editorconfig overrides .ZZZ/settings
     assert_eq!(Some(settings_a.tab_size), NonZeroU32::new(3));
     assert_eq!(settings_a.hard_tabs, true);
     assert_eq!(settings_a.ensure_final_newline_on_save, true);
-    assert_eq!(settings_a.remove_trailing_whitespace_on_save, true);
+    // .editorconfig can disable trailing whitespace removal, but must not
+    // re-enable it when ZZZ settings have disabled it.
+    assert_eq!(settings_a.remove_trailing_whitespace_on_save, false);
     assert_eq!(settings_a.line_ending, LineEndingSetting::EnforceLf);
     assert_eq!(settings_a.preferred_line_length, 120);
 
@@ -926,6 +945,9 @@ async fn test_editorconfig_support(cx: &mut gpui::TestAppContext) {
 
     // "indent_size" is not set, so "tab_width" is used
     assert_eq!(Some(settings_c.tab_size), NonZeroU32::new(10));
+    assert_eq!(settings_c.remove_trailing_whitespace_on_save, false);
+    assert_eq!(settings_readme.remove_trailing_whitespace_on_save, true);
+    assert_eq!(settings_markdown.remove_trailing_whitespace_on_save, true);
 
     // When max_line_length is "off", default to .ZZZ/settings.json
     assert_eq!(settings_b.preferred_line_length, 64);
@@ -17002,8 +17024,7 @@ async fn test_worktree_released_when_creation_caller_is_cancelled(cx: &mut TestA
     let fs = FakeFs::new(cx.executor());
     fs.insert_tree(path!("/project"), json!({ "a.rs": "" }))
         .await;
-    fs.insert_tree(path!("/other"), json!({ "b.rs": "" }))
-        .await;
+    fs.insert_tree(path!("/other"), json!({ "b.rs": "" })).await;
     let project = Project::test(fs, [path!("/project").as_ref()], cx).await;
     cx.run_until_parked();
 
@@ -17035,15 +17056,12 @@ async fn test_worktree_released_when_creation_caller_is_cancelled(cx: &mut TestA
 }
 
 #[gpui::test]
-async fn test_initial_scan_completes_when_creation_caller_is_cancelled(
-    cx: &mut TestAppContext,
-) {
+async fn test_initial_scan_completes_when_creation_caller_is_cancelled(cx: &mut TestAppContext) {
     init_test(cx);
     let fs = FakeFs::new(cx.executor());
     fs.insert_tree(path!("/project"), json!({ "a.rs": "" }))
         .await;
-    fs.insert_tree(path!("/other"), json!({ "b.rs": "" }))
-        .await;
+    fs.insert_tree(path!("/other"), json!({ "b.rs": "" })).await;
     let project = Project::test(fs, [path!("/project").as_ref()], cx).await;
     cx.run_until_parked();
 
