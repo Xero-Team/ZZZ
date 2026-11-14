@@ -32577,6 +32577,159 @@ async fn test_gutter_context_menu_anchor_in_multibuffer(cx: &mut TestAppContext)
     });
 }
 
+async fn build_gutter_action_test_editor(saved: bool, cx: &mut TestAppContext) -> EditorTestContext {
+    init_test(cx, |_| {});
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/a"),
+        json!({
+            "main.rs": "fn main() {}\n",
+        }),
+    )
+    .await;
+    let project = Project::test(fs, [path!("/a").as_ref()], cx).await;
+
+    let buffer = if saved {
+        let worktree_id = project.read_with(cx, |project, cx| {
+            project.worktrees(cx).next().unwrap().read(cx).id()
+        });
+        project
+            .update(cx, |project, cx| {
+                project.open_buffer((worktree_id, rel_path("main.rs")), cx)
+            })
+            .await
+            .unwrap()
+    } else {
+        let buffer = project
+            .update(cx, |project, cx| project.create_buffer(None, true, cx))
+            .await
+            .unwrap();
+        buffer.update(cx, |buffer, cx| {
+            buffer.edit([(0..0, "fn main() {}\n")], None, cx);
+        });
+        buffer
+    };
+
+    let window = cx.add_window(|window, cx| {
+        let editor = build_editor_with_project(
+            project,
+            MultiBuffer::build_from_buffer(buffer, cx),
+            window,
+            cx,
+        );
+        window.focus(&editor.focus_handle(cx), cx);
+        editor
+    });
+
+    EditorTestContext::for_editor(window, cx).await
+}
+
+fn gutter_row_zero_bounds(cx: &mut EditorTestContext) -> gpui::Point<gpui::Pixels> {
+    cx.cx.update(|window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    });
+
+    cx.update_editor(|editor, _, _| {
+        editor
+            .last_position_map
+            .as_ref()
+            .expect("expected editor position map")
+            .gutter_hitbox
+            .bounds
+            .center()
+    })
+}
+
+#[gpui::test]
+async fn test_gutter_hover_button_shown_for_saved_buffer(cx: &mut TestAppContext) {
+    let mut editor_cx = build_gutter_action_test_editor(true, cx).await;
+
+    let hover_position = gutter_row_zero_bounds(&mut editor_cx);
+    editor_cx
+        .cx
+        .simulate_mouse_move(hover_position, None, Modifiers::none());
+    editor_cx.update_editor(|editor, _, _| {
+        assert!(
+            editor.gutter_hover_button.0.is_some(),
+            "expected gutter hover button to be armed for a saved buffer"
+        );
+        assert!(!editor.gutter_hover_button.0.as_ref().unwrap().is_active);
+    });
+
+    cx.executor().advance_clock(Duration::from_millis(250));
+    editor_cx.run_until_parked();
+    editor_cx.update_editor(|editor, _, _| {
+        assert!(
+            editor
+                .gutter_hover_button
+                .0
+                .as_ref()
+                .is_some_and(|indicator| indicator.is_active),
+            "expected gutter hover button to become active after the debounce"
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_gutter_hover_button_hidden_for_unsaved_buffer(cx: &mut TestAppContext) {
+    let mut editor_cx = build_gutter_action_test_editor(false, cx).await;
+
+    let hover_position = gutter_row_zero_bounds(&mut editor_cx);
+    editor_cx
+        .cx
+        .simulate_mouse_move(hover_position, None, Modifiers::none());
+    editor_cx.update_editor(|editor, _, _| {
+        assert!(
+            editor.gutter_hover_button.0.is_none(),
+            "expected no gutter hover button for an unsaved buffer"
+        );
+        assert!(
+            editor.gutter_hover_button.1.is_none(),
+            "expected no debounce task to be armed for an unsaved buffer"
+        );
+    });
+
+    cx.executor().advance_clock(Duration::from_millis(250));
+    editor_cx.run_until_parked();
+    editor_cx.update_editor(|editor, _, _| {
+        assert!(editor.gutter_hover_button.0.is_none());
+    });
+}
+
+#[gpui::test]
+async fn test_gutter_context_menu_shown_for_saved_buffer(cx: &mut TestAppContext) {
+    let mut editor_cx = build_gutter_action_test_editor(true, cx).await;
+
+    let click_position = gutter_row_zero_bounds(&mut editor_cx);
+    editor_cx
+        .cx
+        .simulate_mouse_down(click_position, MouseButton::Right, Modifiers::none());
+    editor_cx.update_editor(|editor, _, _| {
+        assert!(
+            editor.mouse_context_menu.is_some(),
+            "expected gutter context menu to open for a saved buffer"
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_gutter_context_menu_hidden_for_unsaved_buffer(cx: &mut TestAppContext) {
+    let mut editor_cx = build_gutter_action_test_editor(false, cx).await;
+
+    let click_position = gutter_row_zero_bounds(&mut editor_cx);
+    editor_cx
+        .cx
+        .simulate_mouse_down(click_position, MouseButton::Right, Modifiers::none());
+    editor_cx.update_editor(|editor, _, _| {
+        assert!(
+            editor.mouse_context_menu.is_none(),
+            "expected no gutter context menu for an unsaved buffer"
+        );
+    });
+}
+
 #[gpui::test]
 async fn test_breakpoint_after_save_as_existing_path(cx: &mut TestAppContext) {
     init_test(cx, |_| {});

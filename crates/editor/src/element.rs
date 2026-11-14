@@ -1548,7 +1548,9 @@ impl EditorElement {
                 .snapshot
                 .buffer_snapshot()
                 .anchor_to_buffer_anchor(buffer_anchor)
-                .is_some()
+                .is_some_and(|(_, buffer_snapshot)| {
+                    project::File::from_dyn(buffer_snapshot.file()).is_some()
+                })
             {
                 let is_visible = editor
                     .gutter_hover_button
