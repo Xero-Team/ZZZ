@@ -3036,91 +3036,88 @@ impl ProjectPanel {
             tr(cx, "project_panel.delete.delete", "Delete")
         };
 
-        let message = match names {
-            [name] => {
-                let unsaved_warning = if dirty_buffers > 0 {
+        let message = if let [name] = names {
+            let unsaved_warning = if dirty_buffers > 0 {
+                tr(
+                    cx,
+                    "project_panel.delete.unsaved_single",
+                    "\n\nIt has unsaved changes, which will be lost.",
+                )
+            } else {
+                String::new()
+            };
+
+            let (key, fallback) = if trash {
+                (
+                    "project_panel.delete.trash_single_prompt",
+                    "Do you want to trash {}?{}",
+                )
+            } else {
+                (
+                    "project_panel.delete.delete_single_prompt",
+                    "Are you sure you want to permanently delete {}?{}",
+                )
+            };
+
+            tr(cx, key, fallback)
+                .replacen("{}", &MarkdownInlineCode(name.as_ref()).to_string(), 1)
+                .replacen("{}", &unsaved_warning, 1)
+        } else {
+            const CUTOFF_POINT: usize = 10;
+            let mut listed_names = names
+                .iter()
+                .take(CUTOFF_POINT)
+                .map(|name| MarkdownInlineCode(name.as_ref()).to_string())
+                .collect::<Vec<_>>();
+            let omitted_count = names.len().saturating_sub(CUTOFF_POINT);
+            if omitted_count == 1 {
+                listed_names.push(tr(
+                    cx,
+                    "project_panel.delete.one_file_not_shown",
+                    ".. 1 file not shown",
+                ));
+            } else if omitted_count > 1 {
+                listed_names.push(
                     tr(
                         cx,
-                        "project_panel.delete.unsaved_single",
-                        "\n\nIt has unsaved changes, which will be lost.",
+                        "project_panel.delete.files_not_shown",
+                        ".. {} files not shown",
                     )
-                } else {
-                    String::new()
-                };
-
-                let (key, fallback) = if trash {
-                    (
-                        "project_panel.delete.trash_single_prompt",
-                        "Do you want to trash {}?{}",
-                    )
-                } else {
-                    (
-                        "project_panel.delete.delete_single_prompt",
-                        "Are you sure you want to permanently delete {}?{}",
-                    )
-                };
-
-                tr(cx, key, fallback)
-                    .replacen("{}", &MarkdownInlineCode(name.as_ref()).to_string(), 1)
-                    .replacen("{}", &unsaved_warning, 1)
+                    .replacen("{}", &omitted_count.to_string(), 1),
+                );
             }
-            _ => {
-                const CUTOFF_POINT: usize = 10;
-                let mut listed_names = names
-                    .iter()
-                    .take(CUTOFF_POINT)
-                    .map(|name| MarkdownInlineCode(name.as_ref()).to_string())
-                    .collect::<Vec<_>>();
-                let omitted_count = names.len().saturating_sub(CUTOFF_POINT);
-                if omitted_count == 1 {
-                    listed_names.push(tr(
-                        cx,
-                        "project_panel.delete.one_file_not_shown",
-                        ".. 1 file not shown",
-                    ));
-                } else if omitted_count > 1 {
-                    listed_names.push(
-                        tr(
-                            cx,
-                            "project_panel.delete.files_not_shown",
-                            ".. {} files not shown",
-                        )
-                        .replacen("{}", &omitted_count.to_string(), 1),
-                    );
-                }
 
-                let unsaved_warning = match dirty_buffers {
-                    0 => String::new(),
-                    1 => tr(
-                        cx,
-                        "project_panel.delete.unsaved_one_of_many",
-                        "\n\n1 of these has unsaved changes, which will be lost.",
-                    ),
-                    dirty_buffers => tr(
-                        cx,
-                        "project_panel.delete.unsaved_many",
-                        "\n\n{} of these have unsaved changes, which will be lost.",
-                    )
-                    .replacen("{}", &dirty_buffers.to_string(), 1),
-                };
+            let unsaved_warning = match dirty_buffers {
+                0 => String::new(),
+                1 => tr(
+                    cx,
+                    "project_panel.delete.unsaved_one_of_many",
+                    "\n\n1 of these has unsaved changes, which will be lost.",
+                ),
+                dirty_buffers => tr(
+                    cx,
+                    "project_panel.delete.unsaved_many",
+                    "\n\n{} of these have unsaved changes, which will be lost.",
+                )
+                .replacen("{}", &dirty_buffers.to_string(), 1),
+            };
 
-                let (key, fallback) = if trash {
-                    (
-                        "project_panel.delete.trash_multi_prompt",
-                        "Do you want to trash the following {} files?\n{}{}",
-                    )
-                } else {
-                    (
-                        "project_panel.delete.delete_multi_prompt",
-                        "Are you sure you want to permanently delete the following {} files?\n{}{}",
-                    )
-                };
+            let (key, fallback) = if trash {
+                (
+                    "project_panel.delete.trash_multi_prompt",
+                    "Do you want to trash the following {} files?\n{}{}",
+                )
+            } else {
+                (
+                    "project_panel.delete.delete_multi_prompt",
+                    "Are you sure you want to permanently delete the following {} files?\n{}{}",
+                )
+            };
 
-                tr(cx, key, fallback)
-                    .replacen("{}", &names.len().to_string(), 1)
-                    .replacen("{}", &listed_names.join("\n"), 1)
-                    .replacen("{}", &unsaved_warning, 1)
-            }
+            tr(cx, key, fallback)
+                .replacen("{}", &names.len().to_string(), 1)
+                .replacen("{}", &listed_names.join("\n"), 1)
+                .replacen("{}", &unsaved_warning, 1)
         };
 
         let detail = (!trash).then(|| {

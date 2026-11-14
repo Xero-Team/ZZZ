@@ -568,15 +568,14 @@ impl Inner {
             .ok_or_else(|| anyhow!("undo history is inconsistent: can_undo was true"))?;
         let operation = change.clone().to_inverse();
 
-        match operation.execute(self, cx).await? {
-            Some(undo_change) => self.history.insert(before_cursor, undo_change),
-            None => {
-                // The user cancelled: put the original change back so the
-                // history stays consistent and the operation can be retried.
-                self.history.insert(before_cursor, change);
-                self.cursor += 1;
-            }
-        };
+        if let Some(undo_change) = operation.execute(self, cx).await? {
+            self.history.insert(before_cursor, undo_change);
+        } else {
+            // The user cancelled: put the original change back so the
+            // history stays consistent and the operation can be retried.
+            self.history.insert(before_cursor, change);
+            self.cursor += 1;
+        }
 
         Ok(())
     }
