@@ -134,8 +134,8 @@ async fn connect_and_keepalive<F: Future<Output = ()> + Send + Sync + 'static>(
     wait_timer: impl (Fn(Duration) -> F) + Send + Sync + 'static,
 ) {
     // Leak the handler so that its `Drop` (which detaches the signal handlers)
-    // never runs while the process is alive. The binding is only read on Linux,
-    // so it is intentionally underscore-prefixed to stay alive without warning.
+    // never runs while the process is alive. Only Linux reads it back.
+    #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
     let handler = std::mem::ManuallyDrop::new(handler);
     let exe = match env::current_exe() {
         Ok(exe) => exe,
@@ -146,7 +146,10 @@ async fn connect_and_keepalive<F: Future<Output = ()> + Send + Sync + 'static>(
     };
     let zzz_pid = process::id();
     let socket_name = paths::temp_dir().join(format!("zzz-crash-handler-{zzz_pid}"));
+    // The child handle stays alive for the process lifetime; only Linux reads
+    // its pid back, to point the tracer at it.
     #[cfg(not(target_os = "windows"))]
+    #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
     let crash_handler = match Command::new(exe)
         .arg("--crash-handler")
         .arg(&socket_name)

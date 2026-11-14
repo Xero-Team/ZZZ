@@ -143,7 +143,6 @@ fn fail_to_open_window_async(e: anyhow::Error, cx: &mut AsyncApp) {
 }
 
 fn fail_to_open_window(e: anyhow::Error, cx: &mut App) {
-    let launch_failed = app_i18n::tr(cx, "zzz.launch.failed_title", "ZZZ failed to launch");
     eprintln!(
         "{}: {e:?}. See the local troubleshooting documentation for help.",
         app_i18n::tr(
@@ -161,6 +160,9 @@ fn fail_to_open_window(e: anyhow::Error, cx: &mut App) {
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     {
         use ashpd::desktop::notification::{Notification, NotificationProxy, Priority};
+        // Only the Linux/FreeBSD notification path shows the title, so the
+        // string is translated here rather than for every platform.
+        let launch_failed = app_i18n::tr(cx, "zzz.launch.failed_title", "ZZZ failed to launch");
         cx.spawn(async move |_cx| {
             let Ok(proxy) = NotificationProxy::new().await else {
                 process::exit(1);

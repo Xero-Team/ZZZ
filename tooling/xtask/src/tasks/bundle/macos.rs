@@ -242,6 +242,11 @@ fn cargo_bundle(context: &Context) -> Result<PathBuf> {
         .args(context.profile_flag())
         .args(["--target", context.target.triple()])
         .args(["--package", "zzz", "--bin", "zzz"])
+        // `cargo-bundle` otherwise produces every format the target allows,
+        // which for a macOS target includes a DMG. The DMG is built later by
+        // `create_dmg`, which has a Linux path; `cargo-bundle` would shell out
+        // to `hdiutil`, which only exists on macOS.
+        .args(["--format", "osx"])
         .env("CARGO_BUNDLE_SKIP_BUILD", "true")
         .env("CARGO_TARGET_DIR", &context.target_dir)
         .env("ZZZ_RELEASE_CHANNEL", context.channel.as_str())

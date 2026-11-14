@@ -570,8 +570,9 @@ impl Agent {
         }
     }
 
-    /// The bindings are the only localized variant, so this stays `_cx` outside
-    /// of test builds.
+    /// Only the test-only `Stub` variant is localized, so `cx` goes unread in a
+    /// build without `test-support`.
+    #[cfg_attr(not(any(test, feature = "test-support")), allow(unused_variables))]
     pub fn localized_label(&self, cx: &App) -> SharedString {
         match self {
             Self::Absent => SharedString::default(),
