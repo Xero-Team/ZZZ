@@ -118,6 +118,7 @@ members = [
     "crates/onboarding",
     "crates/open_path_prompt",
     "crates/outline",
+    "crates/office_preview",
     "crates/outline_panel",
     "crates/panel",
     "crates/paths",
@@ -384,6 +385,7 @@ notifications = { path = "crates/notifications" }
 onboarding = { path = "crates/onboarding" }
 open_path_prompt = { path = "crates/open_path_prompt" }
 outline = { path = "crates/outline" }
+office_preview = { path = "crates/office_preview" }
 outline_panel = { path = "crates/outline_panel" }
 panel = { path = "crates/panel" }
 paths = { path = "crates/paths" }
@@ -478,6 +480,7 @@ worktree = { path = "crates/worktree" }
 zzz_actions = { path = "crates/zzz_actions" }
 zzz_credentials_provider = { path = "crates/zzz_credentials_provider" }
 zzz_env_vars = { path = "crates/zzz_env_vars" }
+zip = { version = "8", default-features = false, features = ["deflate"] }
 zlog = { path = "crates/zlog" }
 zlog_settings = { path = "crates/zlog_settings" }
 ztracing = { path = "crates/ztracing" }
@@ -533,6 +536,7 @@ cargo_toml = "1.0"
 brush-parser = "0.4"
 chacha20poly1305 = "0.11.0"
 chardetng = "1.0"
+calamine = "0.36"
 chrono = { version = "0.4", features = ["serde"] }
 circular-buffer = "2.0"
 clap = { version = "4.6", features = ["derive", "wrap_help"] }

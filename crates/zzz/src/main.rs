@@ -692,6 +692,7 @@ fn main() {
         feedback::init(cx);
         markdown_preview::init(cx);
         csv_preview::init(cx);
+        office_preview::init(cx);
         database_ui::init(cx);
         register_database_extension_drivers(cx);
         if let Some(extension_store) = extension_host::ExtensionStore::try_global(cx) {

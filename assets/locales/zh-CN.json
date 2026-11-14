@@ -4065,6 +4065,9 @@
     "database.notebook.statement_done": "语句已执行。",
     "database.notebook.result_rows": "{} 行",
     "database.notebook.preview_truncated": "只显示前 {} 行，共 {} 行。",
-    "database.notebook.connect_failed": "无法连接：{}"
+    "database.notebook.connect_failed": "无法连接：{}",
+    "office_preview.empty_document": "此文档为空。",
+    "office_preview.empty_sheet": "此工作表为空。",
+    "office_preview.sheet_tab_tooltip": "工作表：{}"
   }
 }

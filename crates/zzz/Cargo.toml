@@ -87,6 +87,7 @@ ui_component_registry.workspace = true
 component_preview.workspace = true
 crashes.workspace = true
 csv_preview.workspace = true
+office_preview.workspace = true
 dap_adapters.workspace = true
 database_core.workspace = true
 database_ui.workspace = true
