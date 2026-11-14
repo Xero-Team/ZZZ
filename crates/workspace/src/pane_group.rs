@@ -33,6 +33,8 @@ pub struct PaneGroup {
 pub struct PaneRenderResult {
     pub element: gpui::AnyElement,
     pub contains_active_pane: bool,
+    #[cfg(any(test, feature = "test-support"))]
+    pub decorated_pane_ix: Option<usize>,
 }
 
 impl PaneGroup {
@@ -466,6 +468,8 @@ impl Member {
                     return PaneRenderResult {
                         element: div().into_any(),
                         contains_active_pane: false,
+                        #[cfg(any(test, feature = "test-support"))]
+                        decorated_pane_ix: None,
                     };
                 }
 
@@ -475,6 +479,8 @@ impl Member {
                     return PaneRenderResult {
                         element: div().into_any(),
                         contains_active_pane: false,
+                        #[cfg(any(test, feature = "test-support"))]
+                        decorated_pane_ix: None,
                     };
                 }
 
@@ -504,6 +510,8 @@ impl Member {
                         .children(decoration.status_box)
                         .into_any(),
                     contains_active_pane: is_active,
+                    #[cfg(any(test, feature = "test-support"))]
+                    decorated_pane_ix: None,
                 }
             }
             Member::Axis(axis) => axis.render(basis + 1, zoomed, maximized, render_cx, window, cx),
@@ -897,7 +905,7 @@ impl PaneAxis {
                     Member::Pane(pane) => {
                         is_leaf_pane[ix] = true;
                         if pane == render_cx.active_pane() {
-                            active_pane_ix = Some(ix);
+                            active_pane_ix = pane.read(cx).has_focus(window, cx).then_some(ix);
                             contains_active_pane = true;
                         }
                     }
@@ -929,6 +937,8 @@ impl PaneAxis {
         PaneRenderResult {
             element,
             contains_active_pane,
+            #[cfg(any(test, feature = "test-support"))]
+            decorated_pane_ix: active_pane_ix,
         }
     }
 }
