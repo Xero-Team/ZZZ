@@ -59,8 +59,9 @@ impl TestContext {
 
     fn open_path(&mut self, path: &str) {
         select_path(&self.panel, &format!("workspace/{path}"), &mut self.cx);
-        self.panel
-            .update_in(&mut self.cx, |panel, window, cx| panel.open(&Open, window, cx));
+        self.panel.update_in(&mut self.cx, |panel, window, cx| {
+            panel.open(&Open, window, cx)
+        });
         self.cx.run_until_parked();
     }
 

@@ -949,8 +949,12 @@ impl Inner {
         let answer = self
             .panel
             .update_in(cx, |_panel, window, cx| {
-                let prompt =
-                    ProjectPanel::build_removal_prompt(RemovalKind::Trash, names, dirty_buffers, cx);
+                let prompt = ProjectPanel::build_removal_prompt(
+                    RemovalKind::Trash,
+                    names,
+                    dirty_buffers,
+                    cx,
+                );
                 let cancel = tr(cx, "prompt.common.cancel", "Cancel");
                 window.prompt(
                     PromptLevel::Info,

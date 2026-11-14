@@ -45835,9 +45835,7 @@ async fn test_soft_wrap_indent_updated_when_first_excerpt_changes(cx: &mut gpui:
 }
 
 #[gpui::test]
-async fn test_markdown_save_respects_disabled_trailing_whitespace_removal(
-    cx: &mut TestAppContext,
-) {
+async fn test_markdown_save_respects_disabled_trailing_whitespace_removal(cx: &mut TestAppContext) {
     init_test(cx, |settings| {
         settings.defaults.ensure_final_newline_on_save = Some(false);
         settings.languages.0.insert(

@@ -513,7 +513,10 @@ mod tests {
 
         cx.update_editor(|editor, window, cx| {
             assert_eq!(window.scale_factor(), 1.25);
-            let line_height = editor.style(cx).text.line_height_in_pixels(window.rem_size());
+            let line_height = editor
+                .style(cx)
+                .text
+                .line_height_in_pixels(window.rem_size());
             assert_eq!(line_height, gpui::px(18.));
             assert!(window.pixel_snap_f64(f64::from(line_height)) / f64::from(line_height) < 1.);
             editor.set_scroll_position(gpui::point(0., 1.), window, cx);

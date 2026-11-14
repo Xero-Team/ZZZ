@@ -55,8 +55,8 @@ use paths::{
     local_debug_file_relative_path, local_settings_file_relative_path,
     local_tasks_file_relative_path,
 };
-use project::{DirectoryLister, DisableAiSettings, ProjectItem};
 use project::project_settings::{SettingsObserver, SettingsObserverEvent};
+use project::{DirectoryLister, DisableAiSettings, ProjectItem};
 use project_panel::ProjectPanel;
 use quick_action_bar::QuickActionBar;
 use recent_projects::open_remote_project;
@@ -1888,8 +1888,11 @@ fn init_global_config_error_notifications(cx: &mut App) {
                 match result {
                     Ok(_) => dismiss_app_notification(&id, cx),
                     Err(error) => {
-                        let message = tr(cx, message_key, message_fallback)
-                            .replacen("{}", &error.to_string(), 1);
+                        let message = tr(cx, message_key, message_fallback).replacen(
+                            "{}",
+                            &error.to_string(),
+                            1,
+                        );
                         let open_file = tr(cx, "zzz.settings.open_config_file", "Open File");
                         let open_tasks = file_kind == "tasks";
                         show_app_notification(id, cx, move |cx| {
@@ -1901,7 +1904,8 @@ fn init_global_config_error_notifications(cx: &mut App) {
                                         if open_tasks {
                                             window.dispatch_action(OpenTasks.boxed_clone(), cx);
                                         } else {
-                                            window.dispatch_action(OpenDebugTasks.boxed_clone(), cx);
+                                            window
+                                                .dispatch_action(OpenDebugTasks.boxed_clone(), cx);
                                         }
                                         cx.emit(DismissEvent);
                                     })

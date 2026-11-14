@@ -892,7 +892,8 @@ impl ContextServerStore {
             (remote_state, this.is_remote_project())
         })?;
 
-        let root_path: Option<Arc<Path>> = this.update(cx, |this, cx| this.resolve_root_path(cx))?;
+        let root_path: Option<Arc<Path>> =
+            this.update(cx, |this, cx| this.resolve_root_path(cx))?;
         let native_root_path = this.update(cx, |this, cx| {
             this.project
                 .as_ref()

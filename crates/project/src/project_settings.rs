@@ -1604,9 +1604,9 @@ impl SettingsObserver {
 
                 settings_observer
                     .update(cx, |_, cx| match result {
-                        Ok(()) => cx.emit(SettingsObserverEvent::GlobalDebugScenariosUpdated(
-                            Ok(file_path.clone()),
-                        )),
+                        Ok(()) => cx.emit(SettingsObserverEvent::GlobalDebugScenariosUpdated(Ok(
+                            file_path.clone(),
+                        ))),
                         Err(err) => {
                             cx.emit(SettingsObserverEvent::GlobalDebugScenariosUpdated(Err(err)))
                         }

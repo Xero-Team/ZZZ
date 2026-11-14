@@ -730,9 +730,7 @@ impl RecentProjects {
                         .get(*index)
                         .map(|folder| folder.worktree_id)
                     {
-                        RecentProjectsDelegate::remove_open_folder(
-                            picker, worktree_id, window, cx,
-                        );
+                        RecentProjectsDelegate::remove_open_folder(picker, worktree_id, window, cx);
                     }
                 }
                 Some(ProjectPickerEntry::ProjectGroup(hit)) => {
