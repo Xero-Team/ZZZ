@@ -3990,6 +3990,14 @@ impl BackgroundScannerState {
         if entry.path.file_name() == Some(&DOT_GIT) {
             self.insert_git_repository(entry.path.clone(), fs, watcher)
                 .await;
+        } else if git::fossil::fossil_support_enabled()
+            && entry
+                .path
+                .file_name()
+                .is_some_and(|name| git::fossil::FOSSIL_CHECKOUT_DB_NAMES.contains(&name))
+        {
+            self.insert_fossil_repository(entry.path.clone(), fs, watcher)
+                .await;
         }
 
         #[cfg(feature = "test-support")]
@@ -4240,6 +4248,36 @@ impl BackgroundScannerState {
         .log_err();
     }
 
+    /// Registers a Fossil checkout. Fossil stores its metadata in a SQLite
+    /// database in the checkout root rather than in a `.git` directory, so the
+    /// checkout path doubles as the repository path.
+    async fn insert_fossil_repository(
+        &mut self,
+        checkout_db_path: Arc<RelPath>,
+        fs: &dyn Fs,
+        watcher: &dyn Watcher,
+    ) {
+        let Some(work_dir_path) = checkout_db_path.parent() else {
+            log::debug!(
+                "not building Fossil repository for the checkout itself, checkout database: {checkout_db_path:?}"
+            );
+            return;
+        };
+        let work_dir_path: Arc<RelPath> = work_dir_path.into();
+        let checkout_db_abs_path = Arc::from(self.snapshot.absolutize(&checkout_db_path).as_ref());
+
+        self.insert_git_repository_for_path(
+            WorkDirectory::InProject {
+                relative_path: work_dir_path,
+            },
+            checkout_db_abs_path,
+            fs,
+            watcher,
+        )
+        .await
+        .log_err();
+    }
+
     async fn insert_git_repository_for_path(
         &mut self,
         work_directory: WorkDirectory,
@@ -4262,7 +4300,13 @@ impl BackgroundScannerState {
         let work_directory_abs_path = self.snapshot.work_directory_abs_path(&work_directory);
 
         let (repository_dir_abs_path, common_dir_abs_path) =
-            discover_git_paths(&dot_git_abs_path, fs).await;
+            if git::fossil::is_fossil_checkout_db_path(&dot_git_abs_path) {
+                // A Fossil checkout database is a SQLite binary, not a gitfile, and
+                // reading it to look for a `gitdir:` line would be wasted work.
+                (dot_git_abs_path.clone(), dot_git_abs_path.clone())
+            } else {
+                discover_git_paths(&dot_git_abs_path, fs).await
+            };
         watcher
             .add(&common_dir_abs_path)
             .context("failed to add common directory to watcher")

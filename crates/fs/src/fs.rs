@@ -1395,6 +1395,19 @@ impl GitService for RealFs {
         dotgit_path: &Path,
         system_git_binary_path: Option<&Path>,
     ) -> Result<Arc<dyn GitRepository>> {
+        if git::fossil::is_fossil_checkout_db_path(dotgit_path) {
+            anyhow::ensure!(
+                git::fossil::fossil_support_enabled(),
+                "Fossil support is disabled; set {}=1 to open this checkout",
+                git::fossil::FOSSIL_SUPPORT_ENV_VAR
+            );
+            return Ok(Arc::new(git::fossil::FossilRepository::new(
+                dotgit_path,
+                None,
+                self.executor.clone(),
+            )?));
+        }
+
         Ok(Arc::new(RealGitRepository::new(
             dotgit_path,
             self.bundled_git_binary_path.clone(),

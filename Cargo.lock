@@ -6022,6 +6022,7 @@ dependencies = [
  "urlencoding",
  "util",
  "uuid 1.29.0",
+ "which",
  "ztracing",
 ]
 
