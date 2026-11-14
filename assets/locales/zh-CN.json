@@ -4068,6 +4068,12 @@
     "database.notebook.connect_failed": "无法连接：{}",
     "office_preview.empty_document": "此文档为空。",
     "office_preview.empty_sheet": "此工作表为空。",
-    "office_preview.sheet_tab_tooltip": "工作表：{}"
+    "office_preview.sheet_tab_tooltip": "工作表：{}",
+    "docker.title": "容器",
+    "docker.refresh": "刷新",
+    "docker.start": "启动",
+    "docker.stop": "停止",
+    "docker.no_containers": "没有容器。",
+    "docker.unavailable": "Docker 不可用"
   }
 }

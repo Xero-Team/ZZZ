@@ -4282,6 +4282,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "docker"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gpui",
+ "i18n",
+ "serde_json",
+ "ui",
+ "util",
+ "workspace",
+]
+
+[[package]]
 name = "docs"
 version = "0.1.0"
 dependencies = [
@@ -22499,6 +22512,7 @@ dependencies = [
  "debugger_ui",
  "dev_container",
  "diagnostics",
+ "docker",
  "docs",
  "editor",
  "encoding_selector",

@@ -4068,6 +4068,12 @@
     "database.notebook.connect_failed": "Could not connect: {}",
     "office_preview.empty_document": "This document is empty.",
     "office_preview.empty_sheet": "This sheet is empty.",
-    "office_preview.sheet_tab_tooltip": "Sheet: {}"
+    "office_preview.sheet_tab_tooltip": "Sheet: {}",
+    "docker.title": "Containers",
+    "docker.refresh": "Refresh",
+    "docker.start": "Start",
+    "docker.stop": "Stop",
+    "docker.no_containers": "No containers.",
+    "docker.unavailable": "Docker is unavailable"
   }
 }
