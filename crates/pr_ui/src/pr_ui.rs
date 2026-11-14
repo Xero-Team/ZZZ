@@ -433,7 +433,22 @@ impl PullRequestPanel {
                     ),
             );
 
-        let body: AnyElement = if self.status == Loading::Diff {
+        let body: AnyElement = if let Some(error) = &self.error {
+            v_flex()
+                .p_2()
+                .gap_1()
+                .child(
+                    Label::new(tr(cx, "pr_ui.diff_failed", "Could not load the diff"))
+                        .size(LabelSize::Small)
+                        .color(Color::Error),
+                )
+                .child(
+                    Label::new(error.clone())
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted),
+                )
+                .into_any_element()
+        } else if self.status == Loading::Diff {
             v_flex()
                 .p_2()
                 .child(

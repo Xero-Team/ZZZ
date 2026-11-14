@@ -102,6 +102,7 @@ pub struct DockerPanel {
     focus_handle: FocusHandle,
     containers: Vec<Container>,
     error: Option<SharedString>,
+    command_error: Option<SharedString>,
     loading: bool,
     loaded: bool,
 }
@@ -112,6 +113,7 @@ impl DockerPanel {
             focus_handle: cx.focus_handle(),
             containers: Vec::new(),
             error: None,
+            command_error: None,
             loading: false,
             loaded: false,
         };
@@ -155,14 +157,24 @@ impl DockerPanel {
     }
 
     fn run_command(&mut self, id: String, command: ContainerCommand, cx: &mut Context<Self>) {
+        self.command_error = None;
         cx.spawn(async move |this, cx| {
             let mut docker = new_command("docker");
             docker.args([command.argument(), id.as_str()]);
             let result = docker.output().await;
             this.update(cx, |this, cx| {
-                if let Err(error) = result {
-                    this.error = Some(error.to_string().into());
-                }
+                // The list refresh below replaces `error`, so a failed start or
+                // stop keeps its own slot to stay visible.
+                this.command_error = match result {
+                    Ok(output) if output.status.success() => None,
+                    Ok(output) => Some(
+                        String::from_utf8_lossy(&output.stderr)
+                            .trim()
+                            .to_owned()
+                            .into(),
+                    ),
+                    Err(error) => Some(error.to_string().into()),
+                };
                 this.refresh(cx);
             })
             .log_err();
@@ -301,6 +313,18 @@ impl Render for DockerPanel {
                             .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
                     ),
             )
+            .children(self.command_error.clone().map(|error| {
+                v_flex()
+                    .px_2()
+                    .py_1()
+                    .border_b_1()
+                    .border_color(cx.theme().colors().border_variant)
+                    .child(
+                        Label::new(error)
+                            .size(LabelSize::XSmall)
+                            .color(Color::Error),
+                    )
+            }))
             .child(
                 div()
                     .id("docker-container-list")

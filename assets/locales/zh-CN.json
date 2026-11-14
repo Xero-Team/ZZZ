@@ -4089,6 +4089,7 @@
     "pr_ui.none": "没有打开的拉取请求。",
     "pr_ui.no_diff": "该拉取请求没有差异。",
     "pr_ui.no_project": "请打开一个项目以列出拉取请求。",
-    "pr_ui.unavailable": "GitHub CLI 不可用"
+    "pr_ui.unavailable": "GitHub CLI 不可用",
+    "pr_ui.diff_failed": "无法加载差异"
   }
 }
