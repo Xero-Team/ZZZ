@@ -1,46 +1,42 @@
 # ZZZ agent notes
 
 ## Workspace
-- Root is a Rust workspace; default member is `crates/zzz`.
-- Main app entrypoint lives in `crates/zzz`; common touchpoints are `crates/gpui`, `crates/editor`, `crates/project`, `crates/workspace`, `crates/vim`, `crates/lsp`, `crates/rpc`, and `crates/ui`.
-- Extensions live under `extensions/`; `cargo xtask workflows` regenerates the workflow files from Rust sources. The generated files are not tracked (only `ci.yaml` is), so rebuild them on demand rather than committing them.
-- Docs live in `docs/` and have their own `docs/AGENTS.md`.
-- Project-local OpenCode skills live under `.agents/skills/` (`creating-skills`); project-local agents belong under `.opencode/agents/` (`creating-agents`). `CLAUDE.md` and `GEMINI.md` are symlinks to `.rules`; edit `.rules`, not those symlinks.
-- The pinned toolchain is Rust 1.100.0 (`rust-toolchain.toml`), mirrored by `clippy.toml` `msrv` and `Cargo.toml` `[workspace.package] rust-version`. CI checks core crates against both MSRV and stable.
+- Rust workspace; `default-members = ["crates/zzz"]`, so a bare `cargo build` or `cargo test` covers only the app crate. Add `--workspace` or `-p <crate>`.
+- `crates/zzz` is the app and the only crate whose version tracks upstream Zed; `[workspace.package] publish = false` everywhere, so versions exist to satisfy cargo, not a compatibility window.
+- Crate kinds, and where a rule about one belongs: `docs/src/development/crates.md`. Crates that shadow a Zed crate (`gpui`, `editor`, `project`, `workspace`, `ui`, `vim`) get overwritten by the next sync, so a local edit there is a recorded divergence, not a free fix. `telegram`/`telegram_ui` are local-original.
+- Upstream moves by selective cherry-pick, never by merge or fast-forward: `absorbing-upstream` skill plus `docs/src/development/upstream-cherrypick.md`. Rejected surfaces are policy data (`script/check-philosophy`, `docs/src/development/upstream-rejected.tsv`) — do not weaken them.
+- Toolchain is pinned to 1.100.0 in four places that `check msrv` compares: `rust-toolchain.toml` `channel`, `clippy.toml` `msrv`, `Cargo.toml` `rust-version`, and the `toolchain:` line in `.github/workflows/ci.yaml`. Bump all four together. Installed targets cover `wasm32-wasip2` (extensions), `wasm32-unknown-unknown` (gpui web), and musl (embedded remote server).
+- Linux build deps: `./script/linux`, which CI runs before every Rust job.
 
 ## Commands
-- Run app: `cargo run`
-- Fast dev profile: `cargo run --profile release-fast`
-- Full workspace tests: `cargo test --workspace`
-- Lint: `cargo xtask clippy` (not `cargo clippy`); it runs the philosophy preflight, the workspace/manifest clippy passes, the `future_not_send` pass, and local-only auxiliary checks (`typos`, `cargo-machete`, `buf`). `script/clippy` is a forwarding shim to this gate.
-- Repository gates without a compiler: `cargo xtask check` (defaults to `check all`). CI runs it, plus `cargo fmt --all -- --check` and a separate MSRV/stable `cargo check` on core crates.
-- `check all` runs every gate in `tooling/xtask/src/tasks/check.rs` (`GATES`); add a gate there rather than in a new script. `script/check-philosophy` and `script/check-upstream-ledger` stay as scripts because they are policy data, and `cargo xtask check` invokes them.
-- `check links` (needs `lychee`) and `check vendor` are local-optional and are
-  not part of `check all`; run them individually. `check all` also formats the
-  docs and runs ShellCheck, so a local run needs Node (Prettier) and
-  `shellcheck`; every gate is also available on its own (`check keys`,
-  `check locale-keys`, `check dco`, `check todos`, `check licenses`,
-  `check philosophy`, `check upstream-ledger`, `check workflows`,
-  `check scroll-handlers`, `check docs`, `check shellcheck`,
-  `check release`, `check test-markers`, `check gpui-api`).
-- Release artifacts: `cargo xtask build` (containerized by default) and `cargo xtask dist --all`; check a host with `cargo xtask doctor`
-- Linux install/build quirk: `cargo xtask install local` builds and installs a
-  local tarball; `REMOTE_SERVER_TARGET=x86_64-unknown-linux-gnu` still selects
-  the embedded remote-server target when needed.
-- Docs preprocessor: `cargo run -p docs_preprocessor --` and `cargo run -p docs_preprocessor -- postprocess`
-- Docs and settings formatting: `script/prettier` (check) or `script/prettier --write`. It covers `docs/` and `assets/settings/default.json`, and `check docs` runs the same script.
+- Run app: `cargo run`; profiling build: `cargo run --profile release-fast`.
+- Tests: CI runs `cargo nextest run --workspace --no-fail-fast`; `cargo test --workspace` is the quick local pass. One test: `cargo test -p editor test_name`. `.config/nextest.toml` gives every test a 60s slow timeout — extend it there instead of adding sleeps.
+- Lint: `cargo xtask clippy` (not `cargo clippy`); `script/clippy` only forwards to it. It runs the philosophy preflight, the workspace and manifest passes, a curated `future_not_send` pass, then `typos`, `cargo-machete`, and `buf`.
+- Compiler-free gates: `cargo xtask check`, which defaults to `check all`. `GATES` in `tooling/xtask/src/tasks/check.rs` is the list; add a gate there, not in a new script. Individual gates: `todos`, `keys`, `scroll-handlers`, `licenses`, `module-layout`, `msrv`, `release`, `test-markers`, `lints-inheritance`, `locale-catalog`, `locale-keys`, `locale-fallbacks`, `locale-placeholders`, `dco`, `shellcheck`, `docs`, `vendor`, `philosophy`, `upstream-ledger`, `workflows`, `ci-wiring`, `gpui-api`. `check all` needs Node (Prettier) and `shellcheck`; `vendor` and `links` (needs `lychee`) stay out of it.
+- Generated tree-sitter sources: `cargo xtask grammars check`.
+- Docs preprocessor: `cargo run -p docs_preprocessor --`, then `-- postprocess`. Docs and settings formatting: `script/prettier` or `script/prettier --write`.
+- Artifacts: `cargo xtask build` (containerized by default), `cargo xtask dist --all`, `cargo xtask doctor` for host readiness, `cargo xtask install local` for a local Linux tarball.
+
+## Performance work
+- Two local-only harnesses; neither runs in CI, so a regression stays invisible until someone runs it:
+  - `cargo perf-test -p <crate>` runs `#[perf]`-annotated tests under `release-fast`. Used by `gpui`, `search`, `terminal`, `util`, `vim`; harness in `tooling/perf`, macro in `crates/util_macros`.
+  - `cargo bench -p <crate>` runs criterion benches (`harness = false`) in `editor`, `language`, `rope`, `fuzzy_nucleo`, `project_panel`, `extension_host`. `crates/editor/benches/editor_frame_workload.rs` measures frame time, RSS, and allocation count end to end; `crates/*_benchmarks` are standalone driver binaries, not criterion.
+  - `cargo perf-compare` diffs two runs and needs `hyperfine`.
+- Optimization ground rules: never edit a benchmark to hit a target, never run two benchmarks concurrently, no `RUSTFLAGS`/`target-cpu=native` heroics, keep measured cases independent. No gate enforces any of this.
+- Priority order for build and runtime knobs is compute, memory, binary size, then compile time — `docs/src/development/build-pipeline.md`.
 
 ## Rust / GPUI
 - `.rules` is the authority for Rust style, GPUI context/entity rules, task cancellation, test timers, and panic policy. Read it before editing any crate; do not restate it here.
-- Repo-specific additions only: `clippy.toml` disallows `std::process::Command::*` and `smol::Timer::after`, and `[workspace.lints]` in `Cargo.toml` records the promotion bar for new lints.
+- Repo-specific additions only: `clippy.toml` disallows `std::process::Command::*`, `smol::Timer::after`, `serde_json*::from_reader`, and `cocoa::foundation::NSString::alloc`; `[workspace.lints]` in `Cargo.toml` records the promotion bar for new lints.
+- `.cargo/config.toml` sets `MIMALLOC_ALLOW_THP=0` and the `MIRIFLAGS` that let `cargo miri test` run; an explicit env var wins over both.
 
 ## i18n
-- Localize user-facing text with `i18n::tr(cx, key, fallback)` (some crates alias it, e.g. `app_i18n::tr`).
-- Add every key to both `assets/locales/en.json` and `assets/locales/zh-CN.json`; the two catalogs must keep identical key sets.
-- The catalogs are authoritative for what is displayed. Keep the in-code `fallback` identical to the `en.json` value so it does not drift (a changed fallback alone is invisible at runtime).
+- Localize user-facing text with `i18n::tr(cx, key, fallback)` (`cx: &App`; some crates alias it, e.g. `app_i18n::tr`).
+- Add every key to both `assets/locales/en.json` and `assets/locales/zh-CN.json`; `check locale-keys` requires identical key sets, `check locale-placeholders` requires matching format placeholders.
+- The catalogs are authoritative for what is displayed. `check locale-fallbacks` requires the in-code `fallback` to equal the `en.json` value, so a changed fallback alone fails the gate instead of silently drifting.
 - Do not localize brand names, shell commands, HTTP headers, or internal/log identifiers.
 
 ## Contributions
-- README and CONTRIBUTING.md both state DCO/no CLA; use `git commit -s`. `cargo xtask check dco` enforces sign-off on recent non-merge commits.
-- `cargo xtask check locale-keys` enforces identical key sets in `assets/locales/en.json` and `assets/locales/zh-CN.json`; `cargo xtask check philosophy` keeps removed commercial/network surfaces absent. Do not weaken these gates.
-- If you discover a reusable pattern, add it to `.rules` only after validation; include a `Suggested .rules additions` section in PR text.
+- DCO, no CLA: commit with `git commit -s`; `check dco` enforces sign-off on recent non-merge commits.
+- `check philosophy` keeps the removed commercial/network surfaces absent and `check upstream-ledger` validates the rejection ledger. Both are gates — do not weaken them to land a change.
+- Reusable patterns validated in a PR go into `.rules` (which has a high bar for new rules), and PR text carries a `Suggested .rules additions` section.
