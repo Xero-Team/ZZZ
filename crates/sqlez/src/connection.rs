@@ -406,16 +406,14 @@ mod test {
     #[test]
     fn string_round_trips() -> Result<()> {
         let connection = Connection::open_memory(Some("string_round_trips"));
-        connection
-            .exec(indoc! {"
+        connection.exec(indoc! {"
             CREATE TABLE text (
                 text TEXT
             );"})?()?;
 
         let text = "Some test text";
 
-        connection
-            .exec_bound("INSERT INTO text (text) VALUES (?);")?(text)?;
+        connection.exec_bound("INSERT INTO text (text) VALUES (?);")?(text)?;
 
         assert_eq!(
             connection.select_row("SELECT text FROM text;")?()?,
