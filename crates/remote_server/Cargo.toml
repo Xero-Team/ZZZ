@@ -77,7 +77,6 @@ rayon.workspace = true
 uuid = { workspace = true, features = ["v4"] }
 
 [target.'cfg(not(windows))'.dependencies]
-fork.workspace = true
 libc.workspace = true
 
 [target.'cfg(windows)'.dependencies]

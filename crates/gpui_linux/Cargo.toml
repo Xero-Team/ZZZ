@@ -40,7 +40,6 @@ x11 = [
     "x11rb",
     "xkbcommon/x11",
     "xim",
-    "x11-clipboard",
     "filedescriptor",
     "open",
     "scap?/x11",
@@ -135,4 +134,3 @@ xim = { path = "../../vendor/xim-rs", features = [
     "x11rb-xcb",
     "x11rb-client",
 ], optional = true }
-x11-clipboard = { version = "0.9.3", optional = true }

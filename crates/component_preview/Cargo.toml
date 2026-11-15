@@ -30,7 +30,6 @@ node_runtime.workspace = true
 notifications.workspace = true
 project.workspace = true
 release_channel.workspace = true
-reqwest_client.workspace = true
 session.workspace = true
 settings.workspace = true
 theme.workspace = true
@@ -46,6 +45,7 @@ db = { workspace = true, features = ["test-support"] }
 editor.workspace = true
 env_logger.workspace = true
 gpui_platform = { workspace = true, features = ["screen-capture", "font-kit", "wayland", "x11"] }
+reqwest_client.workspace = true
 
 [[example]]
 name = "component_preview"
