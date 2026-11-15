@@ -575,7 +575,7 @@ fn main() {
         let installation_id = cx.foreground_executor().block_on(installation_id).ok();
         let session = cx.foreground_executor().block_on(session);
 
-        let is_new_install = matches!(&installation_id, Some(IdType::New(_)));
+        let is_new_install = matches!(&installation_id, Some(InstallationIdStatus::New));
         let app_session = cx.new(|cx| AppSession::new(session, cx));
 
         let app_state = Arc::new(AppState {
@@ -1211,7 +1211,7 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
     }
 }
 
-async fn installation_id(db: KeyValueStore) -> Result<IdType> {
+async fn installation_id(db: KeyValueStore) -> Result<InstallationIdStatus> {
     let legacy_key_name = "device_id".to_owned();
     let key_name = "installation_id".to_owned();
 
@@ -1219,18 +1219,18 @@ async fn installation_id(db: KeyValueStore) -> Result<IdType> {
     if let Ok(Some(installation_id)) = db.read_kvp(&legacy_key_name) {
         db.write_kvp(key_name, installation_id.clone()).await?;
         db.delete_kvp(legacy_key_name).await?;
-        return Ok(IdType::Existing(installation_id));
+        return Ok(InstallationIdStatus::Existing);
     }
 
-    if let Ok(Some(installation_id)) = db.read_kvp(&key_name) {
-        return Ok(IdType::Existing(installation_id));
+    if let Ok(Some(_)) = db.read_kvp(&key_name) {
+        return Ok(InstallationIdStatus::Existing);
     }
 
     let installation_id = Uuid::new_v4().to_string();
 
     db.write_kvp(key_name, installation_id.clone()).await?;
 
-    Ok(IdType::New(installation_id))
+    Ok(InstallationIdStatus::New)
 }
 
 pub(crate) async fn restore_or_create_workspace(
@@ -1630,17 +1630,9 @@ struct Args {
 }
 
 #[derive(Clone, Debug)]
-enum IdType {
-    New(String),
-    Existing(String),
-}
-
-impl ToString for IdType {
-    fn to_string(&self) -> String {
-        match self {
-            IdType::New(id) | IdType::Existing(id) => id.clone(),
-        }
-    }
+enum InstallationIdStatus {
+    New,
+    Existing,
 }
 
 fn parse_url_arg(arg: &str) -> String {
