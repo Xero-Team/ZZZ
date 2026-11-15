@@ -314,10 +314,10 @@ impl sum_tree::Item for DiagnosticEntry<Anchor> {
 
 impl DiagnosticEntry<Anchor> {
     /// Converts the [DiagnosticEntry] to a different buffer coordinate type.
-    pub fn resolve<'a, O: FromAnchor>(
-        &'a self,
+    pub fn resolve<O: FromAnchor>(
+        &self,
         buffer: &text::BufferSnapshot,
-    ) -> DiagnosticEntryRef<'a, O> {
+    ) -> DiagnosticEntryRef<'_, O> {
         DiagnosticEntryRef {
             range: O::from_anchor(&self.range.start, buffer)
                 ..O::from_anchor(&self.range.end, buffer),

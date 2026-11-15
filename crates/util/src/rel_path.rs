@@ -177,7 +177,7 @@ impl RelPath {
         false
     }
 
-    pub fn strip_prefix<'a>(&'a self, other: &Self) -> Result<&'a Self, StripPrefixError> {
+    pub fn strip_prefix(&self, other: &Self) -> Result<&Self, StripPrefixError> {
         if other.is_empty() {
             return Ok(self);
         }
