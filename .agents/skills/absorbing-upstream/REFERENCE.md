@@ -20,19 +20,19 @@ CREATE_PR=no
 PUSH=no
 ```
 
-As of 2026-11-13, local `main` is `be1bfe60fe`. The last completed
-sync is `docs/src/development/upstream/upstream-sync-2026-11-13.md` on
-`sync/upstream-2026-11-13`; it reviews
-`6ceb6fee87..aff99ecc32`, the first 20 of 22 commits, and advances the
-reviewed baseline to `aff99ecc32`. The live head at query time was
-`dc93abce2f`, so the next range starts with `83df5df635` and
-`dc93abce2f`. The preceding chain is `2026-11-10`, `2026-11-10-b`,
-`2026-11-11`, `2026-11-11-b`, `2026-11-11-c`, and `2026-11-12`, which
-ended at `6ceb6fee87`. The most recent full re-audit is
-`docs/src/development/upstream/upstream-sync-audit-2026-11-03.md` (38
-non-audit reports, 1453 decision rows). Query live upstream again at
-run start; never trust these recorded values as the live head. The next
-range starts after `LAST_REVIEWED_UPSTREAM`.
+As of 2026-11-15, local `main` is `da3887d10e`. The last new upstream
+window is `docs/src/development/upstream/upstream-sync-2026-11-13.md` on
+`sync/upstream-2026-11-13`; it reviews `6ceb6fee87..aff99ecc32`, the
+first 20 of 22 commits, and advances the reviewed baseline to
+`aff99ecc32`. The live head at query time was `dc93abce2f`, so the next
+range starts with `83df5df635` and `dc93abce2f`. The preceding chain
+ends at `2026-11-12`, which closed on `6ceb6fee87`.
+`upstream-sync-2026-11-14.md` re-checks 40 earlier `C` rows and does not
+move the baseline. The most recent full re-audit is
+`docs/src/development/upstream/upstream-sync-audit-2026-11-03.md`; the
+tree holds 48 sync reports and 5 audit reports. Query live upstream
+again at run start; never trust these recorded values as the live head.
+The next range starts after `LAST_REVIEWED_UPSTREAM`.
 
 ## Philosophy
 
@@ -216,10 +216,8 @@ if you lint, never `cargo clippy`.
 This host is Linux. Inspect macOS and Windows hunks, but record those
 runtime tests as `NOT RUN`.
 
-Do not fix unrelated baseline failures. Known 2026-08-07 examples:
-duplicate `hover_links.rs` test names, and Prettier drift in
-`installation.md`, `migrate/vs-code.md`, and
-`reference/all-settings.md`.
+Do not fix unrelated baseline failures. Confirm a failure predates the
+change, on a clean checkout, before calling it baseline.
 
 If Prettier or `cargo fmt` rewrites an unrelated region, restore it.
 

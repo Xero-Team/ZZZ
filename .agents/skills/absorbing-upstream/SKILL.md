@@ -1,13 +1,18 @@
 ---
 name: absorbing-upstream
 description:
-  "Absorbs Zed upstream commits into ZZZ with A/B/C cherry-pick
-  classification. Use when cherry-picking, syncing upstream, absorbing
-  Zed main, porting an upstream SHA, classifying commits as A/B/C, or
-  writing docs/src/development/upstream/upstream-sync-*.md."
+  "Absorbs Zed upstream commits into ZZZ as A/B/C cherry-picks. Use when
+  syncing upstream, porting upstream SHAs, or writing upstream-sync
+  reports. Do not use for release-channel picks."
 license: CC-BY-4.0
 compatibility: opencode
+version: 1.0.0
 metadata:
+  author: Xero Team <maintainers@example.com>
+  tags:
+    - upstream
+    - cherry-pick
+    - workflow
   prompt-language: English
   user-language: Simplified Chinese
 ---
@@ -20,6 +25,12 @@ machinery to make the trees match.
 
 You selectively absorb Zed `main` into ZZZ. This is not a merge and not
 a fast-forward. ZZZ keeps fork-only absences.
+
+## Purpose
+
+Land upstream bugfixes and editor behavior without importing Zed cloud,
+account, telemetry, or native-agent surfaces, and leave a decision record
+for every reviewed commit.
 
 ## Communication Rules
 
@@ -49,6 +60,13 @@ release-channel cherry-picks via `script/cherry-pick`.
 - If a B port fails `cargo check`, revert the attempt completely and
   reclassify `C`.
 
+## Prerequisites
+
+- A clean worktree and network access for `git ls-remote` and `git fetch`.
+- `cargo` with the pinned toolchain for `cargo check` and `cargo test`.
+- Node for Prettier; `script/prettier` pins the version that
+  `cargo xtask check docs` uses.
+
 ## Procedure
 
 1. Read `README.md`, `AGENTS.md`, the latest
@@ -69,6 +87,34 @@ release-channel cherry-picks via `script/cherry-pick`.
 9. Regenerate the rejection ledger with
    `./script/backfill-upstream-ledger` and verify it with
    `cargo xtask check upstream-ledger`.
+
+## Examples
+
+```text
+Absorb the next 20 Zed main commits into ZZZ.
+```
+
+```text
+Classify upstream 6ceb6fee87 as A, B, or C, and land it if it is safe.
+```
+
+## Troubleshooting
+
+- Cherry-pick conflicts: run `git cherry-pick --abort`, then classify `B`
+  or `C`. Never reshape the local tree to match upstream.
+- `LAST_REVIEWED_UPSTREAM` is not an ancestor of `FETCH_HEAD`: stop,
+  record the SHA, and leave the tree clean.
+- `cargo xtask check upstream-ledger` fails: fix the report table and
+  rerun `./script/backfill-upstream-ledger`. Never hand-edit the ledger.
+
+## Limitations
+
+- The baseline and live heads recorded in `REFERENCE.md` are a dated
+  snapshot; query upstream again at run start.
+- This host is Linux, so macOS and Windows hunks are inspected but never
+  executed.
+- One run covers one batch; later upstream commits stay unreviewed until
+  the next run.
 
 ## Final Response
 
