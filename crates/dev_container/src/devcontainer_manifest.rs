@@ -315,17 +315,13 @@ impl DevContainerManifest {
     /// If no such image is available, return an error
     async fn get_base_image_from_config(&self) -> Result<String, DevContainerError> {
         match self.dev_container().build_type() {
-            DevContainerBuildType::Image(image) => {
-                return Ok(image);
-            }
+            DevContainerBuildType::Image(image) => Ok(image),
             DevContainerBuildType::Dockerfile(build) => {
                 let dockerfile_contents = self.expanded_dockerfile_content().await?;
-                return image_from_dockerfile(dockerfile_contents, &build.target).ok_or_else(
-                    || {
-                        log::error!("Unable to find base image in Dockerfile");
-                        DevContainerError::DevContainerParseFailed
-                    },
-                );
+                image_from_dockerfile(dockerfile_contents, &build.target).ok_or_else(|| {
+                    log::error!("Unable to find base image in Dockerfile");
+                    DevContainerError::DevContainerParseFailed
+                })
             }
             DevContainerBuildType::DockerCompose => {
                 let docker_compose_manifest = self.docker_compose_manifest().await?;
@@ -352,11 +348,11 @@ impl DevContainerManifest {
                 }
 
                 log::error!("No valid base image found in docker-compose configuration");
-                return Err(DevContainerError::DevContainerParseFailed);
+                Err(DevContainerError::DevContainerParseFailed)
             }
             DevContainerBuildType::None => {
                 log::error!("Not a valid devcontainer config for build");
-                return Err(DevContainerError::NotInValidProject);
+                Err(DevContainerError::NotInValidProject)
             }
         }
     }
@@ -855,13 +851,11 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                 log::debug!("Using docker compose. Building extended compose files");
                 let docker_compose_resources = self.build_and_extend_compose_files().await?;
 
-                return Ok(DevContainerBuildResources::DockerCompose(
+                Ok(DevContainerBuildResources::DockerCompose(
                     docker_compose_resources,
-                ));
+                ))
             }
-            DevContainerBuildType::None => {
-                return Err(DevContainerError::DevContainerParseFailed);
-            }
+            DevContainerBuildType::None => Err(DevContainerError::DevContainerParseFailed),
         }
     }
 

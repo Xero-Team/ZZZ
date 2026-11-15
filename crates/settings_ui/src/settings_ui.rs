@@ -188,7 +188,7 @@ impl<T: PartialEq + Clone + Send + Sync + 'static> AnySettingField for SettingFi
         let (file, value) = cx
             .global::<SettingsStore>()
             .get_value_from_file(file.to_settings(), self.pick);
-        return (file, value.is_some());
+        (file, value.is_some())
     }
 
     fn reset_to_default_fn(
@@ -215,7 +215,7 @@ impl<T: PartialEq + Clone + Send + Sync + 'static> AnySettingField for SettingFi
         }
         let current_file = current_file.clone();
 
-        return Some(Box::new(move |window, cx| {
+        Some(Box::new(move |window, cx| {
             let store = SettingsStore::global(cx);
             let default_value = (this.pick)(store.raw_default_settings());
             let is_set_somewhere_other_than_default = store
@@ -238,7 +238,7 @@ impl<T: PartialEq + Clone + Send + Sync + 'static> AnySettingField for SettingFi
             )
             // todo(settings_ui): Don't log err
             .log_err();
-        }));
+        }))
     }
 
     fn json_path(&self) -> Option<&'static str> {
@@ -1191,7 +1191,7 @@ impl SettingsPageItem {
                     }
                 }
 
-                return content.into_any_element();
+                content.into_any_element()
             }
             SettingsPageItem::ActionLink(action_link) => v_flex()
                 .group("setting-item")
@@ -4087,7 +4087,7 @@ impl SettingsWindow {
         {
             index = prev_index.checked_sub(1);
         }
-        return index.expect("No root entry found");
+        index.expect("No root entry found")
     }
 }
 

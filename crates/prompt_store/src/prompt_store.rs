@@ -376,14 +376,13 @@ impl PromptStore {
     }
 
     pub fn default_prompt_metadata(&self) -> Vec<PromptMetadata> {
-        return self
-            .metadata_cache
+        self.metadata_cache
             .read()
             .metadata
             .iter()
             .filter(|metadata| metadata.default)
             .cloned()
-            .collect::<Vec<_>>();
+            .collect()
     }
 
     pub fn delete(&self, id: PromptId, cx: &Context<Self>) -> Task<Result<()>> {

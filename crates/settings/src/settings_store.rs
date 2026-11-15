@@ -585,7 +585,7 @@ impl SettingsStore {
             }))
             .map_err(|err| anyhow::format_err!("Failed to update settings file: {}", err))
             .log_with_level(log::Level::Warn);
-        return rx;
+        rx
     }
 
     pub fn update_settings_file(
@@ -798,7 +798,7 @@ impl SettingsStore {
             migration_status,
         };
         self.file_errors.insert(file, result.clone());
-        return (settings, result);
+        (settings, result)
     }
 
     pub fn error_for_file(&self, file: SettingsFile) -> Option<SettingsParseResult> {
@@ -955,7 +955,7 @@ impl SettingsStore {
             self.user_settings = Some(settings);
             self.recompute_values(None, cx);
         }
-        return parse_result;
+        parse_result
     }
 
     /// Sets the global settings via a JSON string.
@@ -982,7 +982,7 @@ impl SettingsStore {
             self.global_settings = Some(Box::new(settings));
             self.recompute_values(None, cx);
         }
-        return parse_result;
+        parse_result
     }
 
     pub fn set_server_settings(

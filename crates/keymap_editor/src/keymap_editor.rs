@@ -1738,7 +1738,7 @@ impl KeymapEditor {
         ) -> impl FnOnce(ContextMenu) -> ContextMenu {
             let focus_handle = focus_handle.clone();
             let keymap_editor = keymap_editor.clone();
-            return move |menu: ContextMenu| {
+            move |menu: ContextMenu| {
                 menu.toggleable_entry(
                     name,
                     toggled,
@@ -1753,7 +1753,7 @@ impl KeymapEditor {
                         }
                     },
                 )
-            };
+            }
         }
     }
 }

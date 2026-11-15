@@ -430,10 +430,10 @@ impl<T: Item> SumTree<T> {
         }
 
         let mut pos = D::zero(cx);
-        return match Self::find_iterate::<_, _, true>(cx, target, bias, &mut pos, self) {
+        match Self::find_iterate::<_, _, true>(cx, target, bias, &mut pos, self) {
             Some((item, end)) => (pos, end, Some(item)),
             None => (pos.clone(), pos, None),
-        };
+        }
     }
 
     /// A more efficient version of `Cursor::new()` + `Cursor::seek()` + `Cursor::item()`
@@ -456,10 +456,10 @@ impl<T: Item> SumTree<T> {
         }
 
         let mut pos = D::zero(cx);
-        return match Self::find_iterate::<_, _, false>(cx, target, bias, &mut pos, self) {
+        match Self::find_iterate::<_, _, false>(cx, target, bias, &mut pos, self) {
             Some((item, end)) => (pos, end, Some(item)),
             None => (pos.clone(), pos, None),
-        };
+        }
     }
 
     fn find_iterate<'tree, 'a, D, Target, const EXACT: bool>(
@@ -541,10 +541,10 @@ impl<T: Item> SumTree<T> {
         }
 
         let mut pos = D::zero(cx);
-        return match Self::find_with_prev_iterate::<_, _, false>(cx, target, bias, &mut pos, self) {
+        match Self::find_with_prev_iterate::<_, _, false>(cx, target, bias, &mut pos, self) {
             Some((prev, item, end)) => (pos, end, Some((prev, item))),
             None => (pos.clone(), pos, None),
-        };
+        }
     }
 
     fn find_with_prev_iterate<'tree, 'a, D, Target, const EXACT: bool>(

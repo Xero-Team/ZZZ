@@ -323,7 +323,7 @@ fn construct_json_value(
             new_value = serde_json::json!({ key.as_ref().to_owned(): new_value });
         }
     }
-    return new_value;
+    new_value
 }
 
 fn parse_index_key(index_key: &str) -> Option<usize> {
@@ -394,7 +394,7 @@ fn handle_possible_array_value(
             replace_value.remove(idx);
         }
     }
-    return Some((replace_range, replace_value));
+    Some((replace_range, replace_value))
 }
 
 const TS_DOCUMENT_KIND: &str = "document";
