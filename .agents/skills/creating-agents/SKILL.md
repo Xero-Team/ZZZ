@@ -2,12 +2,16 @@
 name: creating-agents
 description:
   "Creates or refines project-local OpenCode agents under .opencode/agents/.
-  Use when designing a new agent, renaming or tightening an existing one,
-  choosing mode, selecting tools and permissions, or drafting an agent prompt in
-  English while interacting with the user in Simplified Chinese."
+  Use when designing an agent or fixing its mode, tools, or permissions.
+  Do not use for skills."
 license: CC-BY-4.0
 compatibility: opencode
+version: 1.0.0
 metadata:
+  author: Xero Team <maintainers@example.com>
+  tags:
+    - agents
+    - opencode
   prompt-language: English
   user-language: Simplified Chinese
   output-target: .opencode/agents
@@ -24,6 +28,21 @@ user a short clarifying question in Simplified Chinese.
 You are creating or refining an OpenCode agent Markdown file for this
 repository.
 
+## Purpose
+
+Produce one narrowly scoped agent whose mode, description, tools, and
+permissions match its job, so the model picks it only when it helps.
+
+## When to Use
+
+- The user wants a new agent, or a refinement of an existing one.
+- The user wants an agent's mode, tools, permissions, or description fixed.
+- The user wants a specialized subagent separated from the main mode.
+
+Do not use this skill for skills (use `creating-skills`), for general
+OpenCode configuration, or for prompts that do not live under
+`.opencode/agents/`.
+
 ## Operating Rules
 
 - Keep this skill prompt written in English.
@@ -39,6 +58,12 @@ repository.
 - When choosing mode, tools, or permissions, consult `REFERENCE.md` before
   guessing.
 - Prefer the narrowest capability set that still fits the requested job.
+
+## Prerequisites
+
+- The target directory `.opencode/agents/` exists or can be created.
+- `REFERENCE.md` is available for mode, tool, and permission semantics.
+- No OpenCode configuration change is needed outside that directory.
 
 ## Extract From Conversation
 
@@ -183,6 +208,35 @@ unless the original mode or safety posture is fundamentally wrong.
 
 If the user asks for a rename or trigger improvement, prefer the smallest edit
 set that fixes discovery and keeps the existing workflow intact.
+
+## Examples
+
+```text
+Create a read-only reviewer subagent that reports P0/P1 findings.
+```
+
+```text
+Tighten the existing release agent's description and permissions.
+```
+
+## Troubleshooting
+
+- The agent never gets picked: make `description` concrete and add
+  near-miss task phrases; a vague description is the usual cause.
+- The frontmatter is invalid: `description` and `mode` are required, and
+  an unquoted colon in a description is the usual YAML error.
+- The agent is missing from the picker: check `mode` and that the file
+  sits directly in `.opencode/agents/` with valid frontmatter.
+- The agent edits files it should not: replace `tools` overrides with
+  ordered `permissions` rules and re-check the narrowest capability set.
+
+## Limitations
+
+- Agent discovery depends on the harness version; verify a new file
+  appears before promising behavior.
+- This skill writes one file at a time and does not migrate agents out of
+  user-global configuration.
+- Model choice is a per-agent field, not a project-wide default.
 
 ## Final Response
 

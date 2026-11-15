@@ -1,16 +1,18 @@
 ---
 name: enforcing-philosophy-absence
 description:
-  "Guards ZZZ's local-first absence boundary after the commercial, account,
-  telemetry, hosted-docs, and default-network surfaces were removed. Use when
-  a change reintroduces Zed cloud copy, hosted binaries, Zeta/Copilot
-  defaults, PlanDefinitions, CIMD_URL, allow_data_collection, or collab
-  sign-in, when extending script/check-philosophy with a new regression
-  assertion, or when verifying cargo xtask check philosophy. Do not use for
-  absorbing upstream."
+  "Guards ZZZ's absence boundary: no Zed cloud, account, telemetry, or
+  hosted-download surface returns. Use when a change adds one; not for
+  upstream absorption."
 license: CC-BY-4.0
 compatibility: opencode
+version: 1.0.0
 metadata:
+  author: Xero Team <maintainers@example.com>
+  tags:
+    - philosophy
+    - local-first
+    - gate
   prompt-language: English
   user-language: Simplified Chinese
 ---
@@ -30,6 +32,12 @@ accounts, telemetry, hosted downloads, or a default network call. The
 original removal work is recorded in `REFERENCE.md` as a completed
 inventory and a set of invariants, not as a to-do list.
 
+## Purpose
+
+Keep the removed commercial surfaces absent and keep
+`script/check-philosophy` strong enough to catch the next regression,
+without restoring a configuration switch for anything already deleted.
+
 ## Communication Rules
 
 - Keep this skill prompt written in English.
@@ -42,7 +50,7 @@ inventory and a set of invariants, not as a to-do list.
 ## When to Use
 
 - A diff or upstream absorption reintroduces a rejected surface: Zed Pro,
-  Zeta-as-default, auto-update-on copy, `privacy@zed.dev`,
+  Zeta-as-default, auto-update-on copy, Zed's privacy contact address,
   `install.sh` hosted downloads, `PlanDefinitions`, `CIMD_URL` pointing at
   `zed.dev`, `allow_data_collection`, or collab sign-in.
 - The user asks to extend `script/check-philosophy` with a new regression
@@ -80,6 +88,12 @@ Do not use this skill for absorbing Zed `main` (use
 - In `Entity::update` closures, use the inner `cx`.
 - Match surrounding style. Do not reformat unrelated regions.
 
+## Prerequisites
+
+- A clean worktree and the `cargo xtask` entry point.
+- `bash`, `rg`, and `git` for `script/check-philosophy`.
+- Node for Prettier on touched docs.
+
 ## Procedure
 
 1. Read `README.md`, `AGENTS.md`, `docs/AGENTS.md`, `.rules`,
@@ -99,6 +113,34 @@ Do not use this skill for absorbing Zed `main` (use
    touched Rust with `cargo fmt` on those crates; do not rewrite unrelated
    drift. Re-run `cargo xtask check philosophy` and `git diff --check`.
 7. Stop after the requested scope.
+
+## Examples
+
+```text
+An upstream sync reintroduces a telemetry sender. Remove it and re-run the gate.
+```
+
+```text
+Add an assertion to script/check-philosophy for the new hosted-download path.
+```
+
+## Troubleshooting
+
+- `cargo xtask check philosophy` fails: the message names the file and
+  pattern, so remove the surface instead of editing the assertion.
+- A deletion breaks `cargo check`: cut a smaller surface; do not add an
+  unused type or a gated fallback to keep the build green.
+- A new gate line is rejected: match the existing bash + `rg` style and
+  confirm the pattern fails only on the regression.
+
+## Limitations
+
+- The gate is a text and pattern net, so it cannot prove behavior at
+  runtime; a hand review still covers new provider paths.
+- The inventory in `REFERENCE.md` is a dated snapshot; treat a missing
+  crate name as unverified until you check the tree.
+- This skill removes surfaces and asserts absence; it does not design new
+  local-only features.
 
 ## Final Response
 

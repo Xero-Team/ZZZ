@@ -1,9 +1,15 @@
 ---
 name: repository-research
-description: "Investigates GitHub and local repositories from source code, history, metadata, and primary documentation, then produces evidence-backed architecture analyses and competitor comparisons. Use for repository due diligence, multi-repo technology selection, codebase RAG assessment, maintenance or health reviews, and deep implementation comparisons; skip for superficial README summaries or ordinary code edits."
+description: "Produces evidence-backed repository research from source, history, and primary docs: architecture maps, comparisons, and due diligence. Use for technology selection and health reviews."
 license: CC-BY-4.0
 compatibility: opencode
+version: 1.0.0
 metadata:
+  author: Xero Team <maintainers@example.com>
+  tags:
+    - research
+    - repositories
+    - evidence
   prompt-language: English
   user-language: Simplified Chinese
 ---
@@ -13,6 +19,14 @@ metadata:
 Treat repository research as an evidence problem. Pin the inspected revision,
 trace representative behavior through implementation code, and keep observed
 facts separate from documentation claims, inference, and unknowns.
+
+## Purpose
+
+Answer one decision question about one or more repositories with evidence a
+reader can reproduce: a pinned corpus, a claim ledger, and a recommendation
+that names the experiment able to falsify it.
+
+## Communication Rules
 
 Communicate results in Simplified Chinese unless the user requests another
 language. Preserve product, protocol, and API names as written upstream.
@@ -41,35 +55,35 @@ For multi-repository work, acquisition, codebase analysis, comparison, and
 evidence reporting usually all apply. Research-system comparisons also need the
 research-systems reference.
 
-## Reusable scripts
+## Available scripts
 
 All scripts are standard-library Python and operate read-only on cloned
-repositories unless their name explicitly says `clone` or `init`.
+repositories unless their name says `clone` or `init`. Run each with
+`--help` before adapting its defaults.
 
-- `scripts/init_workspace.py`: create a research workspace from templates
-  without overwriting existing files.
-- `scripts/verify_sources.py`: run non-interactive `git ls-remote` checks and
-  write a verification ledger.
-- `scripts/clone_sources.py`: shallow-clone verified direct/substitute sources;
-  refuse to overwrite non-repositories and support `--dry-run`.
-- `scripts/inventory_repositories.py`: record commit, branch, shallow state,
-  file/language counts, manifests, policy files, and working-tree status.
-- `scripts/survey_repositories.py`: generate deterministic static surveys with
-  subsystem, manifest, dependency, entrypoint, test, documentation, and
-  architecture-keyword hints. `--skip-existing` protects files that a human has
-  annotated beside the generated output.
-- `scripts/compare_lineage.py`: compare shared paths across checkouts and write
-  `lineage.tsv` with common, byte-identical, changed, and one-sided path counts.
-- `scripts/validate_evidence.py`: validate local evidence paths, line/heading
-  locators, commit pins, external timestamps, and evidence kinds. `--report`
-  checks report citations against the ledger, `--lineage` checks a
-  `lineage.tsv`, and `--allow-missing-checkout` turns a deliberately
-  cleaned-up corpus into warnings instead of errors.
+| Script | Purpose | Arguments |
+| --- | --- | --- |
+| `scripts/init_workspace.py` | Create the workspace from `assets/` templates without overwriting existing files. | `--workspace` |
+| `scripts/verify_sources.py` | Run non-interactive `git ls-remote` checks and write a verification ledger. | `--sources --output [--timeout] [--strict]` |
+| `scripts/clone_sources.py` | Shallow-clone verified direct and substitute sources; refuses to overwrite non-repositories. | `--sources --output [--base-dir] [--depth] [--jobs] [--timeout] [--no-checkout] [--dry-run]` |
+| `scripts/inventory_repositories.py` | Record commit, branch, shallow state, file and language counts, manifests, policy files, and working-tree status. | `--sources --output [--base-dir]` |
+| `scripts/survey_repositories.py` | Generate deterministic static surveys with subsystem, manifest, dependency, entrypoint, test, documentation, and keyword hints. | `--sources --output-dir [--base-dir] [--max-file-bytes] [--skip-existing]` |
+| `scripts/compare_lineage.py` | Compare shared paths across checkouts and write `lineage.tsv` counts. | `--sources --output [--base-dir] [--paths]` |
+| `scripts/validate_evidence.py` | Validate paths, locators, commit pins, timestamps, evidence kinds, report citations, and a `lineage.tsv`. | `--sources --evidence [--report] [--lineage] [--base-dir] [--allow-missing-checkout]` |
 
-Run each script with `--help` before adapting its defaults. Prefer the templates
-in `assets/` for `sources.tsv`, `evidence.tsv`, `experiments.tsv`, and the final
-report. Ledger filenames stay lowercase so a workspace can sit beside the report
-it supports.
+`--skip-existing` on `survey_repositories.py` protects survey files a human has
+annotated, and `--allow-missing-checkout` turns a deliberately cleaned-up corpus
+into warnings instead of errors.
+
+Prefer the templates in `assets/` for `sources.tsv`, `evidence.tsv`,
+`experiments.tsv`, and the final report. Ledger filenames stay lowercase so a
+workspace can sit beside the report it supports.
+
+## Prerequisites
+
+- `python3` (standard library only) and `git` on the host.
+- Network access to the sources, or a pre-populated local corpus.
+- Write access to a workspace directory outside the cloned repositories.
 
 ## Core workflow
 
@@ -144,6 +158,36 @@ it supports.
   cannot answer the question.
 - Do not expose credentials, local secrets, private repository contents, or raw
   sensitive payloads in reports or generated inventories.
+
+## Examples
+
+```text
+Compare three Rust code-indexing projects and recommend one for our monorepo.
+```
+
+```text
+Is this fork an independent design or a re-badged upstream? Pin both HEADs.
+```
+
+## Troubleshooting
+
+- A source URL does not resolve: record it as `unavailable` in
+  `sources.tsv` instead of substituting silently, and name the substitute.
+- `validate_evidence.py` rejects a locator: re-read the file at the pinned
+  commit; headings and line numbers drift after a re-pin.
+- A shallow clone cannot prove ancestry: state the depth in the report and
+  cite the object that exists locally rather than claiming history.
+- A GitHub metric cannot be reproduced later: timestamp it and name the
+  endpoint in `evidence.tsv`.
+
+## Limitations
+
+- Static reading cannot establish runtime behavior; benchmark and latency
+  claims need a scoped experiment.
+- Private repositories, rate limits, or missing credentials cap coverage;
+  record the gap instead of extrapolating.
+- Star counts and activity are not architecture quality, and the ledgers
+  describe one revision each.
 
 ## Completion criteria
 

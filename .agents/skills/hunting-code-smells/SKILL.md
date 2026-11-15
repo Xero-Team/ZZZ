@@ -2,15 +2,17 @@
 name: hunting-code-smells
 description:
   "Finds and fixes code smells and quality regressions in ZZZ. Use when
-  reviewing a diff or module for code quality, hunting code smells,
-  refactoring, auditing an absorbed upstream change for cleanliness, auditing
-  unsafe blocks for soundness, or when asked whether Rust code is idiomatic,
-  clean, or over-engineered. Covers ZZZ hard rules (.rules, clippy.toml, i18n,
-  GPUI, philosophy gate), the memory-safety contract for unsafe/UB/aliasing
-  and FFI boundaries, Clean Code heuristics, and Rust idiom rules."
+  reviewing a diff or module, auditing unsafe soundness, or checking
+  absorbed upstream code. Do not use for upstream absorption."
 license: CC-BY-4.0
 compatibility: opencode
+version: 1.0.0
 metadata:
+  author: Xero Team <maintainers@example.com>
+  tags:
+    - rust
+    - review
+    - code-quality
   prompt-language: English
   user-language: Simplified Chinese
 ---
@@ -26,6 +28,12 @@ user asked for. ZZZ already enforces a strict baseline through
 `script/clippy`, `[workspace.lints]`, `clippy.toml`, `.rules`, and
 `cargo xtask check philosophy`. Your job is the part tools do not catch:
 project-specific traps, idiom drift, and Clean Code structural smells.
+
+## Purpose
+
+Find the quality and soundness problems that `cargo xtask clippy`, the
+locale gates, and the philosophy gate cannot see, then fix only the ones
+in scope with the smallest safe diff.
 
 ## Communication Rules
 
@@ -86,6 +94,12 @@ unrelated documentation.
 - Do not edit `.rules` inline. If a reusable trap emerges, put a "Suggested
   .rules additions" section in the report instead.
 
+## Prerequisites
+
+- A built toolchain so `cargo xtask clippy` and `cargo fmt` run.
+- `rg` for the hard-rule detectors in `REFERENCE.md` section 8.
+- The target diff or module named by the user, or a clean worktree to diff.
+
 ## Procedure
 
 1. Scope. Identify the target: `git diff --name-only` for a review, or the
@@ -114,6 +128,34 @@ unrelated documentation.
 6. Verify. Re-run the checks from step 2 that cover the changed area, plus
    `cargo test -p <crate>` for behavior-affecting changes.
 7. Report in Simplified Chinese using the template in `REFERENCE.md`.
+
+## Examples
+
+```text
+Review the last three commits for code smells and report P0/P1 only.
+```
+
+```text
+Audit the unsafe block in crates/gpui/src/platform for soundness.
+```
+
+## Troubleshooting
+
+- `cargo xtask clippy` fails on unrelated drift: record it as pre-existing
+  and keep reviewing; do not fix code the user did not ask about.
+- A finding has no `file:line`: drop it; speculative findings do not belong
+  in the report.
+- The memory-safety pass finds nothing: confirm the change touches `unsafe`,
+  FFI, or manual allocation before claiming section 2 was applied.
+
+## Limitations
+
+- The review is static. Behavior claims that need a runtime test are
+  reported as unverified, not fixed.
+- Findings are read from the current tree, so a stale checkout can hide
+  drift that already landed.
+- This skill does not reformat, rename, or restructure code outside the
+  requested scope.
 
 ## Final Response
 

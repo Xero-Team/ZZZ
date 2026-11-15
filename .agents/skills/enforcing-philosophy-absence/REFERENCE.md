@@ -142,7 +142,8 @@ Support and feature-request links point at this repository.
 `legal/privacy-policy.md` states ZZZ has no accounts, telemetry, payments,
 or hosted AI. `legal/subprocessors.md` says "no default subprocessors".
 `legal/third-party-terms.md` covers only providers the user configures.
-No `privacy@zed.dev`, "Zed Industries", or telemetry opt-out copy remains.
+No Zed privacy contact address, "Zed Industries", or telemetry opt-out
+copy remains.
 
 ### Install and release scripts
 
