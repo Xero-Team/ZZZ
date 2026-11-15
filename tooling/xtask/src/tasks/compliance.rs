@@ -97,12 +97,7 @@ async fn check_compliance_impl(args: ComplianceArgs) -> Result<()> {
         .sorted()
         .find_previous_minor_version(&tag)
         .cloned()
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "Could not find previous version for tag {tag}",
-                tag = tag.to_string()
-            )
-        })?;
+        .ok_or_else(|| anyhow::anyhow!("Could not find previous version for tag {tag}"))?;
 
     println!(
         "Checking compliance for version {} with version {} as base",
@@ -125,10 +120,7 @@ async fn check_compliance_impl(args: ComplianceArgs) -> Result<()> {
         .generate_report(MAX_CONCURRENT_REQUESTS)
         .await;
 
-    println!(
-        "Generated report for version {}",
-        args.version_tag().to_string()
-    );
+    println!("Generated report for version {}", args.version_tag());
 
     let summary = report.summary();
 
