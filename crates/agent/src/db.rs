@@ -5,7 +5,7 @@ use anyhow::{Context as _, Result, anyhow};
 use chrono::{DateTime, Utc};
 use collections::HashMap;
 use futures::{FutureExt, future::Shared};
-use gpui::{BackgroundExecutor, Global, Task};
+use gpui::{App, BackgroundExecutor, Global, SharedString, Task};
 use indoc::indoc;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,6 @@ use sqlez::{
     statement::Statement,
 };
 use std::sync::Arc;
-use ui::{App, SharedString};
 use util::{ResultExt, path_list::PathList};
 use zzz_env_vars::ZZZ_STATELESS;
 

@@ -46,7 +46,6 @@ shlex.workspace = true
 sqlez.workspace = true
 task.workspace = true
 text.workspace = true
-ui.workspace = true
 url.workspace = true
 util.workspace = true
 watch.workspace = true

@@ -10,7 +10,8 @@ use std::{
     path::{Path, PathBuf},
 };
 use text::LineEnding;
-use ui::{App, IconName, SharedString};
+use gpui::{App, SharedString};
+use icons::IconName;
 use url::Url;
 use urlencoding::decode;
 use util::paths::{PathStyle, PathWithPosition, is_absolute};

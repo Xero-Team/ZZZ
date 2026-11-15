@@ -13,7 +13,7 @@ pub use diff::*;
 use feature_flags::{AcpBetaFeatureFlag, FeatureFlagAppExt as _};
 use futures::{FutureExt, channel::oneshot, future::BoxFuture};
 use gpui::{
-    AppContext, AsyncApp, Context, Entity, EventEmitter, SharedString, Subscription, Task,
+    App, AppContext, AsyncApp, Context, Entity, EventEmitter, SharedString, Subscription, Task,
     WeakEntity,
 };
 use itertools::Itertools;
@@ -39,7 +39,6 @@ use std::{fmt::Display, mem, path::PathBuf, sync::Arc};
 use task::{Shell, ShellBuilder};
 pub use terminal::*;
 use text::Bias;
-use ui::App;
 use util::markdown::MarkdownEscaped;
 use util::path_list::PathList;
 use util::{
