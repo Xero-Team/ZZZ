@@ -47,7 +47,20 @@ This workflow always uses `.agents/skills/<name>/SKILL.md`.
 ---
 name: git-release
 description: "Creates consistent releases and changelogs. Use when drafting release notes or proposing a version bump."
+license: CC-BY-4.0
+compatibility: opencode
+version: 1.0.0
+metadata:
+  author: Xero Team <maintainers@example.com>
+  tags:
+    - release
+  prompt-language: English
+  user-language: Simplified Chinese
 ---
+
+## Purpose
+
+Turn merged work into a tagged release with a consistent changelog.
 
 ## What I do
 
@@ -69,6 +82,13 @@ V2 accepts the portability fields `license` and `compatibility` but does not
 interpret them. Repository convention keeps `license: CC-BY-4.0` and
 `compatibility: opencode` on every skill, plus a `metadata` map carrying
 `prompt-language` and `user-language`.
+
+Every skill also carries the `agentskills.io` identity fields that the
+SkillEvaluator Tier 1 gate reads: `version` in `MAJOR.MINOR.PATCH` form,
+`metadata.author` as `Name <email>`, and `metadata.tags` with one to five
+lowercase tags. A missing `metadata.author` fails the schema gate; a missing
+`version` or `tags` costs quality points. Use a placeholder mailbox such as
+`maintainers@example.com`, never a personal or upstream contact address.
 
 All frontmatter is optional at runtime. Add a clear `description` whenever the
 model should discover the skill, and do not add fields OpenCode does not read
@@ -143,10 +163,23 @@ This repository tends to write skills with a clear sectioned structure. A good
 default is:
 
 1. Title or role statement
-2. `## Communication Rules` when language or platform constraints matter
-3. `## When to Use`
-4. `## Procedure`
-5. `## Review Checklist` or `## Final Response`
+2. `## Purpose`
+3. `## Communication Rules` when language or platform constraints matter
+4. `## When to Use`
+5. `## Operating Rules`
+6. `## Prerequisites`
+7. `## Procedure`
+8. `## Examples`
+9. `## Troubleshooting`
+10. `## Limitations`
+11. `## Final Response`
+
+Sections 6, 8, 9, and 10 keep the SkillEvaluator quality score honest and, more
+importantly, give the reader the setup, failure, and boundary information that
+the procedure alone omits. Keep each to a few bullets; drop a section rather
+than padding it. Script-based skills also need `## Available scripts` with a
+`| Script | Purpose | Arguments |` table, because that is where the arguments
+are documented.
 
 Keep the prompt body in English and state Simplified Chinese interaction rules
 explicitly when they matter.

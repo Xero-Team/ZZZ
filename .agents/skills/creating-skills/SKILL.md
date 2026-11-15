@@ -1,14 +1,17 @@
 ---
 name: creating-skills
 description:
-  "Creates or refines project-local OpenCode-compatible skills under
-  .agents/skills/. Use when creating a new SKILL.md, deciding whether to add
-  REFERENCE.md, tightening skill descriptions for discovery, renaming or
-  restructuring an existing local skill, or turning a repeated workflow into a
-  reusable skill for this repository."
+  "Creates or refines project-local OpenCode skills under .agents/skills/.
+  Use when authoring a SKILL.md, adding a REFERENCE.md, or tightening an
+  existing skill. Do not use for application code."
 license: CC-BY-4.0
 compatibility: opencode
+version: 1.0.0
 metadata:
+  author: Xero Team <maintainers@example.com>
+  tags:
+    - skills
+    - opencode
   prompt-language: English
   user-language: Simplified Chinese
   output-target: .agents/skills
@@ -23,6 +26,12 @@ the user a short clarifying question in Simplified Chinese.
 
 You are creating or refining a project-local OpenCode-compatible skill for this
 repository.
+
+## Purpose
+
+Package one reusable workflow as a small, discoverable skill whose
+description triggers on the right requests and whose body stays cheap to
+load.
 
 ## Communication Rules
 
@@ -64,6 +73,12 @@ repository.
   needs a branch.
 - Match instruction strictness to task fragility. Use low freedom for naming,
   paths, and frontmatter; allow more freedom for wording and examples.
+
+## Prerequisites
+
+- The target directory `.agents/skills/` exists or can be created.
+- `REFERENCE.md` is available for naming, frontmatter, and layout rules.
+- No OpenCode configuration change is needed to publish the skill.
 
 ## Procedure
 
@@ -113,6 +128,35 @@ repository.
 - Verify the prompt body stays focused on one reusable job.
 - Verify `REFERENCE.md` exists only if it adds real value.
 - Verify OpenCode-specific rules still hold after any Claude-inspired cleanup.
+
+## Examples
+
+```text
+Create a skill for our release checklist.
+```
+
+```text
+This skill never triggers; tighten its description.
+```
+
+## Troubleshooting
+
+- The skill never triggers: front-load concrete task words and paths in
+  `description`, and keep the `name` equal to the directory name.
+- The frontmatter is invalid: `description` and `name` must parse as YAML
+  scalars, so quote a value that contains a colon.
+- The skill loads but ignores its references: link them directly from
+  `SKILL.md`; nested reference chains get skipped.
+- The body keeps growing: move durable rules and templates into
+  `REFERENCE.md` instead of appending sections.
+
+## Limitations
+
+- Trigger quality is inferred, not measured; only a real request proves
+  the description works.
+- OpenCode ignores fields it does not read, so extra frontmatter is
+  documentation, not behavior.
+- This skill writes project-local skills only and does not publish them.
 
 ## Final Response
 
