@@ -436,7 +436,7 @@ impl Subcommand for CommitsFromVersionToVersion {
             format!("--pretty=format:{}", CommitDetails::FORMAT_STRING),
             format!(
                 "{version}..{branch}",
-                version = self.version_tag.to_string(),
+                version = self.version_tag,
                 branch = self.branch
             ),
         ]
@@ -518,8 +518,8 @@ mod tests {
             assert!(
                 window[0].version() <= window[1].version(),
                 "{} should come before {}",
-                window[0].to_string(),
-                window[1].to_string()
+                window[0],
+                window[1]
             );
         }
         assert_eq!(list.0[0].to_string(), "v0.170.1");
