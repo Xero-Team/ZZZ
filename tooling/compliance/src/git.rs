@@ -130,9 +130,10 @@ impl VersionTag {
     }
 }
 
-impl ToString for VersionTag {
-    fn to_string(&self) -> String {
-        format!(
+impl fmt::Display for VersionTag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
             "v{version}{channel_suffix}",
             version = self.0,
             channel_suffix = self.1.tag_suffix()
