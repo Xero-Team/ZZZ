@@ -358,7 +358,7 @@ impl Column for Arc<Path> {
 impl StaticColumnCount for PathBuf {}
 impl Bind for PathBuf {
     fn bind(&self, statement: &Statement, start_index: i32) -> Result<i32> {
-        (self.as_ref() as &Path).bind(statement, start_index)
+        self.as_path().bind(statement, start_index)
     }
 }
 
