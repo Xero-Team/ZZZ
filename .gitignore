@@ -77,6 +77,12 @@ crates/telegram/credentials.toml
 /crates/grammars/vendor/**/*.o
 /vendor/stacker/psm/a.o
 
+# `cargo check`/`cargo build` writes a `Cargo.lock` into every vendored
+# package's own workspace root. `script/check-vendor` compares each snapshot
+# against upstream, so this build residue has to be ignored or every local
+# build would report the package as outdated.
+/vendor/*/Cargo.lock
+
 # `cargo xtask workflows` regenerates these from Rust sources. They are not
 # checked in: the repository's active workflow is ci.yaml, and generated files
 # are rebuilt on demand rather than tracked.

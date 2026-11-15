@@ -20,7 +20,7 @@ pub fn pptx_to_markdown(bytes: Vec<u8>) -> Result<String> {
     let mut slides: Vec<(usize, String)> = Vec::new();
     for index in 0..archive.len() {
         let entry = archive.by_index(index)?;
-        let name = entry.name().to_string();
+        let name = entry.name()?.to_string();
         if let Some(number) = slide_number_from_path(&name) {
             slides.push((number, name));
         }
