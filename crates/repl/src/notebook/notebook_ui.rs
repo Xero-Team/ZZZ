@@ -2255,7 +2255,7 @@ mod tests {
             assert!(
                 matches!(editor.kernel, Kernel::ErroredLaunch(_)),
                 "kernel launch should fail, instead status is: {}",
-                editor.kernel.status().to_string()
+                editor.kernel.status()
             );
         });
 
