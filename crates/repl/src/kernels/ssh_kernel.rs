@@ -287,7 +287,7 @@ impl SshRunningKernel {
                 execution_state: ExecutionState::Idle,
                 kernel_info: None,
                 working_directory,
-                ssh_tunnel_process: ssh_tunnel_process,
+                ssh_tunnel_process,
                 _local_connection_file: local_connection_file,
                 kernel_id,
                 project,
