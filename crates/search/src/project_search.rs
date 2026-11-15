@@ -4210,8 +4210,8 @@ pub mod tests {
         }) else {
             panic!("Search view expected to appear after new search event trigger")
         };
-        assert!(
-            search_view_2 != search_view,
+        assert_ne!(
+            search_view_2, search_view,
             "New search view should be open after `workspace::NewSearch` event"
         );
 

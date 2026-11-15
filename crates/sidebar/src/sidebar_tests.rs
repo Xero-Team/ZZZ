@@ -4504,8 +4504,9 @@ async fn test_activate_archived_thread_reuses_workspace_in_another_window(cx: &m
         1,
         "should reuse the existing workspace in the other window"
     );
-    assert!(
-        cx_a.read(|cx| cx.active_window().unwrap()) == *multi_workspace_b,
+    assert_eq!(
+        cx_a.read(|cx| cx.active_window().unwrap()),
+        *multi_workspace_b,
         "should activate the window that already owns the matching workspace"
     );
     sidebar.read_with(cx_a, |sidebar, _| {
@@ -4585,8 +4586,9 @@ async fn test_activate_archived_thread_reuses_workspace_in_another_window_with_t
         1,
         "should reuse the existing workspace in the other window"
     );
-    assert!(
-        cx_a.read(|cx| cx.active_window().unwrap()) == *multi_workspace_b,
+    assert_eq!(
+        cx_a.read(|cx| cx.active_window().unwrap()),
+        *multi_workspace_b,
         "should activate the window that already owns the matching workspace"
     );
     sidebar_a.read_with(cx_a, |sidebar, _| {
@@ -4655,8 +4657,9 @@ async fn test_activate_archived_thread_prefers_current_window_for_matching_paths
     });
     cx_a.run_until_parked();
 
-    assert!(
-        cx_a.read(|cx| cx.active_window().unwrap()) == *multi_workspace_a,
+    assert_eq!(
+        cx_a.read(|cx| cx.active_window().unwrap()),
+        *multi_workspace_a,
         "should keep activation in the current window when it already has a matching workspace"
     );
     sidebar_a.read_with(cx_a, |sidebar, _| {

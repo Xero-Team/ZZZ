@@ -606,7 +606,7 @@ mod tests {
             root_kinds.insert(case.root_kind.as_str());
             expectations.insert(case.expected.as_str());
             for component in &case.components_hex {
-                assert!(component.len() % 2 == 0, "odd hex length in {}", case.id);
+                assert_eq!(component.len() % 2, 0, "odd hex length in {}", case.id);
                 assert!(
                     component.bytes().all(|byte| byte.is_ascii_hexdigit()),
                     "non-hex component in {}",

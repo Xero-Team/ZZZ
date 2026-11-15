@@ -6986,11 +6986,10 @@ impl MultiBufferSnapshot {
         }
         assert_eq!(all_buffer_path_keys, all_excerpt_path_keys);
 
-        assert!(
-            self.diff_transforms.summary().input == self.excerpts.summary().text,
-            "incorrect input summary. expected {:?}, got {:?}. transforms: {:+?}",
-            self.excerpts.summary().text,
+        assert_eq!(
             self.diff_transforms.summary().input,
+            self.excerpts.summary().text,
+            "incorrect input summary. transforms: {:+?}",
             self.diff_transforms.items(()),
         );
 
