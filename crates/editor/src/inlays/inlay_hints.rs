@@ -135,6 +135,16 @@ impl LspInlayHintData {
         self.hovered_command = None;
     }
 
+    /// Invalidates cached hints for a refresh that only concerns a single server.
+    ///
+    /// Unlike `clear`, fetches already in flight are kept: they may still be querying
+    /// the other servers, whose hints this refresh does not invalidate.
+    pub fn clear_for_server_refresh(&mut self) {
+        self.hint_chunk_fetching.clear();
+        self.added_hints.clear();
+        self.hovered_command = None;
+    }
+
     /// Like `clear`, but only wipes tracking state for the given buffer IDs.
     /// Hints belonging to other buffers are left intact so they are neither
     /// re-fetched nor duplicated on the next `NewLinesShown`.
@@ -321,10 +331,7 @@ impl LspInlayHintData {
         let has_fetched_chunks = self.has_fetched_chunks(buffer_id);
         let joined_existing_server = self.register_server(buffer_id, server_id);
         if has_fetched_chunks && joined_existing_server {
-            InlayHintRefreshReason::RefreshRequested {
-                server_id,
-                request_id: None,
-            }
+            InlayHintRefreshReason::ServerRegistered { server_id }
         } else {
             InlayHintRefreshReason::NewLinesShown
         }
@@ -342,6 +349,13 @@ pub enum InlayHintRefreshReason {
     RefreshRequested {
         server_id: LanguageServerId,
         request_id: Option<usize>,
+    },
+    /// Another language server started serving a buffer whose chunks were already fetched.
+    ///
+    /// Only the new server has to be queried: unlike [`Self::RefreshRequested`], nothing
+    /// it asked for changed, so fetches already in flight for the other servers stay valid.
+    ServerRegistered {
+        server_id: LanguageServerId,
     },
     BuffersRemoved(Vec<BufferId>),
 }
@@ -432,7 +446,8 @@ impl Editor {
             InlayHintRefreshReason::NewLinesShown | InlayHintRefreshReason::BuffersRemoved(_) => {
                 false
             }
-            InlayHintRefreshReason::RefreshRequested { .. } => true,
+            InlayHintRefreshReason::RefreshRequested { .. }
+            | InlayHintRefreshReason::ServerRegistered { .. } => true,
             InlayHintRefreshReason::BufferEdited(buffer_id) => {
                 let Some(affected_language) = self
                     .buffer()
@@ -474,7 +489,11 @@ impl Editor {
 
         if invalidate_cache.should_invalidate() {
             if invalidate_hints_for_buffers.is_empty() {
-                inlay_hints.clear();
+                if matches!(reason, InlayHintRefreshReason::ServerRegistered { .. }) {
+                    inlay_hints.clear_for_server_refresh();
+                } else {
+                    inlay_hints.clear();
+                }
             } else {
                 inlay_hints.clear_for_buffers(
                     &invalidate_hints_for_buffers,
@@ -530,7 +549,11 @@ impl Editor {
             {
                 *fetched_for_version = visible_excerpts.buffer_version.clone();
                 fetched_chunks.clear();
-                inlay_hints.hint_refresh_tasks.remove(&buffer_id);
+                // A server that just joined wipes the chunk tracking above without the
+                // buffer changing, so the fetches already in flight are still current.
+                if !matches!(reason, InlayHintRefreshReason::ServerRegistered { .. }) {
+                    inlay_hints.hint_refresh_tasks.remove(&buffer_id);
+                }
             }
 
             let known_chunks = if ignore_previous_fetches {
@@ -654,6 +677,12 @@ impl Editor {
                 server_id: *server_id,
                 request_id: *request_id,
             },
+            InlayHintRefreshReason::ServerRegistered { server_id } => {
+                InvalidationStrategy::RefreshRequested {
+                    server_id: *server_id,
+                    request_id: None,
+                }
+            }
         };
 
         if !self
@@ -1445,10 +1474,7 @@ pub mod tests {
             inlay_hints.refresh_reason_for_server_registration(buffer_id, server_b);
         assert_matches!(
             refresh_reason,
-            InlayHintRefreshReason::RefreshRequested {
-                server_id,
-                request_id: None,
-            } if server_id == server_b
+            InlayHintRefreshReason::ServerRegistered { server_id } if server_id == server_b
         );
 
         inlay_hints.clear_for_buffers(
@@ -1466,9 +1492,8 @@ pub mod tests {
             inlay_hints.refresh_reason_for_server_registration(buffer_id, LanguageServerId(3));
         assert_matches!(
             refresh_reason,
-            InlayHintRefreshReason::RefreshRequested {
-                server_id: LanguageServerId(3),
-                ..
+            InlayHintRefreshReason::ServerRegistered {
+                server_id: LanguageServerId(3)
             }
         );
 
@@ -1477,10 +1502,7 @@ pub mod tests {
             inlay_hints.refresh_reason_for_server_registration(buffer_id, server_b);
         assert_matches!(
             refresh_reason,
-            InlayHintRefreshReason::RefreshRequested {
-                server_id,
-                request_id: None,
-            } if server_id == server_b
+            InlayHintRefreshReason::ServerRegistered { server_id } if server_id == server_b
         );
 
         inlay_hints.clear_registered_servers(buffer_id);
