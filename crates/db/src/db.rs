@@ -25,7 +25,12 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{LazyLock, atomic::Ordering};
 use util::{ResultExt, maybe};
-use zzz_env_vars::ZZZ_STATELESS;
+
+pub use env_var::{EnvVar, bool_env_var, env_var};
+
+/// Whether ZZZ is running in stateless mode.
+/// When true, ZZZ will use in-memory databases instead of persistent storage.
+pub static ZZZ_STATELESS: LazyLock<bool> = bool_env_var!("ZZZ_STATELESS");
 
 /// A migration registered via `static_connection!` and collected at link time.
 pub struct DomainMigration {

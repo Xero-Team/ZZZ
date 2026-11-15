@@ -16,7 +16,7 @@ use sqlez::{
 };
 use std::sync::Arc;
 use util::{ResultExt, path_list::PathList};
-use zzz_env_vars::ZZZ_STATELESS;
+use db::ZZZ_STATELESS;
 
 pub type DbMessage = serde_json::Value;
 pub type DbLanguageModel = serde_json::Value;

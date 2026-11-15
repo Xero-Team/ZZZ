@@ -201,7 +201,6 @@ terminal_mode.workspace = true
 terminal_view.workspace = true
 theme.workspace = true
 theme_settings.workspace = true
-theme_extension.workspace = true
 theme_selector.workspace = true
 time.workspace = true
 title_bar.workspace = true
@@ -223,7 +222,6 @@ which_key.workspace = true
 workspace.workspace = true
 workspace_modes.workspace = true
 zzz_actions.workspace = true
-zzz_env_vars.workspace = true
 zlog.workspace = true
 zlog_settings.workspace = true
 

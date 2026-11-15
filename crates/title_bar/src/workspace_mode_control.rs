@@ -1,4 +1,4 @@
-//! Small workspace chrome widgets shared by the title bar.
+//! The workspace mode control shown in the title bar.
 //!
 //! Adapted from Glass's workspace_chrome (GPL-3.0-or-later) at
 //! e8ec0832b4f47b9e1420730c7d5bf7f3bd83eda9. Glass also shipped a browser

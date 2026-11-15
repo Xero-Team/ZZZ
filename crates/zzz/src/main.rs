@@ -338,7 +338,7 @@ fn main() {
         .spawn(installation_id(KeyValueStore::from_app_db(&app_db)));
     let (open_listener, mut open_rx) = OpenListener::new();
 
-    let failed_single_instance_check = if *zzz_env_vars::ZZZ_STATELESS
+    let failed_single_instance_check = if *db::ZZZ_STATELESS
         || *release_channel::RELEASE_CHANNEL == ReleaseChannel::Dev
     {
         false
@@ -602,7 +602,7 @@ fn main() {
 
         theme_settings::init(theme::LoadThemes::All(Box::new(Assets)), cx);
         eager_load_active_theme_and_icon_theme(fs.clone(), cx);
-        theme_extension::init(
+        extension_host::theme_proxy::init(
             extension_host_proxy,
             ThemeRegistry::global(cx),
             cx.background_executor().clone(),

@@ -1,5 +1,6 @@
 mod application_menu;
 mod title_bar_settings;
+mod workspace_mode_control;
 
 use crate::application_menu::{ApplicationMenu, show_menus};
 use agent_settings::{AgentSettings, WindowLayout};
@@ -302,7 +303,7 @@ impl Render for TitleBar {
                 .into_any_element(),
         );
 
-        children.push(workspace_chrome::ModeControl::new().into_any_element());
+        children.push(workspace_mode_control::ModeControl::new().into_any_element());
 
         let status = self.client.status();
         let status = &*status.borrow();

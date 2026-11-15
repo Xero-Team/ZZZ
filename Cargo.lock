@@ -309,7 +309,6 @@ dependencies = [
  "watch",
  "zlog",
  "zstd",
- "zzz_env_vars",
 ]
 
 [[package]]
@@ -3875,6 +3874,7 @@ name = "db"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "env_var",
  "gpui",
  "indoc",
  "inventory",
@@ -3886,7 +3886,6 @@ dependencies = [
  "tempfile",
  "util",
  "uuid 1.29.0",
- "zzz_env_vars",
 ]
 
 [[package]]
@@ -5122,7 +5121,6 @@ dependencies = [
  "task",
  "tempfile",
  "theme",
- "theme_extension",
  "theme_settings",
  "toml 1.2.1+spec-1.1.0",
  "tracing",
@@ -6136,7 +6134,6 @@ dependencies = [
  "menu",
  "multi_buffer",
  "notifications",
- "panel",
  "picker",
  "pretty_assertions",
  "project",
@@ -11556,13 +11553,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e6eb142958d64335fb0e345c5b9ead2ecd6fc438c307e9d7d3c4fd428dbaf12"
 dependencies = [
  "libm",
-]
-
-[[package]]
-name = "panel"
-version = "0.1.0"
-dependencies = [
- "workspace",
 ]
 
 [[package]]
@@ -17199,18 +17189,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "theme_extension"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "extension",
- "fs",
- "gpui",
- "theme",
- "theme_settings",
-]
-
-[[package]]
 name = "theme_importer"
 version = "0.1.0"
 dependencies = [
@@ -17486,7 +17464,7 @@ dependencies = [
  "util",
  "windows 0.62.2",
  "workspace",
- "workspace_chrome",
+ "workspace_modes",
  "zzz_actions",
 ]
 
@@ -21446,16 +21424,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "workspace_chrome"
-version = "0.1.0"
-dependencies = [
- "gpui",
- "i18n",
- "ui",
- "workspace_modes",
-]
-
-[[package]]
 name = "workspace_modes"
 version = "0.1.0"
 dependencies = [
@@ -22631,7 +22599,6 @@ dependencies = [
  "terminal_mode",
  "terminal_view",
  "theme",
- "theme_extension",
  "theme_selector",
  "theme_settings",
  "time",
@@ -22661,7 +22628,6 @@ dependencies = [
  "zlog_settings",
  "ztracing",
  "zzz_actions",
- "zzz_env_vars",
 ]
 
 [[package]]
@@ -22688,13 +22654,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
-]
-
-[[package]]
-name = "zzz_env_vars"
-version = "0.1.0"
-dependencies = [
- "env_var",
 ]
 
 [[package]]

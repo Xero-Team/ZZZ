@@ -122,7 +122,6 @@ members = [
     "crates/outline",
     "crates/office_preview",
     "crates/outline_panel",
-    "crates/panel",
     "crates/paths",
     "crates/picker",
     "crates/pdf_viewer",
@@ -182,7 +181,6 @@ members = [
     "crates/terminal_view",
     "crates/text",
     "crates/theme",
-    "crates/theme_extension",
     "crates/theme_settings",
     "crates/theme_importer",
     "crates/theme_selector",
@@ -206,14 +204,12 @@ members = [
     "crates/which_key",
     "crates/workspace",
     "crates/workspace_modes",
-    "crates/workspace_chrome",
     "crates/worktree",
     "crates/worktree_benchmarks",
     "crates/zzz",
     "crates/zzz_actions",
     "crates/windows_resources",
     "crates/zzz_credentials_provider",
-    "crates/zzz_env_vars",
     "crates/zlog",
     "crates/zlog_settings",
     "crates/ztracing",
@@ -392,7 +388,6 @@ open_path_prompt = { path = "crates/open_path_prompt" }
 outline = { path = "crates/outline" }
 office_preview = { path = "crates/office_preview" }
 outline_panel = { path = "crates/outline_panel" }
-panel = { path = "crates/panel" }
 paths = { path = "crates/paths" }
 perf = { path = "tooling/perf" }
 picker = { path = "crates/picker" }
@@ -458,7 +453,6 @@ terminal_mode = { path = "crates/terminal_mode" }
 terminal_view = { path = "crates/terminal_view" }
 text = { path = "crates/text" }
 theme = { path = "crates/theme" }
-theme_extension = { path = "crates/theme_extension" }
 theme_settings = { path = "crates/theme_settings" }
 theme_selector = { path = "crates/theme_selector" }
 time_format = { path = "crates/time_format" }
@@ -481,11 +475,9 @@ which_key = { path = "crates/which_key" }
 watch = { path = "crates/watch" }
 workspace = { path = "crates/workspace" }
 workspace_modes = { path = "crates/workspace_modes" }
-workspace_chrome = { path = "crates/workspace_chrome" }
 worktree = { path = "crates/worktree" }
 zzz_actions = { path = "crates/zzz_actions" }
 zzz_credentials_provider = { path = "crates/zzz_credentials_provider" }
-zzz_env_vars = { path = "crates/zzz_env_vars" }
 zip = { version = "8", default-features = false, features = ["deflate"] }
 zlog = { path = "crates/zlog" }
 zlog_settings = { path = "crates/zlog_settings" }
