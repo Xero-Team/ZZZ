@@ -55,7 +55,8 @@ enum CheckCommand {
     All,
     /// Reject leftover markers for unfinished work.
     Todos,
-    /// Reject macOS-only modifiers in shared keymaps and duplicate bindings.
+    /// Reject macOS-only modifiers, duplicate bindings and action names no crate
+    /// declares in shared keymaps.
     Keys,
     /// Reject re-entrant entity/ListState access inside scroll handlers.
     ScrollHandlers,
