@@ -92,7 +92,6 @@ const GPG_WRAPPER_SCRIPT_NAME: &str = "gpg-wrapper.sh";
 impl AskPassSession {
     /// This will create a new AskPassSession.
     /// You must retain this session until the master process exits.
-    #[must_use]
     pub async fn new(executor: BackgroundExecutor, mut delegate: AskPassDelegate) -> Result<Self> {
         #[cfg(target_os = "windows")]
         let secret = std::sync::Arc::new(std::sync::Mutex::new(None));

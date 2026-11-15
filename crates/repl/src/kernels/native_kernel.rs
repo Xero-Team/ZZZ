@@ -41,7 +41,6 @@ impl PartialEq for LocalKernelSpecification {
 impl Eq for LocalKernelSpecification {}
 
 impl LocalKernelSpecification {
-    #[must_use]
     fn command(&self, connection_path: &PathBuf) -> Result<std::process::Command> {
         let argv = &self.kernelspec.argv;
 

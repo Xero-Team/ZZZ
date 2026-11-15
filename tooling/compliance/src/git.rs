@@ -63,7 +63,6 @@ pub struct GitCommand<G: Subcommand> {
 }
 
 impl<G: Subcommand> GitCommand<G> {
-    #[must_use]
     pub fn run(subcommand: G) -> Result<G::ParsedOutput> {
         Self { subcommand }.run_impl()
     }

@@ -825,7 +825,6 @@ pub struct GlobalWatcher {
 }
 
 impl GlobalWatcher {
-    #[must_use]
     fn add(
         &self,
         path: Arc<std::path::Path>,
