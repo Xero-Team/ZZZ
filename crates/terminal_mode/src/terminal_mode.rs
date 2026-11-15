@@ -1,34 +1,30 @@
 mod broadcast;
 mod file_panel;
-mod local_transfer;
-mod metrics;
 mod monitor;
 mod session;
 mod session_panel;
-mod settings;
-mod transfer;
 
 #[cfg(test)]
 mod tests;
 
 pub use broadcast::BroadcastModal;
 pub use file_panel::SessionFilePanel;
-pub use session::{
-    Event as SessionEvent, PendingConnection, SessionId, SessionRoot, SessionStatus, SessionStore,
-    SshSession,
-};
 pub use session_panel::SshSessionPanel;
-pub use settings::TerminalModeSettings;
+pub use terminal_mode_core::{
+    Event as SessionEvent, PendingConnection, ReconnectSession, SessionId, SessionRoot,
+    SessionStatus, SessionStore, SshSession, TerminalModeSettings,
+};
 
 use ::settings::Settings as _;
-use gpui::{Action, App, Context, Entity, Window, actions};
+use gpui::{Action, App, Context, Window, actions};
 use i18n::tr;
 use serde::Deserialize;
 use std::sync::Arc;
 use util::ResultExt as _;
 use workspace::{Toast, Workspace, dock::DockPosition, notifications::NotificationId};
 
-use crate::session::{ConnectionMode, is_connection_cancelled};
+use crate::session::{bottom_dock_hidden, disconnect, for_workspace, for_workspace_read, reconnect, set_bottom_dock_hidden};
+use terminal_mode_core::{ConnectionMode, is_connection_cancelled};
 
 actions!(
     terminal_mode,
@@ -57,17 +53,6 @@ pub struct DisconnectSession {
     pub session_id: usize,
 }
 
-/// Reconnects a terminal-mode session using its stored connection options.
-///
-/// `background` suppresses the interactive connection modal; it is set for
-/// automatic reconnection attempts.
-#[derive(Clone, PartialEq, Deserialize, Action)]
-#[action(namespace = terminal_mode, no_json)]
-pub struct ReconnectSession {
-    pub session_id: usize,
-    pub background: bool,
-}
-
 pub fn init(cx: &mut App) {
     TerminalModeSettings::register(cx);
 
@@ -78,16 +63,16 @@ pub fn init(cx: &mut App) {
 
     cx.observe_new(|workspace: &mut Workspace, _window, _cx| {
         workspace.register_action(|workspace, _: &ToggleTerminalMode, window, cx| {
-            let store = SessionStore::for_workspace(workspace, cx);
+            let store = for_workspace(workspace, cx);
             let active = store.update(cx, |store, cx| {
                 let active = !store.terminal_mode_active;
                 store.set_terminal_mode_active(active, cx);
                 active
             });
             if active {
-                enter_terminal_mode(workspace, &store, window, cx);
+                enter_terminal_mode(workspace, window, cx);
             } else {
-                leave_terminal_mode(workspace, &store, window, cx);
+                leave_terminal_mode(workspace, window, cx);
             }
         });
         workspace.register_action(|workspace, _: &ToggleSessionPanel, window, cx| {
@@ -100,28 +85,24 @@ pub fn init(cx: &mut App) {
         });
         workspace.register_action(|workspace, _: &ToggleMonitorPanel, window, cx| {
             ensure_terminal_mode_active(workspace, window, cx);
-            let store = SessionStore::for_workspace(workspace, cx);
+            let store = for_workspace(workspace, cx);
             store.update(cx, |store, cx| {
                 let visible = !store.monitor_visible;
                 store.set_monitor_visible(visible, cx);
             });
         });
         workspace.register_action(|workspace, action: &DisconnectSession, window, cx| {
-            let store = SessionStore::for_workspace(workspace, cx);
-            store.update(cx, |store, cx| {
-                store.disconnect(SessionId(action.session_id), window, cx);
-            });
+            let store = for_workspace(workspace, cx);
+            disconnect(&store, SessionId(action.session_id), window, cx);
         });
         workspace.register_action(|workspace, action: &ReconnectSession, window, cx| {
-            let store = SessionStore::for_workspace(workspace, cx);
+            let store = for_workspace(workspace, cx);
             let mode = if action.background {
                 ConnectionMode::Background
             } else {
                 ConnectionMode::Interactive
             };
-            let task = store.update(cx, |store, cx| {
-                store.reconnect(SessionId(action.session_id), mode, window, cx)
-            });
+            let task = reconnect(&store, SessionId(action.session_id), mode, window, cx);
             cx.spawn_in(window, async move |workspace, cx| {
                 if let Err(error) = task.await
                     && !is_connection_cancelled(&error)
@@ -157,7 +138,7 @@ pub fn init(cx: &mut App) {
 
 /// Returns whether terminal mode is active for `workspace`.
 pub fn is_terminal_mode_active(workspace: &Workspace, cx: &App) -> bool {
-    SessionStore::for_workspace_read(workspace, cx)
+    for_workspace_read(workspace, cx)
         .is_some_and(|store| store.read(cx).terminal_mode_active)
 }
 
@@ -190,12 +171,12 @@ fn ensure_terminal_mode_active(
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) {
-    let store = SessionStore::for_workspace(workspace, cx);
+    let store = for_workspace(workspace, cx);
     if store.read(cx).terminal_mode_active {
         return;
     }
     store.update(cx, |store, cx| store.set_terminal_mode_active(true, cx));
-    enter_terminal_mode(workspace, &store, window, cx);
+    enter_terminal_mode(workspace, window, cx);
 }
 
 /// Opens the terminal-mode panels and closes the bottom dock so the window is
@@ -203,7 +184,6 @@ fn ensure_terminal_mode_active(
 /// restored when terminal mode is left.
 fn enter_terminal_mode(
     workspace: &mut Workspace,
-    store: &Entity<SessionStore>,
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) {
@@ -216,27 +196,21 @@ fn enter_terminal_mode(
     workspace.open_panel::<SshSessionPanel>(window, cx);
     workspace.open_panel::<SessionFilePanel>(window, cx);
 
-    store.update(cx, |store, _| {
-        store.bottom_dock_hidden = bottom_dock_was_open
-    });
+    set_bottom_dock_hidden(workspace, bottom_dock_was_open, cx);
 }
 
 /// Closes the terminal-mode panels and restores the dock state that
 /// [`enter_terminal_mode`] changed.
 fn leave_terminal_mode(
     workspace: &mut Workspace,
-    store: &Entity<SessionStore>,
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) {
     workspace.close_panel::<SshSessionPanel>(window, cx);
     workspace.close_panel::<SessionFilePanel>(window, cx);
 
-    let restore_bottom_dock = store.update(cx, |store, _| {
-        let hidden = store.bottom_dock_hidden;
-        store.bottom_dock_hidden = false;
-        hidden
-    });
+    let restore_bottom_dock = bottom_dock_hidden(workspace, cx);
+    set_bottom_dock_hidden(workspace, false, cx);
     if restore_bottom_dock {
         let bottom_dock = workspace.dock_at_position(DockPosition::Bottom).clone();
         bottom_dock.update(cx, |dock, cx| dock.set_open(true, window, cx));

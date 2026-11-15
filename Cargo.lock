@@ -17087,12 +17087,32 @@ dependencies = [
  "serde_json",
  "settings",
  "terminal",
+ "terminal_mode_core",
  "terminal_view",
  "ui",
  "ui_input",
  "util",
  "vfs",
  "workspace",
+ "worktree",
+]
+
+[[package]]
+name = "terminal_mode_core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "collections",
+ "fs",
+ "gpui",
+ "project",
+ "remote",
+ "serde",
+ "serde_json",
+ "settings",
+ "terminal",
+ "util",
+ "vfs",
  "worktree",
 ]
 

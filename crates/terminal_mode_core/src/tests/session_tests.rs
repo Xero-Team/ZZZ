@@ -1,9 +1,9 @@
-use gpui::{AppContext as _, TestAppContext, WeakEntity};
+use gpui::{AppContext as _, TestAppContext};
 
 use crate::session::{ConnectionCancelled, SessionId, SessionStore, is_connection_cancelled};
 
 fn test_store(cx: &mut TestAppContext) -> gpui::Entity<SessionStore> {
-    cx.new(|_| SessionStore::new(WeakEntity::new_invalid(), None))
+    cx.new(|_| SessionStore::new(None))
 }
 
 #[test]

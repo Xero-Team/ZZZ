@@ -1,10 +1,10 @@
-use gpui::{AppContext as _, TestAppContext, WeakEntity};
+use gpui::{AppContext as _, TestAppContext};
 
-use crate::session::{SessionId, SessionStore};
+use terminal_mode_core::{SessionId, SessionStore};
 
 #[gpui::test]
 fn activating_the_same_session_is_idempotent(cx: &mut TestAppContext) {
-    let store = cx.new(|_| SessionStore::new(WeakEntity::new_invalid(), None));
+    let store = cx.new(|_| SessionStore::new(None));
     let session_id = SessionId(3);
 
     store.update(cx, |store, cx| store.set_active_session(session_id, cx));

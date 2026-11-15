@@ -24,10 +24,10 @@ use workspace::{
 use worktree::Worktree;
 
 use crate::ToggleFilePanel;
-use crate::local_transfer::{download_from_session, upload_to_session};
+use terminal_mode_core::{download_from_session, upload_to_session};
 use crate::monitor::render_monitor;
-use crate::session::{Event as SessionEvent, SessionId, SessionRoot, SessionStore};
-use crate::transfer::{
+use terminal_mode_core::{Event as SessionEvent, SessionId, SessionRoot, SessionStore};
+use terminal_mode_core::{
     copy_between_sessions, mount_id_for_session, mount_id_for_session_root, move_between_sessions,
 };
 
@@ -164,7 +164,7 @@ impl SessionFilePanel {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) -> Entity<Self> {
-        let store = SessionStore::for_workspace(workspace, cx);
+        let store = crate::session::for_workspace(workspace, cx);
         let workspace_handle = workspace.weak_handle();
         let panel = cx.new(|cx| Self {
             store: store.downgrade(),
