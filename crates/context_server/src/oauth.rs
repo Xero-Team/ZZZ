@@ -2116,11 +2116,11 @@ mod tests {
     }
 
     fn json_response(status: u16, body: &str) -> anyhow::Result<Response<AsyncBody>> {
-        Ok(Response::builder()
+        let response = Response::builder()
             .status(status)
             .header("Content-Type", "application/json")
-            .body(AsyncBody::from(body.as_bytes().to_vec()))
-            .unwrap())
+            .body(AsyncBody::from(body.as_bytes().to_vec()))?;
+        Ok(response)
     }
 
     // -- Discovery integration tests -----------------------------------------

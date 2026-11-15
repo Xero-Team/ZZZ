@@ -410,19 +410,15 @@ mod test {
             .exec(indoc! {"
             CREATE TABLE text (
                 text TEXT
-            );"})
-            .unwrap()()
-        .unwrap();
+            );"})?()?;
 
         let text = "Some test text";
 
         connection
-            .exec_bound("INSERT INTO text (text) VALUES (?);")
-            .unwrap()(text)
-        .unwrap();
+            .exec_bound("INSERT INTO text (text) VALUES (?);")?(text)?;
 
         assert_eq!(
-            connection.select_row("SELECT text FROM text;").unwrap()().unwrap(),
+            connection.select_row("SELECT text FROM text;")?()?,
             Some(text.to_string())
         );
 

@@ -66,9 +66,7 @@ mod tests {
             CREATE TABLE text (
                 text TEXT,
                 idx INTEGER
-            );"})
-            .unwrap()()
-        .unwrap();
+            );"})?()?;
 
         let save1_text = "test save1";
         let save2_text = "test save2";
