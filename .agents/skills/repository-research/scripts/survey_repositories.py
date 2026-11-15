@@ -24,6 +24,10 @@ ENTRYPOINT_NAMES = {
 TEST_MARKERS = ("test", "tests", "spec", "specs", "benchmark", "benchmarks", "eval", "evals")
 DOC_NAMES = ("readme", "architecture", "design", "security", "contributing", "agents")
 TEXT_SUFFIXES = {".c", ".cc", ".cpp", ".go", ".java", ".js", ".jsx", ".json", ".kt", ".md", ".py", ".rb", ".rs", ".toml", ".ts", ".tsx", ".yaml", ".yml"}
+DEFAULT_MAX_FILE_BYTES = 1_000_000
+MAX_KEYWORD_FILES = 12
+MAX_SUBSYSTEMS = 30
+MAX_LISTED_ENTRIES = 80
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -31,7 +35,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--sources", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--base-dir", type=Path, default=Path.cwd())
-    parser.add_argument("--max-file-bytes", type=int, default=1_000_000)
+    parser.add_argument("--max-file-bytes", type=int, default=DEFAULT_MAX_FILE_BYTES)
     parser.add_argument(
         "--skip-existing",
         action="store_true",
@@ -40,31 +44,60 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def package_json_dependencies(path: Path) -> set[str]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        name
+        for key in ("dependencies", "devDependencies", "peerDependencies")
+        for name in (data.get(key) or {})
+    }
+
+
+def cargo_toml_dependencies(path: Path) -> set[str]:
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    return {
+        name
+        for key in ("dependencies", "dev-dependencies", "build-dependencies")
+        for name in (data.get(key) or {})
+    }
+
+
+def pyproject_dependencies(path: Path) -> set[str]:
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    project = data.get("project") or {}
+    dependencies: set[str] = set()
+    for item in project.get("dependencies") or []:
+        match = re.match(r"[A-Za-z0-9_.-]+", str(item))
+        if match:
+            dependencies.add(match.group(0))
+    return dependencies
+
+
+def go_mod_dependencies(path: Path) -> set[str]:
+    dependencies: set[str] = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = re.match(r"\s*([\w./-]+)\s+v\d", line)
+        if match:
+            dependencies.add(match.group(1))
+    return dependencies
+
+
+MANIFEST_PARSERS = {
+    "package.json": package_json_dependencies,
+    "pyproject.toml": pyproject_dependencies,
+    "Cargo.toml": cargo_toml_dependencies,
+    "go.mod": go_mod_dependencies,
+}
+
+
 def extract_dependencies(repo: Path, files: list[str]) -> list[str]:
     dependencies: set[str] = set()
     for relative in files:
-        path = repo / relative
+        parser = MANIFEST_PARSERS.get(Path(relative).name)
+        if parser is None:
+            continue
         try:
-            if path.name == "package.json":
-                data = json.loads(path.read_text(encoding="utf-8"))
-                for key in ("dependencies", "devDependencies", "peerDependencies"):
-                    dependencies.update((data.get(key) or {}).keys())
-            elif path.name in {"pyproject.toml", "Cargo.toml"}:
-                data = tomllib.loads(path.read_text(encoding="utf-8"))
-                if path.name == "Cargo.toml":
-                    for key in ("dependencies", "dev-dependencies", "build-dependencies"):
-                        dependencies.update((data.get(key) or {}).keys())
-                else:
-                    project = data.get("project") or {}
-                    for item in project.get("dependencies") or []:
-                        match = re.match(r"[A-Za-z0-9_.-]+", str(item))
-                        if match:
-                            dependencies.add(match.group(0))
-            elif path.name == "go.mod":
-                for line in path.read_text(encoding="utf-8").splitlines():
-                    match = re.match(r"\s*([\w./-]+)\s+v\d", line)
-                    if match:
-                        dependencies.add(match.group(1))
+            dependencies.update(parser(repo / relative))
         except (OSError, UnicodeError, json.JSONDecodeError, tomllib.TOMLDecodeError):
             continue
     return sorted(dependencies)
@@ -92,7 +125,7 @@ def survey(repo: Path, display_name: str, max_file_bytes: int) -> str:
         except OSError:
             continue
         for keyword in KEYWORDS:
-            if keyword in text and len(keyword_files[keyword]) < 12:
+            if keyword in text and len(keyword_files[keyword]) < MAX_KEYWORD_FILES:
                 keyword_files[keyword].append(relative)
 
     dependencies = extract_dependencies(repo, manifests)
@@ -107,7 +140,7 @@ def survey(repo: Path, display_name: str, max_file_bytes: int) -> str:
         "## Top-level subsystems",
         "",
     ]
-    lines.extend(f"- `{name}`: {count} files" for name, count in top_level.most_common(30))
+    lines.extend(f"- `{name}`: {count} files" for name, count in top_level.most_common(MAX_SUBSYSTEMS))
     for title, values in (
         ("Manifests", manifests),
         ("Candidate entrypoints", entrypoints),
@@ -117,9 +150,9 @@ def survey(repo: Path, display_name: str, max_file_bytes: int) -> str:
     ):
         lines.extend(["", f"## {title}", ""])
         if values:
-            lines.extend(f"- `{value}`" for value in values[:80])
-            if len(values) > 80:
-                lines.append(f"- … {len(values) - 80} more")
+            lines.extend(f"- `{value}`" for value in values[:MAX_LISTED_ENTRIES])
+            if len(values) > MAX_LISTED_ENTRIES:
+                lines.append(f"- … {len(values) - MAX_LISTED_ENTRIES} more")
         else:
             lines.append("- None detected by the static survey.")
     lines.extend(["", "## Architecture keyword hints", ""])
