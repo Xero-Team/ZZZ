@@ -945,7 +945,7 @@ pub struct FileFinderSettingsContent {
     /// Whether to pre-fill the file finder's query with text selected in the
     /// focused item, such as an editor or terminal.
     ///
-    /// Default: true
+    /// Default: false
     pub prefill_query_from_selection: Option<bool>,
 }
 
