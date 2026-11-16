@@ -21463,6 +21463,7 @@ dependencies = [
  "itertools 0.15.0",
  "language",
  "log",
+ "lsp",
  "markdown",
  "menu",
  "node_runtime",
