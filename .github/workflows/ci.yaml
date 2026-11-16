@@ -261,6 +261,16 @@ jobs:
       - name: Install dependencies
         run: ./script/linux
 
+      - name: Install Mesa software rasterizer
+        # `gpui_wgpu`'s atlas tests create a headless device. The runner has no
+        # GPU and jammy ships no Vulkan driver, so give them Mesa's software
+        # implementation instead of failing adapter selection.
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            libegl1 libgl1-mesa-dri mesa-vulkan-drivers
+          ls /usr/share/vulkan/icd.d/
+
       - name: Configure CI cargo settings
         run: cp .cargo/ci-config.toml ~/.cargo/config.toml
 
