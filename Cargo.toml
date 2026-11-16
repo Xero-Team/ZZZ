@@ -989,7 +989,8 @@ features = [
 # and build the same aligned, non-null pointer with the stable strict-provenance
 # helper so `cargo miri test` works again.
 any_vec = { path = "vendor/any_vec" }
-async-task = { git = "https://github.com/smol-rs/async-task.git", rev = "b4486cd71e4e94fbda54ce6302444de14f4d190e" }
+# Keep the waker identity fix until it is released: https://github.com/smol-rs/async-task/pull/108
+async-task = { git = "https://github.com/smol-rs/async-task.git", rev = "41fd3359c75e221bd8b187a8ee361aa309c1714c" }
 # `block` 0.1.6 models `_NSConcreteStackBlock` as an uninhabited enum, which
 # newer Rust versions reject for extern statics. Keep its API while using an
 # FFI-safe opaque pointer type for that symbol.
