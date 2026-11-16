@@ -310,6 +310,7 @@ sha	class	reason_code	note	source
 5a773a40	C	absent-api	gpui_web IME autoscroll; `ime_mirror.rs` is absent.	upstream-sync-2026-09-18.md
 5adae449a3	C	untriaged	Fixes duplicated reasoning in the OpenAI-compatible stream mapper that ZZZ's `language_model_core` does not contain.	upstream-sync-2026-10-21.md
 5b055fa7	C	philosophy	Cloud notification websocket plus telemetry `system_id` refresh.	upstream-sync-2026-09-04.md
+5bd59e2e43	C	absent-api	Adds GPT-6.1 Terra to `crates/open_ai` and `crates/language_models`. ZZZ has neither crate, and `crates/language_model/src` carries only `api_key.rs`, `language_model.rs`, and `request.rs`, so the model catalog has no local home.	upstream-sync-2026-11-16.md
 5c58d5c49a	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 5ccbbbd8	C	untriaged	Unused GPUI grid API and public enum rename omitted.	upstream-sync-2026-08-07.md
 5d06fffd98	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
@@ -370,6 +371,7 @@ sha	class	reason_code	note	source
 6f73c7d0	C	untriaged	Replaces `GlobalWatcher` with `OsWatcher`; depends on rejected `db10a8dd`.	upstream-sync-2026-09-17.md
 6fff327a	C	philosophy	rustc 1.98.1 bump; prior 1.97 bump was C, plus collab Docker and flake lock.	upstream-sync-2026-09-18.md
 70277c0193	C	untriaged	Splits agent-reported activity from prompt submission; ZZZ has no `submission.rs`, receipt transport, or `SessionActivity`.	upstream-sync-2026-10-21.md
+703b5ac3f4	C	absent-api	Updates `agent-client-protocol` to 5.3.0 (schema 1.18.0) and follows its rule changes for plan files, v2 command types, and the `speed` config category. Local `acp_thread` has `PlanEntry` but no `PlanContent`, `config_options.rs` is absent, and `Cargo.toml` pins `=5.0.0`, so every hunk needs the 5.1/5.2 plan and option machinery that was never absorbed.	upstream-sync-2026-11-16.md
 70a74b87	C	untriaged	GitHub Actions / xtask remote-server check on each commit.	upstream-sync-2026-09-18.md
 70e686c2a3	C	absent-api	Feature upsell rendering optimization targets upsell machinery that is absent locally; rejected on philosophy grounds.	upstream-sync-2026-09-27.md
 7232ba04ef	C	absent-api	GPUI profiler `journal` module and its dependency are absent locally.	upstream-sync-2026-09-30.md
@@ -439,6 +441,7 @@ sha	class	reason_code	note	source
 8372eb1b13	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 839ab7a9	C	absent-api	Shallow-diff UI/protocol rewrite needs absent git APIs and askpass UI.	upstream-sync-2026-08-27.md
 83b332342f	C	philosophy	Inlay-hint edits require an unisolatable editor/LSP/proto snapshot pipeline and excluded native-agent/collab integrations.	upstream-sync-2026-10-09.md
+83df5df635	C	upstream-infra	Adds `corgi` to the Nix dev shell. ZZZ has the `nix/` tree but no `corgi.toml` at the repo root and no `corgi` reference anywhere in `nix/`, so the devshell input has nothing to install. Upstream-only build tooling.	upstream-sync-2026-11-16.md
 83f3a8e3	C	philosophy	ChatGPT Subscription Responses transport; `HttpSend` absent.	upstream-sync-2026-08-27.md
 849ec589	C	philosophy	Native agent terminal path.	upstream-sync-2026-08-07.md
 84aaa525	C	upstream-infra	Upstream GitHub triage-project workflow and script removal.	upstream-sync-2026-08-27.md
@@ -721,6 +724,7 @@ dbc90d18	C	untriaged	Depends on rejected `05473ed8` crate rename.	upstream-sync-
 dbdcb310	C	absent-api	Requires the absent `lsp_locations` crate.	upstream-sync-2026-08-27.md
 dbf7f638	C	diverged	Anthropic compaction context; completion conflict.	upstream-sync-2026-08-18.md
 dc339e4f	C	absent-api	LLVM IR adapter sharing; conflicts plus deleted picker window_controls.	upstream-sync-2026-09-18.md
+dc93abce2f	C	absent-api	Moves macOS notification service calls off the UI thread and returns a `Task<()>` from `dismiss_system_notification`. Local `gpui` has no `ShowSystemNotification`/`dismiss_system_notification` pair at all — the whole `Platform` notification surface is absent — so there is nothing to make asynchronous.	upstream-sync-2026-11-16.md
 dcf3f98c9a	C	philosophy	Adds keepalive status to the Zed-hosted model completion protocol in `crates/language_models_cloud` and `crates/cloud_llm_client`. ZZZ has neither crate; this is cloud/subscription infrastructure with no local caller, so it is rejected on philosophy and absent-architecture grounds.	upstream-sync-2026-11-08.md
 dd04a229	C	untriaged	Unused `Animation` max-FPS API.	upstream-sync-2026-08-18.md
 dd34370114	C	philosophy	Adds `OrganizationChanged` and an organization management permission so AI features stop using a lost organization. ZZZ has no accounts, organizations, plan, or `UserStore::organizations`; the account surface is deliberately absent.	upstream-sync-2026-11-04.md
