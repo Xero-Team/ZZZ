@@ -8240,6 +8240,21 @@ impl LspStore {
                                         other_servers_cached
                                     } else {
                                         let mut result = other_servers_cached;
+                                        // Another server's hints may have been cached
+                                        // after this refresh was dispatched, by a fetch
+                                        // that was already in flight. They are unaffected
+                                        // by the refresh, and the applying side drops every
+                                        // visible hint, so they have to come back with it.
+                                        if let Some(refreshed_server) = for_server
+                                            && let Some(cached_hints) =
+                                                lsp_data.inlay_hints.cached_hints(&chunk)
+                                        {
+                                            for (server_id, hints) in cached_hints {
+                                                if *server_id != refreshed_server {
+                                                    result.insert(*server_id, hints.clone());
+                                                }
+                                            }
+                                        }
                                         for (server_id, new_hints) in new_hints_by_server {
                                             let new_hints = new_hints
                                                 .into_iter()
