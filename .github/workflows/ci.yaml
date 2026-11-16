@@ -107,6 +107,14 @@ jobs:
       - name: Prefetch locked Cargo dependencies
         run: cargo fetch --locked
 
+      - name: Install pinned FFmpeg
+        # `video` links the FFmpeg 9.0 ABI. jammy's libavutil 56 is below the
+        # floor `ffmpeg-sys-the-third` enforces, so fetch the same development
+        # package the release build bundles and point Cargo at it.
+        run: |
+          ffmpeg_dir="$(cargo xtask ffmpeg ensure --target x86_64-unknown-linux-gnu)"
+          echo "FFMPEG_DIR=$ffmpeg_dir" >> "$GITHUB_ENV"
+
       - name: Install Rust toolchain
         run: rustup toolchain install "$TOOLCHAIN" --profile minimal --no-self-update
 
@@ -128,10 +136,18 @@ jobs:
         run: ./script/linux
 
       - name: Configure CI cargo settings
-        run: cp .cargo/ci-config.toml .cargo/config.toml
+        run: cp .cargo/ci-config.toml ~/.cargo/config.toml
 
       - name: Prefetch locked Cargo dependencies
         run: cargo fetch --locked
+
+      - name: Install pinned FFmpeg
+        # `video` links the FFmpeg 9.0 ABI. jammy's libavutil 56 is below the
+        # floor `ffmpeg-sys-the-third` enforces, so fetch the same development
+        # package the release build bundles and point Cargo at it.
+        run: |
+          ffmpeg_dir="$(cargo xtask ffmpeg ensure --target x86_64-unknown-linux-gnu)"
+          echo "FFMPEG_DIR=$ffmpeg_dir" >> "$GITHUB_ENV"
 
       - name: Run clippy gate
         run: CARGO_NET_OFFLINE=true cargo xtask clippy
@@ -148,6 +164,11 @@ jobs:
     name: GPUI platform checks
     if: github.ref_type == 'branch' && !inputs.skip_rust_build
     runs-on: ubuntu-22.04
+    env:
+      # bindgen pins both its driver and its builtin include path to the LLVM
+      # installed below; the distribution's llvm-14 cannot parse the macOS SDK.
+      CLANG_PATH: /usr/lib/llvm-23/bin/clang
+      LIBCLANG_PATH: /usr/lib/llvm-23/lib
     steps:
       - name: Checkout repo
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -159,10 +180,24 @@ jobs:
         run: ./script/linux
 
       - name: Configure CI cargo settings
-        run: cp .cargo/ci-config.toml .cargo/config.toml
+        run: cp .cargo/ci-config.toml ~/.cargo/config.toml
 
       - name: Prefetch locked Cargo dependencies
         run: cargo fetch --locked
+
+      - name: Install LLVM for bindgen
+        # The `media` build script generates the macOS bindings on this Linux
+        # host, and bindgen takes its builtin include path from the clang it
+        # discovers. jammy's llvm-14 rejects the `__m128i` conversions in the
+        # SDK's headers, so install the same LLVM pin the build image carries.
+        run: |
+          curl --fail --silent --show-error --location \
+            https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo gpg --dearmor --output /usr/share/keyrings/llvm.gpg
+          echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] http://apt.llvm.org/jammy/ llvm-toolchain-jammy-23 main" \
+            | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends clang-23 libclang1-23
 
       - name: Install GPUI cross targets
         run: rustup target add x86_64-apple-darwin x86_64-pc-windows-gnu wasm32-unknown-unknown
@@ -200,10 +235,26 @@ jobs:
         run: ./script/linux
 
       - name: Configure CI cargo settings
-        run: cp .cargo/ci-config.toml .cargo/config.toml
+        run: cp .cargo/ci-config.toml ~/.cargo/config.toml
 
       - name: Prefetch locked Cargo dependencies
         run: cargo fetch --locked
+
+      - name: Install pinned FFmpeg
+        # `video` links the FFmpeg 9.0 ABI. jammy's libavutil 56 is below the
+        # floor `ffmpeg-sys-the-third` enforces, so fetch the same development
+        # package the release build bundles. The test binaries link the shared
+        # library, so its directory also goes on the loader path.
+        run: |
+          ffmpeg_dir="$(cargo xtask ffmpeg ensure --target x86_64-unknown-linux-gnu)"
+          echo "FFMPEG_DIR=$ffmpeg_dir" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$ffmpeg_dir/lib" >> "$GITHUB_ENV"
+
+      - name: Prefetch the WASI SDK
+        # `test_extension_store_with_test_extension` compiles a grammar for the
+        # dev extension, and the sysroot download does not fit in the test's own
+        # timeout. The script is idempotent and checksum-verified.
+        run: ./script/download-wasi-sdk
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@921e2c9f7148d7ba14cd819f417db338f63e733c # nextest
@@ -237,7 +288,7 @@ jobs:
         run: ./script/linux
 
       - name: Configure CI cargo settings
-        run: cp .cargo/ci-config.toml .cargo/config.toml
+        run: cp .cargo/ci-config.toml ~/.cargo/config.toml
 
       - name: Prefetch locked Cargo dependencies
         run: cargo fetch --locked
