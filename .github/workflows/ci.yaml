@@ -132,6 +132,19 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Free disk space
+        # The runner image ships toolchains this job never uses, and a release
+        # build of the workspace outgrows what is left. Drop them up front
+        # rather than failing when linking fills the device.
+        run: |
+          sudo rm -rf \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/lib/android \
+            /usr/local/share/boost \
+            /usr/share/dotnet
+          df -h /
+
       - name: Install dependencies
         run: ./script/linux
 
@@ -230,6 +243,20 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Free disk space
+        # The runner image ships toolchains this job never uses, and a test
+        # build of the workspace outgrows what is left once the FFmpeg package
+        # and WASI SDK are in place. Drop them up front rather than dying when
+        # linking fills the device.
+        run: |
+          sudo rm -rf \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/lib/android \
+            /usr/local/share/boost \
+            /usr/share/dotnet
+          df -h /
 
       - name: Install dependencies
         run: ./script/linux
