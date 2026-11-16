@@ -24,12 +24,12 @@ use workspace::{
 use worktree::Worktree;
 
 use crate::ToggleFilePanel;
-use terminal_mode_core::{download_from_session, upload_to_session};
 use crate::monitor::render_monitor;
 use terminal_mode_core::{Event as SessionEvent, SessionId, SessionRoot, SessionStore};
 use terminal_mode_core::{
     copy_between_sessions, mount_id_for_session, mount_id_for_session_root, move_between_sessions,
 };
+use terminal_mode_core::{download_from_session, upload_to_session};
 
 pub(crate) const SESSION_FILE_PANEL_KEY: &str = "SessionFilePanel";
 

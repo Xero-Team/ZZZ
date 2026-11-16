@@ -5,9 +5,7 @@ use std::time::Duration;
 use ::settings::Settings as _;
 use anyhow::{Context as _, anyhow};
 use collections::{HashMap, HashSet};
-use gpui::{
-    AsyncApp, Context, Entity, EntityId, EventEmitter, Subscription, Task, WeakEntity,
-};
+use gpui::{AsyncApp, Context, Entity, EntityId, EventEmitter, Subscription, Task, WeakEntity};
 use project::Project;
 use remote::{RemoteClient, RemoteConnectionOptions};
 use serde::{Deserialize, Serialize};
@@ -466,10 +464,7 @@ impl SessionStore {
     /// `terminal_counts` maps each session to the number of terminal tabs the
     /// workspace currently shows for it; the UI layer, which owns the panes,
     /// measures them.
-    pub fn snapshot(
-        &self,
-        terminal_counts: &HashMap<SessionId, usize>,
-    ) -> SerializedTerminalMode {
+    pub fn snapshot(&self, terminal_counts: &HashMap<SessionId, usize>) -> SerializedTerminalMode {
         SerializedTerminalMode {
             sessions: self
                 .sessions

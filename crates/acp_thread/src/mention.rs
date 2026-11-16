@@ -1,6 +1,8 @@
 use agent_client_protocol::v1::schema as acp;
 use anyhow::{Context as _, Result, bail};
 use file_icons::FileIcons;
+use gpui::{App, SharedString};
+use icons::IconName;
 use prompt_store::{PromptId, UserPromptId};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -10,8 +12,6 @@ use std::{
     path::{Path, PathBuf},
 };
 use text::LineEnding;
-use gpui::{App, SharedString};
-use icons::IconName;
 use url::Url;
 use urlencoding::decode;
 use util::paths::{PathStyle, PathWithPosition, is_absolute};

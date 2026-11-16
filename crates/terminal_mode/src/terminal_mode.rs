@@ -23,7 +23,10 @@ use std::sync::Arc;
 use util::ResultExt as _;
 use workspace::{Toast, Workspace, dock::DockPosition, notifications::NotificationId};
 
-use crate::session::{bottom_dock_hidden, disconnect, for_workspace, for_workspace_read, reconnect, set_bottom_dock_hidden};
+use crate::session::{
+    bottom_dock_hidden, disconnect, for_workspace, for_workspace_read, reconnect,
+    set_bottom_dock_hidden,
+};
 use terminal_mode_core::{ConnectionMode, is_connection_cancelled};
 
 actions!(
@@ -138,8 +141,7 @@ pub fn init(cx: &mut App) {
 
 /// Returns whether terminal mode is active for `workspace`.
 pub fn is_terminal_mode_active(workspace: &Workspace, cx: &App) -> bool {
-    for_workspace_read(workspace, cx)
-        .is_some_and(|store| store.read(cx).terminal_mode_active)
+    for_workspace_read(workspace, cx).is_some_and(|store| store.read(cx).terminal_mode_active)
 }
 
 /// Restricts dock buttons to the panel set that matches the current mode: only

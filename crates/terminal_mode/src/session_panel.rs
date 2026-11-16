@@ -29,11 +29,11 @@ use workspace::{
 };
 
 use crate::session::{connect, for_workspace, restore, run_quick_command};
-use terminal_mode_core::{SessionId, SessionStatus, SessionStore, is_connection_cancelled};
 use crate::{
     ConfirmConnection, DisconnectSession, ReconnectSession, SelectNextConnection,
     SelectPreviousConnection, ToggleSessionPanel,
 };
+use terminal_mode_core::{SessionId, SessionStatus, SessionStore, is_connection_cancelled};
 
 pub(crate) const SSH_SESSION_PANEL_KEY: &str = "SshSessionPanel";
 
@@ -643,14 +643,15 @@ impl Render for SshSessionPanel {
                                                             && let Some(workspace) =
                                                                 workspace_handle.upgrade()
                                                         {
-                                                            workspace.update(cx, |workspace, cx| {
-                                                                run_quick_command(
-                                                                    workspace,
-                                                                    &store,
-                                                                    &command,
-                                                                    cx,
-                                                                );
-                                                            });
+                                                            workspace.update(
+                                                                cx,
+                                                                |workspace, cx| {
+                                                                    run_quick_command(
+                                                                        workspace, &store,
+                                                                        &command, cx,
+                                                                    );
+                                                                },
+                                                            );
                                                         }
                                                     },
                                                 );

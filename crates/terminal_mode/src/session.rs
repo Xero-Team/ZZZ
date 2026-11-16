@@ -50,7 +50,10 @@ impl SessionStoreRegistry {
 }
 
 /// Returns the store for `workspace`, creating it on first use.
-pub fn for_workspace(workspace: &mut Workspace, cx: &mut Context<Workspace>) -> Entity<SessionStore> {
+pub fn for_workspace(
+    workspace: &mut Workspace,
+    cx: &mut Context<Workspace>,
+) -> Entity<SessionStore> {
     let workspace_id = SessionStoreRegistry::key(workspace);
     if let Some(existing) = cx
         .try_global::<SessionStoreRegistry>()
@@ -179,7 +182,11 @@ pub fn bottom_dock_hidden(workspace: &Workspace, cx: &App) -> bool {
 /// workspace updates (for example the terminal-mode toggle action), where
 /// reading the workspace synchronously would re-enter an already-leased entity
 /// and panic.
-pub fn persist(workspace: &mut Workspace, store: &Entity<SessionStore>, cx: &mut Context<Workspace>) {
+pub fn persist(
+    workspace: &mut Workspace,
+    store: &Entity<SessionStore>,
+    cx: &mut Context<Workspace>,
+) {
     let store = store.clone();
     let workspace_handle = workspace.weak_handle();
     cx.defer(move |cx| persist_now(&workspace_handle, &store, cx));
@@ -190,11 +197,7 @@ pub fn persist(workspace: &mut Workspace, store: &Entity<SessionStore>, cx: &mut
 /// Split from [`persist`] so it runs after the workspace update that triggered
 /// it has finished, which is required because measuring terminal counts reads
 /// the workspace's panes.
-fn persist_now(
-    workspace: &WeakEntity<Workspace>,
-    store: &Entity<SessionStore>,
-    cx: &mut App,
-) {
+fn persist_now(workspace: &WeakEntity<Workspace>, store: &Entity<SessionStore>, cx: &mut App) {
     let Some(key) = store.read(cx).serialization_key().cloned() else {
         return;
     };
@@ -286,8 +289,7 @@ pub fn connect_with_id(
     let store_handle = store.downgrade();
     cx.spawn_in(window, async move |_workspace, cx| {
         let outcome = async {
-            let Some(client) = client_task.await.context("remote connection task failed")?
-            else {
+            let Some(client) = client_task.await.context("remote connection task failed")? else {
                 return Err(anyhow::Error::new(ConnectionCancelled));
             };
 
@@ -356,9 +358,7 @@ pub fn disconnect(
             let terminal_item_ids: Vec<EntityId> = pane
                 .read(cx)
                 .items_of_type::<TerminalView>()
-                .filter(|terminal_view| {
-                    terminal_view.read(cx).project().entity_id() == project_id
-                })
+                .filter(|terminal_view| terminal_view.read(cx).project().entity_id() == project_id)
                 .map(|terminal_view| terminal_view.entity_id())
                 .collect();
             for item_id in terminal_item_ids {
@@ -393,35 +393,32 @@ pub fn reconnect(
         cx.emit(Event::SessionsChanged);
     });
     let replacement_id = store.update(cx, |store, _| store.next_session_id());
-    let connect_task = connect_with_id(
-        store,
-        replacement_id,
-        connection_options,
-        mode,
-        window,
-        cx,
-    );
+    let connect_task = connect_with_id(store, replacement_id, connection_options, mode, window, cx);
     let store_handle = store.downgrade();
-    cx.spawn_in(window, async move |workspace, cx| match connect_task.await {
-        Ok(replacement_id) => {
-            workspace.update_in(cx, |_workspace, window, cx| {
-                if let Some(store) = store_handle.upgrade() {
-                    disconnect(&store, id, window, cx);
-                }
-            })?;
-            Ok(replacement_id)
-        }
-        Err(error) => {
-            store_handle.update(cx, |store, cx| {
-                if let Some(session) = store.sessions.iter_mut().find(|session| session.id == id) {
-                    session.status = SessionStatus::Failed;
-                }
-                cx.emit(Event::SessionsChanged);
-                if TerminalModeSettings::get_global(cx).auto_reconnect {
-                    store.schedule_auto_reconnect(id, cx);
-                }
-            })?;
-            Err(error)
+    cx.spawn_in(window, async move |workspace, cx| {
+        match connect_task.await {
+            Ok(replacement_id) => {
+                workspace.update_in(cx, |_workspace, window, cx| {
+                    if let Some(store) = store_handle.upgrade() {
+                        disconnect(&store, id, window, cx);
+                    }
+                })?;
+                Ok(replacement_id)
+            }
+            Err(error) => {
+                store_handle.update(cx, |store, cx| {
+                    if let Some(session) =
+                        store.sessions.iter_mut().find(|session| session.id == id)
+                    {
+                        session.status = SessionStatus::Failed;
+                    }
+                    cx.emit(Event::SessionsChanged);
+                    if TerminalModeSettings::get_global(cx).auto_reconnect {
+                        store.schedule_auto_reconnect(id, cx);
+                    }
+                })?;
+                Err(error)
+            }
         }
     })
 }
@@ -466,16 +463,17 @@ pub fn restore(
             store_handle.update(cx, |store, cx| {
                 store.set_terminal_mode_active(true, cx);
             })?;
-            let bottom_dock_was_open = workspace_handle.update_in(cx, |workspace, window, cx| {
-                let bottom_dock = workspace.dock_at_position(DockPosition::Bottom).clone();
-                let was_open = bottom_dock.read(cx).is_open();
-                if was_open {
-                    bottom_dock.update(cx, |dock, cx| dock.set_open(false, window, cx));
-                }
-                workspace.open_panel::<crate::SshSessionPanel>(window, cx);
-                workspace.open_panel::<crate::SessionFilePanel>(window, cx);
-                was_open
-            })?;
+            let bottom_dock_was_open =
+                workspace_handle.update_in(cx, |workspace, window, cx| {
+                    let bottom_dock = workspace.dock_at_position(DockPosition::Bottom).clone();
+                    let was_open = bottom_dock.read(cx).is_open();
+                    if was_open {
+                        bottom_dock.update(cx, |dock, cx| dock.set_open(false, window, cx));
+                    }
+                    workspace.open_panel::<crate::SshSessionPanel>(window, cx);
+                    workspace.open_panel::<crate::SessionFilePanel>(window, cx);
+                    was_open
+                })?;
             workspace_handle.update(cx, |workspace, cx| {
                 set_bottom_dock_hidden(workspace, bottom_dock_was_open, cx);
             })?;
@@ -494,7 +492,8 @@ pub fn restore(
                     let id = match session.id {
                         Some(id) => {
                             store.update(cx, |store, _| {
-                                store.next_session_id = store.next_session_id.max(id.saturating_add(1));
+                                store.next_session_id =
+                                    store.next_session_id.max(id.saturating_add(1));
                             });
                             SessionId(id)
                         }
@@ -564,11 +563,9 @@ pub fn send_to_session(
     cx: &mut App,
 ) {
     let input = text.as_bytes().to_vec();
-    let Some(project_id) = store
-        .read_with(cx, |store, _| {
-            store.session(id).map(|session| session.project.entity_id())
-        })
-    else {
+    let Some(project_id) = store.read_with(cx, |store, _| {
+        store.session(id).map(|session| session.project.entity_id())
+    }) else {
         return;
     };
     for terminal_view in terminals_for_project(workspace, project_id, cx) {

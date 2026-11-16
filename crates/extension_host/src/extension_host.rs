@@ -1,7 +1,7 @@
 mod capability_granter;
 pub mod extension_settings;
-pub mod theme_proxy;
 pub mod headless_host;
+pub mod theme_proxy;
 pub mod wasm_host;
 
 #[cfg(test)]

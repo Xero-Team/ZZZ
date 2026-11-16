@@ -137,7 +137,10 @@ fn developer_page() -> SettingsPage {
     SettingsPage {
         title: lt("settings_ui.page_data.title.developer", "Developer"),
         items: Box::new([
-            section_header!("settings_ui.page_data.section.feature.flags", "Feature Flags"),
+            section_header!(
+                "settings_ui.page_data.section.feature.flags",
+                "Feature Flags"
+            ),
             SettingsPageItem::SubPageLink(SubPageLink {
                 title: lt("settings_ui.page_data.title.feature.flags", "Feature Flags"),
                 r#type: Default::default(),
@@ -148,26 +151,36 @@ fn developer_page() -> SettingsPage {
                 files: USER,
                 render: crate::pages::render_feature_flags_page,
             }),
-            section_header!("settings_ui.page_data.section.instrumentation", "Instrumentation"),
+            section_header!(
+                "settings_ui.page_data.section.instrumentation",
+                "Instrumentation"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.performance.profiler", "Performance Profiler"),
-                lt("settings_ui.page_data.description.collect.timing.data.for.foreground.and.background.executor.tasks.so.they.can.be.inspected.via.zzz.open.performance.profiler.may.lead.to.increased.memory.usage", "Collect timing data for foreground and background executor tasks so they can be inspected via `zzz: open performance profiler`. May lead to increased memory usage."),
+                lt(
+                    "settings_ui.page_data.title.performance.profiler",
+                    "Performance Profiler"
+                ),
+                lt(
+                    "settings_ui.page_data.description.collect.timing.data.for.foreground.and.background.executor.tasks.so.they.can.be.inspected.via.zzz.open.performance.profiler.may.lead.to.increased.memory.usage",
+                    "Collect timing data for foreground and background executor tasks so they can be inspected via `zzz: open performance profiler`. May lead to increased memory usage."
+                ),
                 "instrumentation.performance_profiler.enabled",
                 |settings_content| {
-                                        settings_content
-                                            .instrumentation
-                                            .as_ref()
-                                            .and_then(|i| i.performance_profiler.as_ref())
-                                            .and_then(|p| p.enabled.as_ref())
-                                    },
+                    settings_content
+                        .instrumentation
+                        .as_ref()
+                        .and_then(|i| i.performance_profiler.as_ref())
+                        .and_then(|p| p.enabled.as_ref())
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .instrumentation
-                                            .get_or_insert_default()
-                                            .performance_profiler
-                                            .get_or_insert_default()
-                                            .enabled = value;
-                                    }),
+                    settings_content
+                        .instrumentation
+                        .get_or_insert_default()
+                        .performance_profiler
+                        .get_or_insert_default()
+                        .enabled = value;
+                }
+            ),
         ]),
     }
 }
@@ -175,136 +188,256 @@ fn developer_page() -> SettingsPage {
 fn general_page(cx: &App) -> SettingsPage {
     fn general_settings_section(_cx: &App) -> Vec<SettingsPageItem> {
         vec![
-            section_header!("settings_ui.page_data.section.general.settings", "General Settings"),
+            section_header!(
+                "settings_ui.page_data.section.general.settings",
+                "General Settings"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.display.language", "Display Language"),
-                lt("settings_ui.page_data.description.choose.the.language.used.for.the.zzz.user.interface", "Choose the language used for the ZZZ user interface."),
-                "display_language",
-                |settings_content| settings_content.workspace.display_language.as_ref(),
-                |settings_content, value, _| { settings_content.workspace.display_language = value; },
-                metadata: Some(Box::new(SettingsFieldMetadata {
-                    should_do_titlecase: Some(false),
-                    ..Default::default()
-                }))),
+            lt("settings_ui.page_data.title.display.language", "Display Language"),
+            lt("settings_ui.page_data.description.choose.the.language.used.for.the.zzz.user.interface", "Choose the language used for the ZZZ user interface."),
+            "display_language",
+            |settings_content| settings_content.workspace.display_language.as_ref(),
+            |settings_content, value, _| { settings_content.workspace.display_language = value; },
+            metadata: Some(Box::new(SettingsFieldMetadata {
+                should_do_titlecase: Some(false),
+                ..Default::default()
+            }))),
             setting_item!(
-                lt("settings_ui.page_data.title.when.closing.with.no.tabs", "When Closing With No Tabs"),
-                lt("settings_ui.page_data.description.what.to.do.when.using.the.close.active.item.action.with.no.tabs", "What to do when using the 'close active item' action with no tabs."),
+                lt(
+                    "settings_ui.page_data.title.when.closing.with.no.tabs",
+                    "When Closing With No Tabs"
+                ),
+                lt(
+                    "settings_ui.page_data.description.what.to.do.when.using.the.close.active.item.action.with.no.tabs",
+                    "What to do when using the 'close active item' action with no tabs."
+                ),
                 "when_closing_with_no_tabs",
-                |settings_content| { settings_content.workspace.when_closing_with_no_tabs.as_ref() },
-                |settings_content, value, _| { settings_content.workspace.when_closing_with_no_tabs = value; }),
+                |settings_content| {
+                    settings_content
+                        .workspace
+                        .when_closing_with_no_tabs
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content.workspace.when_closing_with_no_tabs = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.on.new.window", "On New Window"),
-                lt("settings_ui.page_data.description.what.to.show.when.opening.a.new.window", "What to show when opening a new window; Readme opens a project's README when no items are open, leaving the pane empty if none is found."),
+                lt(
+                    "settings_ui.page_data.description.what.to.show.when.opening.a.new.window",
+                    "What to show when opening a new window; Readme opens a project's README when no items are open, leaving the pane empty if none is found."
+                ),
                 "on_new_window",
                 |settings_content| settings_content.workspace.on_new_window.as_ref(),
-                |settings_content, value, _| { settings_content.workspace.on_new_window = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.on_new_window = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.on.last.window.closed", "On Last Window Closed"),
-                lt("settings_ui.page_data.description.what.to.do.when.the.last.window.is.closed", "What to do when the last window is closed."),
+                lt(
+                    "settings_ui.page_data.title.on.last.window.closed",
+                    "On Last Window Closed"
+                ),
+                lt(
+                    "settings_ui.page_data.description.what.to.do.when.the.last.window.is.closed",
+                    "What to do when the last window is closed."
+                ),
                 "on_last_window_closed",
                 |settings_content| { settings_content.workspace.on_last_window_closed.as_ref() },
-                |settings_content, value, _| { settings_content.workspace.on_last_window_closed = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.on_last_window_closed = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.use.system.path.prompts", "Use System Path Prompts"),
-                lt("settings_ui.page_data.description.use.native.os.dialogs.for.open.and.save.as", "Use native OS dialogs for 'Open' and 'Save As'."),
+                lt(
+                    "settings_ui.page_data.title.use.system.path.prompts",
+                    "Use System Path Prompts"
+                ),
+                lt(
+                    "settings_ui.page_data.description.use.native.os.dialogs.for.open.and.save.as",
+                    "Use native OS dialogs for 'Open' and 'Save As'."
+                ),
                 "use_system_path_prompts",
                 |settings_content| { settings_content.workspace.use_system_path_prompts.as_ref() },
-                |settings_content, value, _| { settings_content.workspace.use_system_path_prompts = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.use_system_path_prompts = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.use.system.prompts", "Use System Prompts"),
-                lt("settings_ui.page_data.description.use.native.os.dialogs.for.confirmations", "Use native OS dialogs for confirmations."),
+                lt(
+                    "settings_ui.page_data.title.use.system.prompts",
+                    "Use System Prompts"
+                ),
+                lt(
+                    "settings_ui.page_data.description.use.native.os.dialogs.for.confirmations",
+                    "Use native OS dialogs for confirmations."
+                ),
                 "use_system_prompts",
                 |settings_content| settings_content.workspace.use_system_prompts.as_ref(),
-                |settings_content, value, _| { settings_content.workspace.use_system_prompts = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.use_system_prompts = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.redact.private.values", "Redact Private Values"),
-                lt("settings_ui.page_data.description.hide.the.values.of.variables.in.private.files", "Hide the values of variables in private files."),
+                lt(
+                    "settings_ui.page_data.title.redact.private.values",
+                    "Redact Private Values"
+                ),
+                lt(
+                    "settings_ui.page_data.description.hide.the.values.of.variables.in.private.files",
+                    "Hide the values of variables in private files."
+                ),
                 "redact_private_values",
                 |settings_content| settings_content.editor.redact_private_values.as_ref(),
-                |settings_content, value, _| { settings_content.editor.redact_private_values = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.redact_private_values = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.private.files", "Private Files"),
-                lt("settings_ui.page_data.description.globs.to.match.against.file.paths.to.determine.if.a.file.is.private", "Globs to match against file paths to determine if a file is private."),
+                lt(
+                    "settings_ui.page_data.description.globs.to.match.against.file.paths.to.determine.if.a.file.is.private",
+                    "Globs to match against file paths to determine if a file is private."
+                ),
                 "worktree.private_files",
                 |settings_content| { settings_content.project.worktree.private_files.as_ref() },
-                |settings_content, value, _| { settings_content.project.worktree.private_files = value; }),
+                |settings_content, value, _| {
+                    settings_content.project.worktree.private_files = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.cli.default.open.behavior", "CLI Default Open Behavior"),
-                lt("settings_ui.page_data.description.how.zzz.path.opens.directories.when.no.flag.is.specified", "How `zzz <path>` opens directories when no flag is specified."),
-                "cli_default_open_behavior",
-                |settings_content| { settings_content.workspace.cli_default_open_behavior.as_ref() },
-                |settings_content, value, _| { settings_content.workspace.cli_default_open_behavior = value; },
-                metadata: Some(Box::new(SettingsFieldMetadata {
-                    should_do_titlecase: Some(false),
-                    ..Default::default()
-                }))),
+            lt("settings_ui.page_data.title.cli.default.open.behavior", "CLI Default Open Behavior"),
+            lt("settings_ui.page_data.description.how.zzz.path.opens.directories.when.no.flag.is.specified", "How `zzz <path>` opens directories when no flag is specified."),
+            "cli_default_open_behavior",
+            |settings_content| { settings_content.workspace.cli_default_open_behavior.as_ref() },
+            |settings_content, value, _| { settings_content.workspace.cli_default_open_behavior = value; },
+            metadata: Some(Box::new(SettingsFieldMetadata {
+                should_do_titlecase: Some(false),
+                ..Default::default()
+            }))),
             setting_item!(
-                lt("settings_ui.page_data.title.default.open.behavior", "Default Open Behavior"),
-                lt("settings_ui.page_data.description.how.projects.open.from.the.ui.by.default", "How projects open from the UI by default."),
-                "default_open_behavior",
-                |settings_content| { settings_content.workspace.default_open_behavior.as_ref() },
-                |settings_content, value, _| { settings_content.workspace.default_open_behavior = value; },
-                metadata: Some(Box::new(SettingsFieldMetadata {
-                    should_do_titlecase: Some(false),
-                    ..Default::default()
-                }))),
+            lt("settings_ui.page_data.title.default.open.behavior", "Default Open Behavior"),
+            lt("settings_ui.page_data.description.how.projects.open.from.the.ui.by.default", "How projects open from the UI by default."),
+            "default_open_behavior",
+            |settings_content| { settings_content.workspace.default_open_behavior.as_ref() },
+            |settings_content, value, _| { settings_content.workspace.default_open_behavior = value; },
+            metadata: Some(Box::new(SettingsFieldMetadata {
+                should_do_titlecase: Some(false),
+                ..Default::default()
+            }))),
             setting_item!(
-                lt("settings_ui.page_data.title.reveal.if.open", "Reveal If Open"),
-                lt("settings_ui.page_data.description.when.enabled.zzz.prefers.an.already.open.file.in.another.pane", "When enabled, ZZZ prefers an already-open file in another pane."),
+                lt(
+                    "settings_ui.page_data.title.reveal.if.open",
+                    "Reveal If Open"
+                ),
+                lt(
+                    "settings_ui.page_data.description.when.enabled.zzz.prefers.an.already.open.file.in.another.pane",
+                    "When enabled, ZZZ prefers an already-open file in another pane."
+                ),
                 "reveal_if_open",
                 |settings_content| settings_content.workspace.reveal_if_open.as_ref(),
-                |settings_content, value, _| { settings_content.workspace.reveal_if_open = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.reveal_if_open = value;
+                }
+            ),
         ]
     }
     fn security_section() -> [SettingsPageItem; 2] {
         [
             section_header!("settings_ui.page_data.section.security", "Security"),
             setting_item!(
-                lt("settings_ui.page_data.title.trust.all.projects.by.default", "Trust All Projects By Default"),
-                lt("settings_ui.page_data.description.when.opening.zzz.avoid.restricted.mode.by.auto.trusting.all.projects.enabling.use.of.all.features.without.having.to.give.permission.to.each.new.project", "When opening ZZZ, avoid Restricted Mode by auto-trusting all projects, enabling use of all features without having to give permission to each new project."),
+                lt(
+                    "settings_ui.page_data.title.trust.all.projects.by.default",
+                    "Trust All Projects By Default"
+                ),
+                lt(
+                    "settings_ui.page_data.description.when.opening.zzz.avoid.restricted.mode.by.auto.trusting.all.projects.enabling.use.of.all.features.without.having.to.give.permission.to.each.new.project",
+                    "When opening ZZZ, avoid Restricted Mode by auto-trusting all projects, enabling use of all features without having to give permission to each new project."
+                ),
                 "session.trust_all_projects",
                 |settings_content| {
-                                        settings_content
-                                            .session
-                                            .as_ref()
-                                            .and_then(|session| session.trust_all_worktrees.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.session.get_or_insert_default().trust_all_worktrees = value; }),
+                    settings_content
+                        .session
+                        .as_ref()
+                        .and_then(|session| session.trust_all_worktrees.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .session
+                        .get_or_insert_default()
+                        .trust_all_worktrees = value;
+                }
+            ),
         ]
     }
 
     fn workspace_restoration_section() -> [SettingsPageItem; 3] {
         [
-            section_header!("settings_ui.page_data.section.workspace.restoration", "Workspace Restoration"),
+            section_header!(
+                "settings_ui.page_data.section.workspace.restoration",
+                "Workspace Restoration"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.restore.unsaved.buffers", "Restore Unsaved Buffers"),
-                lt("settings_ui.page_data.description.whether.or.not.to.restore.unsaved.buffers.on.restart", "Whether or not to restore unsaved buffers on restart."),
+                lt(
+                    "settings_ui.page_data.title.restore.unsaved.buffers",
+                    "Restore Unsaved Buffers"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.or.not.to.restore.unsaved.buffers.on.restart",
+                    "Whether or not to restore unsaved buffers on restart."
+                ),
                 "session.restore_unsaved_buffers",
                 |settings_content| {
-                                        settings_content
-                                            .session
-                                            .as_ref()
-                                            .and_then(|session| session.restore_unsaved_buffers.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.session.get_or_insert_default().restore_unsaved_buffers = value; }),
+                    settings_content
+                        .session
+                        .as_ref()
+                        .and_then(|session| session.restore_unsaved_buffers.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .session
+                        .get_or_insert_default()
+                        .restore_unsaved_buffers = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.restore.on.startup", "Restore On Startup"),
-                lt("settings_ui.page_data.description.what.to.restore.from.the.previous.session.when.opening.zzz", "What to restore from the previous session when opening ZZZ."),
+                lt(
+                    "settings_ui.page_data.title.restore.on.startup",
+                    "Restore On Startup"
+                ),
+                lt(
+                    "settings_ui.page_data.description.what.to.restore.from.the.previous.session.when.opening.zzz",
+                    "What to restore from the previous session when opening ZZZ."
+                ),
                 "restore_on_startup",
                 |settings_content| settings_content.workspace.restore_on_startup.as_ref(),
-                |settings_content, value, _| { settings_content.workspace.restore_on_startup = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.restore_on_startup = value;
+                }
+            ),
         ]
     }
 
     fn scoped_settings_section() -> [SettingsPageItem; 2] {
         [
-            section_header!("settings_ui.page_data.section.scoped.settings", "Scoped Settings"),
+            section_header!(
+                "settings_ui.page_data.section.scoped.settings",
+                "Scoped Settings"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.settings.profiles", "Settings Profiles"),
-                lt("settings_ui.page_data.description.any.number.of.settings.profiles.that.are.temporarily.applied.on.top.of.your.existing.user.settings", "Any number of settings profiles that are temporarily applied on top of your existing user settings."),
+                lt(
+                    "settings_ui.page_data.title.settings.profiles",
+                    "Settings Profiles"
+                ),
+                lt(
+                    "settings_ui.page_data.description.any.number.of.settings.profiles.that.are.temporarily.applied.on.top.of.your.existing.user.settings",
+                    "Any number of settings profiles that are temporarily applied on top of your existing user settings."
+                ),
                 "settings_profiles",
                 |settings_content| Some(settings_content),
-                |_settings_content, _value, _| {}),
+                |_settings_content, _value, _| {}
+            ),
         ]
     }
 
@@ -809,88 +942,157 @@ fn appearance_page() -> SettingsPage {
             section_header!("settings_ui.page_data.section.ui.font", "UI Font"),
             setting_item!(
                 lt("settings_ui.page_data.title.font.family", "Font Family"),
-                lt("settings_ui.page_data.description.font.family.for.ui.elements", "Font family for UI elements."),
+                lt(
+                    "settings_ui.page_data.description.font.family.for.ui.elements",
+                    "Font family for UI elements."
+                ),
                 "ui_font_family",
                 |settings_content| settings_content.theme.ui_font_family.as_ref(),
-                |settings_content, value, _| { settings_content.theme.ui_font_family = value; }),
+                |settings_content, value, _| {
+                    settings_content.theme.ui_font_family = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.font.size", "Font Size"),
-                lt("settings_ui.page_data.description.font.size.for.ui.elements", "Font size for UI elements."),
+                lt(
+                    "settings_ui.page_data.description.font.size.for.ui.elements",
+                    "Font size for UI elements."
+                ),
                 "ui_font_size",
                 |settings_content| settings_content.theme.ui_font_size.as_ref(),
-                |settings_content, value, _| { settings_content.theme.ui_font_size = value; }),
+                |settings_content, value, _| {
+                    settings_content.theme.ui_font_size = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.font.weight", "Font Weight"),
-                lt("settings_ui.page_data.description.font.weight.for.ui.elements.100.900", "Font weight for UI elements (100-900)."),
+                lt(
+                    "settings_ui.page_data.description.font.weight.for.ui.elements.100.900",
+                    "Font weight for UI elements (100-900)."
+                ),
                 "ui_font_weight",
                 |settings_content| settings_content.theme.ui_font_weight.as_ref(),
-                |settings_content, value, _| { settings_content.theme.ui_font_weight = value; }),
+                |settings_content, value, _| {
+                    settings_content.theme.ui_font_weight = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.font.features", "Font Features"),
-                lt("settings_ui.page_data.description.the.opentype.features.to.enable.for.rendering.in.ui.elements", "The OpenType features to enable for rendering in UI elements."),
+                lt(
+                    "settings_ui.page_data.description.the.opentype.features.to.enable.for.rendering.in.ui.elements",
+                    "The OpenType features to enable for rendering in UI elements."
+                ),
                 "ui_font_features",
                 |settings_content| settings_content.theme.ui_font_features.as_ref(),
-                |settings_content, value, _| { settings_content.theme.ui_font_features = value; }),
+                |settings_content, value, _| {
+                    settings_content.theme.ui_font_features = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.font.fallbacks", "Font Fallbacks"),
-                lt("settings_ui.page_data.description.the.font.fallbacks.to.use.for.rendering.in.the.ui", "The font fallbacks to use for rendering in the UI."),
+                lt(
+                    "settings_ui.page_data.title.font.fallbacks",
+                    "Font Fallbacks"
+                ),
+                lt(
+                    "settings_ui.page_data.description.the.font.fallbacks.to.use.for.rendering.in.the.ui",
+                    "The font fallbacks to use for rendering in the UI."
+                ),
                 "ui_font_fallbacks",
                 |settings_content| settings_content.theme.ui_font_fallbacks.as_ref(),
-                |settings_content, value, _| { settings_content.theme.ui_font_fallbacks = value; }),
+                |settings_content, value, _| {
+                    settings_content.theme.ui_font_fallbacks = value;
+                }
+            ),
         ]
     }
 
     fn agent_panel_font_section() -> [SettingsPageItem; 5] {
         [
-            section_header!("settings_ui.page_data.section.agent.panel.font", "Agent Panel Font"),
+            section_header!(
+                "settings_ui.page_data.section.agent.panel.font",
+                "Agent Panel Font"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.ui.font.family", "UI Font Family"),
-                lt("settings_ui.page_data.description.font.family.for.agent.response.text.in.the.agent.panel.falls.back.to.the.regular.ui.font.family", "Font family for agent response text in the agent panel. Falls back to the regular UI font family."),
+                lt(
+                    "settings_ui.page_data.title.ui.font.family",
+                    "UI Font Family"
+                ),
+                lt(
+                    "settings_ui.page_data.description.font.family.for.agent.response.text.in.the.agent.panel.falls.back.to.the.regular.ui.font.family",
+                    "Font family for agent response text in the agent panel. Falls back to the regular UI font family."
+                ),
                 "agent_ui_font_family",
                 |settings_content| {
-                                        settings_content
-                                            .theme
-                                            .agent_ui_font_family
-                                            .as_ref()
-                                            .or(settings_content.theme.ui_font_family.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.theme.agent_ui_font_family = value; }),
+                    settings_content
+                        .theme
+                        .agent_ui_font_family
+                        .as_ref()
+                        .or(settings_content.theme.ui_font_family.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content.theme.agent_ui_font_family = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.ui.font.size", "UI Font Size"),
-                lt("settings_ui.page_data.description.font.size.for.agent.response.text.in.the.agent.panel.falls.back.to.the.regular.ui.font.size", "Font size for agent response text in the agent panel. Falls back to the regular UI font size."),
+                lt(
+                    "settings_ui.page_data.description.font.size.for.agent.response.text.in.the.agent.panel.falls.back.to.the.regular.ui.font.size",
+                    "Font size for agent response text in the agent panel. Falls back to the regular UI font size."
+                ),
                 "agent_ui_font_size",
                 |settings_content| {
-                                        settings_content
-                                            .theme
-                                            .agent_ui_font_size
-                                            .as_ref()
-                                            .or(settings_content.theme.ui_font_size.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.theme.agent_ui_font_size = value; }),
+                    settings_content
+                        .theme
+                        .agent_ui_font_size
+                        .as_ref()
+                        .or(settings_content.theme.ui_font_size.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content.theme.agent_ui_font_size = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.buffer.font.family", "Buffer Font Family"),
-                lt("settings_ui.page_data.description.font.family.for.user.messages.in.the.agent.panel.falls.back.to.the.regular.buffer.font.family", "Font family for user messages in the agent panel. Falls back to the regular buffer font family."),
+                lt(
+                    "settings_ui.page_data.title.buffer.font.family",
+                    "Buffer Font Family"
+                ),
+                lt(
+                    "settings_ui.page_data.description.font.family.for.user.messages.in.the.agent.panel.falls.back.to.the.regular.buffer.font.family",
+                    "Font family for user messages in the agent panel. Falls back to the regular buffer font family."
+                ),
                 "agent_buffer_font_family",
                 |settings_content| {
-                                        settings_content
-                                            .theme
-                                            .agent_buffer_font_family
-                                            .as_ref()
-                                            .or(settings_content.theme.buffer_font_family.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.theme.agent_buffer_font_family = value; }),
+                    settings_content
+                        .theme
+                        .agent_buffer_font_family
+                        .as_ref()
+                        .or(settings_content.theme.buffer_font_family.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content.theme.agent_buffer_font_family = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.buffer.font.size", "Buffer Font Size"),
-                lt("settings_ui.page_data.description.font.size.for.user.messages.text.in.the.agent.panel", "Font size for user messages text in the agent panel."),
+                lt(
+                    "settings_ui.page_data.title.buffer.font.size",
+                    "Buffer Font Size"
+                ),
+                lt(
+                    "settings_ui.page_data.description.font.size.for.user.messages.text.in.the.agent.panel",
+                    "Font size for user messages text in the agent panel."
+                ),
                 "agent_buffer_font_size",
                 |settings_content| {
-                                        settings_content
-                                            .theme
-                                            .agent_buffer_font_size
-                                            .as_ref()
-                                            .or(settings_content.theme.buffer_font_size.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.theme.agent_buffer_font_size = value; }),
+                    settings_content
+                        .theme
+                        .agent_buffer_font_size
+                        .as_ref()
+                        .or(settings_content.theme.buffer_font_size.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content.theme.agent_buffer_font_size = value;
+                }
+            ),
         ]
     }
 
@@ -899,34 +1101,58 @@ fn appearance_page() -> SettingsPage {
             section_header!("settings_ui.page_data.section.mermaid.font", "Mermaid Font"),
             setting_item!(
                 lt("settings_ui.page_data.title.font.family", "Font Family"),
-                lt("settings_ui.page_data.description.font.family.for.mermaid.diagrams.in.the.agent.panel.and.markdown.preview.falls.back.to.the.ui.font.family", "Font family for Mermaid diagrams in the agent panel and markdown preview. Falls back to the UI font family."),
+                lt(
+                    "settings_ui.page_data.description.font.family.for.mermaid.diagrams.in.the.agent.panel.and.markdown.preview.falls.back.to.the.ui.font.family",
+                    "Font family for Mermaid diagrams in the agent panel and markdown preview. Falls back to the UI font family."
+                ),
                 "mermaid_font_family",
                 |settings_content| {
-                                        settings_content
-                                            .theme
-                                            .mermaid_font_family
-                                            .as_ref()
-                                            .or(settings_content.theme.ui_font_family.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.theme.mermaid_font_family = value; }),
+                    settings_content
+                        .theme
+                        .mermaid_font_family
+                        .as_ref()
+                        .or(settings_content.theme.ui_font_family.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content.theme.mermaid_font_family = value;
+                }
+            ),
         ]
     }
 
     fn text_rendering_section() -> [SettingsPageItem; 3] {
         [
-            section_header!("settings_ui.page_data.section.text.rendering", "Text Rendering"),
+            section_header!(
+                "settings_ui.page_data.section.text.rendering",
+                "Text Rendering"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.text.rendering.mode", "Text Rendering Mode"),
-                lt("settings_ui.page_data.description.the.text.rendering.mode.to.use", "The text rendering mode to use."),
+                lt(
+                    "settings_ui.page_data.title.text.rendering.mode",
+                    "Text Rendering Mode"
+                ),
+                lt(
+                    "settings_ui.page_data.description.the.text.rendering.mode.to.use",
+                    "The text rendering mode to use."
+                ),
                 "text_rendering_mode",
                 |settings_content| { settings_content.workspace.text_rendering_mode.as_ref() },
-                |settings_content, value, _| { settings_content.workspace.text_rendering_mode = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.text_rendering_mode = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.display.p3", "Display P3"),
-                lt("settings_ui.page_data.description.display.p3", "(macOS only) render windows using the Display P3 color space."),
+                lt(
+                    "settings_ui.page_data.description.display.p3",
+                    "(macOS only) render windows using the Display P3 color space."
+                ),
                 "use_display_p3",
                 |settings_content| settings_content.workspace.use_display_p3.as_ref(),
-                |settings_content, value, _| { settings_content.workspace.use_display_p3 = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.use_display_p3 = value;
+                }
+            ),
         ]
     }
 
@@ -934,41 +1160,108 @@ fn appearance_page() -> SettingsPage {
         [
             section_header!("settings_ui.page_data.section.cursor", "Cursor"),
             setting_item!(
-                lt("settings_ui.page_data.title.multi.cursor.modifier", "Multi Cursor Modifier"),
-                lt("settings_ui.page_data.description.modifier.key.for.adding.multiple.cursors", "Modifier key for adding multiple cursors."),
+                lt(
+                    "settings_ui.page_data.title.multi.cursor.modifier",
+                    "Multi Cursor Modifier"
+                ),
+                lt(
+                    "settings_ui.page_data.description.modifier.key.for.adding.multiple.cursors",
+                    "Modifier key for adding multiple cursors."
+                ),
                 "multi_cursor_modifier",
                 |settings_content| settings_content.editor.multi_cursor_modifier.as_ref(),
-                |settings_content, value, _| { settings_content.editor.multi_cursor_modifier = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.multi_cursor_modifier = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.cursor.blink", "Cursor Blink"),
-                lt("settings_ui.page_data.description.whether.the.cursor.blinks.in.the.editor", "Whether the cursor blinks in the editor."),
+                lt(
+                    "settings_ui.page_data.description.whether.the.cursor.blinks.in.the.editor",
+                    "Whether the cursor blinks in the editor."
+                ),
                 "cursor_blink",
                 |settings_content| settings_content.editor.cursor_blink.as_ref(),
-                |settings_content, value, _| { settings_content.editor.cursor_blink = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.cursor_blink = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.cursor.shape", "Cursor Shape"),
-                lt("settings_ui.page_data.description.cursor.shape.for.the.editor", "Cursor shape for the editor."),
+                lt(
+                    "settings_ui.page_data.description.cursor.shape.for.the.editor",
+                    "Cursor shape for the editor."
+                ),
                 "cursor_shape",
                 |settings_content| settings_content.editor.cursor_shape.as_ref(),
-                |settings_content, value, _| { settings_content.editor.cursor_shape = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.cursor_shape = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.cursor.animation", "Cursor Animation"),
-                lt("settings_ui.page_data.description.whether.the.cursor.smoothly.animates", "Whether the cursor smoothly animates when moving around the editor."),
+                lt(
+                    "settings_ui.page_data.title.cursor.animation",
+                    "Cursor Animation"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.the.cursor.smoothly.animates",
+                    "Whether the cursor smoothly animates when moving around the editor."
+                ),
                 "cursor_animation.enabled",
-                |settings_content| { settings_content.editor.cursor_animation.as_ref()?.enabled.as_ref() },
-                |settings_content, value, _| { settings_content.editor.cursor_animation.get_or_insert_default().enabled = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .cursor_animation
+                        .as_ref()?
+                        .enabled
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .cursor_animation
+                        .get_or_insert_default()
+                        .enabled = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.smooth.scrolling", "Smooth Scrolling"),
-                lt("settings_ui.page_data.description.whether.scrolling.animates.smoothly", "Whether scrolling animates smoothly."),
+                lt(
+                    "settings_ui.page_data.title.smooth.scrolling",
+                    "Smooth Scrolling"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.scrolling.animates.smoothly",
+                    "Whether scrolling animates smoothly."
+                ),
                 "smooth_scroll.enabled",
-                |settings_content| { settings_content.editor.smooth_scroll.as_ref()?.enabled.as_ref() },
-                |settings_content, value, _| { settings_content.editor.smooth_scroll.get_or_insert_default().enabled = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .smooth_scroll
+                        .as_ref()?
+                        .enabled
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .smooth_scroll
+                        .get_or_insert_default()
+                        .enabled = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.hide.mouse", "Hide Mouse"),
-                lt("settings_ui.page_data.description.when.to.hide.the.mouse.cursor", "When to hide the mouse cursor."),
+                lt(
+                    "settings_ui.page_data.description.when.to.hide.the.mouse.cursor",
+                    "When to hide the mouse cursor."
+                ),
                 "hide_mouse",
                 |settings_content| settings_content.hide_mouse.as_ref(),
-                |settings_content, value, _| { settings_content.hide_mouse = value; }),
+                |settings_content, value, _| {
+                    settings_content.hide_mouse = value;
+                }
+            ),
         ]
     }
 
@@ -976,35 +1269,85 @@ fn appearance_page() -> SettingsPage {
         [
             section_header!("settings_ui.page_data.section.highlighting", "Highlighting"),
             setting_item!(
-                lt("settings_ui.page_data.title.unnecessary.code.fade", "Unnecessary Code Fade"),
-                lt("settings_ui.page_data.description.how.much.to.fade.out.unused.code.0.0.0.9", "How much to fade out unused code (0.0 - 0.9)."),
+                lt(
+                    "settings_ui.page_data.title.unnecessary.code.fade",
+                    "Unnecessary Code Fade"
+                ),
+                lt(
+                    "settings_ui.page_data.description.how.much.to.fade.out.unused.code.0.0.0.9",
+                    "How much to fade out unused code (0.0 - 0.9)."
+                ),
                 "unnecessary_code_fade",
                 |settings_content| settings_content.theme.unnecessary_code_fade.as_ref(),
-                |settings_content, value, _| { settings_content.theme.unnecessary_code_fade = value; }),
+                |settings_content, value, _| {
+                    settings_content.theme.unnecessary_code_fade = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.current.line.highlight", "Current Line Highlight"),
-                lt("settings_ui.page_data.description.how.to.highlight.the.current.line", "How to highlight the current line."),
+                lt(
+                    "settings_ui.page_data.title.current.line.highlight",
+                    "Current Line Highlight"
+                ),
+                lt(
+                    "settings_ui.page_data.description.how.to.highlight.the.current.line",
+                    "How to highlight the current line."
+                ),
                 "current_line_highlight",
                 |settings_content| { settings_content.editor.current_line_highlight.as_ref() },
-                |settings_content, value, _| { settings_content.editor.current_line_highlight = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.current_line_highlight = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.selection.highlight", "Selection Highlight"),
-                lt("settings_ui.page_data.description.highlight.all.occurrences.of.selected.text", "Highlight all occurrences of selected text."),
+                lt(
+                    "settings_ui.page_data.title.selection.highlight",
+                    "Selection Highlight"
+                ),
+                lt(
+                    "settings_ui.page_data.description.highlight.all.occurrences.of.selected.text",
+                    "Highlight all occurrences of selected text."
+                ),
                 "selection_highlight",
                 |settings_content| settings_content.editor.selection_highlight.as_ref(),
-                |settings_content, value, _| { settings_content.editor.selection_highlight = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.selection_highlight = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.rounded.selection", "Rounded Selection"),
-                lt("settings_ui.page_data.description.whether.the.text.selection.should.have.rounded.corners", "Whether the text selection should have rounded corners."),
+                lt(
+                    "settings_ui.page_data.title.rounded.selection",
+                    "Rounded Selection"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.the.text.selection.should.have.rounded.corners",
+                    "Whether the text selection should have rounded corners."
+                ),
                 "rounded_selection",
                 |settings_content| settings_content.editor.rounded_selection.as_ref(),
-                |settings_content, value, _| { settings_content.editor.rounded_selection = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.rounded_selection = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.minimum.contrast.for.highlights", "Minimum Contrast For Highlights"),
-                lt("settings_ui.page_data.description.the.minimum.apca.perceptual.contrast.to.maintain.when.rendering.text.over.highlight.backgrounds", "The minimum APCA perceptual contrast to maintain when rendering text over highlight backgrounds."),
+                lt(
+                    "settings_ui.page_data.title.minimum.contrast.for.highlights",
+                    "Minimum Contrast For Highlights"
+                ),
+                lt(
+                    "settings_ui.page_data.description.the.minimum.apca.perceptual.contrast.to.maintain.when.rendering.text.over.highlight.backgrounds",
+                    "The minimum APCA perceptual contrast to maintain when rendering text over highlight backgrounds."
+                ),
                 "minimum_contrast_for_highlights",
-                |settings_content| { settings_content.editor.minimum_contrast_for_highlights.as_ref() },
-                |settings_content, value, _| { settings_content.editor.minimum_contrast_for_highlights = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .minimum_contrast_for_highlights
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content.editor.minimum_contrast_for_highlights = value;
+                }
+            ),
         ]
     }
 
@@ -1083,33 +1426,44 @@ fn keymap_page() -> SettingsPage {
         [
             section_header!("settings_ui.page_data.section.base.keymap", "Base Keymap"),
             setting_item!(
-                lt("settings_ui.page_data.title.base.keymap", "Base Keymap"),
-                lt("settings_ui.page_data.description.the.name.of.a.base.set.of.key.bindings.to.use", "The name of a base set of key bindings to use."),
-                "base_keymap",
-                |settings_content| settings_content.base_keymap.as_ref(),
-                |settings_content, value, _| { settings_content.base_keymap = value; },
-                metadata: Some(Box::new(SettingsFieldMetadata {
-                    should_do_titlecase: Some(false),
-                    ..Default::default()
-                }))),
+            lt("settings_ui.page_data.title.base.keymap", "Base Keymap"),
+            lt("settings_ui.page_data.description.the.name.of.a.base.set.of.key.bindings.to.use", "The name of a base set of key bindings to use."),
+            "base_keymap",
+            |settings_content| settings_content.base_keymap.as_ref(),
+            |settings_content, value, _| { settings_content.base_keymap = value; },
+            metadata: Some(Box::new(SettingsFieldMetadata {
+                should_do_titlecase: Some(false),
+                ..Default::default()
+            }))),
         ]
     }
 
     fn modal_editing_section() -> [SettingsPageItem; 3] {
         [
-            section_header!("settings_ui.page_data.section.modal.editing", "Modal Editing"),
+            section_header!(
+                "settings_ui.page_data.section.modal.editing",
+                "Modal Editing"
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.vim.mode", "Vim Mode"),
-                lt("settings_ui.page_data.description.enable.vim.mode.and.key.bindings", "Enable Vim mode and key bindings."),
+                lt(
+                    "settings_ui.page_data.description.enable.vim.mode.and.key.bindings",
+                    "Enable Vim mode and key bindings."
+                ),
                 "vim_mode",
                 |settings_content| settings_content.vim_mode.as_ref(),
-                write_vim_mode),
+                write_vim_mode
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.helix.mode", "Helix Mode"),
-                lt("settings_ui.page_data.description.enable.helix.mode.and.key.bindings", "Enable Helix mode and key bindings."),
+                lt(
+                    "settings_ui.page_data.description.enable.helix.mode.and.key.bindings",
+                    "Enable Helix mode and key bindings."
+                ),
                 "helix_mode",
                 |settings_content| settings_content.helix_mode.as_ref(),
-                write_helix_mode),
+                write_helix_mode
+            ),
         ]
     }
 
@@ -1229,29 +1583,47 @@ fn editor_page() -> SettingsPage {
 
     fn which_key_section() -> [SettingsPageItem; 3] {
         [
-            section_header!("settings_ui.page_data.section.which.key.menu", "Which-key Menu"),
+            section_header!(
+                "settings_ui.page_data.section.which.key.menu",
+                "Which-key Menu"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.which.key.menu", "Show Which-key Menu"),
-                lt("settings_ui.page_data.description.display.the.which.key.menu.with.matching.bindings.while.a.multi.stroke.binding.is.pending", "Display the which-key menu with matching bindings while a multi-stroke binding is pending."),
+                lt(
+                    "settings_ui.page_data.title.show.which.key.menu",
+                    "Show Which-key Menu"
+                ),
+                lt(
+                    "settings_ui.page_data.description.display.the.which.key.menu.with.matching.bindings.while.a.multi.stroke.binding.is.pending",
+                    "Display the which-key menu with matching bindings while a multi-stroke binding is pending."
+                ),
                 "which_key.enabled",
                 |settings_content| {
-                                        settings_content
-                                            .which_key
-                                            .as_ref()
-                                            .and_then(|settings| settings.enabled.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.which_key.get_or_insert_default().enabled = value; }),
+                    settings_content
+                        .which_key
+                        .as_ref()
+                        .and_then(|settings| settings.enabled.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content.which_key.get_or_insert_default().enabled = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.menu.delay", "Menu Delay"),
-                lt("settings_ui.page_data.description.delay.in.milliseconds.before.the.which.key.menu.appears", "Delay in milliseconds before the which-key menu appears."),
+                lt(
+                    "settings_ui.page_data.description.delay.in.milliseconds.before.the.which.key.menu.appears",
+                    "Delay in milliseconds before the which-key menu appears."
+                ),
                 "which_key.delay_ms",
                 |settings_content| {
-                                        settings_content
-                                            .which_key
-                                            .as_ref()
-                                            .and_then(|settings| settings.delay_ms.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.which_key.get_or_insert_default().delay_ms = value; }),
+                    settings_content
+                        .which_key
+                        .as_ref()
+                        .and_then(|settings| settings.delay_ms.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content.which_key.get_or_insert_default().delay_ms = value;
+                }
+            ),
         ]
     }
 
@@ -1259,48 +1631,103 @@ fn editor_page() -> SettingsPage {
         [
             section_header!("settings_ui.page_data.section.multibuffer", "Multibuffer"),
             setting_item!(
-                lt("settings_ui.page_data.title.double.click.in.multibuffer", "Double Click In Multibuffer"),
-                lt("settings_ui.page_data.description.what.to.do.when.multibuffer.is.double.clicked.in.some.of.its.excerpts", "What to do when multibuffer is double-clicked in some of its excerpts."),
+                lt(
+                    "settings_ui.page_data.title.double.click.in.multibuffer",
+                    "Double Click In Multibuffer"
+                ),
+                lt(
+                    "settings_ui.page_data.description.what.to.do.when.multibuffer.is.double.clicked.in.some.of.its.excerpts",
+                    "What to do when multibuffer is double-clicked in some of its excerpts."
+                ),
                 "double_click_in_multibuffer",
                 |settings_content| { settings_content.editor.double_click_in_multibuffer.as_ref() },
-                |settings_content, value, _| { settings_content.editor.double_click_in_multibuffer = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.double_click_in_multibuffer = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.expand.excerpt.lines", "Expand Excerpt Lines"),
-                lt("settings_ui.page_data.description.how.many.lines.to.expand.the.multibuffer.excerpts.by.default", "How many lines to expand the multibuffer excerpts by default."),
+                lt(
+                    "settings_ui.page_data.title.expand.excerpt.lines",
+                    "Expand Excerpt Lines"
+                ),
+                lt(
+                    "settings_ui.page_data.description.how.many.lines.to.expand.the.multibuffer.excerpts.by.default",
+                    "How many lines to expand the multibuffer excerpts by default."
+                ),
                 "expand_excerpt_lines",
                 |settings_content| settings_content.editor.expand_excerpt_lines.as_ref(),
-                |settings_content, value, _| { settings_content.editor.expand_excerpt_lines = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.expand_excerpt_lines = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.excerpt.context.lines", "Excerpt Context Lines"),
-                lt("settings_ui.page_data.description.how.many.lines.of.context.to.provide.in.multibuffer.excerpts.by.default", "How many lines of context to provide in multibuffer excerpts by default."),
+                lt(
+                    "settings_ui.page_data.title.excerpt.context.lines",
+                    "Excerpt Context Lines"
+                ),
+                lt(
+                    "settings_ui.page_data.description.how.many.lines.of.context.to.provide.in.multibuffer.excerpts.by.default",
+                    "How many lines of context to provide in multibuffer excerpts by default."
+                ),
                 "excerpt_context_lines",
                 |settings_content| settings_content.editor.excerpt_context_lines.as_ref(),
-                |settings_content, value, _| { settings_content.editor.excerpt_context_lines = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.excerpt_context_lines = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.expand.outlines.with.depth", "Expand Outlines With Depth"),
-                lt("settings_ui.page_data.description.default.depth.to.expand.outline.items.in.the.current.file", "Default depth to expand outline items in the current file."),
+                lt(
+                    "settings_ui.page_data.title.expand.outlines.with.depth",
+                    "Expand Outlines With Depth"
+                ),
+                lt(
+                    "settings_ui.page_data.description.default.depth.to.expand.outline.items.in.the.current.file",
+                    "Default depth to expand outline items in the current file."
+                ),
                 "outline_panel.expand_outlines_with_depth",
                 |settings_content| {
-                                        settings_content
-                                            .outline_panel
-                                            .as_ref()
-                                            .and_then(|outline_panel| {
-                                                outline_panel.expand_outlines_with_depth.as_ref()
-                                            })
-                                    },
-                |settings_content, value, _| { settings_content.outline_panel.get_or_insert_default().expand_outlines_with_depth = value; }),
+                    settings_content
+                        .outline_panel
+                        .as_ref()
+                        .and_then(|outline_panel| outline_panel.expand_outlines_with_depth.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .outline_panel
+                        .get_or_insert_default()
+                        .expand_outlines_with_depth = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.diff.view.style", "Diff View Style"),
-                lt("settings_ui.page_data.description.how.to.display.diffs.in.the.editor", "How to display diffs in the editor."),
+                lt(
+                    "settings_ui.page_data.title.diff.view.style",
+                    "Diff View Style"
+                ),
+                lt(
+                    "settings_ui.page_data.description.how.to.display.diffs.in.the.editor",
+                    "How to display diffs in the editor."
+                ),
                 "diff_view_style",
                 |settings_content| settings_content.editor.diff_view_style.as_ref(),
-                |settings_content, value, _| { settings_content.editor.diff_view_style = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.diff_view_style = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.minimum.split.diff.width", "Minimum Split Diff Width"),
-                lt("settings_ui.page_data.description.the.minimum.width.in.columns.at.which.the.split.diff.view.is.used.when.the.editor.is.narrower.the.diff.view.automatically.switches.to.unified.mode.set.to.0.to.disable", "The minimum width (in columns) at which the split diff view is used. When the editor is narrower, the diff view automatically switches to unified mode. Set to 0 to disable."),
+                lt(
+                    "settings_ui.page_data.title.minimum.split.diff.width",
+                    "Minimum Split Diff Width"
+                ),
+                lt(
+                    "settings_ui.page_data.description.the.minimum.width.in.columns.at.which.the.split.diff.view.is.used.when.the.editor.is.narrower.the.diff.view.automatically.switches.to.unified.mode.set.to.0.to.disable",
+                    "The minimum width (in columns) at which the split diff view is used. When the editor is narrower, the diff view automatically switches to unified mode. Set to 0 to disable."
+                ),
                 "minimum_split_diff_width",
                 |settings_content| { settings_content.editor.minimum_split_diff_width.as_ref() },
-                |settings_content, value, _| { settings_content.editor.minimum_split_diff_width = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.minimum_split_diff_width = value;
+                }
+            ),
         ]
     }
 
@@ -1308,145 +1735,303 @@ fn editor_page() -> SettingsPage {
         [
             section_header!("settings_ui.page_data.section.scrolling", "Scrolling"),
             setting_item!(
-                lt("settings_ui.page_data.title.scroll.beyond.last.line", "Scroll Beyond Last Line"),
-                lt("settings_ui.page_data.description.whether.the.editor.will.scroll.beyond.the.last.line", "Whether the editor will scroll beyond the last line."),
+                lt(
+                    "settings_ui.page_data.title.scroll.beyond.last.line",
+                    "Scroll Beyond Last Line"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.the.editor.will.scroll.beyond.the.last.line",
+                    "Whether the editor will scroll beyond the last line."
+                ),
                 "scroll_beyond_last_line",
                 |settings_content| { settings_content.editor.scroll_beyond_last_line.as_ref() },
-                |settings_content, value, _| { settings_content.editor.scroll_beyond_last_line = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.scroll_beyond_last_line = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.vertical.scroll.margin", "Vertical Scroll Margin"),
-                lt("settings_ui.page_data.description.the.number.of.lines.to.keep.above.below.the.cursor.when.auto.scrolling", "The number of lines to keep above/below the cursor when auto-scrolling."),
+                lt(
+                    "settings_ui.page_data.title.vertical.scroll.margin",
+                    "Vertical Scroll Margin"
+                ),
+                lt(
+                    "settings_ui.page_data.description.the.number.of.lines.to.keep.above.below.the.cursor.when.auto.scrolling",
+                    "The number of lines to keep above/below the cursor when auto-scrolling."
+                ),
                 "vertical_scroll_margin",
                 |settings_content| { settings_content.editor.vertical_scroll_margin.as_ref() },
-                |settings_content, value, _| { settings_content.editor.vertical_scroll_margin = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.vertical_scroll_margin = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.horizontal.scroll.margin", "Horizontal Scroll Margin"),
-                lt("settings_ui.page_data.description.the.number.of.characters.to.keep.on.either.side.when.scrolling.with.the.mouse", "The number of characters to keep on either side when scrolling with the mouse."),
+                lt(
+                    "settings_ui.page_data.title.horizontal.scroll.margin",
+                    "Horizontal Scroll Margin"
+                ),
+                lt(
+                    "settings_ui.page_data.description.the.number.of.characters.to.keep.on.either.side.when.scrolling.with.the.mouse",
+                    "The number of characters to keep on either side when scrolling with the mouse."
+                ),
                 "horizontal_scroll_margin",
                 |settings_content| { settings_content.editor.horizontal_scroll_margin.as_ref() },
-                |settings_content, value, _| { settings_content.editor.horizontal_scroll_margin = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.horizontal_scroll_margin = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.scroll.sensitivity", "Scroll Sensitivity"),
-                lt("settings_ui.page_data.description.scroll.sensitivity.multiplier.for.both.horizontal.and.vertical.scrolling", "Scroll sensitivity multiplier for both horizontal and vertical scrolling."),
+                lt(
+                    "settings_ui.page_data.title.scroll.sensitivity",
+                    "Scroll Sensitivity"
+                ),
+                lt(
+                    "settings_ui.page_data.description.scroll.sensitivity.multiplier.for.both.horizontal.and.vertical.scrolling",
+                    "Scroll sensitivity multiplier for both horizontal and vertical scrolling."
+                ),
                 "scroll_sensitivity",
                 |settings_content| settings_content.editor.scroll_sensitivity.as_ref(),
-                |settings_content, value, _| { settings_content.editor.scroll_sensitivity = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.scroll_sensitivity = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.mouse.wheel.zoom", "Mouse Wheel Zoom"),
-                lt("settings_ui.page_data.description.whether.to.zoom.the.editor.font.size.with.the.mouse.wheel.while.holding.the.primary.modifier.key", "Whether to zoom the editor font size with the mouse wheel while holding the primary modifier key."),
+                lt(
+                    "settings_ui.page_data.title.mouse.wheel.zoom",
+                    "Mouse Wheel Zoom"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.zoom.the.editor.font.size.with.the.mouse.wheel.while.holding.the.primary.modifier.key",
+                    "Whether to zoom the editor font size with the mouse wheel while holding the primary modifier key."
+                ),
                 "mouse_wheel_zoom",
                 |settings_content| settings_content.editor.mouse_wheel_zoom.as_ref(),
-                |settings_content, value, _| { settings_content.editor.mouse_wheel_zoom = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.mouse_wheel_zoom = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.fast.scroll.sensitivity", "Fast Scroll Sensitivity"),
-                lt("settings_ui.page_data.description.fast.scroll.sensitivity.multiplier.for.both.horizontal.and.vertical.scrolling", "Fast scroll sensitivity multiplier for both horizontal and vertical scrolling."),
+                lt(
+                    "settings_ui.page_data.title.fast.scroll.sensitivity",
+                    "Fast Scroll Sensitivity"
+                ),
+                lt(
+                    "settings_ui.page_data.description.fast.scroll.sensitivity.multiplier.for.both.horizontal.and.vertical.scrolling",
+                    "Fast scroll sensitivity multiplier for both horizontal and vertical scrolling."
+                ),
                 "fast_scroll_sensitivity",
                 |settings_content| { settings_content.editor.fast_scroll_sensitivity.as_ref() },
-                |settings_content, value, _| { settings_content.editor.fast_scroll_sensitivity = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.fast_scroll_sensitivity = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.autoscroll.on.clicks", "Autoscroll On Clicks"),
-                lt("settings_ui.page_data.description.whether.to.scroll.when.clicking.near.the.edge.of.the.visible.text.area", "Whether to scroll when clicking near the edge of the visible text area."),
+                lt(
+                    "settings_ui.page_data.title.autoscroll.on.clicks",
+                    "Autoscroll On Clicks"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.scroll.when.clicking.near.the.edge.of.the.visible.text.area",
+                    "Whether to scroll when clicking near the edge of the visible text area."
+                ),
                 "autoscroll_on_clicks",
                 |settings_content| settings_content.editor.autoscroll_on_clicks.as_ref(),
-                |settings_content, value, _| { settings_content.editor.autoscroll_on_clicks = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.autoscroll_on_clicks = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.sticky.scroll", "Sticky Scroll"),
-                lt("settings_ui.page_data.description.whether.to.stick.scopes.to.the.top.of.the.editor", "Whether to stick scopes to the top of the editor"),
+                lt(
+                    "settings_ui.page_data.description.whether.to.stick.scopes.to.the.top.of.the.editor",
+                    "Whether to stick scopes to the top of the editor"
+                ),
                 "sticky_scroll.enabled",
                 |settings_content| {
-                                        settings_content
-                                            .editor
-                                            .sticky_scroll
-                                            .as_ref()
-                                            .and_then(|sticky_scroll| sticky_scroll.enabled.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.editor.sticky_scroll.get_or_insert_default().enabled = value; }),
+                    settings_content
+                        .editor
+                        .sticky_scroll
+                        .as_ref()
+                        .and_then(|sticky_scroll| sticky_scroll.enabled.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .sticky_scroll
+                        .get_or_insert_default()
+                        .enabled = value;
+                }
+            ),
         ]
     }
 
     fn signature_help_section() -> [SettingsPageItem; 4] {
         [
-            section_header!("settings_ui.page_data.section.signature.help", "Signature Help"),
+            section_header!(
+                "settings_ui.page_data.section.signature.help",
+                "Signature Help"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.auto.signature.help", "Auto Signature Help"),
-                lt("settings_ui.page_data.description.automatically.show.a.signature.help.pop.up", "Automatically show a signature help pop-up."),
+                lt(
+                    "settings_ui.page_data.title.auto.signature.help",
+                    "Auto Signature Help"
+                ),
+                lt(
+                    "settings_ui.page_data.description.automatically.show.a.signature.help.pop.up",
+                    "Automatically show a signature help pop-up."
+                ),
                 "auto_signature_help",
                 |settings_content| settings_content.editor.auto_signature_help.as_ref(),
-                |settings_content, value, _| { settings_content.editor.auto_signature_help = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.auto_signature_help = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.signature.help.after.edits", "Show Signature Help After Edits"),
-                lt("settings_ui.page_data.description.show.the.signature.help.pop.up.after.completions.or.bracket.pairs.are.inserted", "Show the signature help pop-up after completions or bracket pairs are inserted."),
+                lt(
+                    "settings_ui.page_data.title.show.signature.help.after.edits",
+                    "Show Signature Help After Edits"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.signature.help.pop.up.after.completions.or.bracket.pairs.are.inserted",
+                    "Show the signature help pop-up after completions or bracket pairs are inserted."
+                ),
                 "show_signature_help_after_edits",
-                |settings_content| { settings_content.editor.show_signature_help_after_edits.as_ref() },
-                |settings_content, value, _| { settings_content.editor.show_signature_help_after_edits = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .show_signature_help_after_edits
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content.editor.show_signature_help_after_edits = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.snippet.sort.order", "Snippet Sort Order"),
-                lt("settings_ui.page_data.description.determines.how.snippets.are.sorted.relative.to.other.completion.items", "Determines how snippets are sorted relative to other completion items."),
+                lt(
+                    "settings_ui.page_data.title.snippet.sort.order",
+                    "Snippet Sort Order"
+                ),
+                lt(
+                    "settings_ui.page_data.description.determines.how.snippets.are.sorted.relative.to.other.completion.items",
+                    "Determines how snippets are sorted relative to other completion items."
+                ),
                 "snippet_sort_order",
                 |settings_content| settings_content.editor.snippet_sort_order.as_ref(),
-                |settings_content, value, _| { settings_content.editor.snippet_sort_order = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.snippet_sort_order = value;
+                }
+            ),
         ]
     }
 
     fn hover_popover_section() -> [SettingsPageItem; 5] {
         [
-            section_header!("settings_ui.page_data.section.hover.popover", "Hover Popover"),
+            section_header!(
+                "settings_ui.page_data.section.hover.popover",
+                "Hover Popover"
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.enabled", "Enabled"),
-                lt("settings_ui.page_data.description.show.the.informational.hover.box.when.moving.the.mouse.over.symbols.in.the.editor", "Show the informational hover box when moving the mouse over symbols in the editor."),
+                lt(
+                    "settings_ui.page_data.description.show.the.informational.hover.box.when.moving.the.mouse.over.symbols.in.the.editor",
+                    "Show the informational hover box when moving the mouse over symbols in the editor."
+                ),
                 "hover_popover_enabled",
                 |settings_content| settings_content.editor.hover_popover_enabled.as_ref(),
-                |settings_content, value, _| { settings_content.editor.hover_popover_enabled = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.hover_popover_enabled = value;
+                }
+            ),
             // todo(settings ui): add units to this number input
             setting_item!(
                 lt("settings_ui.page_data.title.delay", "Delay"),
-                lt("settings_ui.page_data.description.time.to.wait.in.milliseconds.before.showing.the.informational.hover.box", "Time to wait in milliseconds before showing the informational hover box."),
+                lt(
+                    "settings_ui.page_data.description.time.to.wait.in.milliseconds.before.showing.the.informational.hover.box",
+                    "Time to wait in milliseconds before showing the informational hover box."
+                ),
                 "hover_popover_delay",
                 |settings_content| settings_content.editor.hover_popover_delay.as_ref(),
-                |settings_content, value, _| { settings_content.editor.hover_popover_delay = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.hover_popover_delay = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.sticky", "Sticky"),
-                lt("settings_ui.page_data.description.whether.the.hover.popover.sticks.when.the.mouse.moves.toward.it.allowing.interaction.with.its.contents", "Whether the hover popover sticks when the mouse moves toward it, allowing interaction with its contents."),
+                lt(
+                    "settings_ui.page_data.description.whether.the.hover.popover.sticks.when.the.mouse.moves.toward.it.allowing.interaction.with.its.contents",
+                    "Whether the hover popover sticks when the mouse moves toward it, allowing interaction with its contents."
+                ),
                 "hover_popover_sticky",
                 |settings_content| settings_content.editor.hover_popover_sticky.as_ref(),
-                |settings_content, value, _| { settings_content.editor.hover_popover_sticky = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.hover_popover_sticky = value;
+                }
+            ),
             // todo(settings ui): add units to this number input
             setting_item!(
                 lt("settings_ui.page_data.title.hiding.delay", "Hiding Delay"),
-                lt("settings_ui.page_data.description.time.to.wait.in.milliseconds.before.hiding.the.hover.popover.after.the.mouse.moves.away", "Time to wait in milliseconds before hiding the hover popover after the mouse moves away."),
+                lt(
+                    "settings_ui.page_data.description.time.to.wait.in.milliseconds.before.hiding.the.hover.popover.after.the.mouse.moves.away",
+                    "Time to wait in milliseconds before hiding the hover popover after the mouse moves away."
+                ),
                 "hover_popover_hiding_delay",
                 |settings_content| { settings_content.editor.hover_popover_hiding_delay.as_ref() },
-                |settings_content, value, _| { settings_content.editor.hover_popover_hiding_delay = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.hover_popover_hiding_delay = value;
+                }
+            ),
         ]
     }
 
     fn drag_and_drop_selection_section() -> [SettingsPageItem; 3] {
         [
-            section_header!("settings_ui.page_data.section.drag.and.drop.selection", "Drag And Drop Selection"),
+            section_header!(
+                "settings_ui.page_data.section.drag.and.drop.selection",
+                "Drag And Drop Selection"
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.enabled", "Enabled"),
-                lt("settings_ui.page_data.description.enable.drag.and.drop.selection", "Enable drag and drop selection."),
+                lt(
+                    "settings_ui.page_data.description.enable.drag.and.drop.selection",
+                    "Enable drag and drop selection."
+                ),
                 "drag_and_drop_selection.enabled",
                 |settings_content| {
-                                        settings_content
-                                            .editor
-                                            .drag_and_drop_selection
-                                            .as_ref()
-                                            .and_then(|drag_and_drop| drag_and_drop.enabled.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.editor.drag_and_drop_selection.get_or_insert_default().enabled = value; }),
+                    settings_content
+                        .editor
+                        .drag_and_drop_selection
+                        .as_ref()
+                        .and_then(|drag_and_drop| drag_and_drop.enabled.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .drag_and_drop_selection
+                        .get_or_insert_default()
+                        .enabled = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.delay", "Delay"),
-                lt("settings_ui.page_data.description.delay.in.milliseconds.before.drag.and.drop.selection.starts", "Delay in milliseconds before drag and drop selection starts."),
+                lt(
+                    "settings_ui.page_data.description.delay.in.milliseconds.before.drag.and.drop.selection.starts",
+                    "Delay in milliseconds before drag and drop selection starts."
+                ),
                 "drag_and_drop_selection.delay",
                 |settings_content| {
-                                        settings_content
-                                            .editor
-                                            .drag_and_drop_selection
-                                            .as_ref()
-                                            .and_then(|drag_and_drop| drag_and_drop.delay.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.editor.drag_and_drop_selection.get_or_insert_default().delay = value; }),
+                    settings_content
+                        .editor
+                        .drag_and_drop_selection
+                        .as_ref()
+                        .and_then(|drag_and_drop| drag_and_drop.delay.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .drag_and_drop_selection
+                        .get_or_insert_default()
+                        .delay = value;
+                }
+            ),
         ]
     }
 
@@ -1454,107 +2039,218 @@ fn editor_page() -> SettingsPage {
         [
             section_header!("settings_ui.page_data.section.gutter", "Gutter"),
             setting_item!(
-                lt("settings_ui.page_data.title.git.gutter.width", "Git Gutter Width"),
-                lt("settings_ui.page_data.description.git.gutter.width", "Width, in pixels, of the git diff indicators in the gutter. When unset, the width scales with the buffer font size."),
+                lt(
+                    "settings_ui.page_data.title.git.gutter.width",
+                    "Git Gutter Width"
+                ),
+                lt(
+                    "settings_ui.page_data.description.git.gutter.width",
+                    "Width, in pixels, of the git diff indicators in the gutter. When unset, the width scales with the buffer font size."
+                ),
                 "gutter.git_gutter_width",
                 |settings_content| {
-                                        settings_content
-                                            .editor
-                                            .gutter
-                                            .as_ref()
-                                            .and_then(|gutter| gutter.git_gutter_width.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.editor.gutter.get_or_insert_default().git_gutter_width = value; }),
+                    settings_content
+                        .editor
+                        .gutter
+                        .as_ref()
+                        .and_then(|gutter| gutter.git_gutter_width.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .gutter
+                        .get_or_insert_default()
+                        .git_gutter_width = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.line.numbers", "Show Line Numbers"),
-                lt("settings_ui.page_data.description.show.line.numbers.in.the.gutter", "Show line numbers in the gutter."),
+                lt(
+                    "settings_ui.page_data.title.show.line.numbers",
+                    "Show Line Numbers"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.line.numbers.in.the.gutter",
+                    "Show line numbers in the gutter."
+                ),
                 "gutter.line_numbers",
                 |settings_content| {
-                                        settings_content
-                                            .editor
-                                            .gutter
-                                            .as_ref()
-                                            .and_then(|gutter| gutter.line_numbers.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.editor.gutter.get_or_insert_default().line_numbers = value; }),
+                    settings_content
+                        .editor
+                        .gutter
+                        .as_ref()
+                        .and_then(|gutter| gutter.line_numbers.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .gutter
+                        .get_or_insert_default()
+                        .line_numbers = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.relative.line.numbers", "Relative Line Numbers"),
-                lt("settings_ui.page_data.description.controls.line.number.display.in.the.editor.s.gutter.disabled.shows.absolute.line.numbers.enabled.shows.relative.line.numbers.for.each.absolute.line.and.wrapped.shows.relative.line.numbers.for.every.line.absolute.or.wrapped", "Controls line number display in the editor's gutter. \\\"disabled\\\" shows absolute line numbers, \\\"enabled\\\" shows relative line numbers for each absolute line, and \\\"wrapped\\\" shows relative line numbers for every line, absolute or wrapped."),
+                lt(
+                    "settings_ui.page_data.title.relative.line.numbers",
+                    "Relative Line Numbers"
+                ),
+                lt(
+                    "settings_ui.page_data.description.controls.line.number.display.in.the.editor.s.gutter.disabled.shows.absolute.line.numbers.enabled.shows.relative.line.numbers.for.each.absolute.line.and.wrapped.shows.relative.line.numbers.for.every.line.absolute.or.wrapped",
+                    "Controls line number display in the editor's gutter. \\\"disabled\\\" shows absolute line numbers, \\\"enabled\\\" shows relative line numbers for each absolute line, and \\\"wrapped\\\" shows relative line numbers for every line, absolute or wrapped."
+                ),
                 "relative_line_numbers",
                 |settings_content| settings_content.editor.relative_line_numbers.as_ref(),
-                |settings_content, value, _| { settings_content.editor.relative_line_numbers = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.relative_line_numbers = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.line.number.scale", "Line Number Scale"),
-                lt("settings_ui.page_data.description.scale.of.the.line.number.font.size.relative.to.the.buffer.font.size", "Scale of the line number font size, relative to the buffer font size."),
+                lt(
+                    "settings_ui.page_data.title.line.number.scale",
+                    "Line Number Scale"
+                ),
+                lt(
+                    "settings_ui.page_data.description.scale.of.the.line.number.font.size.relative.to.the.buffer.font.size",
+                    "Scale of the line number font size, relative to the buffer font size."
+                ),
                 "line_number_scale",
                 |settings_content| settings_content.editor.line_number_scale.as_ref(),
-                |settings_content, value, _| { settings_content.editor.line_number_scale = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.line_number_scale = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.runnables", "Show Runnables"),
-                lt("settings_ui.page_data.description.show.runnable.buttons.in.the.gutter", "Show runnable buttons in the gutter."),
+                lt(
+                    "settings_ui.page_data.title.show.runnables",
+                    "Show Runnables"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.runnable.buttons.in.the.gutter",
+                    "Show runnable buttons in the gutter."
+                ),
                 "gutter.runnables",
                 |settings_content| {
-                                        settings_content
-                                            .editor
-                                            .gutter
-                                            .as_ref()
-                                            .and_then(|gutter| gutter.runnables.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.editor.gutter.get_or_insert_default().runnables = value; }),
+                    settings_content
+                        .editor
+                        .gutter
+                        .as_ref()
+                        .and_then(|gutter| gutter.runnables.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .gutter
+                        .get_or_insert_default()
+                        .runnables = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.breakpoints", "Show Breakpoints"),
-                lt("settings_ui.page_data.description.show.breakpoints.in.the.gutter", "Show breakpoints in the gutter."),
+                lt(
+                    "settings_ui.page_data.title.show.breakpoints",
+                    "Show Breakpoints"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.breakpoints.in.the.gutter",
+                    "Show breakpoints in the gutter."
+                ),
                 "gutter.breakpoints",
                 |settings_content| {
-                                        settings_content
-                                            .editor
-                                            .gutter
-                                            .as_ref()
-                                            .and_then(|gutter| gutter.breakpoints.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.editor.gutter.get_or_insert_default().breakpoints = value; }),
+                    settings_content
+                        .editor
+                        .gutter
+                        .as_ref()
+                        .and_then(|gutter| gutter.breakpoints.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .gutter
+                        .get_or_insert_default()
+                        .breakpoints = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.bookmarks", "Show Bookmarks"),
-                lt("settings_ui.page_data.description.show.bookmarks.in.the.gutter", "Show bookmarks in the gutter."),
+                lt(
+                    "settings_ui.page_data.title.show.bookmarks",
+                    "Show Bookmarks"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.bookmarks.in.the.gutter",
+                    "Show bookmarks in the gutter."
+                ),
                 "gutter.bookmarks",
                 |settings_content| {
-                                        settings_content
-                                            .editor
-                                            .gutter
-                                            .as_ref()
-                                            .and_then(|gutter| gutter.bookmarks.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.editor.gutter.get_or_insert_default().bookmarks = value; }),
+                    settings_content
+                        .editor
+                        .gutter
+                        .as_ref()
+                        .and_then(|gutter| gutter.bookmarks.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .gutter
+                        .get_or_insert_default()
+                        .bookmarks = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.show.folds", "Show Folds"),
-                lt("settings_ui.page_data.description.show.code.folding.controls.in.the.gutter", "Show code folding controls in the gutter."),
+                lt(
+                    "settings_ui.page_data.description.show.code.folding.controls.in.the.gutter",
+                    "Show code folding controls in the gutter."
+                ),
                 "gutter.folds",
                 |settings_content| {
-                                        settings_content
-                                            .editor
-                                            .gutter
-                                            .as_ref()
-                                            .and_then(|gutter| gutter.folds.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.editor.gutter.get_or_insert_default().folds = value; }),
+                    settings_content
+                        .editor
+                        .gutter
+                        .as_ref()
+                        .and_then(|gutter| gutter.folds.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content.editor.gutter.get_or_insert_default().folds = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.min.line.number.digits", "Min Line Number Digits"),
-                lt("settings_ui.page_data.description.minimum.number.of.characters.to.reserve.space.for.in.the.gutter", "Minimum number of characters to reserve space for in the gutter."),
+                lt(
+                    "settings_ui.page_data.title.min.line.number.digits",
+                    "Min Line Number Digits"
+                ),
+                lt(
+                    "settings_ui.page_data.description.minimum.number.of.characters.to.reserve.space.for.in.the.gutter",
+                    "Minimum number of characters to reserve space for in the gutter."
+                ),
                 "gutter.min_line_number_digits",
                 |settings_content| {
-                                        settings_content
-                                            .editor
-                                            .gutter
-                                            .as_ref()
-                                            .and_then(|gutter| gutter.min_line_number_digits.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.editor.gutter.get_or_insert_default().min_line_number_digits = value; }),
+                    settings_content
+                        .editor
+                        .gutter
+                        .as_ref()
+                        .and_then(|gutter| gutter.min_line_number_digits.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .gutter
+                        .get_or_insert_default()
+                        .min_line_number_digits = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.inline.code.actions", "Inline Code Actions"),
-                lt("settings_ui.page_data.description.show.code.action.button.at.start.of.buffer.line", "Show code action button at start of buffer line."),
+                lt(
+                    "settings_ui.page_data.title.inline.code.actions",
+                    "Inline Code Actions"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.code.action.button.at.start.of.buffer.line",
+                    "Show code action button at start of buffer line."
+                ),
                 "inline_code_actions",
                 |settings_content| settings_content.editor.inline_code_actions.as_ref(),
-                |settings_content, value, _| { settings_content.editor.inline_code_actions = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.inline_code_actions = value;
+                }
+            ),
         ]
     }
 
@@ -1563,74 +2259,217 @@ fn editor_page() -> SettingsPage {
             section_header!("settings_ui.page_data.section.scrollbar", "Scrollbar"),
             setting_item!(
                 lt("settings_ui.page_data.title.show", "Show"),
-                lt("settings_ui.page_data.description.when.to.show.the.scrollbar.in.the.editor", "When to show the scrollbar in the editor."),
+                lt(
+                    "settings_ui.page_data.description.when.to.show.the.scrollbar.in.the.editor",
+                    "When to show the scrollbar in the editor."
+                ),
                 "scrollbar",
                 |settings_content| { settings_content.editor.scrollbar.as_ref()?.show.as_ref() },
-                |settings_content, value, _| { settings_content.editor.scrollbar.get_or_insert_default().show = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .scrollbar
+                        .get_or_insert_default()
+                        .show = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.cursors", "Cursors"),
-                lt("settings_ui.page_data.description.show.cursor.positions.in.the.scrollbar", "Show cursor positions in the scrollbar."),
+                lt(
+                    "settings_ui.page_data.description.show.cursor.positions.in.the.scrollbar",
+                    "Show cursor positions in the scrollbar."
+                ),
                 "scrollbar.cursors",
                 |settings_content| { settings_content.editor.scrollbar.as_ref()?.cursors.as_ref() },
-                |settings_content, value, _| { settings_content.editor.scrollbar.get_or_insert_default().cursors = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .scrollbar
+                        .get_or_insert_default()
+                        .cursors = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.git.diff", "Git Diff"),
-                lt("settings_ui.page_data.description.show.git.diff.indicators.in.the.scrollbar", "Show Git diff indicators in the scrollbar."),
+                lt(
+                    "settings_ui.page_data.description.show.git.diff.indicators.in.the.scrollbar",
+                    "Show Git diff indicators in the scrollbar."
+                ),
                 "scrollbar.git_diff",
-                |settings_content| { settings_content.editor.scrollbar.as_ref()?.git_diff.as_ref() },
-                |settings_content, value, _| { settings_content.editor.scrollbar.get_or_insert_default().git_diff = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .scrollbar
+                        .as_ref()?
+                        .git_diff
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .scrollbar
+                        .get_or_insert_default()
+                        .git_diff = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.search.results", "Search Results"),
-                lt("settings_ui.page_data.description.show.buffer.search.result.indicators.in.the.scrollbar", "Show buffer search result indicators in the scrollbar."),
+                lt(
+                    "settings_ui.page_data.title.search.results",
+                    "Search Results"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.buffer.search.result.indicators.in.the.scrollbar",
+                    "Show buffer search result indicators in the scrollbar."
+                ),
                 "scrollbar.search_results",
-                |settings_content| { settings_content.editor.scrollbar.as_ref()?.search_results.as_ref() },
-                |settings_content, value, _| { settings_content.editor.scrollbar.get_or_insert_default().search_results = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .scrollbar
+                        .as_ref()?
+                        .search_results
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .scrollbar
+                        .get_or_insert_default()
+                        .search_results = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.selected.text", "Selected Text"),
-                lt("settings_ui.page_data.description.show.selected.text.occurrences.in.the.scrollbar", "Show selected text occurrences in the scrollbar."),
+                lt(
+                    "settings_ui.page_data.description.show.selected.text.occurrences.in.the.scrollbar",
+                    "Show selected text occurrences in the scrollbar."
+                ),
                 "scrollbar.selected_text",
-                |settings_content| { settings_content.editor.scrollbar.as_ref()?.selected_text.as_ref() },
-                |settings_content, value, _| { settings_content.editor.scrollbar.get_or_insert_default().selected_text = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .scrollbar
+                        .as_ref()?
+                        .selected_text
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .scrollbar
+                        .get_or_insert_default()
+                        .selected_text = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.selected.symbol", "Selected Symbol"),
-                lt("settings_ui.page_data.description.show.selected.symbol.occurrences.in.the.scrollbar", "Show selected symbol occurrences in the scrollbar."),
+                lt(
+                    "settings_ui.page_data.title.selected.symbol",
+                    "Selected Symbol"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.selected.symbol.occurrences.in.the.scrollbar",
+                    "Show selected symbol occurrences in the scrollbar."
+                ),
                 "scrollbar.selected_symbol",
-                |settings_content| { settings_content.editor.scrollbar.as_ref()?.selected_symbol.as_ref() },
-                |settings_content, value, _| { settings_content.editor.scrollbar.get_or_insert_default().selected_symbol = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .scrollbar
+                        .as_ref()?
+                        .selected_symbol
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .scrollbar
+                        .get_or_insert_default()
+                        .selected_symbol = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.diagnostics", "Diagnostics"),
-                lt("settings_ui.page_data.description.which.diagnostic.indicators.to.show.in.the.scrollbar", "Which diagnostic indicators to show in the scrollbar."),
+                lt(
+                    "settings_ui.page_data.description.which.diagnostic.indicators.to.show.in.the.scrollbar",
+                    "Which diagnostic indicators to show in the scrollbar."
+                ),
                 "scrollbar.diagnostics",
-                |settings_content| { settings_content.editor.scrollbar.as_ref()?.diagnostics.as_ref() },
-                |settings_content, value, _| { settings_content.editor.scrollbar.get_or_insert_default().diagnostics = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .scrollbar
+                        .as_ref()?
+                        .diagnostics
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .scrollbar
+                        .get_or_insert_default()
+                        .diagnostics = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.horizontal.scrollbar", "Horizontal Scrollbar"),
-                lt("settings_ui.page_data.description.when.false.forcefully.disables.the.horizontal.scrollbar", "When false, forcefully disables the horizontal scrollbar."),
+                lt(
+                    "settings_ui.page_data.title.horizontal.scrollbar",
+                    "Horizontal Scrollbar"
+                ),
+                lt(
+                    "settings_ui.page_data.description.when.false.forcefully.disables.the.horizontal.scrollbar",
+                    "When false, forcefully disables the horizontal scrollbar."
+                ),
                 "scrollbar.axes.horizontal",
-                |settings_content| { settings_content.editor.scrollbar.as_ref()?.axes.as_ref()?.horizontal.as_ref() },
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .scrollbar
+                        .as_ref()?
+                        .axes
+                        .as_ref()?
+                        .horizontal
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .editor
-                                            .scrollbar
-                                            .get_or_insert_default()
-                                            .axes
-                                            .get_or_insert_default()
-                                            .horizontal = value;
-                                    }),
+                    settings_content
+                        .editor
+                        .scrollbar
+                        .get_or_insert_default()
+                        .axes
+                        .get_or_insert_default()
+                        .horizontal = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.vertical.scrollbar", "Vertical Scrollbar"),
-                lt("settings_ui.page_data.description.when.false.forcefully.disables.the.vertical.scrollbar", "When false, forcefully disables the vertical scrollbar."),
+                lt(
+                    "settings_ui.page_data.title.vertical.scrollbar",
+                    "Vertical Scrollbar"
+                ),
+                lt(
+                    "settings_ui.page_data.description.when.false.forcefully.disables.the.vertical.scrollbar",
+                    "When false, forcefully disables the vertical scrollbar."
+                ),
                 "scrollbar.axes.vertical",
-                |settings_content| { settings_content.editor.scrollbar.as_ref()?.axes.as_ref()?.vertical.as_ref() },
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .scrollbar
+                        .as_ref()?
+                        .axes
+                        .as_ref()?
+                        .vertical
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .editor
-                                            .scrollbar
-                                            .get_or_insert_default()
-                                            .axes
-                                            .get_or_insert_default()
-                                            .vertical = value;
-                                    }),
+                    settings_content
+                        .editor
+                        .scrollbar
+                        .get_or_insert_default()
+                        .axes
+                        .get_or_insert_default()
+                        .vertical = value;
+                }
+            ),
         ]
     }
 
@@ -1639,47 +2478,130 @@ fn editor_page() -> SettingsPage {
             section_header!("settings_ui.page_data.section.minimap", "Minimap"),
             setting_item!(
                 lt("settings_ui.page_data.title.show", "Show"),
-                lt("settings_ui.page_data.description.when.to.show.the.minimap.in.the.editor", "When to show the minimap in the editor."),
+                lt(
+                    "settings_ui.page_data.description.when.to.show.the.minimap.in.the.editor",
+                    "When to show the minimap in the editor."
+                ),
                 "minimap.show",
                 |settings_content| { settings_content.editor.minimap.as_ref()?.show.as_ref() },
-                |settings_content, value, _| { settings_content.editor.minimap.get_or_insert_default().show = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.minimap.get_or_insert_default().show = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.display.in", "Display In"),
-                lt("settings_ui.page_data.description.where.to.show.the.minimap.in.the.editor", "Where to show the minimap in the editor."),
+                lt(
+                    "settings_ui.page_data.description.where.to.show.the.minimap.in.the.editor",
+                    "Where to show the minimap in the editor."
+                ),
                 "minimap.display_in",
-                |settings_content| { settings_content.editor.minimap.as_ref()?.display_in.as_ref() },
-                |settings_content, value, _| { settings_content.editor.minimap.get_or_insert_default().display_in = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .minimap
+                        .as_ref()?
+                        .display_in
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .minimap
+                        .get_or_insert_default()
+                        .display_in = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.thumb", "Thumb"),
-                lt("settings_ui.page_data.description.when.to.show.the.minimap.thumb", "When to show the minimap thumb."),
+                lt(
+                    "settings_ui.page_data.description.when.to.show.the.minimap.thumb",
+                    "When to show the minimap thumb."
+                ),
                 "minimap.thumb",
                 |settings_content| { settings_content.editor.minimap.as_ref()?.thumb.as_ref() },
-                |settings_content, value, _| { settings_content.editor.minimap.get_or_insert_default().thumb = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .minimap
+                        .get_or_insert_default()
+                        .thumb = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.thumb.border", "Thumb Border"),
-                lt("settings_ui.page_data.description.border.style.for.the.minimap.s.scrollbar.thumb", "Border style for the minimap's scrollbar thumb."),
+                lt(
+                    "settings_ui.page_data.description.border.style.for.the.minimap.s.scrollbar.thumb",
+                    "Border style for the minimap's scrollbar thumb."
+                ),
                 "minimap.thumb_border",
-                |settings_content| { settings_content.editor.minimap.as_ref()?.thumb_border.as_ref() },
-                |settings_content, value, _| { settings_content.editor.minimap.get_or_insert_default().thumb_border = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .minimap
+                        .as_ref()?
+                        .thumb_border
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .minimap
+                        .get_or_insert_default()
+                        .thumb_border = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.current.line.highlight", "Current Line Highlight"),
-                lt("settings_ui.page_data.description.how.to.highlight.the.current.line.in.the.minimap", "How to highlight the current line in the minimap."),
+                lt(
+                    "settings_ui.page_data.title.current.line.highlight",
+                    "Current Line Highlight"
+                ),
+                lt(
+                    "settings_ui.page_data.description.how.to.highlight.the.current.line.in.the.minimap",
+                    "How to highlight the current line in the minimap."
+                ),
                 "minimap.current_line_highlight",
                 |settings_content| {
-                                        settings_content
-                                            .editor
-                                            .minimap
-                                            .as_ref()
-                                            .and_then(|minimap| minimap.current_line_highlight.as_ref())
-                                            .or(settings_content.editor.current_line_highlight.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.editor.minimap.get_or_insert_default().current_line_highlight = value; }),
+                    settings_content
+                        .editor
+                        .minimap
+                        .as_ref()
+                        .and_then(|minimap| minimap.current_line_highlight.as_ref())
+                        .or(settings_content.editor.current_line_highlight.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .minimap
+                        .get_or_insert_default()
+                        .current_line_highlight = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.max.width.columns", "Max Width Columns"),
-                lt("settings_ui.page_data.description.maximum.number.of.columns.to.display.in.the.minimap", "Maximum number of columns to display in the minimap."),
+                lt(
+                    "settings_ui.page_data.title.max.width.columns",
+                    "Max Width Columns"
+                ),
+                lt(
+                    "settings_ui.page_data.description.maximum.number.of.columns.to.display.in.the.minimap",
+                    "Maximum number of columns to display in the minimap."
+                ),
                 "minimap.max_width_columns",
-                |settings_content| { settings_content.editor.minimap.as_ref()?.max_width_columns.as_ref() },
-                |settings_content, value, _| { settings_content.editor.minimap.get_or_insert_default().max_width_columns = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .minimap
+                        .as_ref()?
+                        .max_width_columns
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .minimap
+                        .get_or_insert_default()
+                        .max_width_columns = value;
+                }
+            ),
         ]
     }
 
@@ -1688,34 +2610,122 @@ fn editor_page() -> SettingsPage {
             section_header!("settings_ui.page_data.section.toolbar", "Toolbar"),
             setting_item!(
                 lt("settings_ui.page_data.title.breadcrumbs", "Breadcrumbs"),
-                lt("settings_ui.page_data.description.show.breadcrumbs", "Show breadcrumbs."),
+                lt(
+                    "settings_ui.page_data.description.show.breadcrumbs",
+                    "Show breadcrumbs."
+                ),
                 "toolbar.breadcrumbs",
-                |settings_content| { settings_content.editor.toolbar.as_ref()?.breadcrumbs.as_ref() },
-                |settings_content, value, _| { settings_content.editor.toolbar.get_or_insert_default().breadcrumbs = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .toolbar
+                        .as_ref()?
+                        .breadcrumbs
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .toolbar
+                        .get_or_insert_default()
+                        .breadcrumbs = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.quick.actions", "Quick Actions"),
-                lt("settings_ui.page_data.description.show.quick.action.buttons.e.g.search.selection.editor.controls.etc", "Show quick action buttons (e.g., search, selection, editor controls, etc.)."),
+                lt(
+                    "settings_ui.page_data.description.show.quick.action.buttons.e.g.search.selection.editor.controls.etc",
+                    "Show quick action buttons (e.g., search, selection, editor controls, etc.)."
+                ),
                 "toolbar.quick_actions",
-                |settings_content| { settings_content.editor.toolbar.as_ref()?.quick_actions.as_ref() },
-                |settings_content, value, _| { settings_content.editor.toolbar.get_or_insert_default().quick_actions = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .toolbar
+                        .as_ref()?
+                        .quick_actions
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .toolbar
+                        .get_or_insert_default()
+                        .quick_actions = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.selections.menu", "Selections Menu"),
-                lt("settings_ui.page_data.description.show.the.selections.menu.in.the.editor.toolbar", "Show the selections menu in the editor toolbar."),
+                lt(
+                    "settings_ui.page_data.title.selections.menu",
+                    "Selections Menu"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.selections.menu.in.the.editor.toolbar",
+                    "Show the selections menu in the editor toolbar."
+                ),
                 "toolbar.selections_menu",
-                |settings_content| { settings_content.editor.toolbar.as_ref()?.selections_menu.as_ref() },
-                |settings_content, value, _| { settings_content.editor.toolbar.get_or_insert_default().selections_menu = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .toolbar
+                        .as_ref()?
+                        .selections_menu
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .toolbar
+                        .get_or_insert_default()
+                        .selections_menu = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.agent.review", "Agent Review"),
-                lt("settings_ui.page_data.description.show.agent.review.buttons.in.the.editor.toolbar", "Show agent review buttons in the editor toolbar."),
+                lt(
+                    "settings_ui.page_data.description.show.agent.review.buttons.in.the.editor.toolbar",
+                    "Show agent review buttons in the editor toolbar."
+                ),
                 "toolbar.agent_review",
-                |settings_content| { settings_content.editor.toolbar.as_ref()?.agent_review.as_ref() },
-                |settings_content, value, _| { settings_content.editor.toolbar.get_or_insert_default().agent_review = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .toolbar
+                        .as_ref()?
+                        .agent_review
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .toolbar
+                        .get_or_insert_default()
+                        .agent_review = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.code.actions", "Code Actions"),
-                lt("settings_ui.page_data.description.show.code.action.buttons.in.the.editor.toolbar", "Show code action buttons in the editor toolbar."),
+                lt(
+                    "settings_ui.page_data.description.show.code.action.buttons.in.the.editor.toolbar",
+                    "Show code action buttons in the editor toolbar."
+                ),
                 "toolbar.code_actions",
-                |settings_content| { settings_content.editor.toolbar.as_ref()?.code_actions.as_ref() },
-                |settings_content, value, _| { settings_content.editor.toolbar.get_or_insert_default().code_actions = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .toolbar
+                        .as_ref()?
+                        .code_actions
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .toolbar
+                        .get_or_insert_default()
+                        .code_actions = value;
+                }
+            ),
         ]
     }
 
@@ -1724,76 +2734,257 @@ fn editor_page() -> SettingsPage {
             section_header!("settings_ui.page_data.section.vim", "Vim"),
             setting_item!(
                 lt("settings_ui.page_data.title.default.mode", "Default Mode"),
-                lt("settings_ui.page_data.description.the.default.mode.when.vim.starts", "The default mode when Vim starts."),
+                lt(
+                    "settings_ui.page_data.description.the.default.mode.when.vim.starts",
+                    "The default mode when Vim starts."
+                ),
                 "vim.default_mode",
                 |settings_content| settings_content.vim.as_ref()?.default_mode.as_ref(),
-                |settings_content, value, _| { settings_content.vim.get_or_insert_default().default_mode = value; }),
+                |settings_content, value, _| {
+                    settings_content.vim.get_or_insert_default().default_mode = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.toggle.relative.line.numbers", "Toggle Relative Line Numbers"),
-                lt("settings_ui.page_data.description.toggle.relative.line.numbers.in.vim.mode", "Toggle relative line numbers in Vim mode."),
+                lt(
+                    "settings_ui.page_data.title.toggle.relative.line.numbers",
+                    "Toggle Relative Line Numbers"
+                ),
+                lt(
+                    "settings_ui.page_data.description.toggle.relative.line.numbers.in.vim.mode",
+                    "Toggle relative line numbers in Vim mode."
+                ),
                 "vim.toggle_relative_line_numbers",
-                |settings_content| { settings_content.vim.as_ref()?.toggle_relative_line_numbers.as_ref() },
-                |settings_content, value, _| { settings_content.vim.get_or_insert_default().toggle_relative_line_numbers = value; }),
+                |settings_content| {
+                    settings_content
+                        .vim
+                        .as_ref()?
+                        .toggle_relative_line_numbers
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .vim
+                        .get_or_insert_default()
+                        .toggle_relative_line_numbers = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.use.system.clipboard", "Use System Clipboard"),
-                lt("settings_ui.page_data.description.controls.when.to.use.system.clipboard.in.vim.mode", "Controls when to use system clipboard in Vim mode."),
+                lt(
+                    "settings_ui.page_data.title.use.system.clipboard",
+                    "Use System Clipboard"
+                ),
+                lt(
+                    "settings_ui.page_data.description.controls.when.to.use.system.clipboard.in.vim.mode",
+                    "Controls when to use system clipboard in Vim mode."
+                ),
                 "vim.use_system_clipboard",
                 |settings_content| { settings_content.vim.as_ref()?.use_system_clipboard.as_ref() },
-                |settings_content, value, _| { settings_content.vim.get_or_insert_default().use_system_clipboard = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .vim
+                        .get_or_insert_default()
+                        .use_system_clipboard = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.use.smartcase.find", "Use Smartcase Find"),
-                lt("settings_ui.page_data.description.enable.smartcase.searching.in.vim.mode", "Enable smartcase searching in Vim mode."),
+                lt(
+                    "settings_ui.page_data.title.use.smartcase.find",
+                    "Use Smartcase Find"
+                ),
+                lt(
+                    "settings_ui.page_data.description.enable.smartcase.searching.in.vim.mode",
+                    "Enable smartcase searching in Vim mode."
+                ),
                 "vim.use_smartcase_find",
                 |settings_content| { settings_content.vim.as_ref()?.use_smartcase_find.as_ref() },
-                |settings_content, value, _| { settings_content.vim.get_or_insert_default().use_smartcase_find = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .vim
+                        .get_or_insert_default()
+                        .use_smartcase_find = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.global.substitution.default", "Global Substitution Default"),
-                lt("settings_ui.page_data.description.when.enabled.the.substitute.command.replaces.all.matches.in.a.line.by.default.the.g.flag.then.toggles.this.behavior", "When enabled, the :substitute command replaces all matches in a line by default. The 'g' flag then toggles this behavior."),
+                lt(
+                    "settings_ui.page_data.title.global.substitution.default",
+                    "Global Substitution Default"
+                ),
+                lt(
+                    "settings_ui.page_data.description.when.enabled.the.substitute.command.replaces.all.matches.in.a.line.by.default.the.g.flag.then.toggles.this.behavior",
+                    "When enabled, the :substitute command replaces all matches in a line by default. The 'g' flag then toggles this behavior."
+                ),
                 "vim.gdefault",
                 |settings_content| settings_content.vim.as_ref()?.gdefault.as_ref(),
-                |settings_content, value, _| { settings_content.vim.get_or_insert_default().gdefault = value; }),
+                |settings_content, value, _| {
+                    settings_content.vim.get_or_insert_default().gdefault = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.highlight.on.yank.duration", "Highlight on Yank Duration"),
-                lt("settings_ui.page_data.description.duration.in.milliseconds.to.highlight.yanked.text.in.vim.mode", "Duration in milliseconds to highlight yanked text in Vim mode."),
+                lt(
+                    "settings_ui.page_data.title.highlight.on.yank.duration",
+                    "Highlight on Yank Duration"
+                ),
+                lt(
+                    "settings_ui.page_data.description.duration.in.milliseconds.to.highlight.yanked.text.in.vim.mode",
+                    "Duration in milliseconds to highlight yanked text in Vim mode."
+                ),
                 "vim.highlight_on_yank_duration",
-                |settings_content| { settings_content.vim.as_ref()?.highlight_on_yank_duration.as_ref() },
-                |settings_content, value, _| { settings_content.vim.get_or_insert_default().highlight_on_yank_duration = value; }),
+                |settings_content| {
+                    settings_content
+                        .vim
+                        .as_ref()?
+                        .highlight_on_yank_duration
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .vim
+                        .get_or_insert_default()
+                        .highlight_on_yank_duration = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.regex.search", "Regex Search"),
-                lt("settings_ui.page_data.description.use.regex.search.by.default.in.vim.search", "Use regex search by default in Vim search."),
+                lt(
+                    "settings_ui.page_data.description.use.regex.search.by.default.in.vim.search",
+                    "Use regex search by default in Vim search."
+                ),
                 "vim.use_regex_search",
                 |settings_content| { settings_content.vim.as_ref()?.use_regex_search.as_ref() },
-                |settings_content, value, _| { settings_content.vim.get_or_insert_default().use_regex_search = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .vim
+                        .get_or_insert_default()
+                        .use_regex_search = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.cursor.shape.normal.mode", "Cursor Shape - Normal Mode"),
-                lt("settings_ui.page_data.description.cursor.shape.for.normal.mode", "Cursor shape for normal mode."),
+                lt(
+                    "settings_ui.page_data.title.cursor.shape.normal.mode",
+                    "Cursor Shape - Normal Mode"
+                ),
+                lt(
+                    "settings_ui.page_data.description.cursor.shape.for.normal.mode",
+                    "Cursor shape for normal mode."
+                ),
                 "vim.cursor_shape.normal",
-                |settings_content| { settings_content.vim.as_ref()?.cursor_shape.as_ref()?.normal.as_ref() },
-                |settings_content, value, _| { settings_content.vim.get_or_insert_default().cursor_shape.get_or_insert_default().normal = value; }),
+                |settings_content| {
+                    settings_content
+                        .vim
+                        .as_ref()?
+                        .cursor_shape
+                        .as_ref()?
+                        .normal
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .vim
+                        .get_or_insert_default()
+                        .cursor_shape
+                        .get_or_insert_default()
+                        .normal = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.cursor.shape.insert.mode", "Cursor Shape - Insert Mode"),
-                lt("settings_ui.page_data.description.cursor.shape.for.insert.mode.inherit.uses.the.editor.s.cursor.shape", "Cursor shape for insert mode. Inherit uses the editor's cursor shape."),
+                lt(
+                    "settings_ui.page_data.title.cursor.shape.insert.mode",
+                    "Cursor Shape - Insert Mode"
+                ),
+                lt(
+                    "settings_ui.page_data.description.cursor.shape.for.insert.mode.inherit.uses.the.editor.s.cursor.shape",
+                    "Cursor shape for insert mode. Inherit uses the editor's cursor shape."
+                ),
                 "vim.cursor_shape.insert",
-                |settings_content| { settings_content.vim.as_ref()?.cursor_shape.as_ref()?.insert.as_ref() },
-                |settings_content, value, _| { settings_content.vim.get_or_insert_default().cursor_shape.get_or_insert_default().insert = value; }),
+                |settings_content| {
+                    settings_content
+                        .vim
+                        .as_ref()?
+                        .cursor_shape
+                        .as_ref()?
+                        .insert
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .vim
+                        .get_or_insert_default()
+                        .cursor_shape
+                        .get_or_insert_default()
+                        .insert = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.cursor.shape.replace.mode", "Cursor Shape - Replace Mode"),
-                lt("settings_ui.page_data.description.cursor.shape.for.replace.mode", "Cursor shape for replace mode."),
+                lt(
+                    "settings_ui.page_data.title.cursor.shape.replace.mode",
+                    "Cursor Shape - Replace Mode"
+                ),
+                lt(
+                    "settings_ui.page_data.description.cursor.shape.for.replace.mode",
+                    "Cursor shape for replace mode."
+                ),
                 "vim.cursor_shape.replace",
-                |settings_content| { settings_content.vim.as_ref()?.cursor_shape.as_ref()?.replace.as_ref() },
-                |settings_content, value, _| { settings_content.vim.get_or_insert_default().cursor_shape.get_or_insert_default().replace = value; }),
+                |settings_content| {
+                    settings_content
+                        .vim
+                        .as_ref()?
+                        .cursor_shape
+                        .as_ref()?
+                        .replace
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .vim
+                        .get_or_insert_default()
+                        .cursor_shape
+                        .get_or_insert_default()
+                        .replace = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.cursor.shape.visual.mode", "Cursor Shape - Visual Mode"),
-                lt("settings_ui.page_data.description.cursor.shape.for.visual.mode", "Cursor shape for visual mode."),
+                lt(
+                    "settings_ui.page_data.title.cursor.shape.visual.mode",
+                    "Cursor Shape - Visual Mode"
+                ),
+                lt(
+                    "settings_ui.page_data.description.cursor.shape.for.visual.mode",
+                    "Cursor shape for visual mode."
+                ),
                 "vim.cursor_shape.visual",
-                |settings_content| { settings_content.vim.as_ref()?.cursor_shape.as_ref()?.visual.as_ref() },
-                |settings_content, value, _| { settings_content.vim.get_or_insert_default().cursor_shape.get_or_insert_default().visual = value; }),
+                |settings_content| {
+                    settings_content
+                        .vim
+                        .as_ref()?
+                        .cursor_shape
+                        .as_ref()?
+                        .visual
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .vim
+                        .get_or_insert_default()
+                        .cursor_shape
+                        .get_or_insert_default()
+                        .visual = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.custom.digraphs", "Custom Digraphs"),
-                lt("settings_ui.page_data.description.custom.digraph.mappings.for.vim.mode", "Custom digraph mappings for Vim mode."),
+                lt(
+                    "settings_ui.page_data.title.custom.digraphs",
+                    "Custom Digraphs"
+                ),
+                lt(
+                    "settings_ui.page_data.description.custom.digraph.mappings.for.vim.mode",
+                    "Custom digraph mappings for Vim mode."
+                ),
                 "vim.custom_digraphs",
                 |settings_content| { settings_content.vim.as_ref()?.custom_digraphs.as_ref() },
-                |settings_content, value, _| { settings_content.vim.get_or_insert_default().custom_digraphs = value; }),
+                |settings_content, value, _| {
+                    settings_content.vim.get_or_insert_default().custom_digraphs = value;
+                }
+            ),
         ]
     }
 
@@ -1838,129 +3029,236 @@ fn languages_and_tools_page(cx: &App) -> SettingsPage {
             section_header!("settings_ui.page_data.section.diagnostics", "Diagnostics"),
             setting_item!(
                 lt("settings_ui.page_data.title.max.severity", "Max Severity"),
-                lt("settings_ui.page_data.description.which.level.to.use.to.filter.out.diagnostics.displayed.in.the.editor", "Which level to use to filter out diagnostics displayed in the editor."),
+                lt(
+                    "settings_ui.page_data.description.which.level.to.use.to.filter.out.diagnostics.displayed.in.the.editor",
+                    "Which level to use to filter out diagnostics displayed in the editor."
+                ),
                 "diagnostics_max_severity",
                 |settings_content| { settings_content.editor.diagnostics_max_severity.as_ref() },
-                |settings_content, value, _| { settings_content.editor.diagnostics_max_severity = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.diagnostics_max_severity = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.include.warnings", "Include Warnings"),
-                lt("settings_ui.page_data.description.whether.to.show.warnings.or.not.by.default", "Whether to show warnings or not by default."),
+                lt(
+                    "settings_ui.page_data.title.include.warnings",
+                    "Include Warnings"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.show.warnings.or.not.by.default",
+                    "Whether to show warnings or not by default."
+                ),
                 "diagnostics.include_warnings",
-                |settings_content| { settings_content.diagnostics.as_ref()?.include_warnings.as_ref() },
-                |settings_content, value, _| { settings_content.diagnostics.get_or_insert_default().include_warnings = value; }),
+                |settings_content| {
+                    settings_content
+                        .diagnostics
+                        .as_ref()?
+                        .include_warnings
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .diagnostics
+                        .get_or_insert_default()
+                        .include_warnings = value;
+                }
+            ),
         ]
     }
 
     fn inline_diagnostics_section() -> [SettingsPageItem; 5] {
         [
-            section_header!("settings_ui.page_data.section.inline.diagnostics", "Inline Diagnostics"),
+            section_header!(
+                "settings_ui.page_data.section.inline.diagnostics",
+                "Inline Diagnostics"
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.enabled", "Enabled"),
-                lt("settings_ui.page_data.description.whether.to.show.diagnostics.inline.or.not", "Whether to show diagnostics inline or not."),
+                lt(
+                    "settings_ui.page_data.description.whether.to.show.diagnostics.inline.or.not",
+                    "Whether to show diagnostics inline or not."
+                ),
                 "diagnostics.inline.enabled",
-                |settings_content| { settings_content.diagnostics.as_ref()?.inline.as_ref()?.enabled.as_ref() },
-                |settings_content, value, _| { settings_content.diagnostics.get_or_insert_default().inline.get_or_insert_default().enabled = value; }),
+                |settings_content| {
+                    settings_content
+                        .diagnostics
+                        .as_ref()?
+                        .inline
+                        .as_ref()?
+                        .enabled
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .diagnostics
+                        .get_or_insert_default()
+                        .inline
+                        .get_or_insert_default()
+                        .enabled = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.update.debounce", "Update Debounce"),
-                lt("settings_ui.page_data.description.the.delay.in.milliseconds.to.show.inline.diagnostics.after.the.last.diagnostic.update", "The delay in milliseconds to show inline diagnostics after the last diagnostic update."),
+                lt(
+                    "settings_ui.page_data.title.update.debounce",
+                    "Update Debounce"
+                ),
+                lt(
+                    "settings_ui.page_data.description.the.delay.in.milliseconds.to.show.inline.diagnostics.after.the.last.diagnostic.update",
+                    "The delay in milliseconds to show inline diagnostics after the last diagnostic update."
+                ),
                 "diagnostics.inline.update_debounce_ms",
                 |settings_content| {
-                                        settings_content
-                                            .diagnostics
-                                            .as_ref()?
-                                            .inline
-                                            .as_ref()?
-                                            .update_debounce_ms
-                                            .as_ref()
-                                    },
+                    settings_content
+                        .diagnostics
+                        .as_ref()?
+                        .inline
+                        .as_ref()?
+                        .update_debounce_ms
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .diagnostics
-                                            .get_or_insert_default()
-                                            .inline
-                                            .get_or_insert_default()
-                                            .update_debounce_ms = value;
-                                    }),
+                    settings_content
+                        .diagnostics
+                        .get_or_insert_default()
+                        .inline
+                        .get_or_insert_default()
+                        .update_debounce_ms = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.padding", "Padding"),
-                lt("settings_ui.page_data.description.the.amount.of.padding.between.the.end.of.the.source.line.and.the.start.of.the.inline.diagnostic", "The amount of padding between the end of the source line and the start of the inline diagnostic."),
+                lt(
+                    "settings_ui.page_data.description.the.amount.of.padding.between.the.end.of.the.source.line.and.the.start.of.the.inline.diagnostic",
+                    "The amount of padding between the end of the source line and the start of the inline diagnostic."
+                ),
                 "diagnostics.inline.padding",
-                |settings_content| { settings_content.diagnostics.as_ref()?.inline.as_ref()?.padding.as_ref() },
-                |settings_content, value, _| { settings_content.diagnostics.get_or_insert_default().inline.get_or_insert_default().padding = value; }),
-            setting_item!(
-                lt("settings_ui.page_data.title.minimum.column", "Minimum Column"),
-                lt("settings_ui.page_data.description.the.minimum.column.at.which.to.display.inline.diagnostics", "The minimum column at which to display inline diagnostics."),
-                "diagnostics.inline.min_column",
-                |settings_content| { settings_content.diagnostics.as_ref()?.inline.as_ref()?.min_column.as_ref() },
+                |settings_content| {
+                    settings_content
+                        .diagnostics
+                        .as_ref()?
+                        .inline
+                        .as_ref()?
+                        .padding
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .diagnostics
-                                            .get_or_insert_default()
-                                            .inline
-                                            .get_or_insert_default()
-                                            .min_column = value;
-                                    }),
+                    settings_content
+                        .diagnostics
+                        .get_or_insert_default()
+                        .inline
+                        .get_or_insert_default()
+                        .padding = value;
+                }
+            ),
+            setting_item!(
+                lt(
+                    "settings_ui.page_data.title.minimum.column",
+                    "Minimum Column"
+                ),
+                lt(
+                    "settings_ui.page_data.description.the.minimum.column.at.which.to.display.inline.diagnostics",
+                    "The minimum column at which to display inline diagnostics."
+                ),
+                "diagnostics.inline.min_column",
+                |settings_content| {
+                    settings_content
+                        .diagnostics
+                        .as_ref()?
+                        .inline
+                        .as_ref()?
+                        .min_column
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .diagnostics
+                        .get_or_insert_default()
+                        .inline
+                        .get_or_insert_default()
+                        .min_column = value;
+                }
+            ),
         ]
     }
 
     fn lsp_pull_diagnostics_section() -> [SettingsPageItem; 3] {
         [
-            section_header!("settings_ui.page_data.section.lsp.pull.diagnostics", "LSP Pull Diagnostics"),
+            section_header!(
+                "settings_ui.page_data.section.lsp.pull.diagnostics",
+                "LSP Pull Diagnostics"
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.enabled", "Enabled"),
-                lt("settings_ui.page_data.description.whether.to.pull.for.language.server.powered.diagnostics.or.not", "Whether to pull for language server-powered diagnostics or not."),
+                lt(
+                    "settings_ui.page_data.description.whether.to.pull.for.language.server.powered.diagnostics.or.not",
+                    "Whether to pull for language server-powered diagnostics or not."
+                ),
                 "diagnostics.lsp_pull_diagnostics.enabled",
                 |settings_content| {
-                                        settings_content
-                                            .diagnostics
-                                            .as_ref()?
-                                            .lsp_pull_diagnostics
-                                            .as_ref()?
-                                            .enabled
-                                            .as_ref()
-                                    },
+                    settings_content
+                        .diagnostics
+                        .as_ref()?
+                        .lsp_pull_diagnostics
+                        .as_ref()?
+                        .enabled
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .diagnostics
-                                            .get_or_insert_default()
-                                            .lsp_pull_diagnostics
-                                            .get_or_insert_default()
-                                            .enabled = value;
-                                    }),
+                    settings_content
+                        .diagnostics
+                        .get_or_insert_default()
+                        .lsp_pull_diagnostics
+                        .get_or_insert_default()
+                        .enabled = value;
+                }
+            ),
             // todo(settings_ui): Needs unit
             setting_item!(
                 lt("settings_ui.page_data.title.debounce", "Debounce"),
-                lt("settings_ui.page_data.description.minimum.time.to.wait.before.pulling.diagnostics.from.the.language.server.s", "Minimum time to wait before pulling diagnostics from the language server(s)."),
+                lt(
+                    "settings_ui.page_data.description.minimum.time.to.wait.before.pulling.diagnostics.from.the.language.server.s",
+                    "Minimum time to wait before pulling diagnostics from the language server(s)."
+                ),
                 "diagnostics.lsp_pull_diagnostics.debounce_ms",
                 |settings_content| {
-                                        settings_content
-                                            .diagnostics
-                                            .as_ref()?
-                                            .lsp_pull_diagnostics
-                                            .as_ref()?
-                                            .debounce_ms
-                                            .as_ref()
-                                    },
+                    settings_content
+                        .diagnostics
+                        .as_ref()?
+                        .lsp_pull_diagnostics
+                        .as_ref()?
+                        .debounce_ms
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .diagnostics
-                                            .get_or_insert_default()
-                                            .lsp_pull_diagnostics
-                                            .get_or_insert_default()
-                                            .debounce_ms = value;
-                                    }),
+                    settings_content
+                        .diagnostics
+                        .get_or_insert_default()
+                        .lsp_pull_diagnostics
+                        .get_or_insert_default()
+                        .debounce_ms = value;
+                }
+            ),
         ]
     }
 
     fn lsp_highlights_section() -> [SettingsPageItem; 2] {
         [
-            section_header!("settings_ui.page_data.section.lsp.highlights", "LSP Highlights"),
+            section_header!(
+                "settings_ui.page_data.section.lsp.highlights",
+                "LSP Highlights"
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.debounce", "Debounce"),
-                lt("settings_ui.page_data.description.the.debounce.delay.before.querying.highlights.from.the.language", "The debounce delay before querying highlights from the language."),
+                lt(
+                    "settings_ui.page_data.description.the.debounce.delay.before.querying.highlights.from.the.language",
+                    "The debounce delay before querying highlights from the language."
+                ),
                 "lsp_highlight_debounce",
                 |settings_content| { settings_content.editor.lsp_highlight_debounce.as_ref() },
-                |settings_content, value, _| { settings_content.editor.lsp_highlight_debounce = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.lsp_highlight_debounce = value;
+                }
+            ),
         ]
     }
 
@@ -2019,58 +3317,156 @@ fn search_and_files_page() -> SettingsPage {
             section_header!("settings_ui.page_data.section.search", "Search"),
             setting_item!(
                 lt("settings_ui.page_data.title.whole.word", "Whole Word"),
-                lt("settings_ui.page_data.description.search.for.whole.words.by.default", "Search for whole words by default."),
+                lt(
+                    "settings_ui.page_data.description.search.for.whole.words.by.default",
+                    "Search for whole words by default."
+                ),
                 "search.whole_word",
                 |settings_content| { settings_content.editor.search.as_ref()?.whole_word.as_ref() },
-                |settings_content, value, _| { settings_content.editor.search.get_or_insert_default().whole_word = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .search
+                        .get_or_insert_default()
+                        .whole_word = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.case.sensitive", "Case Sensitive"),
-                lt("settings_ui.page_data.description.search.case.sensitively.by.default", "Search case-sensitively by default."),
+                lt(
+                    "settings_ui.page_data.title.case.sensitive",
+                    "Case Sensitive"
+                ),
+                lt(
+                    "settings_ui.page_data.description.search.case.sensitively.by.default",
+                    "Search case-sensitively by default."
+                ),
                 "search.case_sensitive",
-                |settings_content| { settings_content.editor.search.as_ref()?.case_sensitive.as_ref() },
-                |settings_content, value, _| { settings_content.editor.search.get_or_insert_default().case_sensitive = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .search
+                        .as_ref()?
+                        .case_sensitive
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .search
+                        .get_or_insert_default()
+                        .case_sensitive = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.use.smartcase.search", "Use Smartcase Search"),
-                lt("settings_ui.page_data.description.whether.to.automatically.enable.case.sensitive.search.based.on.the.search.query", "Whether to automatically enable case-sensitive search based on the search query."),
+                lt(
+                    "settings_ui.page_data.title.use.smartcase.search",
+                    "Use Smartcase Search"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.automatically.enable.case.sensitive.search.based.on.the.search.query",
+                    "Whether to automatically enable case-sensitive search based on the search query."
+                ),
                 "use_smartcase_search",
                 |settings_content| settings_content.editor.use_smartcase_search.as_ref(),
-                |settings_content, value, _| { settings_content.editor.use_smartcase_search = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.use_smartcase_search = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.include.ignored", "Include Ignored"),
-                lt("settings_ui.page_data.description.include.ignored.files.in.search.results.by.default", "Include ignored files in search results by default."),
+                lt(
+                    "settings_ui.page_data.title.include.ignored",
+                    "Include Ignored"
+                ),
+                lt(
+                    "settings_ui.page_data.description.include.ignored.files.in.search.results.by.default",
+                    "Include ignored files in search results by default."
+                ),
                 "search.include_ignored",
-                |settings_content| { settings_content.editor.search.as_ref()?.include_ignored.as_ref() },
-                |settings_content, value, _| { settings_content.editor.search.get_or_insert_default().include_ignored = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .search
+                        .as_ref()?
+                        .include_ignored
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .search
+                        .get_or_insert_default()
+                        .include_ignored = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.regex", "Regex"),
-                lt("settings_ui.page_data.description.use.regex.search.by.default", "Use regex search by default."),
+                lt(
+                    "settings_ui.page_data.description.use.regex.search.by.default",
+                    "Use regex search by default."
+                ),
                 "search.regex",
                 |settings_content| { settings_content.editor.search.as_ref()?.regex.as_ref() },
-                |settings_content, value, _| { settings_content.editor.search.get_or_insert_default().regex = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.search.get_or_insert_default().regex = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.search.wrap", "Search Wrap"),
-                lt("settings_ui.page_data.description.whether.the.editor.search.results.will.loop", "Whether the editor search results will loop."),
+                lt(
+                    "settings_ui.page_data.description.whether.the.editor.search.results.will.loop",
+                    "Whether the editor search results will loop."
+                ),
                 "search_wrap",
                 |settings_content| settings_content.editor.search_wrap.as_ref(),
-                |settings_content, value, _| { settings_content.editor.search_wrap = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.search_wrap = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.center.on.match", "Center on Match"),
-                lt("settings_ui.page_data.description.whether.to.center.the.current.match.in.the.editor", "Whether to center the current match in the editor"),
+                lt(
+                    "settings_ui.page_data.title.center.on.match",
+                    "Center on Match"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.center.the.current.match.in.the.editor",
+                    "Whether to center the current match in the editor"
+                ),
                 "editor.search.center_on_match",
                 |settings_content| {
-                                        settings_content
-                                            .editor
-                                            .search
-                                            .as_ref()
-                                            .and_then(|search| search.center_on_match.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.editor.search.get_or_insert_default().center_on_match = value; }),
+                    settings_content
+                        .editor
+                        .search
+                        .as_ref()
+                        .and_then(|search| search.center_on_match.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .search
+                        .get_or_insert_default()
+                        .center_on_match = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.seed.search.query.from.cursor", "Seed Search Query From Cursor"),
-                lt("settings_ui.page_data.description.when.to.populate.a.new.search.s.query.based.on.the.text.under.the.cursor", "When to populate a new search's query based on the text under the cursor."),
+                lt(
+                    "settings_ui.page_data.title.seed.search.query.from.cursor",
+                    "Seed Search Query From Cursor"
+                ),
+                lt(
+                    "settings_ui.page_data.description.when.to.populate.a.new.search.s.query.based.on.the.text.under.the.cursor",
+                    "When to populate a new search's query based on the text under the cursor."
+                ),
                 "seed_search_query_from_cursor",
-                |settings_content| { settings_content.editor.seed_search_query_from_cursor.as_ref() },
-                |settings_content, value, _| { settings_content.editor.seed_search_query_from_cursor = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .seed_search_query_from_cursor
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content.editor.seed_search_query_from_cursor = value;
+                }
+            ),
         ]
     }
 
@@ -2079,35 +3475,116 @@ fn search_and_files_page() -> SettingsPage {
             section_header!("settings_ui.page_data.section.file.finder", "File Finder"),
             // todo: null by default
             setting_item!(
-                lt("settings_ui.page_data.title.include.ignored.in.search", "Include Ignored in Search"),
-                lt("settings_ui.page_data.description.use.gitignored.files.when.searching", "Use gitignored files when searching."),
+                lt(
+                    "settings_ui.page_data.title.include.ignored.in.search",
+                    "Include Ignored in Search"
+                ),
+                lt(
+                    "settings_ui.page_data.description.use.gitignored.files.when.searching",
+                    "Use gitignored files when searching."
+                ),
                 "file_finder.include_ignored",
-                |settings_content| { settings_content.file_finder.as_ref()?.include_ignored.as_ref() },
-                |settings_content, value, _| { settings_content.file_finder.get_or_insert_default().include_ignored = value; }),
+                |settings_content| {
+                    settings_content
+                        .file_finder
+                        .as_ref()?
+                        .include_ignored
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .file_finder
+                        .get_or_insert_default()
+                        .include_ignored = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.file.icons", "File Icons"),
-                lt("settings_ui.page_data.description.show.file.icons.in.the.file.finder", "Show file icons in the file finder."),
+                lt(
+                    "settings_ui.page_data.description.show.file.icons.in.the.file.finder",
+                    "Show file icons in the file finder."
+                ),
                 "file_finder.file_icons",
                 |settings_content| { settings_content.file_finder.as_ref()?.file_icons.as_ref() },
-                |settings_content, value, _| { settings_content.file_finder.get_or_insert_default().file_icons = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .file_finder
+                        .get_or_insert_default()
+                        .file_icons = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.modal.max.width", "Modal Max Width"),
-                lt("settings_ui.page_data.description.determines.how.much.space.the.file.finder.can.take.up.in.relation.to.the.available.window.width", "Determines how much space the file finder can take up in relation to the available window width."),
+                lt(
+                    "settings_ui.page_data.title.modal.max.width",
+                    "Modal Max Width"
+                ),
+                lt(
+                    "settings_ui.page_data.description.determines.how.much.space.the.file.finder.can.take.up.in.relation.to.the.available.window.width",
+                    "Determines how much space the file finder can take up in relation to the available window width."
+                ),
                 "file_finder.modal_max_width",
-                |settings_content| { settings_content.file_finder.as_ref()?.modal_max_width.as_ref() },
-                |settings_content, value, _| { settings_content.file_finder.get_or_insert_default().modal_max_width = value; }),
+                |settings_content| {
+                    settings_content
+                        .file_finder
+                        .as_ref()?
+                        .modal_max_width
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .file_finder
+                        .get_or_insert_default()
+                        .modal_max_width = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.skip.focus.for.active.in.search", "Skip Focus For Active In Search"),
-                lt("settings_ui.page_data.description.whether.the.file.finder.should.skip.focus.for.the.active.file.in.search.results", "Whether the file finder should skip focus for the active file in search results."),
+                lt(
+                    "settings_ui.page_data.title.skip.focus.for.active.in.search",
+                    "Skip Focus For Active In Search"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.the.file.finder.should.skip.focus.for.the.active.file.in.search.results",
+                    "Whether the file finder should skip focus for the active file in search results."
+                ),
                 "file_finder.skip_focus_for_active_in_search",
-                |settings_content| { settings_content.file_finder.as_ref()?.skip_focus_for_active_in_search.as_ref() },
-                |settings_content, value, _| { settings_content.file_finder.get_or_insert_default().skip_focus_for_active_in_search = value; }),
+                |settings_content| {
+                    settings_content
+                        .file_finder
+                        .as_ref()?
+                        .skip_focus_for_active_in_search
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .file_finder
+                        .get_or_insert_default()
+                        .skip_focus_for_active_in_search = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.prefill.query.from.selection", "Prefill Query From Selection"),
-                lt("settings_ui.page_data.description.whether.to.pre.fill.the.file.finders.query.with.text.selected.in.the.focused.item", "Whether to pre-fill the file finder's query with text selected in the focused item."),
+                lt(
+                    "settings_ui.page_data.title.prefill.query.from.selection",
+                    "Prefill Query From Selection"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.pre.fill.the.file.finders.query.with.text.selected.in.the.focused.item",
+                    "Whether to pre-fill the file finder's query with text selected in the focused item."
+                ),
                 "file_finder.prefill_query_from_selection",
-                |settings_content| { settings_content.file_finder.as_ref()?.prefill_query_from_selection.as_ref() },
-                |settings_content, value, _| { settings_content.file_finder.get_or_insert_default().prefill_query_from_selection = value; }),
+                |settings_content| {
+                    settings_content
+                        .file_finder
+                        .as_ref()?
+                        .prefill_query_from_selection
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .file_finder
+                        .get_or_insert_default()
+                        .prefill_query_from_selection = value;
+                }
+            ),
         ]
     }
 
@@ -2115,29 +3592,77 @@ fn search_and_files_page() -> SettingsPage {
         [
             section_header!("settings_ui.page_data.section.file.scan", "File Scan"),
             setting_item!(
-                lt("settings_ui.page_data.title.file.scan.exclusions", "File Scan Exclusions"),
-                lt("settings_ui.page_data.description.files.or.globs.of.files.that.will.be.excluded.by.zzz.entirely.they.will.be.skipped.during.file.scans.file.searches.and.not.be.displayed.in.the.project.file.tree.takes.precedence.over.file.scan.inclusions", "Files or globs of files that will be excluded by ZZZ entirely. They will be skipped during file scans, file searches, and not be displayed in the project file tree. Takes precedence over \\\"File Scan Inclusions\\\""),
+                lt(
+                    "settings_ui.page_data.title.file.scan.exclusions",
+                    "File Scan Exclusions"
+                ),
+                lt(
+                    "settings_ui.page_data.description.files.or.globs.of.files.that.will.be.excluded.by.zzz.entirely.they.will.be.skipped.during.file.scans.file.searches.and.not.be.displayed.in.the.project.file.tree.takes.precedence.over.file.scan.inclusions",
+                    "Files or globs of files that will be excluded by ZZZ entirely. They will be skipped during file scans, file searches, and not be displayed in the project file tree. Takes precedence over \\\"File Scan Inclusions\\\""
+                ),
                 "file_scan_exclusions",
-                |settings_content| { settings_content.project.worktree.file_scan_exclusions.as_ref() },
-                |settings_content, value, _| { settings_content.project.worktree.file_scan_exclusions = value; }),
+                |settings_content| {
+                    settings_content
+                        .project
+                        .worktree
+                        .file_scan_exclusions
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content.project.worktree.file_scan_exclusions = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.file.scan.inclusions", "File Scan Inclusions"),
-                lt("settings_ui.page_data.description.files.or.globs.of.files.that.will.be.included.by.zzz.even.when.ignored.by.git.this.is.useful.for.files.that.are.not.tracked.by.git.but.are.still.important.to.your.project.note.that.globs.that.are.overly.broad.can.slow.down.zzz.s.file.scanning.file.scan.exclusions.takes.precedence.over.these.inclusions", "Files or globs of files that will be included by ZZZ, even when ignored by git. This is useful for files that are not tracked by git, but are still important to your project. Note that globs that are overly broad can slow down ZZZ's file scanning. \\\"File Scan Exclusions\\\" takes precedence over these inclusions"),
+                lt(
+                    "settings_ui.page_data.title.file.scan.inclusions",
+                    "File Scan Inclusions"
+                ),
+                lt(
+                    "settings_ui.page_data.description.files.or.globs.of.files.that.will.be.included.by.zzz.even.when.ignored.by.git.this.is.useful.for.files.that.are.not.tracked.by.git.but.are.still.important.to.your.project.note.that.globs.that.are.overly.broad.can.slow.down.zzz.s.file.scanning.file.scan.exclusions.takes.precedence.over.these.inclusions",
+                    "Files or globs of files that will be included by ZZZ, even when ignored by git. This is useful for files that are not tracked by git, but are still important to your project. Note that globs that are overly broad can slow down ZZZ's file scanning. \\\"File Scan Exclusions\\\" takes precedence over these inclusions"
+                ),
                 "file_scan_inclusions",
-                |settings_content| { settings_content.project.worktree.file_scan_inclusions.as_ref() },
-                |settings_content, value, _| { settings_content.project.worktree.file_scan_inclusions = value; }),
+                |settings_content| {
+                    settings_content
+                        .project
+                        .worktree
+                        .file_scan_inclusions
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content.project.worktree.file_scan_inclusions = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.restore.file.state", "Restore File State"),
-                lt("settings_ui.page_data.description.restore.previous.file.state.when.reopening", "Restore previous file state when reopening."),
+                lt(
+                    "settings_ui.page_data.title.restore.file.state",
+                    "Restore File State"
+                ),
+                lt(
+                    "settings_ui.page_data.description.restore.previous.file.state.when.reopening",
+                    "Restore previous file state when reopening."
+                ),
                 "restore_on_file_reopen",
                 |settings_content| { settings_content.workspace.restore_on_file_reopen.as_ref() },
-                |settings_content, value, _| { settings_content.workspace.restore_on_file_reopen = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.restore_on_file_reopen = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.close.on.file.delete", "Close on File Delete"),
-                lt("settings_ui.page_data.description.automatically.close.files.that.have.been.deleted", "Automatically close files that have been deleted."),
+                lt(
+                    "settings_ui.page_data.title.close.on.file.delete",
+                    "Close on File Delete"
+                ),
+                lt(
+                    "settings_ui.page_data.description.automatically.close.files.that.have.been.deleted",
+                    "Automatically close files that have been deleted."
+                ),
                 "close_on_file_delete",
                 |settings_content| { settings_content.workspace.close_on_file_delete.as_ref() },
-                |settings_content, value, _| { settings_content.workspace.close_on_file_delete = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.close_on_file_delete = value;
+                }
+            ),
         ]
     }
 
@@ -2154,71 +3679,219 @@ fn window_and_layout_page() -> SettingsPage {
         [
             section_header!("settings_ui.page_data.section.status.bar", "Status Bar"),
             setting_item!(
-                lt("settings_ui.page_data.title.project.panel.button", "Project Panel Button"),
-                lt("settings_ui.page_data.description.show.the.project.panel.button.in.the.status.bar", "Show the project panel button in the status bar."),
+                lt(
+                    "settings_ui.page_data.title.project.panel.button",
+                    "Project Panel Button"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.project.panel.button.in.the.status.bar",
+                    "Show the project panel button in the status bar."
+                ),
                 "project_panel.button",
                 |settings_content| { settings_content.project_panel.as_ref()?.button.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().button = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .button = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.active.language.button", "Active Language Button"),
-                lt("settings_ui.page_data.description.show.the.active.language.button.in.the.status.bar", "Show the active language button in the status bar."),
+                lt(
+                    "settings_ui.page_data.title.active.language.button",
+                    "Active Language Button"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.active.language.button.in.the.status.bar",
+                    "Show the active language button in the status bar."
+                ),
                 "status_bar.active_language_button",
-                |settings_content| { settings_content.status_bar.as_ref()?.active_language_button.as_ref() },
-                |settings_content, value, _| { settings_content.status_bar.get_or_insert_default().active_language_button = value; }),
+                |settings_content| {
+                    settings_content
+                        .status_bar
+                        .as_ref()?
+                        .active_language_button
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .status_bar
+                        .get_or_insert_default()
+                        .active_language_button = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.active.encoding.button", "Active Encoding Button"),
-                lt("settings_ui.page_data.description.control.when.to.show.the.active.encoding.in.the.status.bar", "Control when to show the active encoding in the status bar."),
+                lt(
+                    "settings_ui.page_data.title.active.encoding.button",
+                    "Active Encoding Button"
+                ),
+                lt(
+                    "settings_ui.page_data.description.control.when.to.show.the.active.encoding.in.the.status.bar",
+                    "Control when to show the active encoding in the status bar."
+                ),
                 "status_bar.active_encoding_button",
-                |settings_content| { settings_content.status_bar.as_ref()?.active_encoding_button.as_ref() },
-                |settings_content, value, _| { settings_content.status_bar.get_or_insert_default().active_encoding_button = value; }),
+                |settings_content| {
+                    settings_content
+                        .status_bar
+                        .as_ref()?
+                        .active_encoding_button
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .status_bar
+                        .get_or_insert_default()
+                        .active_encoding_button = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.position", "Position"),
-                lt("settings_ui.page_data.description.where.to.show.the.status.bar.in.the.workspace", "Where to show the status bar in the workspace."),
+                lt(
+                    "settings_ui.page_data.description.where.to.show.the.status.bar.in.the.workspace",
+                    "Where to show the status bar in the workspace."
+                ),
                 "status_bar.position",
                 |settings_content| { settings_content.status_bar.as_ref()?.position.as_ref() },
-                |settings_content, value, _| { settings_content.status_bar.get_or_insert_default().position = value; }),
+                |settings_content, value, _| {
+                    settings_content.status_bar.get_or_insert_default().position = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.cursor.position.button", "Cursor Position Button"),
-                lt("settings_ui.page_data.description.show.the.cursor.position.button.in.the.status.bar", "Show the cursor position button in the status bar."),
+                lt(
+                    "settings_ui.page_data.title.cursor.position.button",
+                    "Cursor Position Button"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.cursor.position.button.in.the.status.bar",
+                    "Show the cursor position button in the status bar."
+                ),
                 "status_bar.cursor_position_button",
-                |settings_content| { settings_content.status_bar.as_ref()?.cursor_position_button.as_ref() },
-                |settings_content, value, _| { settings_content.status_bar.get_or_insert_default().cursor_position_button = value; }),
+                |settings_content| {
+                    settings_content
+                        .status_bar
+                        .as_ref()?
+                        .cursor_position_button
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .status_bar
+                        .get_or_insert_default()
+                        .cursor_position_button = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.line.endings.button", "Line Endings Button"),
-                lt("settings_ui.page_data.description.show.the.active.line.endings.button.in.the.status.bar", "Show the active line endings button in the status bar."),
+                lt(
+                    "settings_ui.page_data.title.line.endings.button",
+                    "Line Endings Button"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.active.line.endings.button.in.the.status.bar",
+                    "Show the active line endings button in the status bar."
+                ),
                 "status_bar.line_endings_button",
-                |settings_content| { settings_content.status_bar.as_ref()?.line_endings_button.as_ref() },
-                |settings_content, value, _| { settings_content.status_bar.get_or_insert_default().line_endings_button = value; }),
+                |settings_content| {
+                    settings_content
+                        .status_bar
+                        .as_ref()?
+                        .line_endings_button
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .status_bar
+                        .get_or_insert_default()
+                        .line_endings_button = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.terminal.button", "Terminal Button"),
-                lt("settings_ui.page_data.description.show.the.terminal.button.in.the.status.bar", "Show the terminal button in the status bar."),
+                lt(
+                    "settings_ui.page_data.title.terminal.button",
+                    "Terminal Button"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.terminal.button.in.the.status.bar",
+                    "Show the terminal button in the status bar."
+                ),
                 "terminal.button",
                 |settings_content| settings_content.terminal.as_ref()?.button.as_ref(),
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().button = value; }),
+                |settings_content, value, _| {
+                    settings_content.terminal.get_or_insert_default().button = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.diagnostics.button", "Diagnostics Button"),
-                lt("settings_ui.page_data.description.show.the.project.diagnostics.button.in.the.status.bar", "Show the project diagnostics button in the status bar."),
+                lt(
+                    "settings_ui.page_data.title.diagnostics.button",
+                    "Diagnostics Button"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.project.diagnostics.button.in.the.status.bar",
+                    "Show the project diagnostics button in the status bar."
+                ),
                 "diagnostics.button",
                 |settings_content| settings_content.diagnostics.as_ref()?.button.as_ref(),
-                |settings_content, value, _| { settings_content.diagnostics.get_or_insert_default().button = value; }),
+                |settings_content, value, _| {
+                    settings_content.diagnostics.get_or_insert_default().button = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.project.search.button", "Project Search Button"),
-                lt("settings_ui.page_data.description.show.the.project.search.button.in.the.status.bar", "Show the project search button in the status bar."),
+                lt(
+                    "settings_ui.page_data.title.project.search.button",
+                    "Project Search Button"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.project.search.button.in.the.status.bar",
+                    "Show the project search button in the status bar."
+                ),
                 "search.button",
                 |settings_content| { settings_content.editor.search.as_ref()?.button.as_ref() },
-                |settings_content, value, _| { settings_content.editor.search.get_or_insert_default().button = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .editor
+                        .search
+                        .get_or_insert_default()
+                        .button = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.debugger.button", "Debugger Button"),
-                lt("settings_ui.page_data.description.show.the.debugger.button.in.the.status.bar", "Show the debugger button in the status bar."),
+                lt(
+                    "settings_ui.page_data.title.debugger.button",
+                    "Debugger Button"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.debugger.button.in.the.status.bar",
+                    "Show the debugger button in the status bar."
+                ),
                 "debugger.button",
                 |settings_content| settings_content.debugger.as_ref()?.button.as_ref(),
-                |settings_content, value, _| { settings_content.debugger.get_or_insert_default().button = value; }),
+                |settings_content, value, _| {
+                    settings_content.debugger.get_or_insert_default().button = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.active.file.name", "Active File Name"),
-                lt("settings_ui.page_data.description.show.the.name.of.the.active.file.in.the.status.bar", "Show the name of the active file in the status bar."),
+                lt(
+                    "settings_ui.page_data.title.active.file.name",
+                    "Active File Name"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.name.of.the.active.file.in.the.status.bar",
+                    "Show the name of the active file in the status bar."
+                ),
                 "status_bar.show_active_file",
-                |settings_content| { settings_content.status_bar.as_ref()?.show_active_file.as_ref() },
-                |settings_content, value, _| { settings_content.status_bar.get_or_insert_default().show_active_file = value; }),
+                |settings_content| {
+                    settings_content
+                        .status_bar
+                        .as_ref()?
+                        .show_active_file
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .status_bar
+                        .get_or_insert_default()
+                        .show_active_file = value;
+                }
+            ),
         ]
     }
 
@@ -2383,57 +4056,147 @@ fn window_and_layout_page() -> SettingsPage {
             section_header!("settings_ui.page_data.section.tab.bar", "Tab Bar"),
             setting_item!(
                 lt("settings_ui.page_data.title.show.tab.bar", "Show Tab Bar"),
-                lt("settings_ui.page_data.description.show.the.tab.bar.in.the.editor", "Show the tab bar in the editor."),
+                lt(
+                    "settings_ui.page_data.description.show.the.tab.bar.in.the.editor",
+                    "Show the tab bar in the editor."
+                ),
                 "tab_bar.show",
                 |settings_content| settings_content.tab_bar.as_ref()?.show.as_ref(),
-                |settings_content, value, _| { settings_content.tab_bar.get_or_insert_default().show = value; }),
+                |settings_content, value, _| {
+                    settings_content.tab_bar.get_or_insert_default().show = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.git.status.in.tabs", "Show Git Status In Tabs"),
-                lt("settings_ui.page_data.description.show.the.git.file.status.on.a.tab.item", "Show the Git file status on a tab item."),
+                lt(
+                    "settings_ui.page_data.title.show.git.status.in.tabs",
+                    "Show Git Status In Tabs"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.git.file.status.on.a.tab.item",
+                    "Show the Git file status on a tab item."
+                ),
                 "tabs.git_status",
                 |settings_content| settings_content.tabs.as_ref()?.git_status.as_ref(),
-                |settings_content, value, _| { settings_content.tabs.get_or_insert_default().git_status = value; }),
+                |settings_content, value, _| {
+                    settings_content.tabs.get_or_insert_default().git_status = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.file.icons.in.tabs", "Show File Icons In Tabs"),
-                lt("settings_ui.page_data.description.show.the.file.icon.for.a.tab", "Show the file icon for a tab."),
+                lt(
+                    "settings_ui.page_data.title.show.file.icons.in.tabs",
+                    "Show File Icons In Tabs"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.file.icon.for.a.tab",
+                    "Show the file icon for a tab."
+                ),
                 "tabs.file_icons",
                 |settings_content| settings_content.tabs.as_ref()?.file_icons.as_ref(),
-                |settings_content, value, _| { settings_content.tabs.get_or_insert_default().file_icons = value; }),
+                |settings_content, value, _| {
+                    settings_content.tabs.get_or_insert_default().file_icons = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.tab.close.position", "Tab Close Position"),
-                lt("settings_ui.page_data.description.position.of.the.close.button.in.a.tab", "Position of the close button in a tab."),
+                lt(
+                    "settings_ui.page_data.title.tab.close.position",
+                    "Tab Close Position"
+                ),
+                lt(
+                    "settings_ui.page_data.description.position.of.the.close.button.in.a.tab",
+                    "Position of the close button in a tab."
+                ),
                 "tabs.close_position",
                 |settings_content| { settings_content.tabs.as_ref()?.close_position.as_ref() },
-                |settings_content, value, _| { settings_content.tabs.get_or_insert_default().close_position = value; }),
+                |settings_content, value, _| {
+                    settings_content.tabs.get_or_insert_default().close_position = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.maximum.tabs", "Maximum Tabs"),
                 lt(
-                                    "settings_ui.page_data.description.maximum.open.tabs.in.a.pane.will.not.close.an.unsaved.tab",
-                                    "Maximum open tabs in a pane. Will not close an unsaved tab.",
-                                ),
-                                // todo(settings_ui): The default for this value is null and it's use in code
-                                // is complex, so I'm going to come back to this later,
+                    "settings_ui.page_data.description.maximum.open.tabs.in.a.pane.will.not.close.an.unsaved.tab",
+                    "Maximum open tabs in a pane. Will not close an unsaved tab.",
+                ),
+                // todo(settings_ui): The default for this value is null and it's use in code
+                // is complex, so I'm going to come back to this later,
                 "max_tabs",
                 |settings_content| settings_content.workspace.max_tabs.as_ref(),
-                |settings_content, value, _| { settings_content.workspace.max_tabs = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.max_tabs = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.navigation.history.buttons", "Show Navigation History Buttons"),
-                lt("settings_ui.page_data.description.show.the.navigation.history.buttons.in.the.tab.bar", "Show the navigation history buttons in the tab bar."),
+                lt(
+                    "settings_ui.page_data.title.show.navigation.history.buttons",
+                    "Show Navigation History Buttons"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.navigation.history.buttons.in.the.tab.bar",
+                    "Show the navigation history buttons in the tab bar."
+                ),
                 "tab_bar.show_nav_history_buttons",
-                |settings_content| { settings_content.tab_bar.as_ref()?.show_nav_history_buttons.as_ref() },
-                |settings_content, value, _| { settings_content.tab_bar.get_or_insert_default().show_nav_history_buttons = value; }),
+                |settings_content| {
+                    settings_content
+                        .tab_bar
+                        .as_ref()?
+                        .show_nav_history_buttons
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .tab_bar
+                        .get_or_insert_default()
+                        .show_nav_history_buttons = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.tab.bar.buttons", "Show Tab Bar Buttons"),
-                lt("settings_ui.page_data.description.show.the.tab.bar.buttons.new.split.pane.zoom", "Show the tab bar buttons (New, Split Pane, Zoom)."),
+                lt(
+                    "settings_ui.page_data.title.show.tab.bar.buttons",
+                    "Show Tab Bar Buttons"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.tab.bar.buttons.new.split.pane.zoom",
+                    "Show the tab bar buttons (New, Split Pane, Zoom)."
+                ),
                 "tab_bar.show_tab_bar_buttons",
-                |settings_content| { settings_content.tab_bar.as_ref()?.show_tab_bar_buttons.as_ref() },
-                |settings_content, value, _| { settings_content.tab_bar.get_or_insert_default().show_tab_bar_buttons = value; }),
+                |settings_content| {
+                    settings_content
+                        .tab_bar
+                        .as_ref()?
+                        .show_tab_bar_buttons
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .tab_bar
+                        .get_or_insert_default()
+                        .show_tab_bar_buttons = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.pinned.tabs.layout", "Pinned Tabs Layout"),
-                lt("settings_ui.page_data.description.show.pinned.tabs.in.a.separate.row.above.unpinned.tabs", "Show pinned tabs in a separate row above unpinned tabs."),
+                lt(
+                    "settings_ui.page_data.title.pinned.tabs.layout",
+                    "Pinned Tabs Layout"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.pinned.tabs.in.a.separate.row.above.unpinned.tabs",
+                    "Show pinned tabs in a separate row above unpinned tabs."
+                ),
                 "tab_bar.show_pinned_tabs_in_separate_row",
-                |settings_content| { settings_content.tab_bar.as_ref()?.show_pinned_tabs_in_separate_row.as_ref() },
-                |settings_content, value, _| { settings_content.tab_bar.get_or_insert_default().show_pinned_tabs_in_separate_row = value; }),
+                |settings_content| {
+                    settings_content
+                        .tab_bar
+                        .as_ref()?
+                        .show_pinned_tabs_in_separate_row
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .tab_bar
+                        .get_or_insert_default()
+                        .show_pinned_tabs_in_separate_row = value;
+                }
+            ),
         ]
     }
 
@@ -2441,29 +4204,83 @@ fn window_and_layout_page() -> SettingsPage {
         [
             section_header!("settings_ui.page_data.section.tab.settings", "Tab Settings"),
             setting_item!(
-                lt("settings_ui.page_data.title.activate.on.close", "Activate On Close"),
-                lt("settings_ui.page_data.description.what.to.do.after.closing.the.current.tab", "What to do after closing the current tab."),
+                lt(
+                    "settings_ui.page_data.title.activate.on.close",
+                    "Activate On Close"
+                ),
+                lt(
+                    "settings_ui.page_data.description.what.to.do.after.closing.the.current.tab",
+                    "What to do after closing the current tab."
+                ),
                 "tabs.activate_on_close",
                 |settings_content| { settings_content.tabs.as_ref()?.activate_on_close.as_ref() },
-                |settings_content, value, _| { settings_content.tabs.get_or_insert_default().activate_on_close = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .tabs
+                        .get_or_insert_default()
+                        .activate_on_close = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.tab.show.diagnostics", "Tab Show Diagnostics"),
-                lt("settings_ui.page_data.description.which.files.containing.diagnostic.errors.warnings.to.mark.in.the.tabs", "Which files containing diagnostic errors/warnings to mark in the tabs."),
+                lt(
+                    "settings_ui.page_data.title.tab.show.diagnostics",
+                    "Tab Show Diagnostics"
+                ),
+                lt(
+                    "settings_ui.page_data.description.which.files.containing.diagnostic.errors.warnings.to.mark.in.the.tabs",
+                    "Which files containing diagnostic errors/warnings to mark in the tabs."
+                ),
                 "tabs.show_diagnostics",
                 |settings_content| { settings_content.tabs.as_ref()?.show_diagnostics.as_ref() },
-                |settings_content, value, _| { settings_content.tabs.get_or_insert_default().show_diagnostics = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .tabs
+                        .get_or_insert_default()
+                        .show_diagnostics = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.close.button", "Show Close Button"),
-                lt("settings_ui.page_data.description.controls.the.appearance.behavior.of.the.tab.s.close.button", "Controls the appearance behavior of the tab's close button."),
+                lt(
+                    "settings_ui.page_data.title.show.close.button",
+                    "Show Close Button"
+                ),
+                lt(
+                    "settings_ui.page_data.description.controls.the.appearance.behavior.of.the.tab.s.close.button",
+                    "Controls the appearance behavior of the tab's close button."
+                ),
                 "tabs.show_close_button",
                 |settings_content| { settings_content.tabs.as_ref()?.show_close_button.as_ref() },
-                |settings_content, value, _| { settings_content.tabs.get_or_insert_default().show_close_button = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .tabs
+                        .get_or_insert_default()
+                        .show_close_button = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.unsaved.indicator", "Show Unsaved Indicator"),
-                lt("settings_ui.page_data.description.show.an.indicator.on.tabs.with.unsaved.changes", "Show an indicator on tabs with unsaved changes."),
+                lt(
+                    "settings_ui.page_data.title.show.unsaved.indicator",
+                    "Show Unsaved Indicator"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.an.indicator.on.tabs.with.unsaved.changes",
+                    "Show an indicator on tabs with unsaved changes."
+                ),
                 "tabs.show_unsaved_indicator",
-                |settings_content| { settings_content.tabs.as_ref()?.show_unsaved_indicator.as_ref() },
-                |settings_content, value, _| { settings_content.tabs.get_or_insert_default().show_unsaved_indicator = value; }),
+                |settings_content| {
+                    settings_content
+                        .tabs
+                        .as_ref()?
+                        .show_unsaved_indicator
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .tabs
+                        .get_or_insert_default()
+                        .show_unsaved_indicator = value;
+                }
+            ),
         ]
     }
 
@@ -2471,93 +4288,167 @@ fn window_and_layout_page() -> SettingsPage {
         [
             section_header!("settings_ui.page_data.section.preview.tabs", "Preview Tabs"),
             setting_item!(
-                lt("settings_ui.page_data.title.preview.tabs.enabled", "Preview Tabs Enabled"),
-                lt("settings_ui.page_data.description.show.opened.editors.as.preview.tabs", "Show opened editors as preview tabs."),
+                lt(
+                    "settings_ui.page_data.title.preview.tabs.enabled",
+                    "Preview Tabs Enabled"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.opened.editors.as.preview.tabs",
+                    "Show opened editors as preview tabs."
+                ),
                 "preview_tabs.enabled",
                 |settings_content| { settings_content.preview_tabs.as_ref()?.enabled.as_ref() },
-                |settings_content, value, _| { settings_content.preview_tabs.get_or_insert_default().enabled = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .preview_tabs
+                        .get_or_insert_default()
+                        .enabled = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.enable.preview.from.project.panel", "Enable Preview From Project Panel"),
-                lt("settings_ui.page_data.description.whether.to.open.tabs.in.preview.mode.when.opened.from.the.project.panel.with.a.single.click", "Whether to open tabs in preview mode when opened from the project panel with a single click or the Open action."),
+                lt(
+                    "settings_ui.page_data.title.enable.preview.from.project.panel",
+                    "Enable Preview From Project Panel"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.open.tabs.in.preview.mode.when.opened.from.the.project.panel.with.a.single.click",
+                    "Whether to open tabs in preview mode when opened from the project panel with a single click or the Open action."
+                ),
                 "preview_tabs.enable_preview_from_project_panel",
                 |settings_content| {
-                                        settings_content
-                                            .preview_tabs
-                                            .as_ref()?
-                                            .enable_preview_from_project_panel
-                                            .as_ref()
-                                    },
-                |settings_content, value, _| { settings_content.preview_tabs.get_or_insert_default().enable_preview_from_project_panel = value; }),
+                    settings_content
+                        .preview_tabs
+                        .as_ref()?
+                        .enable_preview_from_project_panel
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .preview_tabs
+                        .get_or_insert_default()
+                        .enable_preview_from_project_panel = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.enable.preview.from.file.finder", "Enable Preview From File Finder"),
-                lt("settings_ui.page_data.description.whether.to.open.tabs.in.preview.mode.when.selected.from.the.file.finder", "Whether to open tabs in preview mode when selected from the file finder."),
+                lt(
+                    "settings_ui.page_data.title.enable.preview.from.file.finder",
+                    "Enable Preview From File Finder"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.open.tabs.in.preview.mode.when.selected.from.the.file.finder",
+                    "Whether to open tabs in preview mode when selected from the file finder."
+                ),
                 "preview_tabs.enable_preview_from_file_finder",
                 |settings_content| {
-                                        settings_content
-                                            .preview_tabs
-                                            .as_ref()?
-                                            .enable_preview_from_file_finder
-                                            .as_ref()
-                                    },
-                |settings_content, value, _| { settings_content.preview_tabs.get_or_insert_default().enable_preview_from_file_finder = value; }),
+                    settings_content
+                        .preview_tabs
+                        .as_ref()?
+                        .enable_preview_from_file_finder
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .preview_tabs
+                        .get_or_insert_default()
+                        .enable_preview_from_file_finder = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.enable.preview.from.multibuffer", "Enable Preview From Multibuffer"),
-                lt("settings_ui.page_data.description.whether.to.open.tabs.in.preview.mode.when.opened.from.a.multibuffer", "Whether to open tabs in preview mode when opened from a multibuffer."),
+                lt(
+                    "settings_ui.page_data.title.enable.preview.from.multibuffer",
+                    "Enable Preview From Multibuffer"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.open.tabs.in.preview.mode.when.opened.from.a.multibuffer",
+                    "Whether to open tabs in preview mode when opened from a multibuffer."
+                ),
                 "preview_tabs.enable_preview_from_multibuffer",
                 |settings_content| {
-                                        settings_content
-                                            .preview_tabs
-                                            .as_ref()?
-                                            .enable_preview_from_multibuffer
-                                            .as_ref()
-                                    },
-                |settings_content, value, _| { settings_content.preview_tabs.get_or_insert_default().enable_preview_from_multibuffer = value; }),
+                    settings_content
+                        .preview_tabs
+                        .as_ref()?
+                        .enable_preview_from_multibuffer
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .preview_tabs
+                        .get_or_insert_default()
+                        .enable_preview_from_multibuffer = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.enable.preview.multibuffer.from.code.navigation", "Enable Preview Multibuffer From Code Navigation"),
-                lt("settings_ui.page_data.description.whether.to.open.tabs.in.preview.mode.when.code.navigation.is.used.to.open.a.multibuffer", "Whether to open tabs in preview mode when code navigation is used to open a multibuffer."),
+                lt(
+                    "settings_ui.page_data.title.enable.preview.multibuffer.from.code.navigation",
+                    "Enable Preview Multibuffer From Code Navigation"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.open.tabs.in.preview.mode.when.code.navigation.is.used.to.open.a.multibuffer",
+                    "Whether to open tabs in preview mode when code navigation is used to open a multibuffer."
+                ),
                 "preview_tabs.enable_preview_multibuffer_from_code_navigation",
                 |settings_content| {
-                                        settings_content
-                                            .preview_tabs
-                                            .as_ref()?
-                                            .enable_preview_multibuffer_from_code_navigation
-                                            .as_ref()
-                                    },
+                    settings_content
+                        .preview_tabs
+                        .as_ref()?
+                        .enable_preview_multibuffer_from_code_navigation
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .preview_tabs
-                                            .get_or_insert_default()
-                                            .enable_preview_multibuffer_from_code_navigation = value;
-                                    }),
+                    settings_content
+                        .preview_tabs
+                        .get_or_insert_default()
+                        .enable_preview_multibuffer_from_code_navigation = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.enable.preview.file.from.code.navigation", "Enable Preview File From Code Navigation"),
-                lt("settings_ui.page_data.description.whether.to.open.tabs.in.preview.mode.when.code.navigation.is.used.to.open.a.single.file", "Whether to open tabs in preview mode when code navigation is used to open a single file."),
+                lt(
+                    "settings_ui.page_data.title.enable.preview.file.from.code.navigation",
+                    "Enable Preview File From Code Navigation"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.open.tabs.in.preview.mode.when.code.navigation.is.used.to.open.a.single.file",
+                    "Whether to open tabs in preview mode when code navigation is used to open a single file."
+                ),
                 "preview_tabs.enable_preview_file_from_code_navigation",
                 |settings_content| {
-                                        settings_content
-                                            .preview_tabs
-                                            .as_ref()?
-                                            .enable_preview_file_from_code_navigation
-                                            .as_ref()
-                                    },
+                    settings_content
+                        .preview_tabs
+                        .as_ref()?
+                        .enable_preview_file_from_code_navigation
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .preview_tabs
-                                            .get_or_insert_default()
-                                            .enable_preview_file_from_code_navigation = value;
-                                    }),
+                    settings_content
+                        .preview_tabs
+                        .get_or_insert_default()
+                        .enable_preview_file_from_code_navigation = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.enable.keep.preview.on.code.navigation", "Enable Keep Preview On Code Navigation"),
-                lt("settings_ui.page_data.description.whether.to.keep.tabs.in.preview.mode.when.code.navigation.is.used.to.navigate.away.from.them.if.enable.preview.file.from.code.navigation.or.enable.preview.multibuffer.from.code.navigation.is.also.true.the.new.tab.may.replace.the.existing.one", "Whether to keep tabs in preview mode when code navigation is used to navigate away from them. If `enable_preview_file_from_code_navigation` or `enable_preview_multibuffer_from_code_navigation` is also true, the new tab may replace the existing one."),
+                lt(
+                    "settings_ui.page_data.title.enable.keep.preview.on.code.navigation",
+                    "Enable Keep Preview On Code Navigation"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.keep.tabs.in.preview.mode.when.code.navigation.is.used.to.navigate.away.from.them.if.enable.preview.file.from.code.navigation.or.enable.preview.multibuffer.from.code.navigation.is.also.true.the.new.tab.may.replace.the.existing.one",
+                    "Whether to keep tabs in preview mode when code navigation is used to navigate away from them. If `enable_preview_file_from_code_navigation` or `enable_preview_multibuffer_from_code_navigation` is also true, the new tab may replace the existing one."
+                ),
                 "preview_tabs.enable_keep_preview_on_code_navigation",
                 |settings_content| {
-                                        settings_content
-                                            .preview_tabs
-                                            .as_ref()?
-                                            .enable_keep_preview_on_code_navigation
-                                            .as_ref()
-                                    },
-                |settings_content, value, _| { settings_content.preview_tabs.get_or_insert_default().enable_keep_preview_on_code_navigation = value; }),
+                    settings_content
+                        .preview_tabs
+                        .as_ref()?
+                        .enable_keep_preview_on_code_navigation
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .preview_tabs
+                        .get_or_insert_default()
+                        .enable_keep_preview_on_code_navigation = value;
+                }
+            ),
         ]
     }
 
@@ -2565,47 +4456,122 @@ fn window_and_layout_page() -> SettingsPage {
         [
             section_header!("settings_ui.page_data.section.layout", "Layout"),
             setting_item!(
-                lt("settings_ui.page_data.title.bottom.dock.layout", "Bottom Dock Layout"),
-                lt("settings_ui.page_data.description.layout.mode.for.the.bottom.dock", "Layout mode for the bottom dock."),
+                lt(
+                    "settings_ui.page_data.title.bottom.dock.layout",
+                    "Bottom Dock Layout"
+                ),
+                lt(
+                    "settings_ui.page_data.description.layout.mode.for.the.bottom.dock",
+                    "Layout mode for the bottom dock."
+                ),
                 "bottom_dock_layout",
                 |settings_content| settings_content.workspace.bottom_dock_layout.as_ref(),
-                |settings_content, value, _| { settings_content.workspace.bottom_dock_layout = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.bottom_dock_layout = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.centered.layout.left.padding", "Centered Layout Left Padding"),
-                lt("settings_ui.page_data.description.left.padding.for.centered.layout", "Left padding for centered layout."),
+                lt(
+                    "settings_ui.page_data.title.centered.layout.left.padding",
+                    "Centered Layout Left Padding"
+                ),
+                lt(
+                    "settings_ui.page_data.description.left.padding.for.centered.layout",
+                    "Left padding for centered layout."
+                ),
                 "centered_layout.left_padding",
-                |settings_content| { settings_content.workspace.centered_layout.as_ref()?.left_padding.as_ref() },
-                |settings_content, value, _| { settings_content.workspace.centered_layout.get_or_insert_default().left_padding = value; }),
+                |settings_content| {
+                    settings_content
+                        .workspace
+                        .centered_layout
+                        .as_ref()?
+                        .left_padding
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .workspace
+                        .centered_layout
+                        .get_or_insert_default()
+                        .left_padding = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.centered.layout.right.padding", "Centered Layout Right Padding"),
-                lt("settings_ui.page_data.description.right.padding.for.centered.layout", "Right padding for centered layout."),
+                lt(
+                    "settings_ui.page_data.title.centered.layout.right.padding",
+                    "Centered Layout Right Padding"
+                ),
+                lt(
+                    "settings_ui.page_data.description.right.padding.for.centered.layout",
+                    "Right padding for centered layout."
+                ),
                 "centered_layout.right_padding",
-                |settings_content| { settings_content.workspace.centered_layout.as_ref()?.right_padding.as_ref() },
-                |settings_content, value, _| { settings_content.workspace.centered_layout.get_or_insert_default().right_padding = value; }),
+                |settings_content| {
+                    settings_content
+                        .workspace
+                        .centered_layout
+                        .as_ref()?
+                        .right_padding
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .workspace
+                        .centered_layout
+                        .get_or_insert_default()
+                        .right_padding = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.focus.follows.mouse", "Focus Follows Mouse"),
-                lt("settings_ui.page_data.description.whether.to.change.focus.to.a.pane.when.the.mouse.hovers.over.it", "Whether to change focus to a pane when the mouse hovers over it."),
+                lt(
+                    "settings_ui.page_data.title.focus.follows.mouse",
+                    "Focus Follows Mouse"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.change.focus.to.a.pane.when.the.mouse.hovers.over.it",
+                    "Whether to change focus to a pane when the mouse hovers over it."
+                ),
                 "focus_follows_mouse.enabled",
                 |settings_content| {
-                                        settings_content
-                                            .workspace
-                                            .focus_follows_mouse
-                                            .as_ref()
-                                            .and_then(|s| s.enabled.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.workspace.focus_follows_mouse.get_or_insert_default().enabled = value; }),
+                    settings_content
+                        .workspace
+                        .focus_follows_mouse
+                        .as_ref()
+                        .and_then(|s| s.enabled.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .workspace
+                        .focus_follows_mouse
+                        .get_or_insert_default()
+                        .enabled = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.focus.follows.mouse.debounce.ms", "Focus Follows Mouse Debounce ms"),
-                lt("settings_ui.page_data.description.amount.of.time.to.wait.before.changing.focus", "Amount of time to wait before changing focus."),
+                lt(
+                    "settings_ui.page_data.title.focus.follows.mouse.debounce.ms",
+                    "Focus Follows Mouse Debounce ms"
+                ),
+                lt(
+                    "settings_ui.page_data.description.amount.of.time.to.wait.before.changing.focus",
+                    "Amount of time to wait before changing focus."
+                ),
                 "focus_follows_mouse.debounce_ms",
                 |settings_content| {
-                                        settings_content
-                                            .workspace
-                                            .focus_follows_mouse
-                                            .as_ref()
-                                            .and_then(|s| s.debounce_ms.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.workspace.focus_follows_mouse.get_or_insert_default().debounce_ms = value; }),
+                    settings_content
+                        .workspace
+                        .focus_follows_mouse
+                        .as_ref()
+                        .and_then(|s| s.debounce_ms.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .workspace
+                        .focus_follows_mouse
+                        .get_or_insert_default()
+                        .debounce_ms = value;
+                }
+            ),
         ]
     }
 
@@ -2614,72 +4580,172 @@ fn window_and_layout_page() -> SettingsPage {
             section_header!("settings_ui.page_data.section.window", "Window"),
             // todo(settings_ui): Should we filter by platform.as_ref()?
             setting_item!(
-                lt("settings_ui.page_data.title.use.system.window.tabs", "Use System Window Tabs"),
-                lt("settings_ui.page_data.description.macos.only.whether.to.allow.windows.to.tab.together", "(macOS only) whether to allow Windows to tab together."),
+                lt(
+                    "settings_ui.page_data.title.use.system.window.tabs",
+                    "Use System Window Tabs"
+                ),
+                lt(
+                    "settings_ui.page_data.description.macos.only.whether.to.allow.windows.to.tab.together",
+                    "(macOS only) whether to allow Windows to tab together."
+                ),
                 "use_system_window_tabs",
                 |settings_content| { settings_content.workspace.use_system_window_tabs.as_ref() },
-                |settings_content, value, _| { settings_content.workspace.use_system_window_tabs = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.use_system_window_tabs = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.window.decorations", "Window Decorations"),
-                lt("settings_ui.page_data.description.linux.only.whether.zzz.or.your.compositor.should.draw.window.decorations", "(Linux only) whether ZZZ or your compositor should draw window decorations."),
+                lt(
+                    "settings_ui.page_data.title.window.decorations",
+                    "Window Decorations"
+                ),
+                lt(
+                    "settings_ui.page_data.description.linux.only.whether.zzz.or.your.compositor.should.draw.window.decorations",
+                    "(Linux only) whether ZZZ or your compositor should draw window decorations."
+                ),
                 "window_decorations",
                 |settings_content| settings_content.workspace.window_decorations.as_ref(),
-                |settings_content, value, _| { settings_content.workspace.window_decorations = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.window_decorations = value;
+                }
+            ),
         ]
     }
 
     fn pane_modifiers_section() -> [SettingsPageItem; 5] {
         [
-            section_header!("settings_ui.page_data.section.pane.modifiers", "Pane Modifiers"),
+            section_header!(
+                "settings_ui.page_data.section.pane.modifiers",
+                "Pane Modifiers"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.inactive.opacity", "Inactive Opacity"),
-                lt("settings_ui.page_data.description.opacity.of.inactive.panels.0.0.1.0", "Opacity of inactive panels (0.0 - 1.0)."),
+                lt(
+                    "settings_ui.page_data.title.inactive.opacity",
+                    "Inactive Opacity"
+                ),
+                lt(
+                    "settings_ui.page_data.description.opacity.of.inactive.panels.0.0.1.0",
+                    "Opacity of inactive panels (0.0 - 1.0)."
+                ),
                 "active_pane_modifiers.inactive_opacity",
                 |settings_content| {
-                                        settings_content
-                                            .workspace
-                                            .active_pane_modifiers
-                                            .as_ref()?
-                                            .inactive_opacity
-                                            .as_ref()
-                                    },
-                |settings_content, value, _| { settings_content.workspace.active_pane_modifiers.get_or_insert_default().inactive_opacity = value; }),
+                    settings_content
+                        .workspace
+                        .active_pane_modifiers
+                        .as_ref()?
+                        .inactive_opacity
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .workspace
+                        .active_pane_modifiers
+                        .get_or_insert_default()
+                        .inactive_opacity = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.border.size", "Border Size"),
-                lt("settings_ui.page_data.description.size.of.the.border.surrounding.the.active.pane", "Size of the border surrounding the active pane."),
+                lt(
+                    "settings_ui.page_data.description.size.of.the.border.surrounding.the.active.pane",
+                    "Size of the border surrounding the active pane."
+                ),
                 "active_pane_modifiers.border_size",
-                |settings_content| { settings_content.workspace.active_pane_modifiers.as_ref()?.border_size.as_ref() },
-                |settings_content, value, _| { settings_content.workspace.active_pane_modifiers.get_or_insert_default().border_size = value; }),
+                |settings_content| {
+                    settings_content
+                        .workspace
+                        .active_pane_modifiers
+                        .as_ref()?
+                        .border_size
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .workspace
+                        .active_pane_modifiers
+                        .get_or_insert_default()
+                        .border_size = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.zoomed.padding", "Zoomed Padding"),
-                lt("settings_ui.page_data.description.show.padding.for.zoomed.panes", "Show padding for zoomed panes."),
+                lt(
+                    "settings_ui.page_data.title.zoomed.padding",
+                    "Zoomed Padding"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.padding.for.zoomed.panes",
+                    "Show padding for zoomed panes."
+                ),
                 "zoomed_padding",
                 |settings_content| settings_content.workspace.zoomed_padding.as_ref(),
-                |settings_content, value, _| { settings_content.workspace.zoomed_padding = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.zoomed_padding = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.close.panel.on.toggle", "Close Panel on Toggle"),
-                lt("settings_ui.page_data.description.whether.invoking.a.panel.s.togglefocus.action.while.it.s.already.focused.closes.the.panel.instead.of.just.moving.focus.back.to.the.editor", "Whether invoking a panel's ToggleFocus action while it's already focused closes the panel, instead of just moving focus back to the editor."),
+                lt(
+                    "settings_ui.page_data.title.close.panel.on.toggle",
+                    "Close Panel on Toggle"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.invoking.a.panel.s.togglefocus.action.while.it.s.already.focused.closes.the.panel.instead.of.just.moving.focus.back.to.the.editor",
+                    "Whether invoking a panel's ToggleFocus action while it's already focused closes the panel, instead of just moving focus back to the editor."
+                ),
                 "close_panel_on_toggle",
                 |settings_content| { settings_content.workspace.close_panel_on_toggle.as_ref() },
-                |settings_content, value, _| { settings_content.workspace.close_panel_on_toggle = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.close_panel_on_toggle = value;
+                }
+            ),
         ]
     }
 
     fn pane_split_direction_section() -> [SettingsPageItem; 3] {
         [
-            section_header!("settings_ui.page_data.section.pane.split.direction", "Pane Split Direction"),
+            section_header!(
+                "settings_ui.page_data.section.pane.split.direction",
+                "Pane Split Direction"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.vertical.split.direction", "Vertical Split Direction"),
-                lt("settings_ui.page_data.description.direction.to.split.vertically", "Direction to split vertically."),
+                lt(
+                    "settings_ui.page_data.title.vertical.split.direction",
+                    "Vertical Split Direction"
+                ),
+                lt(
+                    "settings_ui.page_data.description.direction.to.split.vertically",
+                    "Direction to split vertically."
+                ),
                 "pane_split_direction_vertical",
-                |settings_content| { settings_content.workspace.pane_split_direction_vertical.as_ref() },
-                |settings_content, value, _| { settings_content.workspace.pane_split_direction_vertical = value; }),
+                |settings_content| {
+                    settings_content
+                        .workspace
+                        .pane_split_direction_vertical
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content.workspace.pane_split_direction_vertical = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.horizontal.split.direction", "Horizontal Split Direction"),
-                lt("settings_ui.page_data.description.direction.to.split.horizontally", "Direction to split horizontally."),
+                lt(
+                    "settings_ui.page_data.title.horizontal.split.direction",
+                    "Horizontal Split Direction"
+                ),
+                lt(
+                    "settings_ui.page_data.description.direction.to.split.horizontally",
+                    "Direction to split horizontally."
+                ),
                 "pane_split_direction_horizontal",
-                |settings_content| { settings_content.workspace.pane_split_direction_horizontal.as_ref() },
-                |settings_content, value, _| { settings_content.workspace.pane_split_direction_horizontal = value; }),
+                |settings_content| {
+                    settings_content
+                        .workspace
+                        .pane_split_direction_horizontal
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content.workspace.pane_split_direction_horizontal = value;
+                }
+            ),
         ]
     }
 
@@ -2707,380 +4773,969 @@ fn panels_page() -> SettingsPage {
     // closures match on every variant, which `setting_item!` cannot express.
     fn project_panel_section() -> [SettingsPageItem; 32] {
         [
-            section_header!("settings_ui.page_data.section.project.panel", "Project Panel"),
+            section_header!(
+                "settings_ui.page_data.section.project.panel",
+                "Project Panel"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.project.panel.dock", "Project Panel Dock"),
-                lt("settings_ui.page_data.description.where.to.dock.the.project.panel", "Where to dock the project panel."),
+                lt(
+                    "settings_ui.page_data.title.project.panel.dock",
+                    "Project Panel Dock"
+                ),
+                lt(
+                    "settings_ui.page_data.description.where.to.dock.the.project.panel",
+                    "Where to dock the project panel."
+                ),
                 "project_panel.dock",
                 |settings_content| settings_content.project_panel.as_ref()?.dock.as_ref(),
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().dock = value; }),
+                |settings_content, value, _| {
+                    settings_content.project_panel.get_or_insert_default().dock = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.project.panel.title.tooltip.delay", "Path Tooltip Delay"),
-                lt("settings_ui.page_data.description.delay.before.showing.a.path.tooltip", "Delay before showing a path tooltip when hovering a project panel entry."),
+                lt(
+                    "settings_ui.page_data.title.project.panel.title.tooltip.delay",
+                    "Path Tooltip Delay"
+                ),
+                lt(
+                    "settings_ui.page_data.description.delay.before.showing.a.path.tooltip",
+                    "Delay before showing a path tooltip when hovering a project panel entry."
+                ),
                 "project_panel.title_tooltip_delay",
-                |settings_content| { settings_content.project_panel.as_ref()?.title_tooltip_delay.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().title_tooltip_delay = value; }),
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .title_tooltip_delay
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .title_tooltip_delay = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.project.panel.default.width", "Project Panel Default Width"),
-                lt("settings_ui.page_data.description.default.width.of.the.project.panel.in.pixels", "Default width of the project panel in pixels."),
+                lt(
+                    "settings_ui.page_data.title.project.panel.default.width",
+                    "Project Panel Default Width"
+                ),
+                lt(
+                    "settings_ui.page_data.description.default.width.of.the.project.panel.in.pixels",
+                    "Default width of the project panel in pixels."
+                ),
                 "project_panel.default_width",
-                |settings_content| { settings_content.project_panel.as_ref()?.default_width.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().default_width = value; }),
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .default_width
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .default_width = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.hide.gitignore", "Hide .gitignore"),
-                lt("settings_ui.page_data.description.whether.to.hide.the.gitignore.entries.in.the.project.panel", "Whether to hide the gitignore entries in the project panel."),
+                lt(
+                    "settings_ui.page_data.title.hide.gitignore",
+                    "Hide .gitignore"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.hide.the.gitignore.entries.in.the.project.panel",
+                    "Whether to hide the gitignore entries in the project panel."
+                ),
                 "project_panel.hide_gitignore",
-                |settings_content| { settings_content.project_panel.as_ref()?.hide_gitignore.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().hide_gitignore = value; }),
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .hide_gitignore
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .hide_gitignore = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.entry.spacing", "Entry Spacing"),
-                lt("settings_ui.page_data.description.spacing.between.worktree.entries.in.the.project.panel", "Spacing between worktree entries in the project panel."),
+                lt(
+                    "settings_ui.page_data.description.spacing.between.worktree.entries.in.the.project.panel",
+                    "Spacing between worktree entries in the project panel."
+                ),
                 "project_panel.entry_spacing",
-                |settings_content| { settings_content.project_panel.as_ref()?.entry_spacing.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().entry_spacing = value; }),
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .entry_spacing
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .entry_spacing = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.file.icons", "File Icons"),
-                lt("settings_ui.page_data.description.show.file.icons.in.the.project.panel", "Show file icons in the project panel."),
+                lt(
+                    "settings_ui.page_data.description.show.file.icons.in.the.project.panel",
+                    "Show file icons in the project panel."
+                ),
                 "project_panel.file_icons",
                 |settings_content| { settings_content.project_panel.as_ref()?.file_icons.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().file_icons = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .file_icons = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.folder.icons", "Folder Icons"),
-                lt("settings_ui.page_data.description.whether.to.show.folder.icons.or.chevrons.for.directories.in.the.project.panel", "Whether to show folder icons or chevrons for directories in the project panel."),
+                lt(
+                    "settings_ui.page_data.description.whether.to.show.folder.icons.or.chevrons.for.directories.in.the.project.panel",
+                    "Whether to show folder icons or chevrons for directories in the project panel."
+                ),
                 "project_panel.folder_icons",
-                |settings_content| { settings_content.project_panel.as_ref()?.folder_icons.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().folder_icons = value; }),
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .folder_icons
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .folder_icons = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.git.status", "Git Status"),
-                lt("settings_ui.page_data.description.show.the.git.status.in.the.project.panel", "Show the Git status in the project panel."),
+                lt(
+                    "settings_ui.page_data.description.show.the.git.status.in.the.project.panel",
+                    "Show the Git status in the project panel."
+                ),
                 "project_panel.git_status",
                 |settings_content| { settings_content.project_panel.as_ref()?.git_status.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().git_status = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .git_status = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.indent.size", "Indent Size"),
-                lt("settings_ui.page_data.description.amount.of.indentation.for.nested.items", "Amount of indentation for nested items."),
+                lt(
+                    "settings_ui.page_data.description.amount.of.indentation.for.nested.items",
+                    "Amount of indentation for nested items."
+                ),
                 "project_panel.indent_size",
-                |settings_content| { settings_content.project_panel.as_ref()?.indent_size.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().indent_size = value; }),
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .indent_size
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .indent_size = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.auto.reveal.entries", "Auto Reveal Entries"),
-                lt("settings_ui.page_data.description.whether.to.reveal.entries.in.the.project.panel.automatically.when.a.corresponding.project.entry.becomes.active", "Whether to reveal entries in the project panel automatically when a corresponding project entry becomes active."),
+                lt(
+                    "settings_ui.page_data.title.auto.reveal.entries",
+                    "Auto Reveal Entries"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.reveal.entries.in.the.project.panel.automatically.when.a.corresponding.project.entry.becomes.active",
+                    "Whether to reveal entries in the project panel automatically when a corresponding project entry becomes active."
+                ),
                 "project_panel.auto_reveal_entries",
-                |settings_content| { settings_content.project_panel.as_ref()?.auto_reveal_entries.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().auto_reveal_entries = value; }),
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .auto_reveal_entries
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .auto_reveal_entries = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.starts.open", "Starts Open"),
-                lt("settings_ui.page_data.description.whether.the.project.panel.should.open.on.startup", "Whether the project panel should open on startup."),
+                lt(
+                    "settings_ui.page_data.description.whether.the.project.panel.should.open.on.startup",
+                    "Whether the project panel should open on startup."
+                ),
                 "project_panel.starts_open",
-                |settings_content| { settings_content.project_panel.as_ref()?.starts_open.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().starts_open = value; }),
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .starts_open
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .starts_open = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.auto.fold.directories", "Auto Fold Directories"),
-                lt("settings_ui.page_data.description.whether.to.fold.directories.automatically.and.show.compact.folders.when.a.directory.has.only.one.subdirectory.inside", "Whether to fold directories automatically and show compact folders when a directory has only one subdirectory inside."),
+                lt(
+                    "settings_ui.page_data.title.auto.fold.directories",
+                    "Auto Fold Directories"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.fold.directories.automatically.and.show.compact.folders.when.a.directory.has.only.one.subdirectory.inside",
+                    "Whether to fold directories automatically and show compact folders when a directory has only one subdirectory inside."
+                ),
                 "project_panel.auto_fold_dirs",
-                |settings_content| { settings_content.project_panel.as_ref()?.auto_fold_dirs.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().auto_fold_dirs = value; }),
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .auto_fold_dirs
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .auto_fold_dirs = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.bold.folder.labels", "Bold Folder Labels"),
-                lt("settings_ui.page_data.description.whether.to.show.folder.names.with.bold.text.in.the.project.panel", "Whether to show folder names with bold text in the project panel."),
+                lt(
+                    "settings_ui.page_data.title.bold.folder.labels",
+                    "Bold Folder Labels"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.show.folder.names.with.bold.text.in.the.project.panel",
+                    "Whether to show folder names with bold text in the project panel."
+                ),
                 "project_panel.bold_folder_labels",
-                |settings_content| { settings_content.project_panel.as_ref()?.bold_folder_labels.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().bold_folder_labels = value; }),
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .bold_folder_labels
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .bold_folder_labels = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.scrollbar", "Show Scrollbar"),
-                lt("settings_ui.page_data.description.show.the.scrollbar.in.the.project.panel", "Show the scrollbar in the project panel."),
+                lt(
+                    "settings_ui.page_data.title.show.scrollbar",
+                    "Show Scrollbar"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.scrollbar.in.the.project.panel",
+                    "Show the scrollbar in the project panel."
+                ),
                 "project_panel.scrollbar.show",
                 |settings_content| {
-                                        show_scrollbar_or_editor(settings_content, |settings_content| {
-                                            settings_content
-                                                .project_panel
-                                                .as_ref()?
-                                                .scrollbar
-                                                .as_ref()?
-                                                .show
-                                                .as_ref()
-                                        })
-                                    },
+                    show_scrollbar_or_editor(settings_content, |settings_content| {
+                        settings_content
+                            .project_panel
+                            .as_ref()?
+                            .scrollbar
+                            .as_ref()?
+                            .show
+                            .as_ref()
+                    })
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .project_panel
-                                            .get_or_insert_default()
-                                            .scrollbar
-                                            .get_or_insert_default()
-                                            .show = value;
-                                    }),
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .scrollbar
+                        .get_or_insert_default()
+                        .show = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.horizontal.scroll", "Horizontal Scroll"),
-                lt("settings_ui.page_data.description.whether.to.allow.horizontal.scrolling.in.the.project.panel.when.disabled.the.view.is.always.locked.to.the.leftmost.position.and.long.file.names.are.clipped", "Whether to allow horizontal scrolling in the project panel. When disabled, the view is always locked to the leftmost position and long file names are clipped."),
+                lt(
+                    "settings_ui.page_data.title.horizontal.scroll",
+                    "Horizontal Scroll"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.allow.horizontal.scrolling.in.the.project.panel.when.disabled.the.view.is.always.locked.to.the.leftmost.position.and.long.file.names.are.clipped",
+                    "Whether to allow horizontal scrolling in the project panel. When disabled, the view is always locked to the leftmost position and long file names are clipped."
+                ),
                 "project_panel.scrollbar.horizontal_scroll",
                 |settings_content| {
-                                        settings_content
-                                            .project_panel
-                                            .as_ref()?
-                                            .scrollbar
-                                            .as_ref()?
-                                            .horizontal_scroll
-                                            .as_ref()
-                                    },
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .scrollbar
+                        .as_ref()?
+                        .horizontal_scroll
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .project_panel
-                                            .get_or_insert_default()
-                                            .scrollbar
-                                            .get_or_insert_default()
-                                            .horizontal_scroll = value;
-                                    }),
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .scrollbar
+                        .get_or_insert_default()
+                        .horizontal_scroll = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.diagnostics", "Show Diagnostics"),
-                lt("settings_ui.page_data.description.which.files.containing.diagnostic.errors.warnings.to.mark.in.the.project.panel", "Which files containing diagnostic errors/warnings to mark in the project panel."),
+                lt(
+                    "settings_ui.page_data.title.show.diagnostics",
+                    "Show Diagnostics"
+                ),
+                lt(
+                    "settings_ui.page_data.description.which.files.containing.diagnostic.errors.warnings.to.mark.in.the.project.panel",
+                    "Which files containing diagnostic errors/warnings to mark in the project panel."
+                ),
                 "project_panel.show_diagnostics",
-                |settings_content| { settings_content.project_panel.as_ref()?.show_diagnostics.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().show_diagnostics = value; }),
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .show_diagnostics
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .show_diagnostics = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.diagnostic.badges", "Diagnostic Badges"),
-                lt("settings_ui.page_data.description.show.error.and.warning.count.badges.next.to.file.names.in.the.project.panel", "Show error and warning count badges next to file names in the project panel."),
+                lt(
+                    "settings_ui.page_data.title.diagnostic.badges",
+                    "Diagnostic Badges"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.error.and.warning.count.badges.next.to.file.names.in.the.project.panel",
+                    "Show error and warning count badges next to file names in the project panel."
+                ),
                 "project_panel.diagnostic_badges",
-                |settings_content| { settings_content.project_panel.as_ref()?.diagnostic_badges.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().diagnostic_badges = value; }),
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .diagnostic_badges
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .diagnostic_badges = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.git.status.indicator", "Git Status Indicator"),
-                lt("settings_ui.page_data.description.show.a.git.status.indicator.next.to.file.names.in.the.project.panel", "Show a git status indicator next to file names in the project panel."),
+                lt(
+                    "settings_ui.page_data.title.git.status.indicator",
+                    "Git Status Indicator"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.a.git.status.indicator.next.to.file.names.in.the.project.panel",
+                    "Show a git status indicator next to file names in the project panel."
+                ),
                 "project_panel.git_status_indicator",
-                |settings_content| { settings_content.project_panel.as_ref()?.git_status_indicator.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().git_status_indicator = value; }),
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .git_status_indicator
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .git_status_indicator = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.sticky.scroll", "Sticky Scroll"),
-                lt("settings_ui.page_data.description.whether.to.stick.parent.directories.at.top.of.the.project.panel", "Whether to stick parent directories at top of the project panel."),
+                lt(
+                    "settings_ui.page_data.description.whether.to.stick.parent.directories.at.top.of.the.project.panel",
+                    "Whether to stick parent directories at top of the project panel."
+                ),
                 "project_panel.sticky_scroll",
-                |settings_content| { settings_content.project_panel.as_ref()?.sticky_scroll.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().sticky_scroll = value; }),
-            setting_item!(
-                lt("settings_ui.page_data.title.show.indent.guides", "Show Indent Guides"),
-                lt("settings_ui.page_data.description.show.indent.guides.in.the.project.panel", "Show indent guides in the project panel."),
-                "project_panel.indent_guides.show",
-                |settings_content| { settings_content.project_panel.as_ref()?.indent_guides.as_ref()?.show.as_ref() },
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .sticky_scroll
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .project_panel
-                                            .get_or_insert_default()
-                                            .indent_guides
-                                            .get_or_insert_default()
-                                            .show = value;
-                                    }),
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .sticky_scroll = value;
+                }
+            ),
+            setting_item!(
+                lt(
+                    "settings_ui.page_data.title.show.indent.guides",
+                    "Show Indent Guides"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.indent.guides.in.the.project.panel",
+                    "Show indent guides in the project panel."
+                ),
+                "project_panel.indent_guides.show",
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .indent_guides
+                        .as_ref()?
+                        .show
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .indent_guides
+                        .get_or_insert_default()
+                        .show = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.drag.and.drop", "Drag and Drop"),
-                lt("settings_ui.page_data.description.whether.to.enable.drag.and.drop.operations.in.the.project.panel", "Whether to enable drag-and-drop operations in the project panel."),
+                lt(
+                    "settings_ui.page_data.description.whether.to.enable.drag.and.drop.operations.in.the.project.panel",
+                    "Whether to enable drag-and-drop operations in the project panel."
+                ),
                 "project_panel.drag_and_drop",
-                |settings_content| { settings_content.project_panel.as_ref()?.drag_and_drop.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().drag_and_drop = value; }),
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .drag_and_drop
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .drag_and_drop = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.hide.root", "Hide Root"),
-                lt("settings_ui.page_data.description.whether.to.hide.the.root.entry.when.only.one.folder.is.open.in.the.window", "Whether to hide the root entry when only one folder is open in the window."),
+                lt(
+                    "settings_ui.page_data.description.whether.to.hide.the.root.entry.when.only.one.folder.is.open.in.the.window",
+                    "Whether to hide the root entry when only one folder is open in the window."
+                ),
                 "project_panel.hide_root",
                 |settings_content| { settings_content.project_panel.as_ref()?.hide_root.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().hide_root = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .hide_root = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.hide.hidden", "Hide Hidden"),
-                lt("settings_ui.page_data.description.whether.to.hide.the.hidden.entries.in.the.project.panel", "Whether to hide the hidden entries in the project panel."),
+                lt(
+                    "settings_ui.page_data.description.whether.to.hide.the.hidden.entries.in.the.project.panel",
+                    "Whether to hide the hidden entries in the project panel."
+                ),
                 "project_panel.hide_hidden",
-                |settings_content| { settings_content.project_panel.as_ref()?.hide_hidden.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().hide_hidden = value; }),
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .hide_hidden
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .hide_hidden = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.sort.mode", "Sort Mode"),
-                lt("settings_ui.page_data.description.sort.order.for.entries.in.the.project.panel", "Sort order for entries in the project panel."),
+                lt(
+                    "settings_ui.page_data.description.sort.order.for.entries.in.the.project.panel",
+                    "Sort order for entries in the project panel."
+                ),
                 "project_panel.sort_mode",
                 |settings_content| { settings_content.project_panel.as_ref()?.sort_mode.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().sort_mode = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .sort_mode = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.sort.order", "Sort Order"),
-                lt("settings_ui.page_data.description.whether.to.sort.file.and.folder.names.case.sensitively.in.the.project.panel", "Whether to sort file and folder names case-sensitively in the project panel."),
+                lt(
+                    "settings_ui.page_data.description.whether.to.sort.file.and.folder.names.case.sensitively.in.the.project.panel",
+                    "Whether to sort file and folder names case-sensitively in the project panel."
+                ),
                 "project_panel.sort_order",
                 |settings_content| { settings_content.project_panel.as_ref()?.sort_order.as_ref() },
-                |settings_content, value, _| { settings_content.project_panel.get_or_insert_default().sort_order = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .sort_order = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.auto.open.files.on.create", "Auto Open Files On Create"),
-                lt("settings_ui.page_data.description.whether.to.automatically.open.newly.created.files.in.the.editor", "Whether to automatically open newly created files in the editor."),
+                lt(
+                    "settings_ui.page_data.title.auto.open.files.on.create",
+                    "Auto Open Files On Create"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.automatically.open.newly.created.files.in.the.editor",
+                    "Whether to automatically open newly created files in the editor."
+                ),
                 "project_panel.auto_open.on_create",
-                |settings_content| { settings_content.project_panel.as_ref()?.auto_open.as_ref()?.on_create.as_ref() },
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .auto_open
+                        .as_ref()?
+                        .on_create
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .project_panel
-                                            .get_or_insert_default()
-                                            .auto_open
-                                            .get_or_insert_default()
-                                            .on_create = value;
-                                    }),
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .auto_open
+                        .get_or_insert_default()
+                        .on_create = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.auto.open.files.on.paste", "Auto Open Files On Paste"),
-                lt("settings_ui.page_data.description.whether.to.automatically.open.files.after.pasting.or.duplicating.them", "Whether to automatically open files after pasting or duplicating them."),
+                lt(
+                    "settings_ui.page_data.title.auto.open.files.on.paste",
+                    "Auto Open Files On Paste"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.automatically.open.files.after.pasting.or.duplicating.them",
+                    "Whether to automatically open files after pasting or duplicating them."
+                ),
                 "project_panel.auto_open.on_paste",
-                |settings_content| { settings_content.project_panel.as_ref()?.auto_open.as_ref()?.on_paste.as_ref() },
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .auto_open
+                        .as_ref()?
+                        .on_paste
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .project_panel
-                                            .get_or_insert_default()
-                                            .auto_open
-                                            .get_or_insert_default()
-                                            .on_paste = value;
-                                    }),
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .auto_open
+                        .get_or_insert_default()
+                        .on_paste = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.auto.open.files.on.drop", "Auto Open Files On Drop"),
-                lt("settings_ui.page_data.description.whether.to.automatically.open.files.dropped.from.external.sources", "Whether to automatically open files dropped from external sources."),
+                lt(
+                    "settings_ui.page_data.title.auto.open.files.on.drop",
+                    "Auto Open Files On Drop"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.automatically.open.files.dropped.from.external.sources",
+                    "Whether to automatically open files dropped from external sources."
+                ),
                 "project_panel.auto_open.on_drop",
-                |settings_content| { settings_content.project_panel.as_ref()?.auto_open.as_ref()?.on_drop.as_ref() },
+                |settings_content| {
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .auto_open
+                        .as_ref()?
+                        .on_drop
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .project_panel
-                                            .get_or_insert_default()
-                                            .auto_open
-                                            .get_or_insert_default()
-                                            .on_drop = value;
-                                    }),
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .auto_open
+                        .get_or_insert_default()
+                        .on_drop = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.should.focus", "Should Focus"),
-                lt("settings_ui.page_data.description.whether.to.focus.on.files.automatically.opened", "Whether to focus on files automatically opened."),
+                lt(
+                    "settings_ui.page_data.description.whether.to.focus.on.files.automatically.opened",
+                    "Whether to focus on files automatically opened."
+                ),
                 "project_panel.auto_open.should_focus",
                 |settings_content| {
-                                        settings_content
-                                            .project_panel
-                                            .as_ref()?
-                                            .auto_open
-                                            .as_ref()?
-                                            .should_focus
-                                            .as_ref()
-                                    },
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .auto_open
+                        .as_ref()?
+                        .should_focus
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .project_panel
-                                            .get_or_insert_default()
-                                            .auto_open
-                                            .get_or_insert_default()
-                                            .should_focus = value;
-                                    }),
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .auto_open
+                        .get_or_insert_default()
+                        .should_focus = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.should.focus", "Should Focus"),
-                lt("settings_ui.page_data.description.whether.to.focus.on.files.automatically.opened", "Whether to focus on files automatically opened."),
+                lt(
+                    "settings_ui.page_data.description.whether.to.focus.on.files.automatically.opened",
+                    "Whether to focus on files automatically opened."
+                ),
                 "project_panel.auto_open.should_focus",
                 |settings_content| {
-                                        settings_content
-                                            .project_panel
-                                            .as_ref()?
-                                            .auto_open
-                                            .as_ref()?
-                                            .should_focus
-                                            .as_ref()
-                                    },
+                    settings_content
+                        .project_panel
+                        .as_ref()?
+                        .auto_open
+                        .as_ref()?
+                        .should_focus
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .project_panel
-                                            .get_or_insert_default()
-                                            .auto_open
-                                            .get_or_insert_default()
-                                            .should_focus = value;
-                                    }),
+                    settings_content
+                        .project_panel
+                        .get_or_insert_default()
+                        .auto_open
+                        .get_or_insert_default()
+                        .should_focus = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.hidden.files", "Hidden Files"),
-                lt("settings_ui.page_data.description.globs.to.match.files.that.will.be.considered.hidden.and.can.be.hidden.from.the.project.panel", "Globs to match files that will be considered \\\"hidden\\\" and can be hidden from the project panel."),
+                lt(
+                    "settings_ui.page_data.description.globs.to.match.files.that.will.be.considered.hidden.and.can.be.hidden.from.the.project.panel",
+                    "Globs to match files that will be considered \\\"hidden\\\" and can be hidden from the project panel."
+                ),
                 "worktree.hidden_files",
                 |settings_content| { settings_content.project.worktree.hidden_files.as_ref() },
-                |settings_content, value, _| { settings_content.project.worktree.hidden_files = value; }),
+                |settings_content, value, _| {
+                    settings_content.project.worktree.hidden_files = value;
+                }
+            ),
         ]
     }
 
     fn terminal_panel_section() -> [SettingsPageItem; 4] {
         [
-            section_header!("settings_ui.page_data.section.terminal.panel", "Terminal Panel"),
+            section_header!(
+                "settings_ui.page_data.section.terminal.panel",
+                "Terminal Panel"
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.terminal.dock", "Terminal Dock"),
-                lt("settings_ui.page_data.description.where.to.dock.the.terminal.panel", "Where to dock the terminal panel."),
+                lt(
+                    "settings_ui.page_data.description.where.to.dock.the.terminal.panel",
+                    "Where to dock the terminal panel."
+                ),
                 "terminal.dock",
                 |settings_content| settings_content.terminal.as_ref()?.dock.as_ref(),
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().dock = value; }),
+                |settings_content, value, _| {
+                    settings_content.terminal.get_or_insert_default().dock = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.terminal.panel.flexible.sizing", "Terminal Panel Flexible Sizing"),
-                lt("settings_ui.page_data.description.whether.the.terminal.panel.should.use.flexible.proportional.sizing.when.docked.to.the.left.or.right", "Whether the terminal panel should use flexible (proportional) sizing when docked to the left or right."),
+                lt(
+                    "settings_ui.page_data.title.terminal.panel.flexible.sizing",
+                    "Terminal Panel Flexible Sizing"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.the.terminal.panel.should.use.flexible.proportional.sizing.when.docked.to.the.left.or.right",
+                    "Whether the terminal panel should use flexible (proportional) sizing when docked to the left or right."
+                ),
                 "terminal.flexible",
                 |settings_content| settings_content.terminal.as_ref()?.flexible.as_ref(),
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().flexible = value; }),
+                |settings_content, value, _| {
+                    settings_content.terminal.get_or_insert_default().flexible = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.count.badge", "Show Count Badge"),
-                lt("settings_ui.page_data.description.show.a.badge.on.the.terminal.panel.icon.with.the.count.of.open.terminals", "Show a badge on the terminal panel icon with the count of open terminals."),
+                lt(
+                    "settings_ui.page_data.title.show.count.badge",
+                    "Show Count Badge"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.a.badge.on.the.terminal.panel.icon.with.the.count.of.open.terminals",
+                    "Show a badge on the terminal panel icon with the count of open terminals."
+                ),
                 "terminal.show_count_badge",
-                |settings_content| { settings_content.terminal.as_ref()?.show_count_badge.as_ref() },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().show_count_badge = value; }),
+                |settings_content| {
+                    settings_content
+                        .terminal
+                        .as_ref()?
+                        .show_count_badge
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .show_count_badge = value;
+                }
+            ),
         ]
     }
 
     fn outline_panel_section() -> [SettingsPageItem; 11] {
         [
-            section_header!("settings_ui.page_data.section.outline.panel", "Outline Panel"),
+            section_header!(
+                "settings_ui.page_data.section.outline.panel",
+                "Outline Panel"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.outline.panel.button", "Outline Panel Button"),
-                lt("settings_ui.page_data.description.show.the.outline.panel.button.in.the.status.bar", "Show the outline panel button in the status bar."),
+                lt(
+                    "settings_ui.page_data.title.outline.panel.button",
+                    "Outline Panel Button"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.outline.panel.button.in.the.status.bar",
+                    "Show the outline panel button in the status bar."
+                ),
                 "outline_panel.button",
                 |settings_content| { settings_content.outline_panel.as_ref()?.button.as_ref() },
-                |settings_content, value, _| { settings_content.outline_panel.get_or_insert_default().button = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .outline_panel
+                        .get_or_insert_default()
+                        .button = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.outline.panel.dock", "Outline Panel Dock"),
-                lt("settings_ui.page_data.description.where.to.dock.the.outline.panel", "Where to dock the outline panel."),
+                lt(
+                    "settings_ui.page_data.title.outline.panel.dock",
+                    "Outline Panel Dock"
+                ),
+                lt(
+                    "settings_ui.page_data.description.where.to.dock.the.outline.panel",
+                    "Where to dock the outline panel."
+                ),
                 "outline_panel.dock",
                 |settings_content| settings_content.outline_panel.as_ref()?.dock.as_ref(),
-                |settings_content, value, _| { settings_content.outline_panel.get_or_insert_default().dock = value; }),
+                |settings_content, value, _| {
+                    settings_content.outline_panel.get_or_insert_default().dock = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.outline.panel.default.width", "Outline Panel Default Width"),
-                lt("settings_ui.page_data.description.default.width.of.the.outline.panel.in.pixels", "Default width of the outline panel in pixels."),
+                lt(
+                    "settings_ui.page_data.title.outline.panel.default.width",
+                    "Outline Panel Default Width"
+                ),
+                lt(
+                    "settings_ui.page_data.description.default.width.of.the.outline.panel.in.pixels",
+                    "Default width of the outline panel in pixels."
+                ),
                 "outline_panel.default_width",
-                |settings_content| { settings_content.outline_panel.as_ref()?.default_width.as_ref() },
-                |settings_content, value, _| { settings_content.outline_panel.get_or_insert_default().default_width = value; }),
+                |settings_content| {
+                    settings_content
+                        .outline_panel
+                        .as_ref()?
+                        .default_width
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .outline_panel
+                        .get_or_insert_default()
+                        .default_width = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.file.icons", "File Icons"),
-                lt("settings_ui.page_data.description.show.file.icons.in.the.outline.panel", "Show file icons in the outline panel."),
+                lt(
+                    "settings_ui.page_data.description.show.file.icons.in.the.outline.panel",
+                    "Show file icons in the outline panel."
+                ),
                 "outline_panel.file_icons",
                 |settings_content| { settings_content.outline_panel.as_ref()?.file_icons.as_ref() },
-                |settings_content, value, _| { settings_content.outline_panel.get_or_insert_default().file_icons = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .outline_panel
+                        .get_or_insert_default()
+                        .file_icons = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.folder.icons", "Folder Icons"),
-                lt("settings_ui.page_data.description.whether.to.show.folder.icons.or.chevrons.for.directories.in.the.outline.panel", "Whether to show folder icons or chevrons for directories in the outline panel."),
+                lt(
+                    "settings_ui.page_data.description.whether.to.show.folder.icons.or.chevrons.for.directories.in.the.outline.panel",
+                    "Whether to show folder icons or chevrons for directories in the outline panel."
+                ),
                 "outline_panel.folder_icons",
-                |settings_content| { settings_content.outline_panel.as_ref()?.folder_icons.as_ref() },
-                |settings_content, value, _| { settings_content.outline_panel.get_or_insert_default().folder_icons = value; }),
+                |settings_content| {
+                    settings_content
+                        .outline_panel
+                        .as_ref()?
+                        .folder_icons
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .outline_panel
+                        .get_or_insert_default()
+                        .folder_icons = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.git.status", "Git Status"),
-                lt("settings_ui.page_data.description.show.the.git.status.in.the.outline.panel", "Show the Git status in the outline panel."),
+                lt(
+                    "settings_ui.page_data.description.show.the.git.status.in.the.outline.panel",
+                    "Show the Git status in the outline panel."
+                ),
                 "outline_panel.git_status",
                 |settings_content| { settings_content.outline_panel.as_ref()?.git_status.as_ref() },
-                |settings_content, value, _| { settings_content.outline_panel.get_or_insert_default().git_status = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .outline_panel
+                        .get_or_insert_default()
+                        .git_status = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.indent.size", "Indent Size"),
-                lt("settings_ui.page_data.description.amount.of.indentation.for.nested.items", "Amount of indentation for nested items."),
+                lt(
+                    "settings_ui.page_data.description.amount.of.indentation.for.nested.items",
+                    "Amount of indentation for nested items."
+                ),
                 "outline_panel.indent_size",
-                |settings_content| { settings_content.outline_panel.as_ref()?.indent_size.as_ref() },
-                |settings_content, value, _| { settings_content.outline_panel.get_or_insert_default().indent_size = value; }),
-            setting_item!(
-                lt("settings_ui.page_data.title.auto.reveal.entries", "Auto Reveal Entries"),
-                lt("settings_ui.page_data.description.whether.to.reveal.when.a.corresponding.outline.entry.becomes.active", "Whether to reveal when a corresponding outline entry becomes active."),
-                "outline_panel.auto_reveal_entries",
-                |settings_content| { settings_content.outline_panel.as_ref()?.auto_reveal_entries.as_ref() },
-                |settings_content, value, _| { settings_content.outline_panel.get_or_insert_default().auto_reveal_entries = value; }),
-            setting_item!(
-                lt("settings_ui.page_data.title.auto.fold.directories", "Auto Fold Directories"),
-                lt("settings_ui.page_data.description.whether.to.fold.directories.automatically.when.a.directory.contains.only.one.subdirectory", "Whether to fold directories automatically when a directory contains only one subdirectory."),
-                "outline_panel.auto_fold_dirs",
-                |settings_content| { settings_content.outline_panel.as_ref()?.auto_fold_dirs.as_ref() },
-                |settings_content, value, _| { settings_content.outline_panel.get_or_insert_default().auto_fold_dirs = value; }),
-            setting_item!(
-                lt("settings_ui.page_data.title.show.indent.guides", "Show Indent Guides"),
-                lt("settings_ui.page_data.description.when.to.show.indent.guides.in.the.outline.panel", "When to show indent guides in the outline panel."),
-                "outline_panel.indent_guides.show",
-                |settings_content| { settings_content.outline_panel.as_ref()?.indent_guides.as_ref()?.show.as_ref() },
+                |settings_content| {
+                    settings_content
+                        .outline_panel
+                        .as_ref()?
+                        .indent_size
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .outline_panel
-                                            .get_or_insert_default()
-                                            .indent_guides
-                                            .get_or_insert_default()
-                                            .show = value;
-                                    }),
+                    settings_content
+                        .outline_panel
+                        .get_or_insert_default()
+                        .indent_size = value;
+                }
+            ),
+            setting_item!(
+                lt(
+                    "settings_ui.page_data.title.auto.reveal.entries",
+                    "Auto Reveal Entries"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.reveal.when.a.corresponding.outline.entry.becomes.active",
+                    "Whether to reveal when a corresponding outline entry becomes active."
+                ),
+                "outline_panel.auto_reveal_entries",
+                |settings_content| {
+                    settings_content
+                        .outline_panel
+                        .as_ref()?
+                        .auto_reveal_entries
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .outline_panel
+                        .get_or_insert_default()
+                        .auto_reveal_entries = value;
+                }
+            ),
+            setting_item!(
+                lt(
+                    "settings_ui.page_data.title.auto.fold.directories",
+                    "Auto Fold Directories"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.fold.directories.automatically.when.a.directory.contains.only.one.subdirectory",
+                    "Whether to fold directories automatically when a directory contains only one subdirectory."
+                ),
+                "outline_panel.auto_fold_dirs",
+                |settings_content| {
+                    settings_content
+                        .outline_panel
+                        .as_ref()?
+                        .auto_fold_dirs
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .outline_panel
+                        .get_or_insert_default()
+                        .auto_fold_dirs = value;
+                }
+            ),
+            setting_item!(
+                lt(
+                    "settings_ui.page_data.title.show.indent.guides",
+                    "Show Indent Guides"
+                ),
+                lt(
+                    "settings_ui.page_data.description.when.to.show.indent.guides.in.the.outline.panel",
+                    "When to show indent guides in the outline panel."
+                ),
+                "outline_panel.indent_guides.show",
+                |settings_content| {
+                    settings_content
+                        .outline_panel
+                        .as_ref()?
+                        .indent_guides
+                        .as_ref()?
+                        .show
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .outline_panel
+                        .get_or_insert_default()
+                        .indent_guides
+                        .get_or_insert_default()
+                        .show = value;
+                }
+            ),
         ]
     }
 
@@ -3088,135 +5743,365 @@ fn panels_page() -> SettingsPage {
         [
             section_header!("settings_ui.page_data.section.git.panel", "Git Panel"),
             setting_item!(
-                lt("settings_ui.page_data.title.git.panel.button", "Git Panel Button"),
-                lt("settings_ui.page_data.description.show.the.git.panel.button.in.the.status.bar", "Show the Git panel button in the status bar."),
+                lt(
+                    "settings_ui.page_data.title.git.panel.button",
+                    "Git Panel Button"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.git.panel.button.in.the.status.bar",
+                    "Show the Git panel button in the status bar."
+                ),
                 "git_panel.button",
                 |settings_content| settings_content.git_panel.as_ref()?.button.as_ref(),
-                |settings_content, value, _| { settings_content.git_panel.get_or_insert_default().button = value; }),
+                |settings_content, value, _| {
+                    settings_content.git_panel.get_or_insert_default().button = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.git.panel.dock", "Git Panel Dock"),
-                lt("settings_ui.page_data.description.where.to.dock.the.git.panel", "Where to dock the Git panel."),
+                lt(
+                    "settings_ui.page_data.title.git.panel.dock",
+                    "Git Panel Dock"
+                ),
+                lt(
+                    "settings_ui.page_data.description.where.to.dock.the.git.panel",
+                    "Where to dock the Git panel."
+                ),
                 "git_panel.dock",
                 |settings_content| settings_content.git_panel.as_ref()?.dock.as_ref(),
-                |settings_content, value, _| { settings_content.git_panel.get_or_insert_default().dock = value; }),
+                |settings_content, value, _| {
+                    settings_content.git_panel.get_or_insert_default().dock = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.git.panel.default.width", "Git Panel Default Width"),
-                lt("settings_ui.page_data.description.default.width.of.the.git.panel.in.pixels", "Default width of the Git panel in pixels."),
+                lt(
+                    "settings_ui.page_data.title.git.panel.default.width",
+                    "Git Panel Default Width"
+                ),
+                lt(
+                    "settings_ui.page_data.description.default.width.of.the.git.panel.in.pixels",
+                    "Default width of the Git panel in pixels."
+                ),
                 "git_panel.default_width",
                 |settings_content| { settings_content.git_panel.as_ref()?.default_width.as_ref() },
-                |settings_content, value, _| { settings_content.git_panel.get_or_insert_default().default_width = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .git_panel
+                        .get_or_insert_default()
+                        .default_width = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.git.panel.status.style", "Git Panel Status Style"),
-                lt("settings_ui.page_data.description.how.entry.statuses.are.displayed", "How entry statuses are displayed."),
+                lt(
+                    "settings_ui.page_data.title.git.panel.status.style",
+                    "Git Panel Status Style"
+                ),
+                lt(
+                    "settings_ui.page_data.description.how.entry.statuses.are.displayed",
+                    "How entry statuses are displayed."
+                ),
                 "git_panel.status_style",
                 |settings_content| { settings_content.git_panel.as_ref()?.status_style.as_ref() },
-                |settings_content, value, _| { settings_content.git_panel.get_or_insert_default().status_style = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .git_panel
+                        .get_or_insert_default()
+                        .status_style = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.fallback.branch.name", "Fallback Branch Name"),
-                lt("settings_ui.page_data.description.default.branch.name.will.be.when.init.defaultbranch.is.not.set.in.git", "Default branch name will be when init.defaultbranch is not set in Git."),
+                lt(
+                    "settings_ui.page_data.title.fallback.branch.name",
+                    "Fallback Branch Name"
+                ),
+                lt(
+                    "settings_ui.page_data.description.default.branch.name.will.be.when.init.defaultbranch.is.not.set.in.git",
+                    "Default branch name will be when init.defaultbranch is not set in Git."
+                ),
                 "git_panel.fallback_branch_name",
-                |settings_content| { settings_content.git_panel.as_ref()?.fallback_branch_name.as_ref() },
-                |settings_content, value, _| { settings_content.git_panel.get_or_insert_default().fallback_branch_name = value; }),
+                |settings_content| {
+                    settings_content
+                        .git_panel
+                        .as_ref()?
+                        .fallback_branch_name
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .git_panel
+                        .get_or_insert_default()
+                        .fallback_branch_name = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.sort.by.path", "Sort By Path"),
-                lt("settings_ui.page_data.description.enable.to.sort.entries.in.the.panel.by.path.disable.to.sort.by.status", "Enable to sort entries in the panel by path, disable to sort by status."),
+                lt(
+                    "settings_ui.page_data.description.enable.to.sort.entries.in.the.panel.by.path.disable.to.sort.by.status",
+                    "Enable to sort entries in the panel by path, disable to sort by status."
+                ),
                 "git_panel.sort_by_path",
                 |settings_content| { settings_content.git_panel.as_ref()?.sort_by_path.as_ref() },
-                |settings_content, value, _| { settings_content.git_panel.get_or_insert_default().sort_by_path = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .git_panel
+                        .get_or_insert_default()
+                        .sort_by_path = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.collapse.untracked.diff", "Collapse Untracked Diff"),
-                lt("settings_ui.page_data.description.whether.to.collapse.untracked.files.in.the.diff.panel", "Whether to collapse untracked files in the diff panel."),
+                lt(
+                    "settings_ui.page_data.title.collapse.untracked.diff",
+                    "Collapse Untracked Diff"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.collapse.untracked.files.in.the.diff.panel",
+                    "Whether to collapse untracked files in the diff panel."
+                ),
                 "git_panel.collapse_untracked_diff",
-                |settings_content| { settings_content.git_panel.as_ref()?.collapse_untracked_diff.as_ref() },
-                |settings_content, value, _| { settings_content.git_panel.get_or_insert_default().collapse_untracked_diff = value; }),
+                |settings_content| {
+                    settings_content
+                        .git_panel
+                        .as_ref()?
+                        .collapse_untracked_diff
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .git_panel
+                        .get_or_insert_default()
+                        .collapse_untracked_diff = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.tree.view", "Tree View"),
-                lt("settings_ui.page_data.description.enable.to.show.entries.in.tree.view.list.disable.to.show.in.flat.view.list", "Enable to show entries in tree view list, disable to show in flat view list."),
+                lt(
+                    "settings_ui.page_data.description.enable.to.show.entries.in.tree.view.list.disable.to.show.in.flat.view.list",
+                    "Enable to show entries in tree view list, disable to show in flat view list."
+                ),
                 "git_panel.tree_view",
                 |settings_content| { settings_content.git_panel.as_ref()?.tree_view.as_ref() },
-                |settings_content, value, _| { settings_content.git_panel.get_or_insert_default().tree_view = value; }),
+                |settings_content, value, _| {
+                    settings_content.git_panel.get_or_insert_default().tree_view = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.file.icons", "File Icons"),
-                lt("settings_ui.page_data.description.show.file.icons.next.to.the.git.status.icon", "Show file icons next to the Git status icon."),
+                lt(
+                    "settings_ui.page_data.description.show.file.icons.next.to.the.git.status.icon",
+                    "Show file icons next to the Git status icon."
+                ),
                 "git_panel.file_icons",
                 |settings_content| { settings_content.git_panel.as_ref()?.file_icons.as_ref() },
-                |settings_content, value, _| { settings_content.git_panel.get_or_insert_default().file_icons = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .git_panel
+                        .get_or_insert_default()
+                        .file_icons = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.folder.icons", "Folder Icons"),
-                lt("settings_ui.page_data.description.whether.to.show.folder.icons.or.chevrons.for.directories.in.the.git.panel", "Whether to show folder icons or chevrons for directories in the git panel."),
+                lt(
+                    "settings_ui.page_data.description.whether.to.show.folder.icons.or.chevrons.for.directories.in.the.git.panel",
+                    "Whether to show folder icons or chevrons for directories in the git panel."
+                ),
                 "git_panel.folder_icons",
                 |settings_content| { settings_content.git_panel.as_ref()?.folder_icons.as_ref() },
-                |settings_content, value, _| { settings_content.git_panel.get_or_insert_default().folder_icons = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .git_panel
+                        .get_or_insert_default()
+                        .folder_icons = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.diff.stats", "Diff Stats"),
-                lt("settings_ui.page_data.description.whether.to.show.the.addition.deletion.change.count.next.to.each.file.in.the.git.panel", "Whether to show the addition/deletion change count next to each file in the Git panel."),
+                lt(
+                    "settings_ui.page_data.description.whether.to.show.the.addition.deletion.change.count.next.to.each.file.in.the.git.panel",
+                    "Whether to show the addition/deletion change count next to each file in the Git panel."
+                ),
                 "git_panel.diff_stats",
                 |settings_content| { settings_content.git_panel.as_ref()?.diff_stats.as_ref() },
-                |settings_content, value, _| { settings_content.git_panel.get_or_insert_default().diff_stats = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .git_panel
+                        .get_or_insert_default()
+                        .diff_stats = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.primary.click.behavior", "Primary Click Behavior"),
-                lt("settings_ui.page_data.description.default.action.when.clicking.a.changed.file.in.the.git.panel", "Default action when clicking a changed file in the Git panel."),
+                lt(
+                    "settings_ui.page_data.title.primary.click.behavior",
+                    "Primary Click Behavior"
+                ),
+                lt(
+                    "settings_ui.page_data.description.default.action.when.clicking.a.changed.file.in.the.git.panel",
+                    "Default action when clicking a changed file in the Git panel."
+                ),
                 "git_panel.entry_primary_click_action",
-                |settings_content| { settings_content.git_panel.as_ref()?.entry_primary_click_action.as_ref() },
-                |settings_content, value, _| { settings_content.git_panel.get_or_insert_default().entry_primary_click_action = value; }),
+                |settings_content| {
+                    settings_content
+                        .git_panel
+                        .as_ref()?
+                        .entry_primary_click_action
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .git_panel
+                        .get_or_insert_default()
+                        .entry_primary_click_action = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.commit.editor", "Commit Editor"),
-                lt("settings_ui.page_data.description.whether.the.commit.message.editor.is.shown.in.the.git.panel.by.default", "Whether the commit message editor is shown in the Git panel by default."),
+                lt(
+                    "settings_ui.page_data.description.whether.the.commit.message.editor.is.shown.in.the.git.panel.by.default",
+                    "Whether the commit message editor is shown in the Git panel by default."
+                ),
                 "git_panel.commit_editor",
                 |settings_content| { settings_content.git_panel.as_ref()?.commit_editor.as_ref() },
-                |settings_content, value, _| { settings_content.git_panel.get_or_insert_default().commit_editor = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .git_panel
+                        .get_or_insert_default()
+                        .commit_editor = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.count.badge", "Show Count Badge"),
-                lt("settings_ui.page_data.description.whether.to.show.a.badge.on.the.git.panel.icon.with.the.count.of.uncommitted.changes", "Whether to show a badge on the git panel icon with the count of uncommitted changes."),
+                lt(
+                    "settings_ui.page_data.title.show.count.badge",
+                    "Show Count Badge"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.show.a.badge.on.the.git.panel.icon.with.the.count.of.uncommitted.changes",
+                    "Whether to show a badge on the git panel icon with the count of uncommitted changes."
+                ),
                 "git_panel.show_count_badge",
-                |settings_content| { settings_content.git_panel.as_ref()?.show_count_badge.as_ref() },
-                |settings_content, value, _| { settings_content.git_panel.get_or_insert_default().show_count_badge = value; }),
+                |settings_content| {
+                    settings_content
+                        .git_panel
+                        .as_ref()?
+                        .show_count_badge
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .git_panel
+                        .get_or_insert_default()
+                        .show_count_badge = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.commit.title.max.length", "Commit Title Max Length"),
-                lt("settings_ui.page_data.description.maximum.length.of.the.commit.message.title.before.a.warning.is.shown.set.to.0.to.disable", "Maximum length of the commit message title before a warning is shown. Set to 0 to disable."),
+                lt(
+                    "settings_ui.page_data.title.commit.title.max.length",
+                    "Commit Title Max Length"
+                ),
+                lt(
+                    "settings_ui.page_data.description.maximum.length.of.the.commit.message.title.before.a.warning.is.shown.set.to.0.to.disable",
+                    "Maximum length of the commit message title before a warning is shown. Set to 0 to disable."
+                ),
                 "git_panel.commit_title_max_length",
-                |settings_content| { settings_content.git_panel.as_ref()?.commit_title_max_length.as_ref() },
-                |settings_content, value, _| { settings_content.git_panel.get_or_insert_default().commit_title_max_length = value; }),
+                |settings_content| {
+                    settings_content
+                        .git_panel
+                        .as_ref()?
+                        .commit_title_max_length
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .git_panel
+                        .get_or_insert_default()
+                        .commit_title_max_length = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.scroll.bar", "Scroll Bar"),
-                lt("settings_ui.page_data.description.how.and.when.the.scrollbar.should.be.displayed", "How and when the scrollbar should be displayed."),
+                lt(
+                    "settings_ui.page_data.description.how.and.when.the.scrollbar.should.be.displayed",
+                    "How and when the scrollbar should be displayed."
+                ),
                 "git_panel.scrollbar.show",
                 |settings_content| {
-                                        show_scrollbar_or_editor(settings_content, |settings_content| {
-                                            settings_content
-                                                .git_panel
-                                                .as_ref()?
-                                                .scrollbar
-                                                .as_ref()?
-                                                .show
-                                                .as_ref()
-                                        })
-                                    },
-                |settings_content, value, _| { settings_content.git_panel.get_or_insert_default().scrollbar.get_or_insert_default().show = value; }),
+                    show_scrollbar_or_editor(settings_content, |settings_content| {
+                        settings_content
+                            .git_panel
+                            .as_ref()?
+                            .scrollbar
+                            .as_ref()?
+                            .show
+                            .as_ref()
+                    })
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .git_panel
+                        .get_or_insert_default()
+                        .scrollbar
+                        .get_or_insert_default()
+                        .show = value;
+                }
+            ),
         ]
     }
 
     fn debugger_panel_section() -> [SettingsPageItem; 4] {
         [
-            section_header!("settings_ui.page_data.section.debugger.panel", "Debugger Panel"),
+            section_header!(
+                "settings_ui.page_data.section.debugger.panel",
+                "Debugger Panel"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.debugger.panel.dock", "Debugger Panel Dock"),
-                lt("settings_ui.page_data.description.the.dock.position.of.the.debug.panel", "The dock position of the debug panel."),
+                lt(
+                    "settings_ui.page_data.title.debugger.panel.dock",
+                    "Debugger Panel Dock"
+                ),
+                lt(
+                    "settings_ui.page_data.description.the.dock.position.of.the.debug.panel",
+                    "The dock position of the debug panel."
+                ),
                 "debugger.dock",
                 |settings_content| settings_content.debugger.as_ref()?.dock.as_ref(),
-                |settings_content, value, _| { settings_content.debugger.get_or_insert_default().dock = value; }),
+                |settings_content, value, _| {
+                    settings_content.debugger.get_or_insert_default().dock = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.debugger.panel.default.width", "Debugger Panel Default Width"),
-                lt("settings_ui.page_data.description.default.width.in.pixels.when.the.debug.panel.is.docked.to.the.left.or.right", "Default width in pixels when the debug panel is docked to the left or right."),
+                lt(
+                    "settings_ui.page_data.title.debugger.panel.default.width",
+                    "Debugger Panel Default Width"
+                ),
+                lt(
+                    "settings_ui.page_data.description.default.width.in.pixels.when.the.debug.panel.is.docked.to.the.left.or.right",
+                    "Default width in pixels when the debug panel is docked to the left or right."
+                ),
                 "debugger.default_width",
                 |settings_content| { settings_content.debugger.as_ref()?.default_width.as_ref() },
-                |settings_content, value, _| { settings_content.debugger.get_or_insert_default().default_width = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .debugger
+                        .get_or_insert_default()
+                        .default_width = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.debugger.panel.default.height", "Debugger Panel Default Height"),
-                lt("settings_ui.page_data.description.default.height.in.pixels.when.the.debug.panel.is.docked.to.the.bottom", "Default height in pixels when the debug panel is docked to the bottom."),
+                lt(
+                    "settings_ui.page_data.title.debugger.panel.default.height",
+                    "Debugger Panel Default Height"
+                ),
+                lt(
+                    "settings_ui.page_data.description.default.height.in.pixels.when.the.debug.panel.is.docked.to.the.bottom",
+                    "Default height in pixels when the debug panel is docked to the bottom."
+                ),
                 "debugger.default_height",
                 |settings_content| { settings_content.debugger.as_ref()?.default_height.as_ref() },
-                |settings_content, value, _| { settings_content.debugger.get_or_insert_default().default_height = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .debugger
+                        .get_or_insert_default()
+                        .default_height = value;
+                }
+            ),
         ]
     }
 
@@ -3224,35 +6109,83 @@ fn panels_page() -> SettingsPage {
         [
             section_header!("settings_ui.page_data.section.agent.panel", "Agent Panel"),
             setting_item!(
-                lt("settings_ui.page_data.title.agent.panel.button", "Agent Panel Button"),
-                lt("settings_ui.page_data.description.whether.to.show.the.agent.panel.button.in.the.status.bar", "Whether to show the agent panel button in the status bar."),
+                lt(
+                    "settings_ui.page_data.title.agent.panel.button",
+                    "Agent Panel Button"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.show.the.agent.panel.button.in.the.status.bar",
+                    "Whether to show the agent panel button in the status bar."
+                ),
                 "agent.button",
                 |settings_content| settings_content.agent.as_ref()?.button.as_ref(),
-                |settings_content, value, _| { settings_content.agent.get_or_insert_default().button = value; }),
+                |settings_content, value, _| {
+                    settings_content.agent.get_or_insert_default().button = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.agent.panel.dock", "Agent Panel Dock"),
-                lt("settings_ui.page_data.description.where.to.dock.the.agent.panel", "Where to dock the agent panel."),
+                lt(
+                    "settings_ui.page_data.title.agent.panel.dock",
+                    "Agent Panel Dock"
+                ),
+                lt(
+                    "settings_ui.page_data.description.where.to.dock.the.agent.panel",
+                    "Where to dock the agent panel."
+                ),
                 "agent.dock",
                 |settings_content| settings_content.agent.as_ref()?.dock.as_ref(),
-                |settings_content, value, _| { settings_content.agent.get_or_insert_default().dock = value; }),
+                |settings_content, value, _| {
+                    settings_content.agent.get_or_insert_default().dock = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.agent.panel.flexible.sizing", "Agent Panel Flexible Sizing"),
-                lt("settings_ui.page_data.description.whether.the.agent.panel.should.use.flexible.proportional.sizing.when.docked.to.the.left.or.right", "Whether the agent panel should use flexible (proportional) sizing when docked to the left or right. When enabled, the default width does not control the panel width, and resetting the panel restores the default proportion."),
+                lt(
+                    "settings_ui.page_data.title.agent.panel.flexible.sizing",
+                    "Agent Panel Flexible Sizing"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.the.agent.panel.should.use.flexible.proportional.sizing.when.docked.to.the.left.or.right",
+                    "Whether the agent panel should use flexible (proportional) sizing when docked to the left or right. When enabled, the default width does not control the panel width, and resetting the panel restores the default proportion."
+                ),
                 "agent.flexible",
                 |settings_content| settings_content.agent.as_ref()?.flexible.as_ref(),
-                |settings_content, value, _| { settings_content.agent.get_or_insert_default().flexible = value; }),
+                |settings_content, value, _| {
+                    settings_content.agent.get_or_insert_default().flexible = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.agent.panel.default.width", "Agent Panel Default Width"),
-                lt("settings_ui.page_data.description.default.width.when.the.agent.panel.is.docked.to.the.left.or.right", "Default fixed width when the agent panel is docked to the left or right and flexible sizing is disabled."),
+                lt(
+                    "settings_ui.page_data.title.agent.panel.default.width",
+                    "Agent Panel Default Width"
+                ),
+                lt(
+                    "settings_ui.page_data.description.default.width.when.the.agent.panel.is.docked.to.the.left.or.right",
+                    "Default fixed width when the agent panel is docked to the left or right and flexible sizing is disabled."
+                ),
                 "agent.default_width",
                 |settings_content| { settings_content.agent.as_ref()?.default_width.as_ref() },
-                |settings_content, value, _| { settings_content.agent.get_or_insert_default().default_width = value; }),
+                |settings_content, value, _| {
+                    settings_content.agent.get_or_insert_default().default_width = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.agent.panel.default.height", "Agent Panel Default Height"),
-                lt("settings_ui.page_data.description.default.height.when.the.agent.panel.is.docked.to.the.bottom", "Default height when the agent panel is docked to the bottom."),
+                lt(
+                    "settings_ui.page_data.title.agent.panel.default.height",
+                    "Agent Panel Default Height"
+                ),
+                lt(
+                    "settings_ui.page_data.description.default.height.when.the.agent.panel.is.docked.to.the.bottom",
+                    "Default height when the agent panel is docked to the bottom."
+                ),
                 "agent.default_height",
                 |settings_content| { settings_content.agent.as_ref()?.default_height.as_ref() },
-                |settings_content, value, _| { settings_content.agent.get_or_insert_default().default_height = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .agent
+                        .get_or_insert_default()
+                        .default_height = value;
+                }
+            ),
             SettingsPageItem::DynamicItem(DynamicItem {
                 discriminant: SettingItem {
                     files: USER,
@@ -3323,67 +6256,229 @@ fn panels_page() -> SettingsPage {
 
     fn telegram_panel_section() -> [SettingsPageItem; 11] {
         [
-            section_header!("settings_ui.page_data.section.telegram.panel", "Telegram Panel"),
+            section_header!(
+                "settings_ui.page_data.section.telegram.panel",
+                "Telegram Panel"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.telegram.panel.button", "Telegram Panel Button"),
-                lt("settings_ui.page_data.description.show.the.telegram.panel.button.in.the.status.bar", "Show the Telegram panel button in the status bar."),
+                lt(
+                    "settings_ui.page_data.title.telegram.panel.button",
+                    "Telegram Panel Button"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.the.telegram.panel.button.in.the.status.bar",
+                    "Show the Telegram panel button in the status bar."
+                ),
                 "telegram_panel.button",
                 |settings_content| { settings_content.telegram_panel.as_ref()?.button.as_ref() },
-                |settings_content, value, _| { settings_content.telegram_panel.get_or_insert_default().button = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .telegram_panel
+                        .get_or_insert_default()
+                        .button = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.telegram.panel.dock", "Telegram Panel Dock"),
-                lt("settings_ui.page_data.description.where.to.dock.the.telegram.panel", "Where to dock the Telegram panel."),
+                lt(
+                    "settings_ui.page_data.title.telegram.panel.dock",
+                    "Telegram Panel Dock"
+                ),
+                lt(
+                    "settings_ui.page_data.description.where.to.dock.the.telegram.panel",
+                    "Where to dock the Telegram panel."
+                ),
                 "telegram_panel.dock",
                 |settings_content| { settings_content.telegram_panel.as_ref()?.dock.as_ref() },
-                |settings_content, value, _| { settings_content.telegram_panel.get_or_insert_default().dock = value; }),
+                |settings_content, value, _| {
+                    settings_content.telegram_panel.get_or_insert_default().dock = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.telegram.panel.default.width", "Telegram Panel Default Width"),
-                lt("settings_ui.page_data.description.default.width.of.the.telegram.panel.in.pixels", "Default width of the Telegram panel in pixels."),
+                lt(
+                    "settings_ui.page_data.title.telegram.panel.default.width",
+                    "Telegram Panel Default Width"
+                ),
+                lt(
+                    "settings_ui.page_data.description.default.width.of.the.telegram.panel.in.pixels",
+                    "Default width of the Telegram panel in pixels."
+                ),
                 "telegram_panel.default_width",
-                |settings_content| { settings_content.telegram_panel.as_ref()?.default_width.as_ref() },
-                |settings_content, value, _| { settings_content.telegram_panel.get_or_insert_default().default_width = value; }),
+                |settings_content| {
+                    settings_content
+                        .telegram_panel
+                        .as_ref()?
+                        .default_width
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .telegram_panel
+                        .get_or_insert_default()
+                        .default_width = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.telegram.panel.default.height", "Telegram Panel Default Height"),
-                lt("settings_ui.page_data.description.default.height.of.the.telegram.panel.in.pixels", "Default height of the Telegram panel in pixels."),
+                lt(
+                    "settings_ui.page_data.title.telegram.panel.default.height",
+                    "Telegram Panel Default Height"
+                ),
+                lt(
+                    "settings_ui.page_data.description.default.height.of.the.telegram.panel.in.pixels",
+                    "Default height of the Telegram panel in pixels."
+                ),
                 "telegram_panel.default_height",
-                |settings_content| { settings_content.telegram_panel.as_ref()?.default_height.as_ref() },
-                |settings_content, value, _| { settings_content.telegram_panel.get_or_insert_default().default_height = value; }),
+                |settings_content| {
+                    settings_content
+                        .telegram_panel
+                        .as_ref()?
+                        .default_height
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .telegram_panel
+                        .get_or_insert_default()
+                        .default_height = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.telegram.panel.flexible", "Telegram Panel Flexible Sizing"),
-                lt("settings_ui.page_data.description.allow.the.telegram.panel.to.stretch.to.fill.its.dock", "Allow the Telegram panel to stretch to fill its dock."),
+                lt(
+                    "settings_ui.page_data.title.telegram.panel.flexible",
+                    "Telegram Panel Flexible Sizing"
+                ),
+                lt(
+                    "settings_ui.page_data.description.allow.the.telegram.panel.to.stretch.to.fill.its.dock",
+                    "Allow the Telegram panel to stretch to fill its dock."
+                ),
                 "telegram_panel.flexible",
                 |settings_content| { settings_content.telegram_panel.as_ref()?.flexible.as_ref() },
-                |settings_content, value, _| { settings_content.telegram_panel.get_or_insert_default().flexible = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .telegram_panel
+                        .get_or_insert_default()
+                        .flexible = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.telegram.panel.starts.open", "Telegram Panel Opens on Startup"),
-                lt("settings_ui.page_data.description.open.the.telegram.panel.on.startup", "Open the Telegram panel on startup."),
+                lt(
+                    "settings_ui.page_data.title.telegram.panel.starts.open",
+                    "Telegram Panel Opens on Startup"
+                ),
+                lt(
+                    "settings_ui.page_data.description.open.the.telegram.panel.on.startup",
+                    "Open the Telegram panel on startup."
+                ),
                 "telegram_panel.starts_open",
-                |settings_content| { settings_content.telegram_panel.as_ref()?.starts_open.as_ref() },
-                |settings_content, value, _| { settings_content.telegram_panel.get_or_insert_default().starts_open = value; }),
+                |settings_content| {
+                    settings_content
+                        .telegram_panel
+                        .as_ref()?
+                        .starts_open
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .telegram_panel
+                        .get_or_insert_default()
+                        .starts_open = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.telegram.panel.show.unread.badge", "Telegram Panel Unread Badge"),
-                lt("settings_ui.page_data.description.show.a.badge.with.the.number.of.unread.messages.muted.chats.do.not.count", "Show a badge with the number of unread messages on the Telegram panel icon. Muted chats do not count."),
+                lt(
+                    "settings_ui.page_data.title.telegram.panel.show.unread.badge",
+                    "Telegram Panel Unread Badge"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.a.badge.with.the.number.of.unread.messages.muted.chats.do.not.count",
+                    "Show a badge with the number of unread messages on the Telegram panel icon. Muted chats do not count."
+                ),
                 "telegram_panel.show_unread_badge",
-                |settings_content| { settings_content.telegram_panel.as_ref()?.show_unread_badge.as_ref() },
-                |settings_content, value, _| { settings_content.telegram_panel.get_or_insert_default().show_unread_badge = value; }),
+                |settings_content| {
+                    settings_content
+                        .telegram_panel
+                        .as_ref()?
+                        .show_unread_badge
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .telegram_panel
+                        .get_or_insert_default()
+                        .show_unread_badge = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.telegram.panel.limit.content.width", "Telegram Panel Limit Content Width"),
-                lt("settings_ui.page_data.description.limit.the.width.of.telegram.messages.the.chat.header.and.the.composer", "Limit the width of messages, the chat header, and the composer."),
+                lt(
+                    "settings_ui.page_data.title.telegram.panel.limit.content.width",
+                    "Telegram Panel Limit Content Width"
+                ),
+                lt(
+                    "settings_ui.page_data.description.limit.the.width.of.telegram.messages.the.chat.header.and.the.composer",
+                    "Limit the width of messages, the chat header, and the composer."
+                ),
                 "telegram_panel.limit_content_width",
-                |settings_content| { settings_content.telegram_panel.as_ref()?.limit_content_width.as_ref() },
-                |settings_content, value, _| { settings_content.telegram_panel.get_or_insert_default().limit_content_width = value; }),
+                |settings_content| {
+                    settings_content
+                        .telegram_panel
+                        .as_ref()?
+                        .limit_content_width
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .telegram_panel
+                        .get_or_insert_default()
+                        .limit_content_width = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.telegram.panel.max.content.width", "Telegram Panel Max Content Width"),
-                lt("settings_ui.page_data.description.maximum.content.width.in.pixels.for.the.telegram.panel", "Maximum content width in pixels. Content is centered when the panel is wider than this value."),
+                lt(
+                    "settings_ui.page_data.title.telegram.panel.max.content.width",
+                    "Telegram Panel Max Content Width"
+                ),
+                lt(
+                    "settings_ui.page_data.description.maximum.content.width.in.pixels.for.the.telegram.panel",
+                    "Maximum content width in pixels. Content is centered when the panel is wider than this value."
+                ),
                 "telegram_panel.max_content_width",
-                |settings_content| { settings_content.telegram_panel.as_ref()?.max_content_width.as_ref() },
-                |settings_content, value, _| { settings_content.telegram_panel.get_or_insert_default().max_content_width = value; }),
+                |settings_content| {
+                    settings_content
+                        .telegram_panel
+                        .as_ref()?
+                        .max_content_width
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .telegram_panel
+                        .get_or_insert_default()
+                        .max_content_width = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.telegram.composer.minimum.lines", "Telegram Composer Minimum Lines"),
-                lt("settings_ui.page_data.description.minimum.number.of.lines.the.telegram.composer.shows.before.it.grows", "Minimum number of lines the Telegram composer shows before it grows."),
+                lt(
+                    "settings_ui.page_data.title.telegram.composer.minimum.lines",
+                    "Telegram Composer Minimum Lines"
+                ),
+                lt(
+                    "settings_ui.page_data.description.minimum.number.of.lines.the.telegram.composer.shows.before.it.grows",
+                    "Minimum number of lines the Telegram composer shows before it grows."
+                ),
                 "telegram_panel.composer_min_lines",
-                |settings_content| { settings_content.telegram_panel.as_ref()?.composer_min_lines.as_ref() },
-                |settings_content, value, _| { settings_content.telegram_panel.get_or_insert_default().composer_min_lines = value; }),
+                |settings_content| {
+                    settings_content
+                        .telegram_panel
+                        .as_ref()?
+                        .composer_min_lines
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .telegram_panel
+                        .get_or_insert_default()
+                        .composer_min_lines = value;
+                }
+            ),
         ]
     }
 
@@ -3407,15 +6502,15 @@ fn collaboration_page() -> SettingsPage {
         items: Box::new([
             section_header!("settings_ui.page_data.section.telegram", "Telegram"),
             setting_item!(
-                lt("settings_ui.page_data.title.telegram.proxy", "Telegram Proxy"),
-                lt("settings_ui.page_data.description.a.dedicated.socks5.proxy.for.telegram", "A dedicated SOCKS5 proxy for Telegram. Telegram cannot use HTTP or HTTPS proxies."),
-                "telegram.proxy",
-                |settings_content| settings_content.telegram.as_ref()?.proxy.as_ref(),
-                |settings_content, value, _| { settings_content.telegram.get_or_insert_default().proxy = value; },
-                metadata: Some(Box::new(SettingsFieldMetadata {
-                    placeholder: Some("socks5://127.0.0.1:1080"),
-                    ..Default::default()
-                }))),
+            lt("settings_ui.page_data.title.telegram.proxy", "Telegram Proxy"),
+            lt("settings_ui.page_data.description.a.dedicated.socks5.proxy.for.telegram", "A dedicated SOCKS5 proxy for Telegram. Telegram cannot use HTTP or HTTPS proxies."),
+            "telegram.proxy",
+            |settings_content| settings_content.telegram.as_ref()?.proxy.as_ref(),
+            |settings_content, value, _| { settings_content.telegram.get_or_insert_default().proxy = value; },
+            metadata: Some(Box::new(SettingsFieldMetadata {
+                placeholder: Some("socks5://127.0.0.1:1080"),
+                ..Default::default()
+            }))),
         ]),
     }
 }
@@ -3425,35 +6520,113 @@ fn debugger_page() -> SettingsPage {
         [
             section_header!("settings_ui.page_data.section.general", "General"),
             setting_item!(
-                lt("settings_ui.page_data.title.stepping.granularity", "Stepping Granularity"),
-                lt("settings_ui.page_data.description.determines.the.stepping.granularity.for.debug.operations", "Determines the stepping granularity for debug operations."),
+                lt(
+                    "settings_ui.page_data.title.stepping.granularity",
+                    "Stepping Granularity"
+                ),
+                lt(
+                    "settings_ui.page_data.description.determines.the.stepping.granularity.for.debug.operations",
+                    "Determines the stepping granularity for debug operations."
+                ),
                 "debugger.stepping_granularity",
-                |settings_content| { settings_content.debugger.as_ref()?.stepping_granularity.as_ref() },
-                |settings_content, value, _| { settings_content.debugger.get_or_insert_default().stepping_granularity = value; }),
+                |settings_content| {
+                    settings_content
+                        .debugger
+                        .as_ref()?
+                        .stepping_granularity
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .debugger
+                        .get_or_insert_default()
+                        .stepping_granularity = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.save.breakpoints", "Save Breakpoints"),
-                lt("settings_ui.page_data.description.whether.breakpoints.should.be.reused.across.zzz.sessions", "Whether breakpoints should be reused across ZZZ sessions."),
+                lt(
+                    "settings_ui.page_data.title.save.breakpoints",
+                    "Save Breakpoints"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.breakpoints.should.be.reused.across.zzz.sessions",
+                    "Whether breakpoints should be reused across ZZZ sessions."
+                ),
                 "debugger.save_breakpoints",
-                |settings_content| { settings_content.debugger.as_ref()?.save_breakpoints.as_ref() },
-                |settings_content, value, _| { settings_content.debugger.get_or_insert_default().save_breakpoints = value; }),
+                |settings_content| {
+                    settings_content
+                        .debugger
+                        .as_ref()?
+                        .save_breakpoints
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .debugger
+                        .get_or_insert_default()
+                        .save_breakpoints = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.timeout", "Timeout"),
-                lt("settings_ui.page_data.description.time.in.milliseconds.until.timeout.error.when.connecting.to.a.tcp.debug.adapter", "Time in milliseconds until timeout error when connecting to a TCP debug adapter."),
+                lt(
+                    "settings_ui.page_data.description.time.in.milliseconds.until.timeout.error.when.connecting.to.a.tcp.debug.adapter",
+                    "Time in milliseconds until timeout error when connecting to a TCP debug adapter."
+                ),
                 "debugger.timeout",
                 |settings_content| settings_content.debugger.as_ref()?.timeout.as_ref(),
-                |settings_content, value, _| { settings_content.debugger.get_or_insert_default().timeout = value; }),
+                |settings_content, value, _| {
+                    settings_content.debugger.get_or_insert_default().timeout = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.log.dap.communications", "Log DAP Communications"),
-                lt("settings_ui.page_data.description.whether.to.log.messages.between.active.debug.adapters.and.zzz", "Whether to log messages between active debug adapters and ZZZ."),
+                lt(
+                    "settings_ui.page_data.title.log.dap.communications",
+                    "Log DAP Communications"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.log.messages.between.active.debug.adapters.and.zzz",
+                    "Whether to log messages between active debug adapters and ZZZ."
+                ),
                 "debugger.log_dap_communications",
-                |settings_content| { settings_content.debugger.as_ref()?.log_dap_communications.as_ref() },
-                |settings_content, value, _| { settings_content.debugger.get_or_insert_default().log_dap_communications = value; }),
+                |settings_content| {
+                    settings_content
+                        .debugger
+                        .as_ref()?
+                        .log_dap_communications
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .debugger
+                        .get_or_insert_default()
+                        .log_dap_communications = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.format.dap.log.messages", "Format DAP Log Messages"),
-                lt("settings_ui.page_data.description.whether.to.format.dap.messages.when.adding.them.to.debug.adapter.logger", "Whether to format DAP messages when adding them to debug adapter logger."),
+                lt(
+                    "settings_ui.page_data.title.format.dap.log.messages",
+                    "Format DAP Log Messages"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.format.dap.messages.when.adding.them.to.debug.adapter.logger",
+                    "Whether to format DAP messages when adding them to debug adapter logger."
+                ),
                 "debugger.format_dap_log_messages",
-                |settings_content| { settings_content.debugger.as_ref()?.format_dap_log_messages.as_ref() },
-                |settings_content, value, _| { settings_content.debugger.get_or_insert_default().format_dap_log_messages = value; }),
+                |settings_content| {
+                    settings_content
+                        .debugger
+                        .as_ref()?
+                        .format_dap_log_messages
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .debugger
+                        .get_or_insert_default()
+                        .format_dap_log_messages = value;
+                }
+            ),
         ]
     }
 
@@ -3808,166 +6981,409 @@ fn terminal_page() -> SettingsPage {
             section_header!("settings_ui.page_data.section.font", "Font"),
             setting_item!(
                 lt("settings_ui.page_data.title.font.size", "Font Size"),
-                lt("settings_ui.page_data.description.font.size.for.terminal.text.if.not.set.defaults.to.buffer.font.size", "Font size for terminal text. If not set, defaults to buffer font size."),
+                lt(
+                    "settings_ui.page_data.description.font.size.for.terminal.text.if.not.set.defaults.to.buffer.font.size",
+                    "Font size for terminal text. If not set, defaults to buffer font size."
+                ),
                 "terminal.font_size",
                 |settings_content| {
-                                        settings_content
-                                            .terminal
-                                            .as_ref()
-                                            .and_then(|terminal| terminal.font_size.as_ref())
-                                            .or(settings_content.theme.buffer_font_size.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().font_size = value; }),
+                    settings_content
+                        .terminal
+                        .as_ref()
+                        .and_then(|terminal| terminal.font_size.as_ref())
+                        .or(settings_content.theme.buffer_font_size.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content.terminal.get_or_insert_default().font_size = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.font.family", "Font Family"),
-                lt("settings_ui.page_data.description.font.family.for.terminal.text.if.not.set.defaults.to.buffer.font.family", "Font family for terminal text. If not set, defaults to buffer font family."),
+                lt(
+                    "settings_ui.page_data.description.font.family.for.terminal.text.if.not.set.defaults.to.buffer.font.family",
+                    "Font family for terminal text. If not set, defaults to buffer font family."
+                ),
                 "terminal.font_family",
                 |settings_content| {
-                                        settings_content
-                                            .terminal
-                                            .as_ref()
-                                            .and_then(|terminal| terminal.font_family.as_ref())
-                                            .or(settings_content.theme.buffer_font_family.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().font_family = value; }),
+                    settings_content
+                        .terminal
+                        .as_ref()
+                        .and_then(|terminal| terminal.font_family.as_ref())
+                        .or(settings_content.theme.buffer_font_family.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .font_family = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.font.fallbacks", "Font Fallbacks"),
-                lt("settings_ui.page_data.description.font.fallbacks.for.terminal.text.if.not.set.defaults.to.buffer.font.fallbacks", "Font fallbacks for terminal text. If not set, defaults to buffer font fallbacks."),
+                lt(
+                    "settings_ui.page_data.title.font.fallbacks",
+                    "Font Fallbacks"
+                ),
+                lt(
+                    "settings_ui.page_data.description.font.fallbacks.for.terminal.text.if.not.set.defaults.to.buffer.font.fallbacks",
+                    "Font fallbacks for terminal text. If not set, defaults to buffer font fallbacks."
+                ),
                 "terminal.font_fallbacks",
                 |settings_content| {
-                                            settings_content
-                                                .terminal
-                                                .as_ref()
-                                                .and_then(|terminal| terminal.font_fallbacks.as_ref())
-                                                .or(settings_content.theme.buffer_font_fallbacks.as_ref())
-                                        },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().font_fallbacks = value; }),
+                    settings_content
+                        .terminal
+                        .as_ref()
+                        .and_then(|terminal| terminal.font_fallbacks.as_ref())
+                        .or(settings_content.theme.buffer_font_fallbacks.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .font_fallbacks = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.font.weight", "Font Weight"),
-                lt("settings_ui.page_data.description.font.weight.for.terminal.text.in.css.weight.units.100.900", "Font weight for terminal text in CSS weight units (100-900)."),
+                lt(
+                    "settings_ui.page_data.description.font.weight.for.terminal.text.in.css.weight.units.100.900",
+                    "Font weight for terminal text in CSS weight units (100-900)."
+                ),
                 "terminal.font_weight",
                 |settings_content| { settings_content.terminal.as_ref()?.font_weight.as_ref() },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().font_weight = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .font_weight = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.font.features", "Font Features"),
-                lt("settings_ui.page_data.description.font.features.for.terminal.text", "Font features for terminal text."),
+                lt(
+                    "settings_ui.page_data.description.font.features.for.terminal.text",
+                    "Font features for terminal text."
+                ),
                 "terminal.font_features",
                 |settings_content| {
-                                            settings_content
-                                                .terminal
-                                                .as_ref()
-                                                .and_then(|terminal| terminal.font_features.as_ref())
-                                                .or(settings_content.theme.buffer_font_features.as_ref())
-                                        },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().font_features = value; }),
+                    settings_content
+                        .terminal
+                        .as_ref()
+                        .and_then(|terminal| terminal.font_features.as_ref())
+                        .or(settings_content.theme.buffer_font_features.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .font_features = value;
+                }
+            ),
         ]
     }
 
     fn display_settings_section() -> [SettingsPageItem; 6] {
         [
-            section_header!("settings_ui.page_data.section.display.settings", "Display Settings"),
+            section_header!(
+                "settings_ui.page_data.section.display.settings",
+                "Display Settings"
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.line.height", "Line Height"),
-                lt("settings_ui.page_data.description.line.height.for.terminal.text", "Line height for terminal text."),
+                lt(
+                    "settings_ui.page_data.description.line.height.for.terminal.text",
+                    "Line height for terminal text."
+                ),
                 "terminal.line_height",
                 |settings_content| { settings_content.terminal.as_ref()?.line_height.as_ref() },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().line_height = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .line_height = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.cursor.shape", "Cursor Shape"),
-                lt("settings_ui.page_data.description.default.cursor.shape.for.the.terminal.bar.block.underline.or.hollow", "Default cursor shape for the terminal (bar, block, underline, or hollow)."),
+                lt(
+                    "settings_ui.page_data.description.default.cursor.shape.for.the.terminal.bar.block.underline.or.hollow",
+                    "Default cursor shape for the terminal (bar, block, underline, or hollow)."
+                ),
                 "terminal.cursor_shape",
                 |settings_content| { settings_content.terminal.as_ref()?.cursor_shape.as_ref() },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().cursor_shape = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .cursor_shape = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.cursor.blinking", "Cursor Blinking"),
-                lt("settings_ui.page_data.description.sets.the.cursor.blinking.behavior.in.the.terminal", "Sets the cursor blinking behavior in the terminal."),
+                lt(
+                    "settings_ui.page_data.title.cursor.blinking",
+                    "Cursor Blinking"
+                ),
+                lt(
+                    "settings_ui.page_data.description.sets.the.cursor.blinking.behavior.in.the.terminal",
+                    "Sets the cursor blinking behavior in the terminal."
+                ),
                 "terminal.blinking",
                 |settings_content| settings_content.terminal.as_ref()?.blinking.as_ref(),
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().blinking = value; }),
+                |settings_content, value, _| {
+                    settings_content.terminal.get_or_insert_default().blinking = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.alternate.scroll", "Alternate Scroll"),
-                lt("settings_ui.page_data.description.whether.alternate.scroll.mode.is.active.by.default.converts.mouse.scroll.to.arrow.keys.in.apps.like.vim", "Whether alternate scroll mode is active by default (converts mouse scroll to arrow keys in apps like Vim)."),
+                lt(
+                    "settings_ui.page_data.title.alternate.scroll",
+                    "Alternate Scroll"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.alternate.scroll.mode.is.active.by.default.converts.mouse.scroll.to.arrow.keys.in.apps.like.vim",
+                    "Whether alternate scroll mode is active by default (converts mouse scroll to arrow keys in apps like Vim)."
+                ),
                 "terminal.alternate_scroll",
-                |settings_content| { settings_content.terminal.as_ref()?.alternate_scroll.as_ref() },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().alternate_scroll = value; }),
+                |settings_content| {
+                    settings_content
+                        .terminal
+                        .as_ref()?
+                        .alternate_scroll
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .alternate_scroll = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.minimum.contrast", "Minimum Contrast"),
-                lt("settings_ui.page_data.description.the.minimum.apca.perceptual.contrast.between.foreground.and.background.colors.0.106", "The minimum APCA perceptual contrast between foreground and background colors (0-106)."),
+                lt(
+                    "settings_ui.page_data.title.minimum.contrast",
+                    "Minimum Contrast"
+                ),
+                lt(
+                    "settings_ui.page_data.description.the.minimum.apca.perceptual.contrast.between.foreground.and.background.colors.0.106",
+                    "The minimum APCA perceptual contrast between foreground and background colors (0-106)."
+                ),
                 "terminal.minimum_contrast",
-                |settings_content| { settings_content.terminal.as_ref()?.minimum_contrast.as_ref() },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().minimum_contrast = value; }),
+                |settings_content| {
+                    settings_content
+                        .terminal
+                        .as_ref()?
+                        .minimum_contrast
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .minimum_contrast = value;
+                }
+            ),
         ]
     }
 
     fn behavior_settings_section() -> [SettingsPageItem; 6] {
         [
-            section_header!("settings_ui.page_data.section.behavior.settings", "Behavior Settings"),
+            section_header!(
+                "settings_ui.page_data.section.behavior.settings",
+                "Behavior Settings"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.option.as.meta", "Option As Meta"),
-                lt("settings_ui.page_data.description.whether.the.option.key.behaves.as.the.meta.key", "Whether the option key behaves as the meta key."),
+                lt(
+                    "settings_ui.page_data.title.option.as.meta",
+                    "Option As Meta"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.the.option.key.behaves.as.the.meta.key",
+                    "Whether the option key behaves as the meta key."
+                ),
                 "terminal.option_as_meta",
                 |settings_content| { settings_content.terminal.as_ref()?.option_as_meta.as_ref() },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().option_as_meta = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .option_as_meta = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.open.links.in.mouse.mode", "Open Links In Mouse Mode"),
-                lt("settings_ui.page_data.description.whether.cmd.click.ctrl.click.opens.hyperlinks.when.the.terminal.application.has.enabled.mouse.reporting", "Whether cmd-click (ctrl-click on Linux and Windows) opens hyperlinks even when the terminal application has enabled mouse reporting. When disabled, these clicks are forwarded to the application; links can still be opened with shift-cmd-click."),
+                lt(
+                    "settings_ui.page_data.title.open.links.in.mouse.mode",
+                    "Open Links In Mouse Mode"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.cmd.click.ctrl.click.opens.hyperlinks.when.the.terminal.application.has.enabled.mouse.reporting",
+                    "Whether cmd-click (ctrl-click on Linux and Windows) opens hyperlinks even when the terminal application has enabled mouse reporting. When disabled, these clicks are forwarded to the application; links can still be opened with shift-cmd-click."
+                ),
                 "terminal.open_links_in_mouse_mode",
-                |settings_content| { settings_content.terminal.as_ref()?.open_links_in_mouse_mode.as_ref() },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().open_links_in_mouse_mode = value; }),
+                |settings_content| {
+                    settings_content
+                        .terminal
+                        .as_ref()?
+                        .open_links_in_mouse_mode
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .open_links_in_mouse_mode = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.copy.on.select", "Copy On Select"),
-                lt("settings_ui.page_data.description.whether.selecting.text.in.the.terminal.automatically.copies.to.the.system.clipboard", "Whether selecting text in the terminal automatically copies to the system clipboard."),
+                lt(
+                    "settings_ui.page_data.title.copy.on.select",
+                    "Copy On Select"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.selecting.text.in.the.terminal.automatically.copies.to.the.system.clipboard",
+                    "Whether selecting text in the terminal automatically copies to the system clipboard."
+                ),
                 "terminal.copy_on_select",
                 |settings_content| { settings_content.terminal.as_ref()?.copy_on_select.as_ref() },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().copy_on_select = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .copy_on_select = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.keep.selection.on.copy", "Keep Selection On Copy"),
-                lt("settings_ui.page_data.description.whether.to.keep.the.text.selection.after.copying.it.to.the.clipboard", "Whether to keep the text selection after copying it to the clipboard."),
+                lt(
+                    "settings_ui.page_data.title.keep.selection.on.copy",
+                    "Keep Selection On Copy"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.keep.the.text.selection.after.copying.it.to.the.clipboard",
+                    "Whether to keep the text selection after copying it to the clipboard."
+                ),
                 "terminal.keep_selection_on_copy",
-                |settings_content| { settings_content.terminal.as_ref()?.keep_selection_on_copy.as_ref() },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().keep_selection_on_copy = value; }),
+                |settings_content| {
+                    settings_content
+                        .terminal
+                        .as_ref()?
+                        .keep_selection_on_copy
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .keep_selection_on_copy = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.audible.bell", "Audible Bell"),
-                lt("settings_ui.page_data.description.whether.to.play.a.sound.when.the.bel.character.a.0x07.is.printed", "Whether to play a sound when the BEL character (`\\\\a`, `0x07`) is printed"),
+                lt(
+                    "settings_ui.page_data.description.whether.to.play.a.sound.when.the.bel.character.a.0x07.is.printed",
+                    "Whether to play a sound when the BEL character (`\\\\a`, `0x07`) is printed"
+                ),
                 "terminal.bell",
                 |settings_content| settings_content.terminal.as_ref()?.bell.as_ref(),
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().bell = value; }),
+                |settings_content, value, _| {
+                    settings_content.terminal.get_or_insert_default().bell = value;
+                }
+            ),
         ]
     }
 
     fn layout_settings_section() -> [SettingsPageItem; 3] {
         [
-            section_header!("settings_ui.page_data.section.layout.settings", "Layout Settings"),
+            section_header!(
+                "settings_ui.page_data.section.layout.settings",
+                "Layout Settings"
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.default.width", "Default Width"),
-                lt("settings_ui.page_data.description.default.width.when.the.terminal.is.docked.to.the.left.or.right.in.pixels", "Default width when the terminal is docked to the left or right (in pixels)."),
+                lt(
+                    "settings_ui.page_data.description.default.width.when.the.terminal.is.docked.to.the.left.or.right.in.pixels",
+                    "Default width when the terminal is docked to the left or right (in pixels)."
+                ),
                 "terminal.default_width",
                 |settings_content| { settings_content.terminal.as_ref()?.default_width.as_ref() },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().default_width = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .default_width = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.default.height", "Default Height"),
-                lt("settings_ui.page_data.description.default.height.when.the.terminal.is.docked.to.the.bottom.in.pixels", "Default height when the terminal is docked to the bottom (in pixels)."),
+                lt(
+                    "settings_ui.page_data.title.default.height",
+                    "Default Height"
+                ),
+                lt(
+                    "settings_ui.page_data.description.default.height.when.the.terminal.is.docked.to.the.bottom.in.pixels",
+                    "Default height when the terminal is docked to the bottom (in pixels)."
+                ),
                 "terminal.default_height",
                 |settings_content| { settings_content.terminal.as_ref()?.default_height.as_ref() },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().default_height = value; }),
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .default_height = value;
+                }
+            ),
         ]
     }
 
     fn advanced_settings_section() -> [SettingsPageItem; 3] {
         [
-            section_header!("settings_ui.page_data.section.advanced.settings", "Advanced Settings"),
+            section_header!(
+                "settings_ui.page_data.section.advanced.settings",
+                "Advanced Settings"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.max.scroll.history.lines", "Max Scroll History Lines"),
-                lt("settings_ui.page_data.description.maximum.number.of.lines.to.keep.in.scrollback.history.max.100.000.0.disables.scrolling", "Maximum number of lines to keep in scrollback history (max: 100,000; 0 disables scrolling)."),
+                lt(
+                    "settings_ui.page_data.title.max.scroll.history.lines",
+                    "Max Scroll History Lines"
+                ),
+                lt(
+                    "settings_ui.page_data.description.maximum.number.of.lines.to.keep.in.scrollback.history.max.100.000.0.disables.scrolling",
+                    "Maximum number of lines to keep in scrollback history (max: 100,000; 0 disables scrolling)."
+                ),
                 "terminal.max_scroll_history_lines",
-                |settings_content| { settings_content.terminal.as_ref()?.max_scroll_history_lines.as_ref() },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().max_scroll_history_lines = value; }),
+                |settings_content| {
+                    settings_content
+                        .terminal
+                        .as_ref()?
+                        .max_scroll_history_lines
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .max_scroll_history_lines = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.scroll.multiplier", "Scroll Multiplier"),
-                lt("settings_ui.page_data.description.the.multiplier.for.scrolling.in.the.terminal.with.the.mouse.wheel", "The multiplier for scrolling in the terminal with the mouse wheel"),
+                lt(
+                    "settings_ui.page_data.title.scroll.multiplier",
+                    "Scroll Multiplier"
+                ),
+                lt(
+                    "settings_ui.page_data.description.the.multiplier.for.scrolling.in.the.terminal.with.the.mouse.wheel",
+                    "The multiplier for scrolling in the terminal with the mouse wheel"
+                ),
                 "terminal.scroll_multiplier",
-                |settings_content| { settings_content.terminal.as_ref()?.scroll_multiplier.as_ref() },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().scroll_multiplier = value; }),
+                |settings_content| {
+                    settings_content
+                        .terminal
+                        .as_ref()?
+                        .scroll_multiplier
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .scroll_multiplier = value;
+                }
+            ),
         ]
     }
 
@@ -3976,17 +7392,29 @@ fn terminal_page() -> SettingsPage {
             section_header!("settings_ui.page_data.section.toolbar", "Toolbar"),
             setting_item!(
                 lt("settings_ui.page_data.title.breadcrumbs", "Breadcrumbs"),
-                lt("settings_ui.page_data.description.display.the.terminal.title.in.breadcrumbs.inside.the.terminal.pane", "Display the terminal title in breadcrumbs inside the terminal pane."),
+                lt(
+                    "settings_ui.page_data.description.display.the.terminal.title.in.breadcrumbs.inside.the.terminal.pane",
+                    "Display the terminal title in breadcrumbs inside the terminal pane."
+                ),
                 "terminal.toolbar.breadcrumbs",
-                |settings_content| { settings_content.terminal.as_ref()?.toolbar.as_ref()?.breadcrumbs.as_ref() },
+                |settings_content| {
+                    settings_content
+                        .terminal
+                        .as_ref()?
+                        .toolbar
+                        .as_ref()?
+                        .breadcrumbs
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .terminal
-                                            .get_or_insert_default()
-                                            .toolbar
-                                            .get_or_insert_default()
-                                            .breadcrumbs = value;
-                                    }),
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .toolbar
+                        .get_or_insert_default()
+                        .breadcrumbs = value;
+                }
+            ),
         ]
     }
 
@@ -3994,21 +7422,35 @@ fn terminal_page() -> SettingsPage {
         [
             section_header!("settings_ui.page_data.section.scrollbar", "Scrollbar"),
             setting_item!(
-                lt("settings_ui.page_data.title.show.scrollbar", "Show Scrollbar"),
-                lt("settings_ui.page_data.description.when.to.show.the.scrollbar.in.the.terminal", "When to show the scrollbar in the terminal."),
+                lt(
+                    "settings_ui.page_data.title.show.scrollbar",
+                    "Show Scrollbar"
+                ),
+                lt(
+                    "settings_ui.page_data.description.when.to.show.the.scrollbar.in.the.terminal",
+                    "When to show the scrollbar in the terminal."
+                ),
                 "terminal.scrollbar.show",
                 |settings_content| {
-                                        show_scrollbar_or_editor(settings_content, |settings_content| {
-                                            settings_content
-                                                .terminal
-                                                .as_ref()?
-                                                .scrollbar
-                                                .as_ref()?
-                                                .show
-                                                .as_ref()
-                                        })
-                                    },
-                |settings_content, value, _| { settings_content.terminal.get_or_insert_default().scrollbar.get_or_insert_default().show = value; }),
+                    show_scrollbar_or_editor(settings_content, |settings_content| {
+                        settings_content
+                            .terminal
+                            .as_ref()?
+                            .scrollbar
+                            .as_ref()?
+                            .show
+                            .as_ref()
+                    })
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .terminal
+                        .get_or_insert_default()
+                        .scrollbar
+                        .get_or_insert_default()
+                        .show = value;
+                }
+            ),
         ]
     }
 
@@ -4032,7 +7474,10 @@ fn version_control_page() -> SettingsPage {
     // closures match on every variant, which `setting_item!` cannot express.
     fn git_integration_section() -> [SettingsPageItem; 3] {
         [
-            section_header!("settings_ui.page_data.section.git.integration", "Git Integration"),
+            section_header!(
+                "settings_ui.page_data.section.git.integration",
+                "Git Integration"
+            ),
             SettingsPageItem::DynamicItem(DynamicItem {
                 discriminant: SettingItem {
                     files: USER,
@@ -4231,68 +7676,169 @@ fn version_control_page() -> SettingsPage {
             section_header!("settings_ui.page_data.section.git.gutter", "Git Gutter"),
             setting_item!(
                 lt("settings_ui.page_data.title.visibility", "Visibility"),
-                lt("settings_ui.page_data.description.control.whether.git.status.is.shown.in.the.editor.s.gutter", "Control whether Git status is shown in the editor's gutter."),
+                lt(
+                    "settings_ui.page_data.description.control.whether.git.status.is.shown.in.the.editor.s.gutter",
+                    "Control whether Git status is shown in the editor's gutter."
+                ),
                 "git.git_gutter",
                 |settings_content| settings_content.git.as_ref()?.git_gutter.as_ref(),
-                |settings_content, value, _| { settings_content.git.get_or_insert_default().git_gutter = value; }),
+                |settings_content, value, _| {
+                    settings_content.git.get_or_insert_default().git_gutter = value;
+                }
+            ),
             // todo(settings_ui): Figure out the right default for this value in default.json
             setting_item!(
                 lt("settings_ui.page_data.title.debounce", "Debounce"),
-                lt("settings_ui.page_data.description.debounce.threshold.in.milliseconds.after.which.changes.are.reflected.in.the.git.gutter", "Debounce threshold in milliseconds after which changes are reflected in the Git gutter."),
+                lt(
+                    "settings_ui.page_data.description.debounce.threshold.in.milliseconds.after.which.changes.are.reflected.in.the.git.gutter",
+                    "Debounce threshold in milliseconds after which changes are reflected in the Git gutter."
+                ),
                 "git.gutter_debounce",
                 |settings_content| { settings_content.git.as_ref()?.gutter_debounce.as_ref() },
-                |settings_content, value, _| { settings_content.git.get_or_insert_default().gutter_debounce = value; }),
+                |settings_content, value, _| {
+                    settings_content.git.get_or_insert_default().gutter_debounce = value;
+                }
+            ),
         ]
     }
 
     fn inline_git_blame_section() -> [SettingsPageItem; 6] {
         [
-            section_header!("settings_ui.page_data.section.inline.git.blame", "Inline Git Blame"),
+            section_header!(
+                "settings_ui.page_data.section.inline.git.blame",
+                "Inline Git Blame"
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.enabled", "Enabled"),
-                lt("settings_ui.page_data.description.whether.or.not.to.show.git.blame.data.inline.in.the.currently.focused.line", "Whether or not to show Git blame data inline in the currently focused line."),
+                lt(
+                    "settings_ui.page_data.description.whether.or.not.to.show.git.blame.data.inline.in.the.currently.focused.line",
+                    "Whether or not to show Git blame data inline in the currently focused line."
+                ),
                 "git.inline_blame.enabled",
-                |settings_content| { settings_content.git.as_ref()?.inline_blame.as_ref()?.enabled.as_ref() },
-                |settings_content, value, _| { settings_content.git.get_or_insert_default().inline_blame.get_or_insert_default().enabled = value; }),
+                |settings_content| {
+                    settings_content
+                        .git
+                        .as_ref()?
+                        .inline_blame
+                        .as_ref()?
+                        .enabled
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .git
+                        .get_or_insert_default()
+                        .inline_blame
+                        .get_or_insert_default()
+                        .enabled = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.delay", "Delay"),
-                lt("settings_ui.page_data.description.the.delay.after.which.the.inline.blame.information.is.shown", "The delay after which the inline blame information is shown."),
+                lt(
+                    "settings_ui.page_data.description.the.delay.after.which.the.inline.blame.information.is.shown",
+                    "The delay after which the inline blame information is shown."
+                ),
                 "git.inline_blame.delay_ms",
-                |settings_content| { settings_content.git.as_ref()?.inline_blame.as_ref()?.delay_ms.as_ref() },
-                |settings_content, value, _| { settings_content.git.get_or_insert_default().inline_blame.get_or_insert_default().delay_ms = value; }),
+                |settings_content| {
+                    settings_content
+                        .git
+                        .as_ref()?
+                        .inline_blame
+                        .as_ref()?
+                        .delay_ms
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .git
+                        .get_or_insert_default()
+                        .inline_blame
+                        .get_or_insert_default()
+                        .delay_ms = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.padding", "Padding"),
-                lt("settings_ui.page_data.description.padding.between.the.end.of.the.source.line.and.the.start.of.the.inline.blame.in.columns", "Padding between the end of the source line and the start of the inline blame in columns."),
+                lt(
+                    "settings_ui.page_data.description.padding.between.the.end.of.the.source.line.and.the.start.of.the.inline.blame.in.columns",
+                    "Padding between the end of the source line and the start of the inline blame in columns."
+                ),
                 "git.inline_blame.padding",
-                |settings_content| { settings_content.git.as_ref()?.inline_blame.as_ref()?.padding.as_ref() },
-                |settings_content, value, _| { settings_content.git.get_or_insert_default().inline_blame.get_or_insert_default().padding = value; }),
+                |settings_content| {
+                    settings_content
+                        .git
+                        .as_ref()?
+                        .inline_blame
+                        .as_ref()?
+                        .padding
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .git
+                        .get_or_insert_default()
+                        .inline_blame
+                        .get_or_insert_default()
+                        .padding = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.minimum.column", "Minimum Column"),
-                lt("settings_ui.page_data.description.the.minimum.column.number.at.which.to.show.the.inline.blame.information", "The minimum column number at which to show the inline blame information."),
+                lt(
+                    "settings_ui.page_data.title.minimum.column",
+                    "Minimum Column"
+                ),
+                lt(
+                    "settings_ui.page_data.description.the.minimum.column.number.at.which.to.show.the.inline.blame.information",
+                    "The minimum column number at which to show the inline blame information."
+                ),
                 "git.inline_blame.min_column",
-                |settings_content| { settings_content.git.as_ref()?.inline_blame.as_ref()?.min_column.as_ref() },
-                |settings_content, value, _| { settings_content.git.get_or_insert_default().inline_blame.get_or_insert_default().min_column = value; }),
+                |settings_content| {
+                    settings_content
+                        .git
+                        .as_ref()?
+                        .inline_blame
+                        .as_ref()?
+                        .min_column
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .git
+                        .get_or_insert_default()
+                        .inline_blame
+                        .get_or_insert_default()
+                        .min_column = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.commit.summary", "Show Commit Summary"),
-                lt("settings_ui.page_data.description.show.commit.summary.as.part.of.the.inline.blame", "Show commit summary as part of the inline blame."),
+                lt(
+                    "settings_ui.page_data.title.show.commit.summary",
+                    "Show Commit Summary"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.commit.summary.as.part.of.the.inline.blame",
+                    "Show commit summary as part of the inline blame."
+                ),
                 "git.inline_blame.show_commit_summary",
                 |settings_content| {
-                                        settings_content
-                                            .git
-                                            .as_ref()?
-                                            .inline_blame
-                                            .as_ref()?
-                                            .show_commit_summary
-                                            .as_ref()
-                                    },
+                    settings_content
+                        .git
+                        .as_ref()?
+                        .inline_blame
+                        .as_ref()?
+                        .show_commit_summary
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .git
-                                            .get_or_insert_default()
-                                            .inline_blame
-                                            .get_or_insert_default()
-                                            .show_commit_summary = value;
-                                    }),
+                    settings_content
+                        .git
+                        .get_or_insert_default()
+                        .inline_blame
+                        .get_or_insert_default()
+                        .show_commit_summary = value;
+                }
+            ),
         ]
     }
 
@@ -4301,49 +7847,87 @@ fn version_control_page() -> SettingsPage {
             section_header!("settings_ui.page_data.section.git.avatars", "Git Avatars"),
             setting_item!(
                 lt("settings_ui.page_data.title.show.avatars", "Show Avatars"),
-                lt("settings_ui.page_data.description.show.avatar.images.for.commit.authors.in.git.views", "Show avatar images for commit authors in git views. Avatars are loaded from the hosting provider and disclose the author's email address to it."),
+                lt(
+                    "settings_ui.page_data.description.show.avatar.images.for.commit.authors.in.git.views",
+                    "Show avatar images for commit authors in git views. Avatars are loaded from the hosting provider and disclose the author's email address to it."
+                ),
                 "git.show_avatar",
                 |settings_content| settings_content.git.as_ref()?.show_avatar.as_ref(),
-                |settings_content, value, _| { settings_content.git.get_or_insert_default().show_avatar = value; }),
+                |settings_content, value, _| {
+                    settings_content.git.get_or_insert_default().show_avatar = value;
+                }
+            ),
         ]
     }
 
     fn git_blame_view_section() -> [SettingsPageItem; 2] {
         [
-            section_header!("settings_ui.page_data.section.git.blame.view", "Git Blame View"),
+            section_header!(
+                "settings_ui.page_data.section.git.blame.view",
+                "Git Blame View"
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.show.avatar", "Show Avatar"),
-                lt("settings_ui.page_data.description.show.the.avatar.of.the.author.of.the.commit", "Show the avatar of the author of the commit."),
+                lt(
+                    "settings_ui.page_data.description.show.the.avatar.of.the.author.of.the.commit",
+                    "Show the avatar of the author of the commit."
+                ),
                 "git.blame.show_avatar",
-                |settings_content| { settings_content.git.as_ref()?.blame.as_ref()?.show_avatar.as_ref() },
-                |settings_content, value, _| { settings_content.git.get_or_insert_default().blame.get_or_insert_default().show_avatar = value; }),
+                |settings_content| {
+                    settings_content
+                        .git
+                        .as_ref()?
+                        .blame
+                        .as_ref()?
+                        .show_avatar
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .git
+                        .get_or_insert_default()
+                        .blame
+                        .get_or_insert_default()
+                        .show_avatar = value;
+                }
+            ),
         ]
     }
 
     fn branch_picker_section() -> [SettingsPageItem; 2] {
         [
-            section_header!("settings_ui.page_data.section.branch.picker", "Branch Picker"),
+            section_header!(
+                "settings_ui.page_data.section.branch.picker",
+                "Branch Picker"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.author.name", "Show Author Name"),
-                lt("settings_ui.page_data.description.show.author.name.as.part.of.the.commit.information.in.branch.picker", "Show author name as part of the commit information in branch picker."),
+                lt(
+                    "settings_ui.page_data.title.show.author.name",
+                    "Show Author Name"
+                ),
+                lt(
+                    "settings_ui.page_data.description.show.author.name.as.part.of.the.commit.information.in.branch.picker",
+                    "Show author name as part of the commit information in branch picker."
+                ),
                 "git.branch_picker.show_author_name",
                 |settings_content| {
-                                        settings_content
-                                            .git
-                                            .as_ref()?
-                                            .branch_picker
-                                            .as_ref()?
-                                            .show_author_name
-                                            .as_ref()
-                                    },
+                    settings_content
+                        .git
+                        .as_ref()?
+                        .branch_picker
+                        .as_ref()?
+                        .show_author_name
+                        .as_ref()
+                },
                 |settings_content, value, _| {
-                                        settings_content
-                                            .git
-                                            .get_or_insert_default()
-                                            .branch_picker
-                                            .get_or_insert_default()
-                                            .show_author_name = value;
-                                    }),
+                    settings_content
+                        .git
+                        .get_or_insert_default()
+                        .branch_picker
+                        .get_or_insert_default()
+                        .show_author_name = value;
+                }
+            ),
         ]
     }
 
@@ -4352,22 +7936,52 @@ fn version_control_page() -> SettingsPage {
             section_header!("settings_ui.page_data.section.git.hunks", "Git Hunks"),
             setting_item!(
                 lt("settings_ui.page_data.title.hunk.style", "Hunk Style"),
-                lt("settings_ui.page_data.description.how.git.hunks.are.displayed.visually.in.the.editor", "How Git hunks are displayed visually in the editor."),
+                lt(
+                    "settings_ui.page_data.description.how.git.hunks.are.displayed.visually.in.the.editor",
+                    "How Git hunks are displayed visually in the editor."
+                ),
                 "git.hunk_style",
                 |settings_content| settings_content.git.as_ref()?.hunk_style.as_ref(),
-                |settings_content, value, _| { settings_content.git.get_or_insert_default().hunk_style = value; }),
+                |settings_content, value, _| {
+                    settings_content.git.get_or_insert_default().hunk_style = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.path.style", "Path Style"),
-                lt("settings_ui.page_data.description.should.the.name.or.path.be.displayed.first.in.the.git.view", "Should the name or path be displayed first in the git view."),
+                lt(
+                    "settings_ui.page_data.description.should.the.name.or.path.be.displayed.first.in.the.git.view",
+                    "Should the name or path be displayed first in the git view."
+                ),
                 "git.path_style",
                 |settings_content| settings_content.git.as_ref()?.path_style.as_ref(),
-                |settings_content, value, _| { settings_content.git.get_or_insert_default().path_style = value; }),
+                |settings_content, value, _| {
+                    settings_content.git.get_or_insert_default().path_style = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.show.stage.restore.buttons", "Show Stage/Restore Buttons"),
-                lt("settings_ui.page_data.description.whether.to.show.the.stage.and.restore.buttons.on.diff.hunks", "Whether to show the stage and restore buttons on diff hunks."),
+                lt(
+                    "settings_ui.page_data.title.show.stage.restore.buttons",
+                    "Show Stage/Restore Buttons"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.show.the.stage.and.restore.buttons.on.diff.hunks",
+                    "Whether to show the stage and restore buttons on diff hunks."
+                ),
                 "git.show_stage_restore_buttons",
-                |settings_content| { settings_content.git.as_ref()?.show_stage_restore_buttons.as_ref() },
-                |settings_content, value, _| { settings_content.git.get_or_insert_default().show_stage_restore_buttons = value; }),
+                |settings_content| {
+                    settings_content
+                        .git
+                        .as_ref()?
+                        .show_stage_restore_buttons
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content
+                        .git
+                        .get_or_insert_default()
+                        .show_stage_restore_buttons = value;
+                }
+            ),
         ]
     }
 
@@ -4400,17 +8014,29 @@ fn ai_page(cx: &App) -> SettingsPage {
                 |settings_content, value, _| { settings_content.project.disable_ai = value; },
                 files: USER | PROJECT),
             setting_item!(
-                lt("settings_ui.page_data.title.threads.sidebar.side", "Threads Sidebar Side"),
-                lt("settings_ui.page_data.description.which.side.of.the.window.the.threads.sidebar.appears.on", "Which side of the window the threads sidebar appears on."),
+                lt(
+                    "settings_ui.page_data.title.threads.sidebar.side",
+                    "Threads Sidebar Side"
+                ),
+                lt(
+                    "settings_ui.page_data.description.which.side.of.the.window.the.threads.sidebar.appears.on",
+                    "Which side of the window the threads sidebar appears on."
+                ),
                 "agent.sidebar_side",
                 |settings_content| settings_content.agent.as_ref()?.sidebar_side.as_ref(),
-                |settings_content, value, _| { settings_content.agent.get_or_insert_default().sidebar_side = value; }),
+                |settings_content, value, _| {
+                    settings_content.agent.get_or_insert_default().sidebar_side = value;
+                }
+            ),
         ]
     }
 
     fn agent_configuration_section(_cx: &App) -> Box<[SettingsPageItem]> {
         let mut items = vec![
-            section_header!("settings_ui.page_data.section.agent.configuration", "Agent Configuration"),
+            section_header!(
+                "settings_ui.page_data.section.agent.configuration",
+                "Agent Configuration"
+            ),
             SettingsPageItem::SubPageLink(SubPageLink {
                 title: lt(
                     "settings_ui.page_data.title.tool.permissions",
@@ -4542,25 +8168,25 @@ fn network_page() -> SettingsPage {
         [
             section_header!("settings_ui.page_data.section.network", "Network"),
             setting_item!(
-                lt("settings_ui.page_data.title.proxy", "Proxy"),
-                lt("settings_ui.page_data.description.the.proxy.to.use.for.network.requests", "The proxy to use for network requests."),
-                "proxy",
-                |settings_content| settings_content.proxy.as_ref(),
-                |settings_content, value, _| { settings_content.proxy = value; },
-                metadata: Some(Box::new(SettingsFieldMetadata {
-                    placeholder: Some("socks5h://localhost:10808"),
-                    ..Default::default()
-                }))),
+            lt("settings_ui.page_data.title.proxy", "Proxy"),
+            lt("settings_ui.page_data.description.the.proxy.to.use.for.network.requests", "The proxy to use for network requests."),
+            "proxy",
+            |settings_content| settings_content.proxy.as_ref(),
+            |settings_content, value, _| { settings_content.proxy = value; },
+            metadata: Some(Box::new(SettingsFieldMetadata {
+                placeholder: Some("socks5h://localhost:10808"),
+                ..Default::default()
+            }))),
             setting_item!(
-                lt("settings_ui.page_data.title.server.url", "Server URL"),
-                lt("settings_ui.page_data.description.the.url.of.the.zzz.server.to.connect.to", "The URL of the ZZZ server to connect to."),
-                "server_url",
-                |settings_content| settings_content.server_url.as_ref(),
-                |settings_content, value, _| { settings_content.server_url = value; },
-                metadata: Some(Box::new(SettingsFieldMetadata {
-                    placeholder: Some("http://127.0.0.1:7331"),
-                    ..Default::default()
-                }))),
+            lt("settings_ui.page_data.title.server.url", "Server URL"),
+            lt("settings_ui.page_data.description.the.url.of.the.zzz.server.to.connect.to", "The URL of the ZZZ server to connect to."),
+            "server_url",
+            |settings_content| settings_content.server_url.as_ref(),
+            |settings_content, value, _| { settings_content.server_url = value; },
+            metadata: Some(Box::new(SettingsFieldMetadata {
+                placeholder: Some("http://127.0.0.1:7331"),
+                ..Default::default()
+            }))),
             SettingsPageItem::SubPageLink(SubPageLink {
                 title: lt("database.settings.title", "Database Connections"),
                 r#type: Default::default(),
@@ -4630,7 +8256,7 @@ fn language_settings_data() -> Box<[SettingsPageItem]> {
     fn indentation_section() -> [SettingsPageItem; 5] {
         [
             section_header!("settings_ui.page_data.section.indentation", "Indentation"),
-SettingsPageItem::SettingItem(SettingItem {
+            SettingsPageItem::SettingItem(SettingItem {
                 title: lt("settings_ui.page_data.title.tab.size", "Tab Size"),
                 description: lt(
                     "settings_ui.page_data.description.how.many.columns.a.tab.should.occupy",
@@ -4802,7 +8428,10 @@ SettingsPageItem::SettingItem(SettingItem {
 
     fn indent_guides_section() -> [SettingsPageItem; 6] {
         [
-            section_header!("settings_ui.page_data.section.indent.guides", "Indent Guides"),
+            section_header!(
+                "settings_ui.page_data.section.indent.guides",
+                "Indent Guides"
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.enabled", "Enabled"),
                 lt("settings_ui.page_data.description.display.indent.guides.in.the.editor", "Display indent guides in the editor."),
@@ -4904,7 +8533,7 @@ SettingsPageItem::SettingItem(SettingItem {
     fn formatting_section() -> [SettingsPageItem; 8] {
         [
             section_header!("settings_ui.page_data.section.formatting", "Formatting"),
-SettingsPageItem::SettingItem(SettingItem {
+            SettingsPageItem::SettingItem(SettingItem {
                 title: lt(
                     "settings_ui.page_data.title.format.on.save",
                     "Format On Save",
@@ -5089,7 +8718,7 @@ SettingsPageItem::SettingItem(SettingItem {
                                         })
                                     },
                 files: USER | PROJECT),
-SettingsPageItem::SettingItem(SettingItem {
+            SettingsPageItem::SettingItem(SettingItem {
                 title: lt(
                     "settings_ui.page_data.title.jsx.tag.auto.close",
                     "JSX Tag Auto Close",
@@ -5244,23 +8873,50 @@ SettingsPageItem::SettingItem(SettingItem {
                                     },
                 files: USER | PROJECT),
             setting_item!(
-                lt("settings_ui.page_data.title.completion.menu.scrollbar", "Completion Menu Scrollbar"),
-                lt("settings_ui.page_data.description.when.to.show.the.scrollbar.in.the.completion.menu", "When to show the scrollbar in the completion menu."),
+                lt(
+                    "settings_ui.page_data.title.completion.menu.scrollbar",
+                    "Completion Menu Scrollbar"
+                ),
+                lt(
+                    "settings_ui.page_data.description.when.to.show.the.scrollbar.in.the.completion.menu",
+                    "When to show the scrollbar in the completion menu."
+                ),
                 "editor.completion_menu_scrollbar",
                 |settings_content| { settings_content.editor.completion_menu_scrollbar.as_ref() },
-                |settings_content, value, _| { settings_content.editor.completion_menu_scrollbar = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.completion_menu_scrollbar = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.completion.detail.alignment", "Completion Detail Alignment"),
-                lt("settings_ui.page_data.description.whether.to.align.detail.text.in.code.completions.context.menus.left.or.right", "Whether to align detail text in code completions context menus left or right."),
+                lt(
+                    "settings_ui.page_data.title.completion.detail.alignment",
+                    "Completion Detail Alignment"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.align.detail.text.in.code.completions.context.menus.left.or.right",
+                    "Whether to align detail text in code completions context menus left or right."
+                ),
                 "editor.completion_detail_alignment",
                 |settings_content| { settings_content.editor.completion_detail_alignment.as_ref() },
-                |settings_content, value, _| { settings_content.editor.completion_detail_alignment = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.completion_detail_alignment = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.completion.menu.item.kind", "Completion Menu Item Kind"),
-                lt("settings_ui.page_data.description.how.to.display.the.lsp.item.kind.function.method.variable.etc.of.each.entry.in.the.completions.menu", "How to display the LSP item kind (function, method, variable, etc.) of each entry in the completions menu."),
+                lt(
+                    "settings_ui.page_data.title.completion.menu.item.kind",
+                    "Completion Menu Item Kind"
+                ),
+                lt(
+                    "settings_ui.page_data.description.how.to.display.the.lsp.item.kind.function.method.variable.etc.of.each.entry.in.the.completions.menu",
+                    "How to display the LSP item kind (function, method, variable, etc.) of each entry in the completions menu."
+                ),
                 "editor.completion_menu_item_kind",
                 |settings_content| { settings_content.editor.completion_menu_item_kind.as_ref() },
-                |settings_content, value, _| { settings_content.editor.completion_menu_item_kind = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.completion_menu_item_kind = value;
+                }
+            ),
         ]
     }
 
@@ -5402,7 +9058,7 @@ SettingsPageItem::SettingItem(SettingItem {
                                         })
                                     },
                 files: USER | PROJECT),
-SettingsPageItem::SettingItem(SettingItem {
+            SettingsPageItem::SettingItem(SettingItem {
                 title: lt(
                     "settings_ui.page_data.title.toggle.on.modifiers.press",
                     "Toggle On Modifiers Press",
@@ -5503,13 +9159,25 @@ SettingsPageItem::SettingItem(SettingItem {
 
     fn miscellaneous_section() -> [SettingsPageItem; 8] {
         [
-            section_header!("settings_ui.page_data.section.miscellaneous", "Miscellaneous"),
+            section_header!(
+                "settings_ui.page_data.section.miscellaneous",
+                "Miscellaneous"
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.language.detection", "Language Detection"),
-                lt("settings_ui.page_data.description.whether.to.enable.automatic.language.detection.in.unsaved.buffers", "Whether to enable automatic language detection in unsaved buffers."),
+                lt(
+                    "settings_ui.page_data.title.language.detection",
+                    "Language Detection"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.enable.automatic.language.detection.in.unsaved.buffers",
+                    "Whether to enable automatic language detection in unsaved buffers."
+                ),
                 "language_detection",
                 |settings_content| settings_content.editor.language_detection.as_ref(),
-                |settings_content, value, _| { settings_content.editor.language_detection = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.language_detection = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.word.diff.enabled", "Word Diff Enabled"),
                 lt("settings_ui.page_data.description.whether.to.enable.word.diff.highlighting.in.the.editor.when.enabled.changed.words.within.modified.lines.are.highlighted.to.show.exactly.what.changed", "Whether to enable word diff highlighting in the editor. When enabled, changed words within modified lines are highlighted to show exactly what changed."),
@@ -5545,11 +9213,20 @@ SettingsPageItem::SettingItem(SettingItem {
                                         },
                 files: USER | PROJECT),
             setting_item!(
-                lt("settings_ui.page_data.title.middle.click.paste", "Middle Click Paste"),
-                lt("settings_ui.page_data.description.enable.middle.click.paste.on.linux", "Enable middle-click paste on Linux."),
+                lt(
+                    "settings_ui.page_data.title.middle.click.paste",
+                    "Middle Click Paste"
+                ),
+                lt(
+                    "settings_ui.page_data.description.enable.middle.click.paste.on.linux",
+                    "Enable middle-click paste on Linux."
+                ),
                 "languages.$(language).editor.middle_click_paste",
                 |settings_content| settings_content.editor.middle_click_paste.as_ref(),
-                |settings_content, value, _| { settings_content.editor.middle_click_paste = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.middle_click_paste = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.extend.comment.on.newline", "Extend Comment On Newline"),
                 lt("settings_ui.page_data.description.whether.to.start.a.new.line.with.a.comment.when.a.previous.line.is.a.comment.as.well", "Whether to start a new line with a comment when a previous line is a comment as well."),
@@ -5594,15 +9271,21 @@ SettingsPageItem::SettingItem(SettingItem {
         [
             setting_item!(
                 lt("settings_ui.page_data.title.image.viewer", "Image Viewer"),
-                lt("settings_ui.page_data.description.the.unit.for.image.file.sizes", "The unit for image file sizes."),
+                lt(
+                    "settings_ui.page_data.description.the.unit.for.image.file.sizes",
+                    "The unit for image file sizes."
+                ),
                 "image_viewer.unit",
                 |settings_content| {
-                                        settings_content
-                                            .image_viewer
-                                            .as_ref()
-                                            .and_then(|image_viewer| image_viewer.unit.as_ref())
-                                    },
-                |settings_content, value, _| { settings_content.image_viewer.get_or_insert_default().unit = value; }),
+                    settings_content
+                        .image_viewer
+                        .as_ref()
+                        .and_then(|image_viewer| image_viewer.unit.as_ref())
+                },
+                |settings_content, value, _| {
+                    settings_content.image_viewer.get_or_insert_default().unit = value;
+                }
+            ),
             SettingsPageItem::DynamicItem(DynamicItem {
                 discriminant: SettingItem {
                     files: USER,
@@ -5673,31 +9356,53 @@ SettingsPageItem::SettingItem(SettingItem {
                 ],
             }),
             setting_item!(
-                lt("settings_ui.page_data.title.drop.size.target", "Drop Size Target"),
-                lt("settings_ui.page_data.description.relative.size.of.the.drop.target.in.the.editor.that.will.open.dropped.file.as.a.split.pane", "Relative size of the drop target in the editor that will open dropped file as a split pane."),
+                lt(
+                    "settings_ui.page_data.title.drop.size.target",
+                    "Drop Size Target"
+                ),
+                lt(
+                    "settings_ui.page_data.description.relative.size.of.the.drop.target.in.the.editor.that.will.open.dropped.file.as.a.split.pane",
+                    "Relative size of the drop target in the editor that will open dropped file as a split pane."
+                ),
                 "drop_target_size",
                 |settings_content| settings_content.workspace.drop_target_size.as_ref(),
-                |settings_content, value, _| { settings_content.workspace.drop_target_size = value; }),
+                |settings_content, value, _| {
+                    settings_content.workspace.drop_target_size = value;
+                }
+            ),
         ]
     }
 
     let is_global = active_language().is_none();
 
     let code_lens_item = [setting_item!(
-                                  lt("settings_ui.page_data.title.code.lens", "Code Lens"),
-                                  lt("settings_ui.page_data.description.whether.and.how.to.display.code.lenses.from.language.servers", "Whether and how to display code lenses from language servers."),
-                                  "code_lens",
-                                  |settings_content| settings_content.editor.code_lens.as_ref(),
-                                  |settings_content, value, _| { settings_content.editor.code_lens = value; })
-];
+        lt("settings_ui.page_data.title.code.lens", "Code Lens"),
+        lt(
+            "settings_ui.page_data.description.whether.and.how.to.display.code.lenses.from.language.servers",
+            "Whether and how to display code lenses from language servers."
+        ),
+        "code_lens",
+        |settings_content| settings_content.editor.code_lens.as_ref(),
+        |settings_content, value, _| {
+            settings_content.editor.code_lens = value;
+        }
+    )];
 
     let lsp_document_colors_item = [setting_item!(
-                                            lt("settings_ui.page_data.title.lsp.document.colors", "LSP Document Colors"),
-                                            lt("settings_ui.page_data.description.how.to.render.lsp.color.previews.in.the.editor", "How to render LSP color previews in the editor."),
-                                            "lsp_document_colors",
-                                            |settings_content| settings_content.editor.lsp_document_colors.as_ref(),
-                                            |settings_content, value, _| { settings_content.editor.lsp_document_colors = value; })
-];
+        lt(
+            "settings_ui.page_data.title.lsp.document.colors",
+            "LSP Document Colors"
+        ),
+        lt(
+            "settings_ui.page_data.description.how.to.render.lsp.color.previews.in.the.editor",
+            "How to render LSP color previews in the editor."
+        ),
+        "lsp_document_colors",
+        |settings_content| settings_content.editor.lsp_document_colors.as_ref(),
+        |settings_content, value, _| {
+            settings_content.editor.lsp_document_colors = value;
+        }
+    )];
 
     if is_global {
         concat_sections!(
@@ -5788,17 +9493,40 @@ fn non_editor_language_settings_data() -> Box<[SettingsPageItem]> {
                                     },
                 files: USER | PROJECT),
             setting_item!(
-                lt("settings_ui.page_data.title.go.to.definition.fallback", "Go To Definition Fallback"),
-                lt("settings_ui.page_data.description.whether.to.follow.up.empty.go.to.definition.responses.from.the.language.server", "Whether to follow-up empty Go to definition responses from the language server."),
+                lt(
+                    "settings_ui.page_data.title.go.to.definition.fallback",
+                    "Go To Definition Fallback"
+                ),
+                lt(
+                    "settings_ui.page_data.description.whether.to.follow.up.empty.go.to.definition.responses.from.the.language.server",
+                    "Whether to follow-up empty Go to definition responses from the language server."
+                ),
                 "go_to_definition_fallback",
                 |settings_content| { settings_content.editor.go_to_definition_fallback.as_ref() },
-                |settings_content, value, _| { settings_content.editor.go_to_definition_fallback = value; }),
+                |settings_content, value, _| {
+                    settings_content.editor.go_to_definition_fallback = value;
+                }
+            ),
             setting_item!(
-                lt("settings_ui.page_data.title.go.to.definition.scroll.strategy", "Go To Definition Scroll Strategy"),
-                lt("settings_ui.page_data.description.how.to.scroll.the.target.into.view.when.navigating.to.a.definition.or.reference", "How to scroll the target into view when navigating to a definition or reference."),
+                lt(
+                    "settings_ui.page_data.title.go.to.definition.scroll.strategy",
+                    "Go To Definition Scroll Strategy"
+                ),
+                lt(
+                    "settings_ui.page_data.description.how.to.scroll.the.target.into.view.when.navigating.to.a.definition.or.reference",
+                    "How to scroll the target into view when navigating to a definition or reference."
+                ),
                 "go_to_definition_scroll_strategy",
-                |settings_content| { settings_content.editor.go_to_definition_scroll_strategy.as_ref() },
-                |settings_content, value, _| { settings_content.editor.go_to_definition_scroll_strategy = value; }),
+                |settings_content| {
+                    settings_content
+                        .editor
+                        .go_to_definition_scroll_strategy
+                        .as_ref()
+                },
+                |settings_content, value, _| {
+                    settings_content.editor.go_to_definition_scroll_strategy = value;
+                }
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.semantic.tokens", "Semantic Tokens"),
                 {
@@ -5852,7 +9580,10 @@ fn non_editor_language_settings_data() -> Box<[SettingsPageItem]> {
 
     fn lsp_completions_section() -> [SettingsPageItem; 4] {
         [
-            section_header!("settings_ui.page_data.section.lsp.completions", "LSP Completions"),
+            section_header!(
+                "settings_ui.page_data.section.lsp.completions",
+                "LSP Completions"
+            ),
             setting_item!(
                 lt("settings_ui.page_data.title.enabled", "Enabled"),
                 lt("settings_ui.page_data.description.whether.to.fetch.lsp.completions.or.not", "Whether to fetch LSP completions or not."),

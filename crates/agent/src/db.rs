@@ -4,6 +4,7 @@ use agent_settings::AgentProfileId;
 use anyhow::{Context as _, Result, anyhow};
 use chrono::{DateTime, Utc};
 use collections::HashMap;
+use db::ZZZ_STATELESS;
 use futures::{FutureExt, future::Shared};
 use gpui::{App, BackgroundExecutor, Global, SharedString, Task};
 use indoc::indoc;
@@ -16,7 +17,6 @@ use sqlez::{
 };
 use std::sync::Arc;
 use util::{ResultExt, path_list::PathList};
-use db::ZZZ_STATELESS;
 
 pub type DbMessage = serde_json::Value;
 pub type DbLanguageModel = serde_json::Value;
