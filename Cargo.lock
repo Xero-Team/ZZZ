@@ -11731,6 +11731,7 @@ dependencies = [
  "db",
  "editor",
  "file_icons",
+ "fs",
  "futures 0.3.34",
  "gpui",
  "i18n",
