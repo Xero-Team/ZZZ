@@ -194,7 +194,7 @@ where
         return Vec::new();
     }
 
-    let mut results = segment_results.concat();
+    let mut results = segment_results.into_iter().flatten().collect::<Vec<_>>();
     util::truncate_to_bottom_n_sorted_by(&mut results, max_results, &|left, right| right.cmp(left));
     results
 }
