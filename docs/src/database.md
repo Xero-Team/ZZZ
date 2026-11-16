@@ -15,7 +15,8 @@ SQLite; other drivers can be registered by extensions.
 Run `database: open` from the command palette to pick a `.db` or `.sqlite` file.
 The connection is saved, so you can reopen it from the Databases panel later.
 
-- `database: toggle panel` focuses the Databases panel.
+- `database: toggle panel` focuses the Databases panel; it also has a default
+  binding, `Ctrl-Shift-9` on every platform.
 - `database: add connection` opens the connection dialog for a named connection.
 
 Each database opens in a tab with the schema tree on one side and the SQL editor
@@ -27,12 +28,29 @@ The Databases panel lists saved connections and their runtime state. State is
 never persisted: a connection is disconnected until you connect it in this
 session.
 
-- Use the connect button to connect it, and the open button to open its
-  browser tab.
-- Use the edit action to change its name or file, test it, or delete it.
+- Click a connection to select it, and double-click it (or press `Enter`) to
+  open its browser tab.
+- Use the connect button to connect it, or right-click for connect, open, edit,
+  and delete.
+- The edit dialog changes the name or file, tests the connection, and deletes
+  it.
 - Passwords for network drivers are stored in the system keychain. They are
   never written to `settings.json`, logs, errors, query history, or the MCP
   output.
+
+Right-click the panel's dock button to hide it, move it to the other side, or
+change its width. Like the other panels, the button and placement live in
+settings:
+
+```json [settings]
+{
+  "database": {
+    "button": true,
+    "dock": "left",
+    "default_width": 280
+  }
+}
+```
 
 The connection dialog creates file connections. A server connection can be
 written in `settings.json` with `host`, `port`, `user`, and `database`; the

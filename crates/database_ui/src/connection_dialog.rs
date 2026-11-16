@@ -12,7 +12,7 @@ use editor::{Editor, EditorElement};
 use fs::Fs;
 use gpui::{
     App, AppContext as _, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
-    Render, SharedString, Task, Window,
+    Render, SharedString, Task, Window, rems,
 };
 use i18n::tr;
 use menu;
@@ -32,7 +32,6 @@ enum MessageKind {
 }
 
 pub struct ConnectionDialog {
-    focus_handle: FocusHandle,
     original: Option<ConnectionConfig>,
     driver_id: String,
     capabilities: Capabilities,
@@ -91,7 +90,6 @@ impl ConnectionDialog {
         let capabilities = DatabaseState::manager(cx)
             .capabilities_for(&driver_id)
             .unwrap_or_else(Capabilities::read_only);
-        let focus_handle = cx.focus_handle();
 
         let name_editor = single_line_editor(
             original
@@ -150,7 +148,6 @@ impl ConnectionDialog {
         let password_editor = single_line_editor("", true, window, cx);
 
         Self {
-            focus_handle,
             original,
             driver_id,
             capabilities,
@@ -409,7 +406,9 @@ impl ConnectionDialog {
             prompt: None,
         };
         let paths = cx.prompt_for_paths(options);
-        let task = cx.spawn_in(window, async move |this, cx| {
+        // The picker runs on its own so opening it cannot cancel a test or save
+        // that is still in flight (a replaced `Task` is cancelled).
+        cx.spawn_in(window, async move |this, cx| {
             let Ok(Ok(Some(paths))) = paths.await else {
                 return;
             };
@@ -432,8 +431,8 @@ impl ConnectionDialog {
                 cx.notify();
             })
             .ok();
-        });
-        self.task = Some(task);
+        })
+        .detach();
     }
 }
 
@@ -454,24 +453,31 @@ fn single_line_editor(
     })
 }
 
-fn field(label: SharedString, editor: Entity<Editor>, cx: &App) -> impl IntoElement {
+fn editor_box(editor: Entity<Editor>, cx: &App) -> impl IntoElement {
+    div()
+        .px_2()
+        .py_1()
+        .border_1()
+        .rounded_md()
+        .border_color(cx.theme().colors().border)
+        .bg(cx.theme().colors().editor_background)
+        .child(EditorElement::new(&editor, editor::EditorStyle::default()))
+}
+
+fn labeled_field(label: SharedString, content: impl IntoElement) -> impl IntoElement {
     v_flex()
         .gap_1()
         .child(Label::new(label).size(LabelSize::Small))
-        .child(
-            div()
-                .px_2()
-                .py_1()
-                .border_1()
-                .rounded_md()
-                .border_color(cx.theme().colors().border)
-                .child(EditorElement::new(&editor, editor::EditorStyle::default())),
-        )
+        .child(content)
+}
+
+fn field(label: SharedString, editor: Entity<Editor>, cx: &App) -> impl IntoElement {
+    labeled_field(label, editor_box(editor, cx))
 }
 
 impl Focusable for ConnectionDialog {
-    fn focus_handle(&self, _cx: &App) -> FocusHandle {
-        self.focus_handle.clone()
+    fn focus_handle(&self, cx: &App) -> FocusHandle {
+        self.name_editor.focus_handle(cx)
     }
 }
 
@@ -515,22 +521,28 @@ impl Render for ConnectionDialog {
                     cx,
                 ));
         } else {
-            let path_field = field(
+            let path_field = labeled_field(
                 tr(cx, "database.dialog.path", "Database file").into(),
-                self.path_editor.clone(),
-                cx,
-            );
-            fields = fields.child(
-                v_flex().gap_1().child(path_field).child(
-                    Button::new(
-                        "browse-database-file",
-                        tr(cx, "database.dialog.browse", "Browse…"),
+                h_flex()
+                    .gap_1()
+                    .items_center()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(editor_box(self.path_editor.clone(), cx)),
                     )
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.pick_file(window, cx);
-                    })),
-                ),
+                    .child(
+                        Button::new(
+                            "browse-database-file",
+                            tr(cx, "database.dialog.browse", "Browse…"),
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.pick_file(window, cx);
+                        })),
+                    ),
             );
+            fields = fields.child(path_field);
         }
         if self.capabilities.requires_credentials {
             fields = fields
@@ -602,8 +614,11 @@ impl Render for ConnectionDialog {
                     ),
             );
 
-        v_flex()
-            .track_focus(&self.focus_handle)
+        div()
+            .elevation_3(cx)
+            .occlude()
+            .w(rems(34.))
+            .key_context("DatabaseConnectionDialog")
             .on_action(cx.listener(Self::cancel))
             .on_action(cx.listener(Self::confirm))
             .child(

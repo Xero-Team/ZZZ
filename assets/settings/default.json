@@ -1025,6 +1025,17 @@
     // Set to 0 to collapse all items that have children, 1 or higher to collapse items at that depth or deeper.
     "expand_outlines_with_depth": 100,
   },
+  "database": {
+    // Whether to show the database panel button in the status bar.
+    "button": true,
+    // Default width of the database panel.
+    "default_width": 280,
+    // Where to dock the database panel. Can be 'left' or 'right'.
+    "dock": "left",
+    // Saved database connections. Secrets are never stored here;
+    // they live in the platform keychain under the connection's stable id.
+    "connections": [],
+  },
   "git_panel": {
     // Whether to show the git panel button in the status bar.
     "button": true,

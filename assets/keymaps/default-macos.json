@@ -762,6 +762,7 @@
       "ctrl-shift-g": "git_panel::ToggleFocus",
       "cmd-shift-d": "debug_panel::ToggleFocus",
       "ctrl-shift-8": "telegram_panel::ToggleFocus",
+      "ctrl-shift-9": "database::ToggleDatabasePanel",
       "cmd-?": "agent::ToggleFocus",
       "cmd-alt-s": "workspace::SaveAll",
       "cmd-k n": "encoding_selector::Toggle",
@@ -1051,6 +1052,25 @@
     "use_key_equivalents": true,
     "bindings": {
       "space": "project_panel::Open",
+    },
+  },
+  {
+    "context": "DatabasePanel",
+    "bindings": {
+      "enter": "database::OpenSelectedConnection",
+    },
+  },
+  {
+    "context": "DatabaseConnectionDialog > Editor",
+    "bindings": {
+      "enter": "menu::Confirm",
+      "escape": "menu::Cancel",
+    },
+  },
+  {
+    "context": "DatabaseConnectionDialog",
+    "bindings": {
+      "escape": "menu::Cancel",
     },
   },
   {

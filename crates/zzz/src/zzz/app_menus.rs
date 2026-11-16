@@ -1,3 +1,4 @@
+use database_ui;
 use git_ui::git_panel;
 use gpui::{App, Menu, MenuItem, OsAction};
 use i18n::tr;
@@ -97,6 +98,10 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
         MenuItem::action(
             tr(cx, "menu.view.debugger_panel", "Debugger Panel"),
             debug_panel::ToggleFocus,
+        ),
+        MenuItem::action(
+            tr(cx, "menu.view.database_panel", "Database Panel"),
+            database_ui::ToggleDatabasePanel,
         ),
         MenuItem::action(
             tr(cx, "menu.view.git_panel", "Git Panel"),
