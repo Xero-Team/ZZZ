@@ -5,9 +5,9 @@
 //! sidebar; ZZZ keeps only the mode control, which arranges existing docks.
 
 use gpui::{Action as _, App, RenderOnce, Window, div};
-use ui::{Button, ButtonSize, ButtonStyle, Label, LabelSize, TintColor, Tooltip, prelude::*};
+use ui::{Button, ButtonSize, ButtonStyle, Label, LabelSize, TintColor, prelude::*};
 use workspace_modes::{
-    CycleMode, ModeId, SwitchToEditorMode, SwitchToTerminalMode, SwitchToZenMode, active_mode,
+    ModeId, SwitchToEditorMode, SwitchToTerminalMode, SwitchToZenMode, active_mode,
 };
 
 /// A compact three-state control for the workspace layout mode. The control is
@@ -28,19 +28,6 @@ impl RenderOnce for ModeControl {
 
         h_flex()
             .gap_0p5()
-            .child(
-                Button::new("cycle-workspace-mode", mode.label(cx))
-                    .style(ButtonStyle::Subtle)
-                    .size(ButtonSize::Compact)
-                    .label_size(LabelSize::Small)
-                    .tooltip(Tooltip::for_action_title(
-                        i18n::tr(cx, "workspace_modes.cycle", "Cycle workspace mode"),
-                        &CycleMode,
-                    ))
-                    .on_click(|_, window, cx| {
-                        window.dispatch_action(CycleMode.boxed_clone(), cx);
-                    }),
-            )
             .children(
                 [ModeId::Editor, ModeId::Terminal, ModeId::Zen]
                     .into_iter()

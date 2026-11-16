@@ -2742,7 +2742,6 @@
     "toolbox.json.placeholder": "在此粘贴 JSON，或复制文件内容后粘贴。",
     "toolbox.json.title": "JSON 格式化",
     "project_bookmarks.placeholder": "搜索书签...",
-    "workspace_modes.cycle": "切换工作区模式",
     "workspace_modes.editor": "编辑器",
     "workspace_modes.terminal": "终端",
     "workspace_modes.zen": "禅",

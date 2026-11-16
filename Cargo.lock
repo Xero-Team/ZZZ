@@ -17121,6 +17121,7 @@ dependencies = [
  "util",
  "vfs",
  "workspace",
+ "workspace_modes",
  "worktree",
 ]
 

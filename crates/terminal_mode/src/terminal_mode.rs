@@ -28,6 +28,7 @@ use crate::session::{
     set_bottom_dock_hidden,
 };
 use terminal_mode_core::{ConnectionMode, is_connection_cancelled};
+use workspace_modes::{self as layout, ModeId as LayoutMode, ModeObserver};
 
 actions!(
     terminal_mode,
@@ -63,19 +64,22 @@ pub fn init(cx: &mut App) {
         Some(Arc::new(TerminalModePanelButtonVisibility)),
         cx,
     );
+    layout::set_mode_observer(Some(Arc::new(TerminalLayoutObserver)), cx);
 
     cx.observe_new(|workspace: &mut Workspace, _window, _cx| {
         workspace.register_action(|workspace, _: &ToggleTerminalMode, window, cx| {
             let store = for_workspace(workspace, cx);
-            let active = store.update(cx, |store, cx| {
-                let active = !store.terminal_mode_active;
-                store.set_terminal_mode_active(active, cx);
-                active
-            });
-            if active {
-                enter_terminal_mode(workspace, window, cx);
-            } else {
+            if store.read(cx).terminal_mode_active {
+                store.update(cx, |store, cx| store.set_terminal_mode_active(false, cx));
                 leave_terminal_mode(workspace, window, cx);
+            } else {
+                // Return the layout mode to Editor before opening the session
+                // panels. The mode observer stays out of the way because
+                // terminal mode is not marked active yet, so this switch cannot
+                // unwind what the action is about to open.
+                layout::switch_to_editor(workspace, window, cx);
+                store.update(cx, |store, cx| store.set_terminal_mode_active(true, cx));
+                enter_terminal_mode(workspace, window, cx);
             }
         });
         workspace.register_action(|workspace, _: &ToggleSessionPanel, window, cx| {
@@ -163,6 +167,31 @@ impl workspace::dock::PanelButtonVisibilityFilter for TerminalModePanelButtonVis
         } else {
             !is_terminal_mode_panel
         }
+    }
+}
+
+/// Keeps the title bar's layout mode consistent with terminal mode. The mode
+/// control arranges the same left and right docks that hold the session
+/// panels, so switching the layout mode leaves terminal mode rather than
+/// collapsing docks the mode still believes it owns.
+struct TerminalLayoutObserver;
+
+impl ModeObserver for TerminalLayoutObserver {
+    fn will_switch_mode(
+        &self,
+        workspace: &mut Workspace,
+        _target: LayoutMode,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    ) {
+        let Some(store) = for_workspace_read(workspace, cx) else {
+            return;
+        };
+        if !store.read(cx).terminal_mode_active {
+            return;
+        }
+        store.update(cx, |store, cx| store.set_terminal_mode_active(false, cx));
+        leave_terminal_mode(workspace, window, cx);
     }
 }
 

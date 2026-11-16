@@ -13,6 +13,7 @@
 use db::kvp::KeyValueStore;
 use gpui::{App, AppContext as _, Context, Global, SharedString, Window, actions};
 use i18n::tr;
+use std::sync::Arc;
 use util::ResultExt as _;
 use workspace::{Workspace, dock::DockPosition};
 
@@ -105,6 +106,51 @@ pub fn active_mode(cx: &App) -> ModeId {
         .map_or(ModeId::Editor, |state| state.mode)
 }
 
+/// Observes mode switches so another layout layer can unwind before the docks
+/// move.
+///
+/// Terminal mode fills the same left and right docks that Editor mode
+/// restores, so the two layers must not each arrange those docks behind the
+/// other's back. `workspace_modes` has no dependency on terminal mode; the
+/// assembly layer installs the observer instead.
+pub trait ModeObserver: 'static {
+    /// Called with the mode being switched to, before any dock changes.
+    fn will_switch_mode(
+        &self,
+        workspace: &mut Workspace,
+        target: ModeId,
+        window: &mut Window,
+        cx: &mut Context<Workspace>,
+    );
+}
+
+#[derive(Default)]
+struct ModeObserverSlot(Option<Arc<dyn ModeObserver>>);
+
+impl Global for ModeObserverSlot {}
+
+/// Installs the observer that runs before a mode switch rearranges the docks.
+pub fn set_mode_observer(observer: Option<Arc<dyn ModeObserver>>, cx: &mut App) {
+    if cx.has_global::<ModeObserverSlot>() {
+        cx.global_mut::<ModeObserverSlot>().0 = observer;
+    } else {
+        cx.set_global(ModeObserverSlot(observer));
+    }
+}
+
+/// Switches `workspace` to Editor mode.
+///
+/// A layer that arranges docks on top of the layout mode (such as terminal
+/// mode) calls this before taking the docks over, so the title bar's control
+/// keeps matching the docks that are actually open.
+pub fn switch_to_editor(
+    workspace: &mut Workspace,
+    window: &mut Window,
+    cx: &mut Context<Workspace>,
+) {
+    switch(workspace, ModeId::Editor, window, cx);
+}
+
 fn active_mode_mut(cx: &mut App) -> &mut ActiveMode {
     if cx.try_global::<ActiveMode>().is_none() {
         cx.set_global(ActiveMode::default());
@@ -168,6 +214,16 @@ fn switch(
     let previous = active_mode(cx);
     if previous == mode {
         return;
+    }
+
+    // Let another layout layer unwind while the mode still names what it owns,
+    // and before the docks are snapshotted, so a snapshot never records docks
+    // that only that layer opened.
+    let observer = cx
+        .try_global::<ModeObserverSlot>()
+        .and_then(|slot| slot.0.clone());
+    if let Some(observer) = observer {
+        observer.will_switch_mode(workspace, mode, window, cx);
     }
 
     let mut open_positions = DOCK_POSITIONS

@@ -379,6 +379,8 @@ While terminal mode is active, two panels open:
 - **SSH Sessions** (left) lists saved connections and hosts from `~/.ssh/config`. Search the list, press `Enter` to connect, and right-click a connection to disconnect, reconnect, or open the server manager.
 - **Session Files** (right) shows the active session's remote file tree with a preview pane below it.
 
+Terminal mode and the title bar's layout modes (`Editor`, `Terminal`, `Zen`) share the left and right docks, so they take turns. Entering terminal mode returns the layout mode to `Editor`, and switching the layout mode closes terminal mode; the two never disagree about which docks are open.
+
 ### Transfers {#ssh-terminal-mode-transfers}
 
 With a session active you can move files between hosts and your machine:

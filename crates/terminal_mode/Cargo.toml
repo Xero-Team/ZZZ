@@ -39,6 +39,7 @@ ui_input.workspace = true
 util.workspace = true
 vfs.workspace = true
 workspace.workspace = true
+workspace_modes.workspace = true
 worktree.workspace = true
 
 [dev-dependencies]

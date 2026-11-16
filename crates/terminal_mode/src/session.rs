@@ -460,6 +460,14 @@ pub fn restore(
         };
 
         if serialized.terminal_mode_active {
+            // The persisted layout mode and the persisted terminal mode are
+            // independent, so a saved Zen layout would otherwise stay active
+            // while the session panels are on screen. Reset the layout mode
+            // before marking terminal mode active: the mode observer ignores
+            // this switch, because terminal mode does not own anything yet.
+            workspace_handle.update_in(cx, |workspace, window, cx| {
+                workspace_modes::switch_to_editor(workspace, window, cx);
+            })?;
             store_handle.update(cx, |store, cx| {
                 store.set_terminal_mode_active(true, cx);
             })?;
