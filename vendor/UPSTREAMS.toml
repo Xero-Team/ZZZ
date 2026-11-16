@@ -189,6 +189,7 @@ include = [
 patches = [
     "vendor/patches/wgpu/0001-zzz-integration.patch",
     "vendor/patches/wgpu/0002-cargo-machete-ignores.patch",
+    "vendor/patches/wgpu/0003-wasm-unused-allows.patch",
 ]
 
 [[package]]

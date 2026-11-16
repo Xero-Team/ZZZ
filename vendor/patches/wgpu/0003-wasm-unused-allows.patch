@@ -1,0 +1,14 @@
+diff --git a/wgpu/src/lib.rs b/wgpu/src/lib.rs
+--- a/wgpu/src/lib.rs
++++ b/wgpu/src/lib.rs
+@@ -94,5 +94,9 @@
+ // NOTE: Keep this in sync with `wgpu-core`.
+ #![cfg_attr(not(send_sync), allow(clippy::arc_with_non_send_sync))]
+ #![cfg_attr(not(any(wgpu_core, webgpu)), allow(unused))]
++// A wasm build enables only the WebGPU backend, so the native HAL
++// documentation macros, a few `Deref` imports, and dispatch helpers have no
++// user. ZZZ checks this target with `-D warnings`.
++#![cfg_attr(target_family = "wasm", allow(unused))]
+ 
+ extern crate alloc;
+ #[cfg(any(std, test))]

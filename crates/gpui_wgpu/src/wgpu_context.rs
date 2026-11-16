@@ -37,6 +37,9 @@ pub enum SoftwareAdapterPolicy {
 }
 
 impl SoftwareAdapterPolicy {
+    // Only the native adapter-selection path and its unit test consult the
+    // policy; a wasm build has a single backend and no adapter enumeration.
+    #[cfg(not(target_family = "wasm"))]
     fn accepts(self, device_type: wgpu::DeviceType) -> bool {
         match self {
             Self::Allow => true,

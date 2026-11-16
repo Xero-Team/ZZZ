@@ -325,6 +325,11 @@ impl CosmicTextSystemState {
 
         let mut loaded_font_ids = SmallVec::new();
         for (font_id, postscript_name) in families {
+            // `face_index` only feeds the FreeType color-glyph path below.
+            #[cfg_attr(
+                not(any(target_os = "linux", target_os = "freebsd")),
+                allow(unused_variables)
+            )]
             let (style, weight, face_index) = {
                 let face = self
                     .font_system
