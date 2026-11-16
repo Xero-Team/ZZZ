@@ -388,7 +388,7 @@ impl WebWindowInner {
             let key_char = compute_key_char(&event, &key, &modifiers);
 
             let keystroke = Keystroke {
-                modifiers,
+                modifiers: keystroke_modifiers(&key, modifiers),
                 key,
                 key_char: key_char.clone(),
             };
@@ -450,7 +450,7 @@ impl WebWindowInner {
             let key_char = compute_key_char(&event, &key, &modifiers);
 
             let keystroke = Keystroke {
-                modifiers,
+                modifiers: keystroke_modifiers(&key, modifiers),
                 key,
                 key_char,
             };
@@ -668,6 +668,18 @@ pub(crate) fn is_mac_platform(browser_window: &web_sys::Window) -> bool {
     false
 }
 
+/// Drops Shift from symbol keystrokes, as GPUI's Linux platform does.
+fn keystroke_modifiers(key: &str, mut modifiers: Modifiers) -> Modifiers {
+    // Browsers report the shifted character as the key (Shift+1 arrives as `!`),
+    // so keeping Shift would produce `shift-!`, which never matches a `!`
+    // binding. Shift stays on letters, where it distinguishes case, and on named
+    // keys such as `tab` and `enter`.
+    if modifiers.shift && key.chars().count() == 1 && key.to_lowercase() == key.to_uppercase() {
+        modifiers.shift = false;
+    }
+    modifiers
+}
+
 fn is_modifier_only_key(key: &str) -> bool {
     matches!(
         key,
@@ -725,4 +737,23 @@ fn pointer_position_in_element(event: &web_sys::PointerEvent) -> Point<Pixels> {
 fn mouse_position_in_element(event: &web_sys::MouseEvent) -> Point<Pixels> {
     // offset_x/offset_y give position relative to the target element's padding edge
     point(px(event.offset_x() as f32), px(event.offset_y() as f32))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shift_is_dropped_only_from_symbol_keys() {
+        let shift = Modifiers::shift();
+        assert_eq!(keystroke_modifiers("!", shift), Modifiers::none());
+        assert_eq!(keystroke_modifiers("?", shift), Modifiers::none());
+        assert_eq!(keystroke_modifiers("a", shift), shift);
+        assert_eq!(keystroke_modifiers("tab", shift), shift);
+        let control_shift = Modifiers::control_shift();
+        assert_eq!(
+            keystroke_modifiers("!", control_shift),
+            Modifiers::control()
+        );
+    }
 }
