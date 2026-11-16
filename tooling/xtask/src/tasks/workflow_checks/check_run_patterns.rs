@@ -11,7 +11,7 @@ use std::{
 };
 
 static GITHUB_INPUT_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"\$\{\{[[:blank:]]*([[:alnum:]]|[[:punct:]])+?[[:blank:]]*\}\}"#)
+    Regex::new(r#"\$\{\{[[:blank:]]*[[:alnum:][:punct:]]+?[[:blank:]]*\}\}"#)
         .expect("Should compile")
 });
 

@@ -4139,8 +4139,9 @@ fn test_trailing_whitespace_ranges(mut rng: StdRng) {
     }
 
     match rng.random_range(0..10) {
-        // sometimes remove the last newline
-        0..=1 => drop(text.pop()), //
+        // Sometimes remove the last newline. The popped character is unused, and
+        // `Option` is `#[must_use]`, so it has to go through `drop` to discard it.
+        0..=1 => drop(text.pop()),
 
         // sometimes add extra newlines
         2..=3 => text.push_str(&"\n".repeat(rng.random_range(1..5))),
@@ -4175,6 +4176,8 @@ fn test_trailing_whitespace_ranges_in_rows(mut rng: StdRng) {
         text.push('\n');
     }
     match rng.random_range(0..10) {
+        // Sometimes remove the last newline. The popped character is unused, and
+        // `Option` is `#[must_use]`, so it has to go through `drop` to discard it.
         0..=1 => drop(text.pop()),
         2..=3 => text.push_str(&"\n".repeat(rng.random_range(1..5))),
         _ => {}

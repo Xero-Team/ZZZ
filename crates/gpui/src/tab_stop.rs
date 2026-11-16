@@ -301,7 +301,6 @@ mod tests {
     }
 
     impl TabStopMapTest {
-        #[must_use]
         fn new() -> Self {
             Self {
                 tab_map: TabStopMap::default(),
@@ -310,7 +309,6 @@ mod tests {
             }
         }
 
-        #[must_use]
         fn tab_non_stop(mut self, index: isize) -> Self {
             let handle = FocusHandle::new(&self.focus_map)
                 .tab_stop(false)
@@ -319,7 +317,6 @@ mod tests {
             self
         }
 
-        #[must_use]
         fn tab_stop(mut self, index: isize, expected: usize) -> Self {
             let handle = FocusHandle::new(&self.focus_map)
                 .tab_stop(true)
@@ -330,7 +327,6 @@ mod tests {
             self
         }
 
-        #[must_use]
         fn tab_group(mut self, tab_index: isize, children: impl FnOnce(Self) -> Self) -> Self {
             self.tab_map.begin_group(tab_index);
             self = children(self);
