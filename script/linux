@@ -52,6 +52,7 @@ if [[ -n $apt ]]; then
     lld
     llvm
     jq
+    ripgrep
     git
     curl
     shellcheck
@@ -134,6 +135,7 @@ if [[ -n $dnf ]] || [[ -n $yum ]]; then
     pipewire
     xdg-desktop-portal
     jq
+    ripgrep
     git
     tar
   )
@@ -194,6 +196,7 @@ if [[ -n $zyp ]]; then
     git
     gzip
     jq
+    ripgrep
     libvulkan1
     libX11-devel
     libxcb-devel
@@ -239,6 +242,7 @@ if [[ -n $pacman ]]; then
     pipewire
     xdg-desktop-portal
     jq
+    ripgrep
     git
   )
   $maysudo "$pacman" -Syu --needed --noconfirm "${deps[@]}"
@@ -255,6 +259,7 @@ if [[ -n $xbps ]]; then
     clang
     cmake
     jq
+    ripgrep
     elfutils-devel
     gcc
     alsa-lib-devel
@@ -295,6 +300,7 @@ if [[ -n $emerge ]]; then
     x11-libs/libxkbcommon
     dev-db/sqlite
     media-video/pipewire
+    sys-apps/ripgrep
     sys-apps/xdg-desktop-portal
   )
   $maysudo "$emerge" -u "${deps[@]}"
