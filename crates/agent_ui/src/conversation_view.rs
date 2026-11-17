@@ -8079,7 +8079,7 @@ pub(crate) mod tests {
                 match conversation.permission_selections.get(&request_id) {
                     Some(thread_view::PermissionSelection::SelectedPatterns(checked)) => {
                         let mut checked = checked.clone();
-                        checked.sort();
+                        checked.sort_unstable();
                         Some(checked)
                     }
                     Some(thread_view::PermissionSelection::Choice(_)) => {
