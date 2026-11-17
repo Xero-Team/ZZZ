@@ -2,7 +2,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context as _, Result, anyhow};
 use merman::svg::{CssOverridePostprocessor, SvgPipeline, SvgRenderOptions};
-use merman::{OperationControl, RenderOutput, RenderRequest, Renderer, SvgRequest};
+use merman::{
+    MermaidEngine, OperationControl, RenderOutput, RenderRequest, Renderer,
+    SourcePresentationConfig, SvgRequest,
+};
 
 use crate::{MermaidTheme, css_color};
 
@@ -12,7 +15,8 @@ pub(super) fn render_mermaid(source: &str, theme: &MermaidTheme) -> Result<Strin
     let diagram_id = format!("merman-{id}");
 
     let config = to_merman_config(theme);
-    let engine = merman::Engine::new().with_site_config(config);
+    let engine =
+        MermaidEngine::new().with_site_config(SourcePresentationConfig::from_config(config));
     // Apply merman's raster-safe pipeline before Zed-specific styling. The
     // pipeline handles generic rasterizer compatibility cleanup: foreignObject
     // fallback text, unsupported CSS removal, and invalid SVG attribute cleanup.
@@ -22,7 +26,7 @@ pub(super) fn render_mermaid(source: &str, theme: &MermaidTheme) -> Result<Strin
         .with_postprocessor(CssOverridePostprocessor::strip_existing_important());
 
     let output = Renderer::new()
-        .with_engine(engine)
+        .with_presentation_engine(engine)
         .render(RenderRequest::svg(
             source,
             OperationControl::new(),

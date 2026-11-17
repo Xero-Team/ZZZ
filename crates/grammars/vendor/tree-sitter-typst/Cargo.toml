@@ -44,7 +44,7 @@ tree-sitter-language = "0.1"
 cc = "1.11"
 
 [dev-dependencies]
-tree-sitter = "0.27.1"
+tree-sitter = "0.27.2"
 
 # Vendored upstream grammar crate: deliberately outside the ZZZ `[workspace.lints]` deny set.
 [lints]

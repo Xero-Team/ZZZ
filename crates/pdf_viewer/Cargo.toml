@@ -20,7 +20,6 @@ anyhow.workspace = true
 db.workspace = true
 editor.workspace = true
 file_icons.workspace = true
-fs.workspace = true
 futures.workspace = true
 gpui.workspace = true
 i18n.workspace = true
@@ -37,8 +36,8 @@ ui_input.workspace = true
 util.workspace = true
 vfs.workspace = true
 workspace.workspace = true
-zpdf = { version = "0.19.0", default-features = true }
+zpdf = { version = "0.20.0", default-features = true }
 
 [dev-dependencies]
 editor = { workspace = true, features = ["test-support"] }
-zpdf-writer = { version = "0.19.0", default-features = false }
+zpdf-writer = { version = "0.20.0", default-features = false }
