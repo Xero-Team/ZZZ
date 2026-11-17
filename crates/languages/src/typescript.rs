@@ -1,10 +1,10 @@
 use anyhow::{Context as _, Result};
 use async_trait::async_trait;
-use chrono::{DateTime, Local};
 use collections::HashMap;
 use futures::future::join_all;
 use gpui::{App, AppContext, AsyncApp, Entity, Task};
 use itertools::Itertools as _;
+use jiff::Timestamp;
 use language::{
     Buffer, ContextLocation, ContextProvider, File, LanguageName, LanguageToolchainStore,
     LspAdapter, LspAdapterDelegate, LspInstaller, Toolchain,
@@ -366,7 +366,8 @@ impl TypeScriptContextProvider {
                 .await
                 .with_context(|| format!("getting metadata for {package_json_path:?}"))?
                 .with_context(|| format!("missing FS metadata for {package_json_path:?}"))?;
-            let mtime = DateTime::<Local>::from(metadata.mtime.timestamp_for_user());
+            let mtime = Timestamp::try_from(metadata.mtime.timestamp_for_user())
+                .context("package.json mtime out of range")?;
             let existing_data = {
                 let contents = existing_package_json.0.read().await;
                 contents

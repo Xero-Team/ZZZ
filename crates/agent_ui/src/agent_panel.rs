@@ -51,7 +51,6 @@ use crate::{
 use crate::{Agent, AgentInitialContent, ExternalSourcePrompt, NewExternalAgentThread};
 use agent_settings::AgentSettings;
 use anyhow::Result;
-use chrono::{DateTime, Utc};
 use collections::HashMap;
 use editor::{Editor, MultiBuffer};
 use fs::Fs;
@@ -61,6 +60,7 @@ use gpui::{
     WeakEntity, prelude::*, pulsating_between,
 };
 use i18n as app_i18n;
+use jiff::Timestamp;
 use language::LanguageRegistry;
 use project::{AgentRegistryStore, Project, ProjectPath, Worktree};
 use prompt_store::{PromptStore, UserPromptId};
@@ -699,35 +699,35 @@ fn build_conflicted_files_resolution_prompt(
     content
 }
 
-fn format_timestamp_human(cx: &App, dt: &DateTime<Utc>) -> String {
-    let now = Utc::now();
-    let duration = now.signed_duration_since(*dt);
+fn format_timestamp_human(cx: &App, dt: &Timestamp) -> String {
+    let now = Timestamp::now();
+    let duration = now.duration_since(*dt);
 
-    let relative = if duration.num_seconds() < 0 {
+    let relative = if duration.as_secs() < 0 {
         app_i18n::tr(cx, "agent_ui.panel.timestamp.in_future", "in the future")
-    } else if duration.num_seconds() < 60 {
-        let seconds = duration.num_seconds();
+    } else if duration.as_secs() < 60 {
+        let seconds = duration.as_secs();
         app_i18n::tr(cx, "agent_ui.panel.timestamp.seconds_ago", "{} seconds ago").replacen(
             "{}",
             &seconds.to_string(),
             1,
         )
-    } else if duration.num_minutes() < 60 {
-        let minutes = duration.num_minutes();
+    } else if duration.as_mins() < 60 {
+        let minutes = duration.as_mins();
         app_i18n::tr(cx, "agent_ui.panel.timestamp.minutes_ago", "{} minutes ago").replacen(
             "{}",
             &minutes.to_string(),
             1,
         )
-    } else if duration.num_hours() < 24 {
-        let hours = duration.num_hours();
+    } else if duration.as_hours() < 24 {
+        let hours = duration.as_hours();
         app_i18n::tr(cx, "agent_ui.panel.timestamp.hours_ago", "{} hours ago").replacen(
             "{}",
             &hours.to_string(),
             1,
         )
     } else {
-        let days = duration.num_days();
+        let days = duration.as_secs() / 86_400;
         app_i18n::tr(cx, "agent_ui.panel.timestamp.days_ago", "{} days ago").replacen(
             "{}",
             &days.to_string(),
@@ -735,7 +735,7 @@ fn format_timestamp_human(cx: &App, dt: &DateTime<Utc>) -> String {
         )
     };
 
-    let timestamp = dt.to_rfc3339();
+    let timestamp = dt.to_string();
     app_i18n::tr(
         cx,
         "agent_ui.panel.timestamp.absolute_with_relative",
@@ -802,7 +802,7 @@ struct TerminalSpawnOptions {
     working_directory: Option<PathBuf>,
     custom_title: Option<SharedString>,
     initial_title: Option<SharedString>,
-    created_at: Option<DateTime<Utc>>,
+    created_at: Option<Timestamp>,
     /// Switch the panel to the new terminal once it has spawned.
     select: bool,
     /// Give the new terminal focus along with the switch.
@@ -815,7 +815,7 @@ struct TerminalSpawnOptions {
 pub struct AgentPanelTerminalInfo {
     pub id: TerminalId,
     pub title: SharedString,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
     pub has_notification: bool,
     pub custom_title: Option<SharedString>,
     pub working_directory: Option<PathBuf>,
@@ -829,7 +829,7 @@ struct AgentTerminal {
     last_known_title: String,
     last_known_terminal_title: String,
     working_directory: Option<PathBuf>,
-    created_at: DateTime<Utc>,
+    created_at: Timestamp,
     has_notification: bool,
     search_bar: Option<Entity<BufferSearchBar>>,
     notification_windows: NotificationWindowManager,
@@ -1712,7 +1712,7 @@ impl AgentPanel {
             last_known_title: last_known_terminal_title.clone(),
             last_known_terminal_title,
             working_directory: options.working_directory,
-            created_at: options.created_at.unwrap_or_else(Utc::now),
+            created_at: options.created_at.unwrap_or_else(Timestamp::now),
             has_notification: false,
             search_bar: None,
             notification_windows: NotificationWindowManager::default(),
@@ -5116,7 +5116,7 @@ mod tests {
     async fn test_serialize_preserves_session_id_in_load_error(cx: &mut TestAppContext) {
         use crate::conversation_view::tests::FlakyAgentServer;
         use crate::thread_metadata_store::{ThreadId, ThreadMetadata};
-        use chrono::Utc;
+        use jiff::Timestamp;
         use project::{AgentId as ProjectAgentId, WorktreePaths};
 
         init_test(cx);
@@ -5151,8 +5151,8 @@ mod tests {
                         session_id: Some(resume_session_id.clone()),
                         agent_id: ProjectAgentId::new("Flaky"),
                         title: Some("Persistent chat".into()),
-                        updated_at: Utc::now(),
-                        created_at: Some(Utc::now()),
+                        updated_at: Timestamp::now(),
+                        created_at: Some(Timestamp::now()),
                         interacted_at: None,
                         worktree_paths: WorktreePaths::from_folder_paths(&PathList::default()),
                         remote_connection: None,
@@ -5969,7 +5969,7 @@ mod tests {
         let db_thread = agent::DbThread {
             title: source_title.clone(),
             messages: Vec::new(),
-            updated_at: Utc::now(),
+            updated_at: Timestamp::now(),
             detailed_summary: None,
             initial_project_snapshot: None,
             cumulative_token_usage: Default::default(),

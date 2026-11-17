@@ -8,9 +8,9 @@ use agent_ui::{
     },
     thread_metadata_store::{ThreadMetadata, WorktreePaths},
 };
-use chrono::DateTime;
 use fs::{FakeFs, Fs};
 use gpui::TestAppContext;
+use jiff::{SignedDuration, Timestamp};
 use pretty_assertions::assert_eq;
 use project::AgentId;
 use settings::SettingsStore;
@@ -19,6 +19,16 @@ use std::{
     sync::Arc,
 };
 use util::{path_list::PathList, rel_path::rel_path};
+
+/// Builds a UTC [`Timestamp`] from civil calendar components.
+#[cfg(test)]
+fn utc(year: i16, month: i8, day: i8, hour: i8, minute: i8, second: i8) -> jiff::Timestamp {
+    jiff::civil::date(year, month, day)
+        .at(hour, minute, second, 0)
+        .to_zoned(jiff::tz::TimeZone::UTC)
+        .expect("UTC has no ambiguous civil datetimes")
+        .timestamp()
+}
 
 fn init_test(cx: &mut TestAppContext) {
     cx.update(|cx| {
@@ -210,7 +220,7 @@ async fn save_n_test_threads(
         save_thread_metadata(
             acp::SessionId::new(Arc::from(format!("thread-{}", i))),
             Some(format!("Thread {}", i + 1).into()),
-            chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, i).unwrap(),
+            utc(2024, 1, 1, 0, 0, i as i8),
             None,
             None,
             project,
@@ -228,7 +238,7 @@ async fn save_test_thread_metadata(
     save_thread_metadata(
         session_id.clone(),
         Some("Test".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         project,
@@ -245,7 +255,7 @@ async fn save_named_thread_metadata(
     save_thread_metadata(
         acp::SessionId::new(Arc::from(session_id)),
         Some(SharedString::from(title.to_string())),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         project,
@@ -338,9 +348,9 @@ async fn start_remote_project(
 fn save_thread_metadata(
     session_id: acp::SessionId,
     title: Option<SharedString>,
-    updated_at: DateTime<Utc>,
-    created_at: Option<DateTime<Utc>>,
-    interacted_at: Option<DateTime<Utc>>,
+    updated_at: Timestamp,
+    created_at: Option<Timestamp>,
+    interacted_at: Option<Timestamp>,
     project: &Entity<project::Project>,
     cx: &mut TestAppContext,
 ) {
@@ -374,7 +384,7 @@ fn save_thread_metadata_with_main_paths(
     title: &str,
     folder_paths: PathList,
     main_worktree_paths: PathList,
-    updated_at: DateTime<Utc>,
+    updated_at: Timestamp,
     cx: &mut TestAppContext,
 ) {
     let session_id = acp::SessionId::new(Arc::from(session_id));
@@ -637,7 +647,7 @@ async fn test_single_workspace_with_saved_threads(cx: &mut TestAppContext) {
     save_thread_metadata(
         acp::SessionId::new(Arc::from("thread-1")),
         Some("Fix crash in project panel".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 3, 0, 0, 0).unwrap(),
+        utc(2024, 1, 3, 0, 0, 0),
         None,
         None,
         &project,
@@ -647,7 +657,7 @@ async fn test_single_workspace_with_saved_threads(cx: &mut TestAppContext) {
     save_thread_metadata(
         acp::SessionId::new(Arc::from("thread-2")),
         Some("Add inline diff view".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 2, 0, 0, 0).unwrap(),
+        utc(2024, 1, 2, 0, 0, 0),
         None,
         None,
         &project,
@@ -680,7 +690,7 @@ async fn test_workspace_lifecycle(cx: &mut TestAppContext) {
     save_thread_metadata(
         acp::SessionId::new(Arc::from("thread-a1")),
         Some("Thread A1".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &project,
@@ -864,8 +874,8 @@ async fn test_visible_entries_as_strings(cx: &mut TestAppContext) {
                     agent_id: AgentId::new("zzz-agent"),
                     worktree_paths: WorktreePaths::default(),
                     title: Some("Completed thread".into()),
-                    updated_at: Utc::now(),
-                    created_at: Some(Utc::now()),
+                    updated_at: Timestamp::now(),
+                    created_at: Some(Timestamp::now()),
                     interacted_at: None,
                     archived: false,
                     remote_connection: None,
@@ -889,8 +899,8 @@ async fn test_visible_entries_as_strings(cx: &mut TestAppContext) {
                     agent_id: AgentId::new("zzz-agent"),
                     worktree_paths: WorktreePaths::default(),
                     title: Some("Running thread".into()),
-                    updated_at: Utc::now(),
-                    created_at: Some(Utc::now()),
+                    updated_at: Timestamp::now(),
+                    created_at: Some(Timestamp::now()),
                     interacted_at: None,
                     archived: false,
                     remote_connection: None,
@@ -914,8 +924,8 @@ async fn test_visible_entries_as_strings(cx: &mut TestAppContext) {
                     agent_id: AgentId::new("zzz-agent"),
                     worktree_paths: WorktreePaths::default(),
                     title: Some("Error thread".into()),
-                    updated_at: Utc::now(),
-                    created_at: Some(Utc::now()),
+                    updated_at: Timestamp::now(),
+                    created_at: Some(Timestamp::now()),
                     interacted_at: None,
                     archived: false,
                     remote_connection: None,
@@ -940,8 +950,8 @@ async fn test_visible_entries_as_strings(cx: &mut TestAppContext) {
                     agent_id: AgentId::new("zzz-agent"),
                     worktree_paths: WorktreePaths::default(),
                     title: Some("Waiting thread".into()),
-                    updated_at: Utc::now(),
-                    created_at: Some(Utc::now()),
+                    updated_at: Timestamp::now(),
+                    created_at: Some(Timestamp::now()),
                     interacted_at: None,
                     archived: false,
                     remote_connection: None,
@@ -966,8 +976,8 @@ async fn test_visible_entries_as_strings(cx: &mut TestAppContext) {
                     agent_id: AgentId::new("zzz-agent"),
                     worktree_paths: WorktreePaths::default(),
                     title: Some("Notified thread".into()),
-                    updated_at: Utc::now(),
-                    created_at: Some(Utc::now()),
+                    updated_at: Timestamp::now(),
+                    created_at: Some(Timestamp::now()),
                     interacted_at: None,
                     archived: false,
                     remote_connection: None,
@@ -1593,7 +1603,7 @@ async fn test_search_narrows_visible_threads_to_matches(cx: &mut TestAppContext)
         save_thread_metadata(
             acp::SessionId::new(Arc::from(id)),
             Some(title.into()),
-            chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, hour, 0, 0).unwrap(),
+            utc(2024, 1, 1, hour, 0, 0),
             None,
             None,
             &project,
@@ -1645,7 +1655,7 @@ async fn test_search_matches_regardless_of_case(cx: &mut TestAppContext) {
     save_thread_metadata(
         acp::SessionId::new(Arc::from("thread-1")),
         Some("Fix Crash In Project Panel".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &project,
@@ -1689,7 +1699,7 @@ async fn test_escape_from_search_focuses_first_thread(cx: &mut TestAppContext) {
         save_thread_metadata(
             acp::SessionId::new(Arc::from(id)),
             Some(title.into()),
-            chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, hour, 0, 0).unwrap(),
+            utc(2024, 1, 1, hour, 0, 0),
             None,
             None,
             &project,
@@ -1763,7 +1773,7 @@ async fn test_search_only_shows_workspace_headers_with_matches(cx: &mut TestAppC
         save_thread_metadata(
             acp::SessionId::new(Arc::from(id)),
             Some(title.into()),
-            chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, hour, 0, 0).unwrap(),
+            utc(2024, 1, 1, hour, 0, 0),
             None,
             None,
             &project_a,
@@ -1788,7 +1798,7 @@ async fn test_search_only_shows_workspace_headers_with_matches(cx: &mut TestAppC
         save_thread_metadata(
             acp::SessionId::new(Arc::from(id)),
             Some(title.into()),
-            chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, hour, 0, 0).unwrap(),
+            utc(2024, 1, 1, hour, 0, 0),
             None,
             None,
             &project_b,
@@ -1853,7 +1863,7 @@ async fn test_search_matches_workspace_name(cx: &mut TestAppContext) {
         save_thread_metadata(
             acp::SessionId::new(Arc::from(id)),
             Some(title.into()),
-            chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, hour, 0, 0).unwrap(),
+            utc(2024, 1, 1, hour, 0, 0),
             None,
             None,
             &project_a,
@@ -1878,7 +1888,7 @@ async fn test_search_matches_workspace_name(cx: &mut TestAppContext) {
         save_thread_metadata(
             acp::SessionId::new(Arc::from(id)),
             Some(title.into()),
-            chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, hour, 0, 0).unwrap(),
+            utc(2024, 1, 1, hour, 0, 0),
             None,
             None,
             &project_b,
@@ -1964,7 +1974,7 @@ async fn test_search_finds_threads_inside_collapsed_groups(cx: &mut TestAppConte
     save_thread_metadata(
         acp::SessionId::new(Arc::from("thread-1")),
         Some("Important thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &project,
@@ -2016,7 +2026,7 @@ async fn test_search_then_keyboard_navigate_and_confirm(cx: &mut TestAppContext)
         save_thread_metadata(
             acp::SessionId::new(Arc::from(id)),
             Some(title.into()),
-            chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, hour, 0, 0).unwrap(),
+            utc(2024, 1, 1, hour, 0, 0),
             None,
             None,
             &project,
@@ -2087,7 +2097,7 @@ async fn test_confirm_on_historical_thread_activates_workspace(cx: &mut TestAppC
     save_thread_metadata(
         acp::SessionId::new(Arc::from("hist-1")),
         Some("Historical Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 6, 1, 0, 0, 0).unwrap(),
+        utc(2024, 6, 1, 0, 0, 0),
         None,
         None,
         &project,
@@ -2143,7 +2153,7 @@ async fn test_confirm_on_historical_thread_preserves_historical_timestamp_and_or
     let (sidebar, _panel) = setup_sidebar_with_agent_panel(&multi_workspace, cx);
 
     let newer_session_id = acp::SessionId::new(Arc::from("newer-historical-thread"));
-    let newer_timestamp = chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 6, 2, 0, 0, 0).unwrap();
+    let newer_timestamp = utc(2024, 6, 2, 0, 0, 0);
     save_thread_metadata(
         newer_session_id,
         Some("Newer Historical Thread".into()),
@@ -2155,7 +2165,7 @@ async fn test_confirm_on_historical_thread_preserves_historical_timestamp_and_or
     );
 
     let older_session_id = acp::SessionId::new(Arc::from("older-historical-thread"));
-    let older_timestamp = chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 6, 1, 0, 0, 0).unwrap();
+    let older_timestamp = utc(2024, 6, 1, 0, 0, 0);
     save_thread_metadata(
         older_session_id.clone(),
         Some("Older Historical Thread".into()),
@@ -2269,7 +2279,7 @@ async fn test_confirm_on_historical_thread_in_new_project_group_opens_real_threa
     save_thread_metadata(
         session_id.clone(),
         Some("Historical Thread in New Group".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 6, 1, 0, 0, 0).unwrap(),
+        utc(2024, 6, 1, 0, 0, 0),
         None,
         None,
         &project_b,
@@ -2378,7 +2388,7 @@ async fn test_click_clears_selection_and_focus_in_restores_it(cx: &mut TestAppCo
     save_thread_metadata(
         acp::SessionId::new(Arc::from("t-1")),
         Some("Thread A".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 2, 0, 0, 0).unwrap(),
+        utc(2024, 1, 2, 0, 0, 0),
         None,
         None,
         &project,
@@ -2388,7 +2398,7 @@ async fn test_click_clears_selection_and_focus_in_restores_it(cx: &mut TestAppCo
     save_thread_metadata(
         acp::SessionId::new(Arc::from("t-2")),
         Some("Thread B".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &project,
@@ -3079,7 +3089,7 @@ async fn test_git_worktree_added_live_updates_sidebar(cx: &mut TestAppContext) {
         "Worktree Thread",
         PathList::new(&[PathBuf::from("/wt/rosewood")]),
         PathList::new(&[PathBuf::from("/project")]),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         cx,
     );
 
@@ -3181,7 +3191,7 @@ async fn test_two_worktree_workspaces_absorbed_when_main_added(cx: &mut TestAppC
     save_thread_metadata(
         acp::SessionId::new(Arc::from("thread-a")),
         Some("Thread A".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &project_a,
@@ -3190,7 +3200,7 @@ async fn test_two_worktree_workspaces_absorbed_when_main_added(cx: &mut TestAppC
     save_thread_metadata(
         acp::SessionId::new(Arc::from("thread-b")),
         Some("Thread B".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 1).unwrap(),
+        utc(2024, 1, 1, 0, 0, 1),
         None,
         None,
         &project_b,
@@ -4146,7 +4156,7 @@ async fn test_sidebar_keeps_multi_root_thread_with_stale_main_paths(cx: &mut Tes
                     session_id: Some(session_id.clone()),
                     agent_id: agent::ZZZ_AGENT_ID.clone(),
                     title: Some("Stale Multi-Root Thread".into()),
-                    updated_at: Utc::now(),
+                    updated_at: Timestamp::now(),
                     created_at: None,
                     interacted_at: None,
                     worktree_paths: WorktreePaths::from_folder_paths(&folder_paths),
@@ -4226,7 +4236,7 @@ async fn test_activate_archived_thread_with_saved_paths_activates_matching_works
                 session_id: Some(session_id.clone()),
                 agent_id: agent::ZZZ_AGENT_ID.clone(),
                 title: Some("Archived Thread".into()),
-                updated_at: Utc::now(),
+                updated_at: Timestamp::now(),
                 created_at: None,
                 interacted_at: None,
                 worktree_paths: WorktreePaths::from_folder_paths(&PathList::new(&[PathBuf::from(
@@ -4295,7 +4305,7 @@ async fn test_activate_archived_thread_cwd_fallback_with_matching_workspace(
                 session_id: Some(acp::SessionId::new(Arc::from("unknown-session"))),
                 agent_id: agent::ZZZ_AGENT_ID.clone(),
                 title: Some("CWD Thread".into()),
-                updated_at: Utc::now(),
+                updated_at: Timestamp::now(),
                 created_at: None,
                 interacted_at: None,
                 worktree_paths: WorktreePaths::from_folder_paths(&PathList::new(&[
@@ -4362,7 +4372,7 @@ async fn test_activate_archived_thread_no_paths_no_cwd_uses_active_workspace(
                 session_id: Some(acp::SessionId::new(Arc::from("no-context-session"))),
                 agent_id: agent::ZZZ_AGENT_ID.clone(),
                 title: Some("Contextless Thread".into()),
-                updated_at: Utc::now(),
+                updated_at: Timestamp::now(),
                 created_at: None,
                 interacted_at: None,
                 worktree_paths: WorktreePaths::default(),
@@ -4419,7 +4429,7 @@ async fn test_activate_archived_thread_saved_paths_opens_new_workspace(cx: &mut 
                 session_id: Some(session_id.clone()),
                 agent_id: agent::ZZZ_AGENT_ID.clone(),
                 title: Some("New WS Thread".into()),
-                updated_at: Utc::now(),
+                updated_at: Timestamp::now(),
                 created_at: None,
                 interacted_at: None,
                 worktree_paths: WorktreePaths::from_folder_paths(&path_list_b),
@@ -4475,7 +4485,7 @@ async fn test_activate_archived_thread_reuses_workspace_in_another_window(cx: &m
                 session_id: Some(session_id.clone()),
                 agent_id: agent::ZZZ_AGENT_ID.clone(),
                 title: Some("Cross Window Thread".into()),
-                updated_at: Utc::now(),
+                updated_at: Timestamp::now(),
                 created_at: None,
                 interacted_at: None,
                 worktree_paths: WorktreePaths::from_folder_paths(&PathList::new(&[PathBuf::from(
@@ -4557,7 +4567,7 @@ async fn test_activate_archived_thread_reuses_workspace_in_another_window_with_t
                 session_id: Some(session_id.clone()),
                 agent_id: agent::ZZZ_AGENT_ID.clone(),
                 title: Some("Cross Window Thread".into()),
-                updated_at: Utc::now(),
+                updated_at: Timestamp::now(),
                 created_at: None,
                 interacted_at: None,
                 worktree_paths: WorktreePaths::from_folder_paths(&PathList::new(&[PathBuf::from(
@@ -4642,7 +4652,7 @@ async fn test_activate_archived_thread_prefers_current_window_for_matching_paths
                 session_id: Some(session_id.clone()),
                 agent_id: agent::ZZZ_AGENT_ID.clone(),
                 title: Some("Current Window Thread".into()),
-                updated_at: Utc::now(),
+                updated_at: Timestamp::now(),
                 created_at: None,
                 interacted_at: None,
                 worktree_paths: WorktreePaths::from_folder_paths(&PathList::new(&[PathBuf::from(
@@ -4777,7 +4787,7 @@ async fn test_archive_thread_uses_next_threads_own_workspace(cx: &mut TestAppCon
     save_thread_metadata(
         thread2_session_id.clone(),
         Some("Thread 2".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 2, 0, 0, 0).unwrap(),
+        utc(2024, 1, 2, 0, 0, 0),
         None,
         None,
         &main_project,
@@ -4790,7 +4800,7 @@ async fn test_archive_thread_uses_next_threads_own_workspace(cx: &mut TestAppCon
     save_thread_metadata(
         thread1_session_id,
         Some("Thread 1".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &worktree_project,
@@ -4931,7 +4941,7 @@ async fn test_archive_last_worktree_thread_removes_workspace(cx: &mut TestAppCon
     save_thread_metadata(
         acp::SessionId::new(Arc::from("main-thread")),
         Some("Main Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 2, 0, 0, 0).unwrap(),
+        utc(2024, 1, 2, 0, 0, 0),
         None,
         None,
         &main_project,
@@ -4943,7 +4953,7 @@ async fn test_archive_last_worktree_thread_removes_workspace(cx: &mut TestAppCon
     save_thread_metadata(
         wt_thread_id.clone(),
         Some("Worktree Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &worktree_project,
@@ -5408,7 +5418,7 @@ async fn test_restore_worktree_thread_uses_main_repo_project_group_key(cx: &mut 
     save_thread_metadata(
         wt_session_id.clone(),
         Some("Worktree Thread C".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &worktree_project,
@@ -5556,7 +5566,7 @@ async fn test_archive_last_worktree_thread_not_blocked_by_remote_thread_at_same_
     save_thread_metadata(
         acp::SessionId::new(Arc::from("main-thread")),
         Some("Main Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 2, 0, 0, 0).unwrap(),
+        utc(2024, 1, 2, 0, 0, 0),
         None,
         None,
         &main_project,
@@ -5568,7 +5578,7 @@ async fn test_archive_last_worktree_thread_not_blocked_by_remote_thread_at_same_
     save_thread_metadata(
         wt_thread_id.clone(),
         Some("Local Worktree Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &worktree_project,
@@ -5586,7 +5596,7 @@ async fn test_archive_last_worktree_thread_not_blocked_by_remote_thread_at_same_
             session_id: Some(acp::SessionId::new(Arc::from("remote-wt-thread"))),
             agent_id: agent::ZZZ_AGENT_ID.clone(),
             title: Some("Remote Worktree Thread".into()),
-            updated_at: chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+            updated_at: utc(2024, 1, 1, 0, 0, 0),
             created_at: None,
             interacted_at: None,
             worktree_paths: WorktreePaths::from_folder_paths(&PathList::new(&[PathBuf::from(
@@ -5725,7 +5735,7 @@ async fn test_linked_worktree_threads_not_duplicated_across_groups(cx: &mut Test
     save_thread_metadata(
         wt_session_id,
         Some("Worktree Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &worktree_project,
@@ -5816,8 +5826,8 @@ async fn test_thread_switcher_ordering(cx: &mut TestAppContext) {
     save_thread_metadata(
         session_id_c.clone(),
         Some("Thread C".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
-        Some(chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap()),
+        utc(2024, 1, 1, 0, 0, 0),
+        Some(utc(2024, 1, 1, 0, 0, 0)),
         None,
         &project,
         cx,
@@ -5834,8 +5844,8 @@ async fn test_thread_switcher_ordering(cx: &mut TestAppContext) {
     save_thread_metadata(
         session_id_b.clone(),
         Some("Thread B".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 2, 0, 0, 0).unwrap(),
-        Some(chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 2, 0, 0, 0).unwrap()),
+        utc(2024, 1, 2, 0, 0, 0),
+        Some(utc(2024, 1, 2, 0, 0, 0)),
         None,
         &project,
         cx,
@@ -5852,8 +5862,8 @@ async fn test_thread_switcher_ordering(cx: &mut TestAppContext) {
     save_thread_metadata(
         session_id_a.clone(),
         Some("Thread A".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 3, 0, 0, 0).unwrap(),
-        Some(chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 3, 0, 0, 0).unwrap()),
+        utc(2024, 1, 3, 0, 0, 0),
+        Some(utc(2024, 1, 3, 0, 0, 0)),
         None,
         &project,
         cx,
@@ -6020,8 +6030,8 @@ async fn test_thread_switcher_ordering(cx: &mut TestAppContext) {
     save_thread_metadata(
         acp::SessionId::new(Arc::from("thread-historical")),
         Some("Historical Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 6, 1, 0, 0, 0).unwrap(),
-        Some(chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 6, 1, 0, 0, 0).unwrap()),
+        utc(2024, 6, 1, 0, 0, 0),
+        Some(utc(2024, 6, 1, 0, 0, 0)),
         None,
         &project,
         cx,
@@ -6058,8 +6068,8 @@ async fn test_thread_switcher_ordering(cx: &mut TestAppContext) {
     save_thread_metadata(
         acp::SessionId::new(Arc::from("thread-old-historical")),
         Some("Old Historical Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2023, 6, 1, 0, 0, 0).unwrap(),
-        Some(chrono::TimeZone::with_ymd_and_hms(&Utc, 2023, 6, 1, 0, 0, 0).unwrap()),
+        utc(2023, 6, 1, 0, 0, 0),
+        Some(utc(2023, 6, 1, 0, 0, 0)),
         None,
         &project,
         cx,
@@ -6109,7 +6119,7 @@ async fn test_thread_switcher_menu_navigation_wraps_without_confirming(cx: &mut 
         open_thread_with_connection(&panel, connection, cx);
         send_message(&panel, cx);
         let session_id = active_session_id(&panel, cx);
-        let timestamp = chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, day, 0, 0, 0).unwrap();
+        let timestamp = utc(2024, 1, day, 0, 0, 0);
         save_thread_metadata(
             session_id.clone(),
             Some(title.into()),
@@ -6209,7 +6219,7 @@ async fn test_archive_thread_keeps_metadata_but_hides_from_sidebar(cx: &mut Test
     save_thread_metadata(
         acp::SessionId::new(Arc::from("thread-to-archive")),
         Some("Thread To Archive".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &project,
@@ -6502,7 +6512,7 @@ async fn test_unarchive_first_thread_in_group_does_not_create_spurious_draft(
                     session_id: Some(session_id.clone()),
                     agent_id: agent::ZZZ_AGENT_ID.clone(),
                     title: Some("Unarchived Thread".into()),
-                    updated_at: Utc::now(),
+                    updated_at: Timestamp::now(),
                     created_at: None,
                     interacted_at: None,
                     worktree_paths: WorktreePaths::from_folder_paths(&path_list_b),
@@ -6594,7 +6604,7 @@ async fn test_unarchive_into_new_workspace_does_not_create_duplicate_real_thread
                     session_id: Some(session_id.clone()),
                     agent_id: agent::ZZZ_AGENT_ID.clone(),
                     title: Some("Unarchived Thread".into()),
-                    updated_at: Utc::now(),
+                    updated_at: Timestamp::now(),
                     created_at: None,
                     interacted_at: None,
                     worktree_paths: WorktreePaths::from_folder_paths(&path_list_b),
@@ -6818,7 +6828,7 @@ async fn test_unarchive_into_inactive_existing_workspace_does_not_leave_active_d
                     session_id: Some(session_id.clone()),
                     agent_id: agent::ZZZ_AGENT_ID.clone(),
                     title: Some("Restored In Inactive Workspace".into()),
-                    updated_at: Utc::now(),
+                    updated_at: Timestamp::now(),
                     created_at: None,
                     interacted_at: None,
                     worktree_paths: WorktreePaths::from_folder_paths(&PathList::new(&[
@@ -7221,7 +7231,7 @@ async fn test_archived_threads_excluded_from_sidebar_entries(cx: &mut TestAppCon
     save_thread_metadata(
         acp::SessionId::new(Arc::from("visible-thread")),
         Some("Visible Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 2, 0, 0, 0).unwrap(),
+        utc(2024, 1, 2, 0, 0, 0),
         None,
         None,
         &project,
@@ -7232,7 +7242,7 @@ async fn test_archived_threads_excluded_from_sidebar_entries(cx: &mut TestAppCon
     save_thread_metadata(
         archived_thread_session_id.clone(),
         Some("Archived Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &project,
@@ -7377,7 +7387,7 @@ async fn test_archive_last_thread_on_linked_worktree_does_not_create_new_thread_
     save_thread_metadata(
         worktree_thread_id.clone(),
         Some("Ochre Drift Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 2, 0, 0, 0).unwrap(),
+        utc(2024, 1, 2, 0, 0, 0),
         None,
         None,
         &worktree_project,
@@ -7389,7 +7399,7 @@ async fn test_archive_last_thread_on_linked_worktree_does_not_create_new_thread_
     save_thread_metadata(
         acp::SessionId::new(Arc::from("main-project-thread")),
         Some("Main Project Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &main_project,
@@ -7544,7 +7554,7 @@ async fn test_archive_last_thread_on_linked_worktree_with_no_siblings_leaves_gro
     save_thread_metadata(
         worktree_thread_id.clone(),
         Some("Ochre Drift Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 2, 0, 0, 0).unwrap(),
+        utc(2024, 1, 2, 0, 0, 0),
         None,
         None,
         &worktree_project,
@@ -7660,7 +7670,7 @@ async fn test_unarchive_linked_worktree_thread_into_project_group_shows_only_res
                     session_id: Some(session_id.clone()),
                     agent_id: agent::ZZZ_AGENT_ID.clone(),
                     title: Some("Unarchived Linked Thread".into()),
-                    updated_at: Utc::now(),
+                    updated_at: Timestamp::now(),
                     created_at: None,
                     interacted_at: None,
                     worktree_paths: WorktreePaths::from_path_lists(
@@ -7843,7 +7853,7 @@ async fn test_archive_thread_on_linked_worktree_selects_sibling_thread(cx: &mut 
     save_thread_metadata(
         worktree_thread_id.clone(),
         Some("Ochre Drift Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 2, 0, 0, 0).unwrap(),
+        utc(2024, 1, 2, 0, 0, 0),
         None,
         None,
         &worktree_project,
@@ -7855,7 +7865,7 @@ async fn test_archive_thread_on_linked_worktree_selects_sibling_thread(cx: &mut 
     save_thread_metadata(
         main_thread_id,
         Some("Main Project Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &main_project,
@@ -8319,7 +8329,7 @@ async fn test_legacy_thread_with_canonical_path_opens_main_repo_workspace(cx: &m
             session_id: Some(legacy_session.clone()),
             agent_id: agent::ZZZ_AGENT_ID.clone(),
             title: Some("Legacy Main Thread".into()),
-            updated_at: chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+            updated_at: utc(2024, 1, 1, 0, 0, 0),
             created_at: None,
             interacted_at: None,
             worktree_paths: WorktreePaths::from_folder_paths(&PathList::new(&[PathBuf::from(
@@ -8776,7 +8786,7 @@ async fn test_non_archive_thread_paths_migrate_on_worktree_add_and_remove(cx: &m
     save_thread_metadata(
         acp::SessionId::new(Arc::from("hist-1")),
         Some("Historical 1".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &project,
@@ -8785,7 +8795,7 @@ async fn test_non_archive_thread_paths_migrate_on_worktree_add_and_remove(cx: &m
     save_thread_metadata(
         acp::SessionId::new(Arc::from("hist-2")),
         Some("Historical 2".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 1).unwrap(),
+        utc(2024, 1, 1, 0, 0, 1),
         None,
         None,
         &project,
@@ -8947,8 +8957,8 @@ async fn test_worktree_add_only_regroups_threads_for_changed_workspace(cx: &mut 
     cx.run_until_parked();
 
     // Save a thread for each workspace's folder paths.
-    let time_main = chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 1).unwrap();
-    let time_wt = chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 2).unwrap();
+    let time_main = utc(2024, 1, 1, 0, 0, 1);
+    let time_wt = utc(2024, 1, 1, 0, 0, 2);
     save_thread_metadata(
         acp::SessionId::new(Arc::from("thread-main")),
         Some("Main Thread".into()),
@@ -9297,9 +9307,8 @@ mod property_test {
     ) {
         let session_id = state.next_metadata_only_thread_id();
         let title: SharedString = format!("Thread {}", session_id).into();
-        let updated_at = chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2024, 1, 1, 0, 0, 0)
-            .unwrap()
-            + chrono::Duration::seconds(state.thread_counter as i64);
+        let updated_at =
+            utc(2024, 1, 1, 0, 0, 0) + SignedDuration::from_secs(state.thread_counter as i64);
         let metadata = ThreadMetadata {
             thread_id: ThreadId::new(),
             session_id: Some(session_id),
@@ -9358,10 +9367,8 @@ mod property_test {
 
                     let title: SharedString = format!("Thread {}", state.thread_counter).into();
                     state.thread_counter += 1;
-                    let updated_at =
-                        chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2024, 1, 1, 0, 0, 0)
-                            .unwrap()
-                            + chrono::Duration::seconds(state.thread_counter as i64);
+                    let updated_at = utc(2024, 1, 1, 0, 0, 0)
+                        + SignedDuration::from_secs(state.thread_counter as i64);
                     save_thread_metadata(
                         session_id,
                         Some(title),
@@ -10188,7 +10195,7 @@ async fn test_remote_project_integration_does_not_briefly_render_as_separate_pro
     save_thread_metadata(
         main_thread_id.clone(),
         Some("Main Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &project,
@@ -10214,7 +10221,7 @@ async fn test_remote_project_integration_does_not_briefly_render_as_separate_pro
             session_id: Some(remote_thread_id.clone()),
             agent_id: agent::ZZZ_AGENT_ID.clone(),
             title: Some("Worktree Thread".into()),
-            updated_at: chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 1).unwrap(),
+            updated_at: utc(2024, 1, 1, 0, 0, 1),
             created_at: None,
             interacted_at: None,
             worktree_paths: WorktreePaths::from_path_lists(
@@ -10470,7 +10477,7 @@ async fn test_archive_removes_worktree_even_when_workspace_paths_diverge(cx: &mu
             PathBuf::from("/nonexistent"),
         ]),
         PathList::new(&[PathBuf::from("/project"), PathBuf::from("/nonexistent")]),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         cx,
     );
 
@@ -10478,7 +10485,7 @@ async fn test_archive_removes_worktree_even_when_workspace_paths_diverge(cx: &mu
     save_thread_metadata(
         acp::SessionId::new(Arc::from("main-thread")),
         Some("Main Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 2, 0, 0, 0).unwrap(),
+        utc(2024, 1, 2, 0, 0, 0),
         None,
         None,
         &main_project,
@@ -10695,7 +10702,7 @@ async fn test_archive_mixed_workspace_closes_only_archived_worktree_items(cx: &m
             PathBuf::from("/nonexistent"),
         ]),
         PathList::new(&[PathBuf::from("/main-repo"), PathBuf::from("/nonexistent")]),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         cx,
     );
 
@@ -10707,7 +10714,7 @@ async fn test_archive_mixed_workspace_closes_only_archived_worktree_items(cx: &m
         "Other Thread",
         PathList::new(&[PathBuf::from("/main-repo")]),
         PathList::new(&[PathBuf::from("/main-repo")]),
-        chrono::TimeZone::with_ymd_and_hms(&Utc, 2024, 1, 2, 0, 0, 0).unwrap(),
+        utc(2024, 1, 2, 0, 0, 0),
         cx,
     );
     cx.run_until_parked();
@@ -10956,8 +10963,7 @@ async fn test_remote_archive_thread_with_active_connection(
             session_id: Some(wt_thread_id.clone()),
             agent_id: agent::ZZZ_AGENT_ID.clone(),
             title: Some("Worktree Thread".into()),
-            updated_at: chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2024, 1, 1, 0, 0, 0)
-                .unwrap(),
+            updated_at: utc(2024, 1, 1, 0, 0, 0),
             created_at: None,
             interacted_at: None,
             worktree_paths: WorktreePaths::from_path_lists(
@@ -11075,7 +11081,7 @@ async fn test_remote_archive_thread_with_disconnected_remote(
     save_thread_metadata(
         thread_id.clone(),
         Some("Remote Thread".into()),
-        chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2024, 1, 1, 0, 0, 0).unwrap(),
+        utc(2024, 1, 1, 0, 0, 0),
         None,
         None,
         &project,

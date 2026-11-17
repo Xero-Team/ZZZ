@@ -55,7 +55,7 @@ fn monitor_hangs(cx: &App) {
                                 save_hang_trace(
                                     main_thread_id,
                                     &background_executor,
-                                    chrono::Local::now(),
+                                    jiff::Zoned::now(),
                                 );
                             }
                         }
@@ -97,7 +97,7 @@ fn prune_hang_traces(directory: &Path, maximum_count: usize) {
 fn save_hang_trace(
     main_thread_id: ThreadId,
     background_executor: &gpui::BackgroundExecutor,
-    hang_time: chrono::DateTime<chrono::Local>,
+    hang_time: jiff::Zoned,
 ) {
     let thread_timings = background_executor
         .dispatcher()
@@ -118,7 +118,7 @@ fn save_hang_trace(
 
     let trace_path = paths::hang_traces_dir().join(&format!(
         "hang-{}.miniprof.json",
-        hang_time.format("%Y-%m-%d_%H-%M-%S")
+        hang_time.strftime("%Y-%m-%d_%H-%M-%S")
     ));
 
     prune_hang_traces(paths::hang_traces_dir(), MAX_HANG_TRACES - 1);

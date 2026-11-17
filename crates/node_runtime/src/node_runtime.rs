@@ -1,9 +1,9 @@
 use anyhow::{Context as _, Result, anyhow, bail};
 use async_compression::futures::bufread::GzipDecoder;
 use async_tar::Archive;
-use chrono::{DateTime, Utc};
 use futures::{AsyncReadExt, FutureExt as _, channel::oneshot, future::Shared};
 use http_client::{Host, HttpClient, Url};
+use jiff::Timestamp;
 use log::Level;
 use semver::{Version, VersionReq};
 use serde::Deserialize;
@@ -502,9 +502,9 @@ fn select_npm_package_version(
     if let Some(before) = before
         && !info.time.is_empty()
     {
-        let before_timestamp = DateTime::parse_from_rfc3339(before)
-            .with_context(|| format!("parsing npm before config timestamp {before:?}"))?
-            .with_timezone(&Utc);
+        let before_timestamp = before
+            .parse::<Timestamp>()
+            .with_context(|| format!("parsing npm before config timestamp {before:?}"))?;
         let latest_version = info.dist_tags.latest.as_ref();
 
         if let Some(version) = latest_version
@@ -538,7 +538,7 @@ fn is_allowed_npm_version_before(
     version: &Version,
     latest_version: Option<&Version>,
     published_at_by_version: &HashMap<String, String>,
-    before: &DateTime<Utc>,
+    before: &Timestamp,
     allow_prereleases: bool,
 ) -> Result<bool> {
     if (!allow_prereleases && !version.pre.is_empty())
@@ -553,14 +553,14 @@ fn is_allowed_npm_version_before(
 fn npm_version_was_published_before(
     version: &Version,
     published_at_by_version: &HashMap<String, String>,
-    before: &DateTime<Utc>,
+    before: &Timestamp,
 ) -> Result<bool> {
     let Some(published_at) = published_at_by_version.get(&version.to_string()) else {
         return Ok(false);
     };
-    let published_at = DateTime::parse_from_rfc3339(published_at)
-        .with_context(|| format!("parsing npm release timestamp for version {version}"))?
-        .with_timezone(&Utc);
+    let published_at = published_at
+        .parse::<Timestamp>()
+        .with_context(|| format!("parsing npm release timestamp for version {version}"))?;
     Ok(&published_at <= before)
 }
 

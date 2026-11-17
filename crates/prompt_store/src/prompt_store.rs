@@ -1,7 +1,6 @@
 mod prompts;
 
 use anyhow::{Result, anyhow};
-use chrono::{DateTime, Utc};
 use collections::HashMap;
 use futures::FutureExt as _;
 use futures::future::Shared;
@@ -13,6 +12,7 @@ use heed::{
     Database, RoTxn,
     types::{SerdeBincode, SerdeJson, Str},
 };
+use jiff::Timestamp;
 use parking_lot::RwLock;
 pub use prompts::*;
 use rope::Rope;
@@ -49,7 +49,7 @@ pub struct PromptMetadata {
     pub id: PromptId,
     pub title: Option<SharedString>,
     pub default: bool,
-    pub saved_at: DateTime<Utc>,
+    pub saved_at: Timestamp,
 }
 
 impl PromptMetadata {
@@ -58,7 +58,7 @@ impl PromptMetadata {
             id: PromptId::BuiltIn(builtin),
             title: Some(builtin.title().into()),
             default: false,
-            saved_at: DateTime::default(),
+            saved_at: Timestamp::default(),
         }
     }
 }
@@ -518,7 +518,7 @@ impl PromptStore {
                 id,
                 title,
                 default,
-                saved_at: Utc::now(),
+                saved_at: Timestamp::now(),
             }
         };
 
@@ -572,7 +572,7 @@ impl PromptStore {
             id,
             title,
             default,
-            saved_at: Utc::now(),
+            saved_at: Timestamp::now(),
         };
 
         cache.insert(prompt_metadata.clone());
@@ -613,7 +613,7 @@ struct PromptMetadataV1 {
     id: PromptIdV1,
     title: Option<SharedString>,
     default: bool,
-    saved_at: DateTime<Utc>,
+    saved_at: Timestamp,
 }
 
 /// Wraps a shared future to a prompt store so it can be assigned as a context global.
@@ -938,7 +938,7 @@ mod tests {
                 id: prompt_id_v1.clone(),
                 title: Some("V1 Prompt".into()),
                 default: false,
-                saved_at: Utc::now(),
+                saved_at: Timestamp::now(),
             };
 
             metadata_v1_db

@@ -1,7 +1,7 @@
-use chrono::{Datelike, Local, NaiveTime, Timelike};
 use editor::scroll::Autoscroll;
 use editor::{Editor, SelectionEffects};
 use gpui::{App, AppContext as _, Context, Window, actions};
+use jiff::{Zoned, civil};
 pub use settings::HourFormat;
 use settings::{RegisterSetting, Settings};
 use std::{
@@ -60,7 +60,7 @@ pub fn new_journal_entry(workspace: &Workspace, window: &mut Window, cx: &mut Ap
         log::error!("Can't determine journal directory");
         return;
     };
-    let now = Local::now();
+    let now = Zoned::now();
     let month_dir = journal_dir
         .join(format!("{:04}", now.year()))
         .join(format!("{:02}", now.month()));
@@ -187,16 +187,20 @@ fn journal_dir(path: &str) -> Option<PathBuf> {
     Some(absolute_path.join("journal"))
 }
 
-fn heading_entry(now: NaiveTime, hour_format: &HourFormat) -> String {
+fn heading_entry(now: civil::Time, hour_format: &HourFormat) -> String {
     match hour_format {
         HourFormat::Hour24 => {
             let hour = now.hour();
             format!("# {}:{:02}", hour, now.minute())
         }
         HourFormat::Hour12 => {
-            let (pm, hour) = now.hour12();
-            let am_or_pm = if pm { "PM" } else { "AM" };
-            format!("# {}:{:02} {}", hour, now.minute(), am_or_pm)
+            let hour = now.hour();
+            let hour12 = match hour % 12 {
+                0 => 12,
+                hour => hour,
+            };
+            let am_or_pm = if hour >= 12 { "PM" } else { "AM" };
+            format!("# {}:{:02} {}", hour12, now.minute(), am_or_pm)
         }
     }
 }
@@ -208,7 +212,7 @@ mod tests {
 
         #[test]
         fn test_heading_entry_is_hour_12() {
-            let naive_time = NaiveTime::from_hms_milli_opt(15, 0, 0, 0).unwrap();
+            let naive_time = civil::time(15, 0, 0, 0);
             let actual_heading_entry = heading_entry(naive_time, &HourFormat::Hour12);
             let expected_heading_entry = "# 3:00 PM";
 
@@ -217,7 +221,7 @@ mod tests {
 
         #[test]
         fn test_heading_entry_is_hour_24() {
-            let naive_time = NaiveTime::from_hms_milli_opt(15, 0, 0, 0).unwrap();
+            let naive_time = civil::time(15, 0, 0, 0);
             let actual_heading_entry = heading_entry(naive_time, &HourFormat::Hour24);
             let expected_heading_entry = "# 15:00";
 

@@ -4536,7 +4536,7 @@ pub(crate) mod tests {
     #[gpui::test]
     async fn test_reset_preserves_session_id_after_load_error(cx: &mut TestAppContext) {
         use crate::thread_metadata_store::{ThreadId, ThreadMetadata};
-        use chrono::Utc;
+        use jiff::Timestamp;
         use project::{AgentId as ProjectAgentId, WorktreePaths};
         use std::sync::atomic::Ordering;
 
@@ -4563,8 +4563,8 @@ pub(crate) mod tests {
                         session_id: Some(resume_session_id.clone()),
                         agent_id: ProjectAgentId::new("Flaky"),
                         title: Some(stored_title.clone()),
-                        updated_at: Utc::now(),
-                        created_at: Some(Utc::now()),
+                        updated_at: Timestamp::now(),
+                        created_at: Some(Timestamp::now()),
                         interacted_at: None,
                         worktree_paths: WorktreePaths::from_folder_paths(&PathList::default()),
                         remote_connection: None,
@@ -8083,7 +8083,7 @@ pub(crate) mod tests {
                 match conversation.permission_selections.get(&request_id) {
                     Some(thread_view::PermissionSelection::SelectedPatterns(checked)) => {
                         let mut checked = checked.clone();
-                        checked.sort();
+                        checked.sort_unstable();
                         Some(checked)
                     }
                     Some(thread_view::PermissionSelection::Choice(_)) => {

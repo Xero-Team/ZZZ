@@ -621,11 +621,7 @@ impl AgentSessionList for AcpSessionList {
                         )),
 
                         title: s.title.map(Into::into),
-                        updated_at: s.updated_at.and_then(|date_str| {
-                            chrono::DateTime::parse_from_rfc3339(&date_str)
-                                .log_err()
-                                .map(|dt| dt.with_timezone(&chrono::Utc))
-                        }),
+                        updated_at: s.updated_at.and_then(|date_str| date_str.parse().log_err()),
                         created_at: None,
                         meta: s.meta,
                     })

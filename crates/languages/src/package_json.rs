@@ -1,11 +1,11 @@
-use chrono::{DateTime, Local};
 use collections::{BTreeSet, HashMap};
+use jiff::Timestamp;
 use serde_json_lenient::Value;
 use std::{path::Path, sync::Arc};
 
 #[derive(Clone, Debug)]
 pub struct PackageJson {
-    pub mtime: DateTime<Local>,
+    pub mtime: Timestamp,
     pub data: PackageJsonData,
 }
 

@@ -129,11 +129,9 @@ fn single_line_preview(sql: &str) -> String {
 /// Local wall-clock time, because a user reading their own history thinks in
 /// local time and the stored value is UTC seconds.
 fn format_history_time(executed_at: i64) -> String {
-    use chrono::TimeZone as _;
-    chrono::Local
-        .timestamp_opt(executed_at, 0)
-        .single()
-        .map_or_default(|time| time.format("%Y-%m-%d %H:%M").to_string())
+    jiff::Timestamp::from_second(executed_at)
+        .map(|timestamp| timestamp.to_zoned(jiff::tz::TimeZone::system()))
+        .map_or_default(|time| time.strftime("%Y-%m-%d %H:%M").to_string())
 }
 
 fn import_failure_message(cx: &App, failure: &ImportFailure) -> String {
@@ -1388,7 +1386,7 @@ impl ResultSetView {
                 .record(
                     history_connection_id,
                     sql.clone(),
-                    chrono::Utc::now().timestamp(),
+                    jiff::Timestamp::now().as_second(),
                     row_count,
                     Some(duration_ms),
                     result.is_ok() && !cancelled,

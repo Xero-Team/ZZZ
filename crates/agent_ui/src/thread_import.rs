@@ -1,7 +1,6 @@
 use acp_thread::AgentSessionListRequest;
 use agent::ThreadStore;
 use agent_client_protocol::v1::schema as acp;
-use chrono::Utc;
 use collections::HashSet;
 use db::kvp::Dismissable;
 use db::sqlez;
@@ -12,6 +11,7 @@ use gpui::{
     Render, SharedString, Task, WeakEntity, Window,
 };
 use itertools::Itertools as _;
+use jiff::Timestamp;
 use notifications::status_toast::StatusToast;
 use project::{AgentId, AgentRegistryStore, AgentServerStore};
 use release_channel::ReleaseChannel;
@@ -630,7 +630,7 @@ fn collect_importable_threads(
                 session_id: Some(session.session_id),
                 agent_id: agent_id.clone(),
                 title: session.title,
-                updated_at: session.updated_at.unwrap_or_else(|| Utc::now()),
+                updated_at: session.updated_at.unwrap_or_else(|| Timestamp::now()),
                 created_at: session.created_at,
                 interacted_at: None,
                 worktree_paths: WorktreePaths::from_folder_paths(&folder_paths),
@@ -786,8 +786,8 @@ fn show_cross_channel_import_toast(
 mod tests {
     use super::*;
     use acp_thread::AgentSessionInfo;
-    use chrono::Utc;
     use gpui::TestAppContext;
+    use jiff::Timestamp;
     use std::path::Path;
     use workspace::PathList;
 
@@ -795,8 +795,8 @@ mod tests {
         session_id: &str,
         title: Option<&str>,
         work_dirs: Option<PathList>,
-        updated_at: Option<chrono::DateTime<Utc>>,
-        created_at: Option<chrono::DateTime<Utc>>,
+        updated_at: Option<Timestamp>,
+        created_at: Option<Timestamp>,
     ) -> AgentSessionInfo {
         AgentSessionInfo {
             session_id: acp::SessionId::new(session_id),

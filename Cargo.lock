@@ -108,7 +108,6 @@ dependencies = [
  "async-channel 2.5.0",
  "base64 0.23.1",
  "buffer_diff",
- "chrono",
  "collections",
  "env_logger 0.11.11",
  "feature_flags",
@@ -119,6 +118,7 @@ dependencies = [
  "image",
  "indoc",
  "itertools 0.15.0",
+ "jiff",
  "language",
  "language_model",
  "log",
@@ -266,7 +266,6 @@ dependencies = [
  "agent_settings",
  "anyhow",
  "async-io",
- "chrono",
  "client",
  "clock",
  "collections",
@@ -281,6 +280,7 @@ dependencies = [
  "gpui",
  "gpui_tokio",
  "indoc",
+ "jiff",
  "language",
  "language_model",
  "log",
@@ -362,7 +362,6 @@ dependencies = [
  "agent-client-protocol",
  "anyhow",
  "async-channel 2.5.0",
- "chrono",
  "client",
  "collections",
  "env_logger 0.11.11",
@@ -432,7 +431,6 @@ dependencies = [
  "audio",
  "base64 0.23.1",
  "buffer_diff",
- "chrono",
  "client",
  "clock",
  "collections",
@@ -458,6 +456,7 @@ dependencies = [
  "image",
  "indoc",
  "itertools 0.15.0",
+ "jiff",
  "jsonschema",
  "language",
  "language_model",
@@ -2328,7 +2327,7 @@ dependencies = [
 name = "cloud_api_types"
 version = "0.1.0"
 dependencies = [
- "chrono",
+ "jiff",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -3857,7 +3856,6 @@ name = "database_ui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "chrono",
  "client",
  "credentials_provider",
  "database_core",
@@ -3867,6 +3865,7 @@ dependencies = [
  "futures 0.3.34",
  "gpui",
  "i18n",
+ "jiff",
  "log",
  "markdown",
  "menu",
@@ -6370,7 +6369,6 @@ dependencies = [
  "bitflags 2.13.2",
  "block",
  "cbindgen",
- "chrono",
  "cocoa 0.27.0",
  "cocoa-foundation 0.2.1",
  "collections",
@@ -6400,6 +6398,7 @@ dependencies = [
  "image",
  "inventory",
  "itertools 0.15.0",
+ "jiff",
  "log",
  "lyon",
  "mach2 0.7.0",
@@ -8066,9 +8065,9 @@ dependencies = [
 name = "input_latency_ui"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "gpui",
  "hdrhistogram",
+ "jiff",
  "log",
 ]
 
@@ -8406,9 +8405,9 @@ name = "journal"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "chrono",
  "editor",
  "gpui",
+ "jiff",
  "log",
  "serde",
  "settings",
@@ -8961,7 +8960,6 @@ dependencies = [
  "async-fs",
  "async-tar",
  "async-trait",
- "chrono",
  "collections",
  "fs",
  "futures 0.3.34",
@@ -8971,6 +8969,7 @@ dependencies = [
  "http_client",
  "indoc",
  "itertools 0.15.0",
+ "jiff",
  "json_schema_store",
  "language",
  "log",
@@ -10440,9 +10439,9 @@ dependencies = [
  "async-compression",
  "async-tar",
  "async-trait",
- "chrono",
  "futures 0.3.34",
  "http_client",
+ "jiff",
  "log",
  "paths",
  "semver",
@@ -13225,7 +13224,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "assets",
- "chrono",
  "collections",
  "fs",
  "futures 0.3.34",
@@ -13233,6 +13231,7 @@ dependencies = [
  "gpui",
  "handlebars",
  "heed",
+ "jiff",
  "language",
  "log",
  "parking_lot 0.13.0",
@@ -14024,7 +14023,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "askpass",
- "chrono",
  "db",
  "dev_container",
  "editor",
@@ -14037,6 +14035,7 @@ dependencies = [
  "http_client",
  "i18n",
  "indoc",
+ "jiff",
  "language",
  "log",
  "menu",
@@ -15030,9 +15029,9 @@ version = "0.1.0"
 dependencies = [
  "async-task",
  "backtrace",
- "chrono",
  "flume",
  "futures 0.3.34",
+ "jiff",
  "parking_lot 0.13.0",
  "rand 0.10.4",
  "web-time",
@@ -15759,7 +15758,6 @@ dependencies = [
  "agent_ui",
  "anyhow",
  "async-channel 2.5.0",
- "chrono",
  "client",
  "clock",
  "db",
@@ -15772,6 +15770,7 @@ dependencies = [
  "gpui",
  "http_client",
  "i18n",
+ "jiff",
  "language",
  "language_model",
  "log",
@@ -18756,7 +18755,6 @@ dependencies = [
 name = "ui"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "documented",
  "gpui",
  "gpui_macros",
@@ -18764,6 +18762,7 @@ dependencies = [
  "i18n",
  "icons",
  "itertools 0.15.0",
+ "jiff",
  "log",
  "menu",
  "release_channel",
@@ -21449,7 +21448,6 @@ dependencies = [
  "any_vec",
  "anyhow",
  "async-recursion",
- "chrono",
  "client",
  "clock",
  "collections",
@@ -21463,6 +21461,7 @@ dependencies = [
  "http_client",
  "i18n",
  "itertools 0.15.0",
+ "jiff",
  "language",
  "log",
  "lsp",
@@ -22162,8 +22161,8 @@ name = "zlog"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "chrono",
  "collections",
+ "jiff",
  "log",
  "tempfile",
 ]
@@ -22516,7 +22515,6 @@ dependencies = [
  "audio_viewer",
  "base64 0.23.1",
  "breadcrumbs",
- "chrono",
  "clap",
  "cli",
  "client",
@@ -22566,6 +22564,7 @@ dependencies = [
  "inspector_ui",
  "install_cli",
  "itertools 0.15.0",
+ "jiff",
  "journal",
  "json_schema_store",
  "keymap_editor",

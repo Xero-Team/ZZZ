@@ -1,22 +1,22 @@
 // This won't be documented further as it is intended to be removed, or merged with the `time_format` crate.
 
-use chrono::{DateTime, Local, NaiveDateTime};
+use jiff::{Zoned, civil};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DateTimeType {
-    Naive(NaiveDateTime),
-    Local(DateTime<Local>),
+    Naive(civil::DateTime),
+    Local(Zoned),
 }
 
 impl DateTimeType {
-    /// Converts the [`DateTimeType`] to a [`NaiveDateTime`].
+    /// Converts the [`DateTimeType`] to a [`civil::DateTime`].
     ///
-    /// If the [`DateTimeType`] is already a [`NaiveDateTime`], it will be returned as is.
-    /// If the [`DateTimeType`] is a [`DateTime<Local>`], it will be converted to a [`NaiveDateTime`].
-    pub fn to_naive(self) -> NaiveDateTime {
+    /// If the [`DateTimeType`] is already a [`civil::DateTime`], it will be returned as is.
+    /// If the [`DateTimeType`] is a [`Zoned`], it will be converted to a [`civil::DateTime`].
+    pub fn to_naive(&self) -> civil::DateTime {
         match self {
-            DateTimeType::Naive(naive) => naive,
-            DateTimeType::Local(local) => local.naive_local(),
+            DateTimeType::Naive(naive) => *naive,
+            DateTimeType::Local(local) => local.datetime(),
         }
     }
 }
@@ -41,7 +41,7 @@ impl FormatDistance {
     }
 
     pub fn from_now(date: DateTimeType) -> Self {
-        Self::new(date, DateTimeType::Local(Local::now()))
+        Self::new(date, DateTimeType::Local(Zoned::now()))
     }
 
     pub fn include_seconds(mut self, include_seconds: bool) -> Self {
@@ -66,7 +66,7 @@ impl std::fmt::Display for FormatDistance {
             f,
             "{}",
             format_distance(
-                self.date,
+                self.date.clone(),
                 self.base_date.to_naive(),
                 self.include_seconds,
                 self.add_suffix,
@@ -75,16 +75,16 @@ impl std::fmt::Display for FormatDistance {
         )
     }
 }
-/// Calculates the distance in seconds between two [`NaiveDateTime`] objects.
+/// Calculates the distance in seconds between two [`civil::DateTime`] objects.
 /// It returns a signed integer denoting the difference. If `date` is earlier than `base_date`, the returned value will be negative.
 ///
 /// ## Arguments
 ///
-/// * `date` - A [NaiveDateTime`] object representing the date of interest
-/// * `base_date` - A [NaiveDateTime`] object representing the base date against which the comparison is made
-fn distance_in_seconds(date: NaiveDateTime, base_date: NaiveDateTime) -> i64 {
-    let duration = date.signed_duration_since(base_date);
-    -duration.num_seconds()
+/// * `date` - A [`civil::DateTime`] object representing the date of interest
+/// * `base_date` - A [`civil::DateTime`] object representing the base date against which the comparison is made
+fn distance_in_seconds(date: civil::DateTime, base_date: civil::DateTime) -> i64 {
+    let duration = date.duration_since(base_date);
+    -duration.as_secs()
 }
 
 /// Generates a string describing the time distance between two dates in a human-readable way.
@@ -229,10 +229,10 @@ fn distance_string(
 ///
 /// For example, "less than a minute ago", "about 2 hours ago", "3 months from now", etc.
 ///
-/// Use [`format_distance_from_now`] to compare a NaiveDateTime against now.
+/// Use [`format_distance_from_now`] to compare a [`civil::DateTime`] against now.
 pub fn format_distance(
     date: DateTimeType,
-    base_date: NaiveDateTime,
+    base_date: civil::DateTime,
     include_seconds: bool,
     add_suffix: bool,
     hide_prefix: bool,
@@ -251,7 +251,7 @@ pub fn format_distance_from_now(
     add_suffix: bool,
     hide_prefix: bool,
 ) -> String {
-    let now = chrono::offset::Local::now().naive_local();
+    let now = Zoned::now().datetime();
 
     format_distance(datetime, now, include_seconds, add_suffix, hide_prefix)
 }
@@ -259,18 +259,11 @@ pub fn format_distance_from_now(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::NaiveDateTime;
 
     #[test]
     fn test_format_distance() {
-        let date = DateTimeType::Naive(
-            #[allow(deprecated)]
-            NaiveDateTime::from_timestamp_opt(9600, 0).expect("Invalid NaiveDateTime for date"),
-        );
-        let base_date = DateTimeType::Naive(
-            #[allow(deprecated)]
-            NaiveDateTime::from_timestamp_opt(0, 0).expect("Invalid NaiveDateTime for base_date"),
-        );
+        let date = DateTimeType::Naive(jiff::civil::date(1970, 1, 1).at(2, 40, 0, 0));
+        let base_date = DateTimeType::Naive(jiff::civil::date(1970, 1, 1).at(0, 0, 0, 0));
 
         assert_eq!(
             "about 2 hours",
@@ -280,14 +273,8 @@ mod tests {
 
     #[test]
     fn test_format_distance_with_suffix() {
-        let date = DateTimeType::Naive(
-            #[allow(deprecated)]
-            NaiveDateTime::from_timestamp_opt(9600, 0).expect("Invalid NaiveDateTime for date"),
-        );
-        let base_date = DateTimeType::Naive(
-            #[allow(deprecated)]
-            NaiveDateTime::from_timestamp_opt(0, 0).expect("Invalid NaiveDateTime for base_date"),
-        );
+        let date = DateTimeType::Naive(jiff::civil::date(1970, 1, 1).at(2, 40, 0, 0));
+        let base_date = DateTimeType::Naive(jiff::civil::date(1970, 1, 1).at(0, 0, 0, 0));
 
         assert_eq!(
             "about 2 hours from now",
@@ -298,12 +285,12 @@ mod tests {
     #[test]
     fn test_format_distance_from_hms() {
         let date = DateTimeType::Naive(
-            NaiveDateTime::parse_from_str("1969-07-20T11:22:33Z", "%Y-%m-%dT%H:%M:%SZ")
-                .expect("Invalid NaiveDateTime for date"),
+            civil::DateTime::strptime("%Y-%m-%dT%H:%M:%S", "1969-07-20T11:22:33")
+                .expect("Invalid civil::DateTime for date"),
         );
         let base_date = DateTimeType::Naive(
-            NaiveDateTime::parse_from_str("2024-02-01T00:00:00Z", "%Y-%m-%dT%H:%M:%SZ")
-                .expect("Invalid NaiveDateTime for base_date"),
+            civil::DateTime::strptime("%Y-%m-%dT%H:%M:%S", "2024-02-01T00:00:00")
+                .expect("Invalid civil::DateTime for base_date"),
         );
 
         assert_eq!(

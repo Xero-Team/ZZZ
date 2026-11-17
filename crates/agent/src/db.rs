@@ -2,12 +2,12 @@ use acp_thread::UserMessageId;
 use agent_client_protocol::v1::schema as acp;
 use agent_settings::AgentProfileId;
 use anyhow::{Context as _, Result, anyhow};
-use chrono::{DateTime, Utc};
 use collections::HashMap;
 use db::ZZZ_STATELESS;
 use futures::{FutureExt, future::Shared};
 use gpui::{App, BackgroundExecutor, Global, SharedString, Task};
 use indoc::indoc;
+use jiff::Timestamp;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use sqlez::{
@@ -20,6 +20,16 @@ use std::{
     sync::Arc,
 };
 use util::{ResultExt, path_list::PathList};
+
+/// Builds a UTC [`Timestamp`] from civil calendar components.
+#[cfg(test)]
+fn utc(year: i16, month: i8, day: i8, hour: i8, minute: i8, second: i8) -> jiff::Timestamp {
+    jiff::civil::date(year, month, day)
+        .at(hour, minute, second, 0)
+        .to_zoned(jiff::tz::TimeZone::UTC)
+        .expect("UTC has no ambiguous civil datetimes")
+        .timestamp()
+}
 
 pub type DbMessage = serde_json::Value;
 pub type DbLanguageModel = serde_json::Value;
@@ -51,8 +61,8 @@ pub struct DbThreadMetadata {
     pub id: acp::SessionId,
     pub parent_session_id: Option<acp::SessionId>,
     pub title: SharedString,
-    pub updated_at: DateTime<Utc>,
-    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Timestamp,
+    pub created_at: Option<Timestamp>,
     /// The workspace folder paths this thread was created against, sorted
     /// lexicographically. Used for grouping threads by project in the sidebar.
     pub folder_paths: PathList,
@@ -75,7 +85,7 @@ impl From<&DbThreadMetadata> for acp_thread::AgentSessionInfo {
 pub struct DbThread {
     pub title: SharedString,
     pub messages: Vec<DbMessage>,
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: Timestamp,
     #[serde(default)]
     pub detailed_summary: Option<SharedString>,
     #[serde(default)]
@@ -112,7 +122,7 @@ pub struct SerializedScrollPosition {
 pub struct SharedThread {
     pub title: SharedString,
     pub messages: Vec<DbMessage>,
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: Timestamp,
     #[serde(default)]
     pub model: Option<DbLanguageModel>,
     pub version: String,
@@ -338,7 +348,7 @@ impl ThreadsDatabase {
         }
 
         let title = thread.title.to_string();
-        let updated_at = thread.updated_at.to_rfc3339();
+        let updated_at = thread.updated_at.to_string();
         let parent_id = thread
             .subagent_context
             .as_ref()
@@ -442,15 +452,14 @@ impl ThreadsDatabase {
                 });
                 let created_at = created_at
                     .as_deref()
-                    .map(DateTime::parse_from_rfc3339)
-                    .transpose()?
-                    .map(|dt| dt.with_timezone(&Utc));
+                    .map(|created_at| created_at.parse::<Timestamp>())
+                    .transpose()?;
 
                 threads.push(DbThreadMetadata {
                     id: acp::SessionId::new(id),
                     parent_session_id: parent_id.map(acp::SessionId::new),
                     title: summary.into(),
-                    updated_at: DateTime::parse_from_rfc3339(&updated_at)?.with_timezone(&Utc),
+                    updated_at: updated_at.parse::<Timestamp>()?,
                     created_at,
                     folder_paths,
                 });
@@ -534,9 +543,9 @@ impl ThreadsDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{DateTime, TimeZone, Utc};
     use collections::HashMap;
     use gpui::TestAppContext;
+    use jiff::Timestamp;
     use std::sync::Arc;
 
     #[test]
@@ -544,7 +553,7 @@ mod tests {
         let original = SharedThread {
             title: "Test Thread".into(),
             messages: vec![],
-            updated_at: Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+            updated_at: utc(2024, 1, 1, 0, 0, 0),
             model: None,
             version: SharedThread::VERSION.to_string(),
         };
@@ -591,7 +600,7 @@ mod tests {
         acp::SessionId::new(Arc::<str>::from(value))
     }
 
-    fn make_thread(title: &str, updated_at: DateTime<Utc>) -> DbThread {
+    fn make_thread(title: &str, updated_at: Timestamp) -> DbThread {
         DbThread {
             title: title.to_string().into(),
             messages: Vec::new(),
@@ -615,10 +624,7 @@ mod tests {
     async fn test_save_thread_stores_versioned_json(cx: &mut TestAppContext) {
         let database = ThreadsDatabase::new(cx.executor()).unwrap();
         let thread_id = session_id("versioned-thread");
-        let mut thread = make_thread(
-            "Thread \"雪\"",
-            Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-        );
+        let mut thread = make_thread("Thread \"雪\"", utc(2024, 1, 1, 0, 0, 0));
         thread.detailed_summary = Some(
             "A long summary with \"quotes\", \\ and 雪\n"
                 .repeat(8192)
@@ -655,14 +661,8 @@ mod tests {
         let older_id = session_id("thread-a");
         let newer_id = session_id("thread-b");
 
-        let older_thread = make_thread(
-            "Thread A",
-            Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-        );
-        let newer_thread = make_thread(
-            "Thread B",
-            Utc.with_ymd_and_hms(2024, 1, 2, 0, 0, 0).unwrap(),
-        );
+        let older_thread = make_thread("Thread A", utc(2024, 1, 1, 0, 0, 0));
+        let newer_thread = make_thread("Thread B", utc(2024, 1, 2, 0, 0, 0));
 
         database
             .save_thread(older_id.clone(), older_thread, PathList::default())
@@ -704,14 +704,8 @@ mod tests {
         let database = ThreadsDatabase::new(cx.executor()).unwrap();
 
         let thread_id = session_id("thread-a");
-        let original_thread = make_thread(
-            "Thread A",
-            Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-        );
-        let updated_thread = make_thread(
-            "Thread B",
-            Utc.with_ymd_and_hms(2024, 1, 2, 0, 0, 0).unwrap(),
-        );
+        let original_thread = make_thread("Thread A", utc(2024, 1, 1, 0, 0, 0));
+        let updated_thread = make_thread("Thread B", utc(2024, 1, 2, 0, 0, 0));
 
         database
             .save_thread(thread_id.clone(), original_thread, PathList::default())
@@ -726,10 +720,7 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].id, thread_id);
         assert_eq!(entries[0].title.as_ref(), "Thread B");
-        assert_eq!(
-            entries[0].updated_at,
-            Utc.with_ymd_and_hms(2024, 1, 2, 0, 0, 0).unwrap()
-        );
+        assert_eq!(entries[0].updated_at, utc(2024, 1, 2, 0, 0, 0));
         assert!(
             entries[0].created_at.is_some(),
             "created_at should be populated"
@@ -775,10 +766,7 @@ mod tests {
         let parent_id = session_id("parent-thread");
         let child_id = session_id("child-thread");
 
-        let mut child_thread = make_thread(
-            "Subagent Thread",
-            Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-        );
+        let mut child_thread = make_thread("Subagent Thread", utc(2024, 1, 1, 0, 0, 0));
         child_thread.subagent_context = Some(crate::SubagentContext {
             parent_thread_id: parent_id.clone(),
             depth: 2,
@@ -807,10 +795,7 @@ mod tests {
         let database = ThreadsDatabase::new(cx.executor()).unwrap();
 
         let thread_id = session_id("regular-thread");
-        let thread = make_thread(
-            "Regular Thread",
-            Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-        );
+        let thread = make_thread("Regular Thread", utc(2024, 1, 1, 0, 0, 0));
 
         database
             .save_thread(thread_id.clone(), thread, PathList::default())
@@ -834,10 +819,7 @@ mod tests {
         let database = ThreadsDatabase::new(cx.executor()).unwrap();
 
         let thread_id = session_id("folder-thread");
-        let thread = make_thread(
-            "Folder Thread",
-            Utc.with_ymd_and_hms(2024, 6, 15, 12, 0, 0).unwrap(),
-        );
+        let thread = make_thread("Folder Thread", utc(2024, 6, 15, 12, 0, 0));
 
         let folder_paths = PathList::new(&[
             std::path::PathBuf::from("/home/user/project-a"),
@@ -858,10 +840,7 @@ mod tests {
         let database = ThreadsDatabase::new(cx.executor()).unwrap();
 
         let thread_id = session_id("no-folder-thread");
-        let thread = make_thread(
-            "No Folder Thread",
-            Utc.with_ymd_and_hms(2024, 6, 15, 12, 0, 0).unwrap(),
-        );
+        let thread = make_thread("No Folder Thread", utc(2024, 6, 15, 12, 0, 0));
 
         database
             .save_thread(thread_id.clone(), thread, PathList::default())
@@ -894,10 +873,7 @@ mod tests {
 
         let thread_id = session_id("thread-with-scroll");
 
-        let mut thread = make_thread(
-            "Thread With Scroll",
-            Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-        );
+        let mut thread = make_thread("Thread With Scroll", utc(2024, 1, 1, 0, 0, 0));
         thread.ui_scroll_position = Some(SerializedScrollPosition {
             item_ix: 42,
             offset_in_item: 13.5,

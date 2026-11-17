@@ -143,6 +143,16 @@ mod constants {
 #[cfg(target_os = "macos")]
 use constants::*;
 
+/// Builds a UTC [`Timestamp`] from civil calendar components.
+#[cfg(target_os = "macos")]
+fn utc(year: i16, month: i8, day: i8, hour: i8, minute: i8, second: i8) -> jiff::Timestamp {
+    jiff::civil::date(year, month, day)
+        .at(hour, minute, second, 0)
+        .to_zoned(jiff::tz::TimeZone::UTC)
+        .expect("UTC has no ambiguous civil datetimes")
+        .timestamp()
+}
+
 #[cfg(target_os = "macos")]
 fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> {
     // Create the visual test context with deterministic task scheduling
@@ -2701,12 +2711,9 @@ fn run_multi_workspace_sidebar_visual_tests(
                             "zzz.visual_test_runner.multi_workspace.refine_thread_view_scrolling_behavior",
                             "Refine thread view scrolling behavior",
                         ),
-                        // These are fixed, valid UTC timestamps used only as
-                        // visual-test fixture data; UTC has no DST ambiguity, so
-                        // the epoch fallback is never reached in practice.
-                        chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2024, 6, 15, 10, 30, 0)
-                            .single()
-                            .unwrap_or_default(),
+                        // These are fixed UTC timestamps used only as
+                        // visual-test fixture data.
+                        utc(2024, 6, 15, 10, 30, 0),
                     ),
                     1 => (
                         "visual-test-thread-1",
@@ -2715,9 +2722,7 @@ fn run_multi_workspace_sidebar_visual_tests(
                             "zzz.visual_test_runner.multi_workspace.add_line_numbers_option",
                             "Add line numbers option to FileEditBlock",
                         ),
-                        chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2024, 6, 15, 11, 0, 0)
-                            .single()
-                            .unwrap_or_default(),
+                        utc(2024, 6, 15, 11, 0, 0),
                     ),
                     _ => continue,
                 };
