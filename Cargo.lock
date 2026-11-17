@@ -9506,6 +9506,7 @@ dependencies = [
  "gpui_platform",
  "i18n",
  "image",
+ "indoc",
  "language",
  "languages",
  "linkify",
@@ -15546,6 +15547,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_json_lenient",
+ "serde_path_to_error",
  "settings_json",
  "settings_macros",
  "strum 0.28.0",
@@ -22496,7 +22498,7 @@ dependencies = [
 
 [[package]]
 name = "zzz"
-version = "1.29.0"
+version = "1.30.0"
 dependencies = [
  "acp_thread",
  "acp_tools",
