@@ -69,6 +69,10 @@ load.
   authoring ideas from Claude skill guidance.
 - Keep `SKILL.md` concise. Move durable rules, long examples, and naming or path
   policies into `REFERENCE.md`.
+- Keep `description` within the documented 1,024-character limit, and keep the
+  body under 500 lines. The catalog of every skill name and description shares a
+  50 KB budget (`docs/src/ai/skills.md`), so one long description hides other
+  skills from the model.
 - Prefer one recommended path over many parallel options unless the task truly
   needs a branch.
 - Match instruction strictness to task fragility. Use low freedom for naming,
@@ -100,16 +104,41 @@ load.
    - extra folders only when they remove repeated work now, not speculatively
 4. Draft or refine `SKILL.md` first. Tighten `description` before adding body
    text if discovery is weak.
-5. When improving an existing skill, prefer small structural edits over a full
+5. Test the trigger before polishing the body. Write five to eight realistic
+   requests, mix should-trigger with near-miss should-not-trigger, and check
+   each one against the description alone. See "Testing the Trigger" below.
+6. When improving an existing skill, prefer small structural edits over a full
    rewrite unless the current design is fundamentally wrong.
-6. Write imperative instructions. Assume the model already knows common
+7. Write imperative instructions. Assume the model already knows common
    background. Keep only information that improves outcomes for this
    repository.
-7. If the skill needs normative reference material, put it in
+8. If the skill needs normative reference material, put it in
    `.agents/skills/<skill-name>/REFERENCE.md` and keep links one level deep from
    `SKILL.md`.
-8. Finish with a concise review of trigger quality, file placement, and whether
+9. Finish with a concise review of trigger quality, file placement, and whether
    the skill is still focused on one job.
+
+## Testing the Trigger
+
+The model sees only the `name` and `description` until it loads the skill, and it
+tends to undertrigger rather than overtrigger. Treat the description as the
+product and the body as the manual, then check it against real phrasing:
+
+1. Write five to eight requests the user would actually type, with real paths,
+   crate names, and gate names, not abstract labels like "create a chart".
+2. At least half must be near misses: requests that share keywords with the
+   skill but need a different workflow, so the test measures precision, not
+   just recall.
+3. Mark each request `should-trigger` or `should-not-trigger`, then read the
+   description against every one and record the miss.
+4. Fix a miss in the description, not in the body. Add the phrase the user
+   actually used, or add the scope sentence that excludes the near miss.
+5. Do not keep a simple one-step request as a positive test: the model handles
+   those without a skill and will not load one regardless of the description.
+
+A description that survives this pass is the strongest evidence available in
+this repository. There is no local trigger-evaluation harness, so the recorded
+prompts are the evidence, and they belong in the final response.
 
 ## Output Expectations
 
@@ -124,7 +153,9 @@ load.
 - Verify the folder path is `.agents/skills/<skill-name>/`.
 - Verify `SKILL.md` is uppercase and the `name` matches the folder.
 - Verify the `description` is concrete, third-person, and specific enough to
-  trigger.
+  trigger, and that it fit the documented 1,024-character limit.
+- Verify the description passed the near-miss trigger test, and record the
+  requests that failed, if any.
 - Verify the prompt body stays focused on one reusable job.
 - Verify `REFERENCE.md` exists only if it adds real value.
 - Verify OpenCode-specific rules still hold after any Claude-inspired cleanup.
@@ -152,8 +183,8 @@ This skill never triggers; tighten its description.
 
 ## Limitations
 
-- Trigger quality is inferred, not measured; only a real request proves
-  the description works.
+- Trigger quality is checked against written prompts, not measured by a harness;
+  only a real session proves the description works.
 - OpenCode ignores fields it does not read, so extra frontmatter is
   documentation, not behavior.
 - This skill writes project-local skills only and does not publish them.
@@ -165,5 +196,7 @@ When the draft is ready, summarize in Simplified Chinese:
 - what the skill does
 - which files were created
 - why `REFERENCE.md` was or was not added
+- the trigger test: which requests should trigger, which near misses should not,
+  and any that the description still misses
 - one or two example prompts the user can try
 - the weakest remaining assumption, only if it could materially change the skill

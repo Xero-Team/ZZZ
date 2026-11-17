@@ -11,6 +11,7 @@ skills rules first, then the local repository conventions.
 - Recognized frontmatter fields
 - Naming rules
 - Description rules
+- Trigger testing
 - Conciseness rules
 - Recommended body structure
 - Progressive disclosure
@@ -21,6 +22,7 @@ skills rules first, then the local repository conventions.
 - Repository conventions to preserve
 - Common mistakes
 - Example directory layout
+- Sources
 
 ## Scope For This Skill
 
@@ -131,9 +133,11 @@ The description is the main trigger surface. It should:
 - front-load concrete keywords, filenames, or paths when they matter for
   discovery
 
-OpenCode advertises the description and does not currently enforce a maximum
-length. Use enough detail to make triggering reliable without turning the
-description into a wall of text.
+OpenCode itself does not enforce a maximum length, but this repository documents
+one: `docs/src/ai/skills.md` records a 1,024-character description limit, a 500
+line body, and a 50 KB budget shared by every skill's name and description. Treat
+those as the working budget. When a description outgrows it, move the trigger
+detail into the body and keep only the phrases the model must match.
 
 Good pattern:
 
@@ -146,6 +150,31 @@ Weak pattern:
 ```yaml
 description: Helps with skills.
 ```
+
+## Trigger Testing
+
+The description is judged against the requests a user actually types, not against
+an idea of the task. Test it before trimming the body:
+
+1. Collect five to eight requests with real detail: repository paths, crate
+   names, gate names, file names, error text. "Tighten the skill description"
+   tests less than "this skill never triggers when I ask it to review the
+   locale catalogs".
+2. Split them into should-trigger and near-miss should-not-trigger. The near
+   misses are the valuable half: a request that shares vocabulary with the skill
+   but needs a different workflow, such as asking `creating-skills` for
+   application code or asking `hunting-code-smells` to absorb upstream.
+3. Exclude one-step requests from the positive set. The model handles a simple
+   rename or lookup without loading a skill, so such a request measures nothing.
+4. For each miss, change the description: add the user's own phrasing, name the
+   path or command the request contains, or add a sentence that excludes the
+   near miss.
+5. Record the results. There is no local trigger-evaluation harness, so the
+   written requests and their outcomes are the evidence behind the description.
+
+Keep the sets small and stable. Ten well-chosen requests beat fifty paraphrase
+variants, and a description that only passes self-invented examples is still
+unproven.
 
 ## Conciseness Rules
 
@@ -263,3 +292,12 @@ For heavier skills, a deliberate expansion can look like this:
     scripts/
     references/
 ```
+
+## Sources
+
+The trigger-testing method and the "treat the description as the product" framing
+are adapted from Anthropic's `skill-creator`
+(https://github.com/anthropics/skills, Apache-2.0), rewritten for OpenCode's
+discovery rules rather than copied. The 500-line body, 1,024-character
+description, and 50 KB catalog figures come from this repository's
+`docs/src/ai/skills.md`, which describes how ZZZ loads skills.
