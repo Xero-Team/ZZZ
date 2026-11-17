@@ -1669,7 +1669,12 @@ impl ThreadView {
 
         cx.emit(AcpThreadViewEvent::Interacted);
 
-        self.message_editor.focus_handle(cx).focus(window, cx);
+        // A manual send (Send Now, or fast-tracking with an empty composer)
+        // returns focus to this thread. An automatic send from the Stopped
+        // handler must not take focus away from wherever the user is typing.
+        if is_send_now {
+            self.message_editor.focus_handle(cx).focus(window, cx);
+        }
 
         let content = queued.content;
         let tracked_buffers = queued.tracked_buffers;
