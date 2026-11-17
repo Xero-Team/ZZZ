@@ -8,8 +8,8 @@ use std::{
     sync::Arc,
 };
 
-use chrono::{DateTime, NaiveDateTime, Utc};
 use fs::Fs;
+use jiff::{SignedDuration, Timestamp, civil, tz::TimeZone};
 
 use anyhow::{Context as _, Result, bail};
 use collections::{HashMap, HashSet, IndexSet};
@@ -61,9 +61,11 @@ use self::model::{DockStructure, SerializedWorkspaceLocation, SessionWorkspace};
 // > which defaults to <..> 32766 for SQLite versions after 3.32.0.
 const MAX_QUERY_PLACEHOLDERS: usize = 32000;
 
-fn parse_timestamp(text: &str) -> DateTime<Utc> {
-    NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M:%S")
-        .map_or_else(|_| Utc::now(), |naive| naive.and_utc())
+fn parse_timestamp(text: &str) -> Timestamp {
+    civil::DateTime::strptime("%Y-%m-%d %H:%M:%S", text)
+        .ok()
+        .and_then(|naive| naive.to_zoned(TimeZone::UTC).ok())
+        .map_or_else(Timestamp::now, |zoned| zoned.timestamp())
 }
 
 fn contains_wsl_path(paths: &PathList) -> bool {
@@ -1944,7 +1946,7 @@ impl WorkspaceDb {
             Option<RemoteConnectionId>,
             Option<String>,
             Option<PathStyle>,
-            DateTime<Utc>,
+            Timestamp,
         )>,
     > {
         Ok(self
@@ -2294,7 +2296,7 @@ impl WorkspaceDb {
         last_session_id: Option<&str>,
     ) -> Result<()> {
         let remote_connections = self.remote_connections()?;
-        let now = Utc::now();
+        let now = Timestamp::now();
         let mut workspaces_to_delete = Vec::new();
         for (id, paths, _identity_paths_hint, remote_connection_id, session_id, _, timestamp) in
             self.recent_workspaces()?
@@ -2323,7 +2325,7 @@ impl WorkspaceDb {
             }
 
             if !Self::all_paths_exist_with_a_directory(paths.paths(), fs).await
-                && now - timestamp >= chrono::Duration::days(7)
+                && now.duration_since(timestamp) >= SignedDuration::from_secs(7 * 86_400)
             {
                 workspaces_to_delete.push(id);
             }
@@ -2832,7 +2834,7 @@ pub struct RecentWorkspace {
     pub paths: PathList,
     pub identity_paths: PathList,
     pub path_style: Option<PathStyle>,
-    pub timestamp: DateTime<Utc>,
+    pub timestamp: Timestamp,
 }
 
 impl RecentWorkspace {
@@ -4288,7 +4290,7 @@ mod tests {
     async fn local_recent_workspace(
         workspace_id: WorkspaceId,
         paths: PathList,
-        timestamp: DateTime<Utc>,
+        timestamp: Timestamp,
         fs: &dyn Fs,
     ) -> RecentWorkspace {
         let identity_paths = resolve_local_workspace_identity(fs, &paths)
@@ -5681,10 +5683,10 @@ mod tests {
         )
         .await;
 
-        let t0 = Utc::now() - chrono::Duration::hours(4);
-        let t1 = Utc::now() - chrono::Duration::hours(3);
-        let t2 = Utc::now() - chrono::Duration::hours(2);
-        let t3 = Utc::now() - chrono::Duration::hours(1);
+        let t0 = Timestamp::now() - SignedDuration::from_hours(4);
+        let t1 = Timestamp::now() - SignedDuration::from_hours(3);
+        let t2 = Timestamp::now() - SignedDuration::from_hours(2);
+        let t3 = Timestamp::now() - SignedDuration::from_hours(1);
 
         let workspaces = vec![
             local_recent_workspace(WorkspaceId(1), PathList::new(&["/repo"]), t0, fs.as_ref())
@@ -5766,7 +5768,7 @@ mod tests {
         )
         .await;
 
-        let t0 = Utc::now();
+        let t0 = Timestamp::now();
 
         let result = local_recent_workspace(
             WorkspaceId(1),
@@ -5807,7 +5809,7 @@ mod tests {
         let result = local_recent_workspace(
             WorkspaceId(1),
             PathList::new(&["/Foo/Bar"]),
-            Utc::now(),
+            Timestamp::now(),
             fs.as_ref(),
         )
         .await;
@@ -5847,8 +5849,8 @@ mod tests {
         )
         .await;
 
-        let t0 = Utc::now() - chrono::Duration::hours(1);
-        let t1 = Utc::now();
+        let t0 = Timestamp::now() - SignedDuration::from_hours(1);
+        let t1 = Timestamp::now();
         let workspaces = vec![
             local_recent_workspace(
                 WorkspaceId(1),

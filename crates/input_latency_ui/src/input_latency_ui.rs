@@ -1,5 +1,6 @@
 use gpui::{App, Global, InputLatencySnapshot, Window, WindowId, actions};
 use hdrhistogram::Histogram;
+use jiff::Zoned;
 
 actions!(
     dev,
@@ -20,7 +21,7 @@ pub fn format_input_latency_report(window: &Window, cx: &mut App) -> String {
     let report = format_report(&snapshot, window_id, state);
 
     state.previous_snapshot = Some(snapshot);
-    state.previous_timestamp = Some(chrono::Local::now());
+    state.previous_timestamp = Some(Zoned::now());
     state.previous_window_id = Some(window_id);
 
     report
@@ -29,7 +30,7 @@ pub fn format_input_latency_report(window: &Window, cx: &mut App) -> String {
 #[derive(Default)]
 struct ReporterState {
     previous_snapshot: Option<InputLatencySnapshot>,
-    previous_timestamp: Option<chrono::DateTime<chrono::Local>>,
+    previous_timestamp: Option<Zoned>,
     previous_window_id: Option<WindowId>,
 }
 
@@ -58,13 +59,13 @@ fn format_report(
         ("max  ", 1.0),
     ];
 
-    let now = chrono::Local::now();
+    let now = Zoned::now();
 
     let mut report = String::new();
     report.push_str("Input Latency Histogram\n");
     report.push_str("=======================\n");
 
-    let timestamp = now.format("%Y-%m-%d %H:%M:%S %Z");
+    let timestamp = now.strftime("%Y-%m-%d %H:%M:%S %Z");
     report.push_str(&format!("Timestamp: {timestamp}\n"));
     report.push_str(&format!("Samples: {total}\n"));
     if snapshot.mid_draw_events_dropped > 0 {
@@ -130,8 +131,8 @@ fn format_report(
                 report.push('\n');
                 report.push_str("Delta Since Last Report\n");
                 report.push_str("-----------------------\n");
-                let prev_ts = prev_timestamp.format("%Y-%m-%d %H:%M:%S %Z");
-                let elapsed_secs = (now - *prev_timestamp).num_seconds().max(0);
+                let prev_ts = prev_timestamp.strftime("%Y-%m-%d %H:%M:%S %Z");
+                let elapsed_secs = now.duration_since(prev_timestamp).as_secs().max(0);
                 report.push_str(&format!(
                     "Previous report: {prev_ts} ({elapsed_secs}s ago)\n"
                 ));
@@ -240,7 +241,7 @@ mod tests {
         let window_id = WindowId::from(1);
         let previous = ReporterState {
             previous_snapshot: Some(previous_snapshot),
-            previous_timestamp: Some(chrono::Local::now()),
+            previous_timestamp: Some(Zoned::now()),
             previous_window_id: Some(window_id),
         };
 
@@ -254,7 +255,7 @@ mod tests {
     fn omits_delta_for_snapshot_from_another_window() {
         let previous = ReporterState {
             previous_snapshot: Some(snapshot(&[1_000_000])),
-            previous_timestamp: Some(chrono::Local::now()),
+            previous_timestamp: Some(Zoned::now()),
             previous_window_id: Some(WindowId::from(1)),
         };
 
@@ -268,7 +269,7 @@ mod tests {
         let window_id = WindowId::from(1);
         let previous = ReporterState {
             previous_snapshot: Some(snapshot(&[1_000_000, 3_000_000])),
-            previous_timestamp: Some(chrono::Local::now()),
+            previous_timestamp: Some(Zoned::now()),
             previous_window_id: Some(window_id),
         };
 

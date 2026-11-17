@@ -2672,8 +2672,8 @@ impl RecentProjectsDelegate {
 mod tests {
     use std::assert_matches;
 
-    use chrono::Utc;
     use gpui::{TestAppContext, UpdateGlobal, VisualTestContext};
+    use jiff::Timestamp;
 
     use serde_json::json;
     use settings::SettingsStore;
@@ -2734,7 +2734,7 @@ mod tests {
             paths: paths.clone(),
             identity_paths: paths,
             path_style: Some(PathStyle::local()),
-            timestamp: Utc::now(),
+            timestamp: Timestamp::now(),
         }
     }
 
@@ -2921,7 +2921,7 @@ mod tests {
             paths: paths.clone(),
             identity_paths: paths.clone(),
             path_style: Some(PathStyle::local()),
-            timestamp: Utc::now(),
+            timestamp: Timestamp::now(),
         };
         let remote_workspace = RecentWorkspace {
             workspace_id: WorkspaceId::from_i64(2),
@@ -2931,7 +2931,7 @@ mod tests {
             paths: paths.clone(),
             identity_paths: paths,
             path_style: Some(PathStyle::local()),
-            timestamp: Utc::now(),
+            timestamp: Timestamp::now(),
         };
 
         // A local open folder should hide only the matching local recent

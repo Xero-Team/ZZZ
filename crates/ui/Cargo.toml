@@ -13,7 +13,7 @@ name = "ui"
 path = "src/ui.rs"
 
 [dependencies]
-chrono.workspace = true
+jiff.workspace = true
 ui_component_registry.workspace = true
 documented.workspace = true
 gpui.workspace = true

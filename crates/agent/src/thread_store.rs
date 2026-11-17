@@ -5,6 +5,16 @@ use futures::{FutureExt, future::Shared};
 use gpui::{App, Context, Entity, Global, Task, prelude::*};
 use util::{ResultExt as _, path_list::PathList};
 
+/// Builds a UTC [`Timestamp`] from civil calendar components.
+#[cfg(test)]
+fn utc(year: i16, month: i8, day: i8, hour: i8, minute: i8, second: i8) -> jiff::Timestamp {
+    jiff::civil::date(year, month, day)
+        .at(hour, minute, second, 0)
+        .to_zoned(jiff::tz::TimeZone::UTC)
+        .expect("UTC has no ambiguous civil datetimes")
+        .timestamp()
+}
+
 struct GlobalThreadStore(Entity<ThreadStore>);
 
 impl Global for GlobalThreadStore {}
@@ -146,16 +156,16 @@ impl ThreadStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{DateTime, TimeZone, Utc};
     use collections::HashMap;
     use gpui::TestAppContext;
+    use jiff::Timestamp;
     use std::sync::Arc;
 
     fn session_id(value: &str) -> acp::SessionId {
         acp::SessionId::new(Arc::<str>::from(value))
     }
 
-    fn make_thread(title: &str, updated_at: DateTime<Utc>) -> DbThread {
+    fn make_thread(title: &str, updated_at: Timestamp) -> DbThread {
         DbThread {
             title: title.to_string().into(),
             messages: Vec::new(),
@@ -183,14 +193,8 @@ mod tests {
         let older_id = session_id("thread-a");
         let newer_id = session_id("thread-b");
 
-        let older_thread = make_thread(
-            "Thread A",
-            Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-        );
-        let newer_thread = make_thread(
-            "Thread B",
-            Utc.with_ymd_and_hms(2024, 1, 2, 0, 0, 0).unwrap(),
-        );
+        let older_thread = make_thread("Thread A", utc(2024, 1, 1, 0, 0, 0));
+        let newer_thread = make_thread("Thread B", utc(2024, 1, 2, 0, 0, 0));
 
         let save_older = thread_store.update(cx, |store, cx| {
             store.save_thread(older_id.clone(), older_thread, PathList::default(), cx)
@@ -216,10 +220,7 @@ mod tests {
         cx.run_until_parked();
 
         let thread_id = session_id("thread-a");
-        let thread = make_thread(
-            "Thread A",
-            Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-        );
+        let thread = make_thread("Thread A", utc(2024, 1, 1, 0, 0, 0));
 
         let save_task = thread_store.update(cx, |store, cx| {
             store.save_thread(thread_id, thread, PathList::default(), cx)
@@ -244,14 +245,8 @@ mod tests {
         let first_id = session_id("thread-a");
         let second_id = session_id("thread-b");
 
-        let first_thread = make_thread(
-            "Thread A",
-            Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-        );
-        let second_thread = make_thread(
-            "Thread B",
-            Utc.with_ymd_and_hms(2024, 1, 2, 0, 0, 0).unwrap(),
-        );
+        let first_thread = make_thread("Thread A", utc(2024, 1, 1, 0, 0, 0));
+        let second_thread = make_thread("Thread B", utc(2024, 1, 2, 0, 0, 0));
 
         let save_first = thread_store.update(cx, |store, cx| {
             store.save_thread(first_id.clone(), first_thread, PathList::default(), cx)
@@ -281,14 +276,8 @@ mod tests {
         let first_id = session_id("thread-a");
         let second_id = session_id("thread-b");
 
-        let first_thread = make_thread(
-            "Thread A",
-            Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-        );
-        let second_thread = make_thread(
-            "Thread B",
-            Utc.with_ymd_and_hms(2024, 1, 2, 0, 0, 0).unwrap(),
-        );
+        let first_thread = make_thread("Thread A", utc(2024, 1, 1, 0, 0, 0));
+        let second_thread = make_thread("Thread B", utc(2024, 1, 2, 0, 0, 0));
 
         let save_first = thread_store.update(cx, |store, cx| {
             store.save_thread(first_id.clone(), first_thread, PathList::default(), cx)
@@ -300,10 +289,7 @@ mod tests {
         save_second.await.unwrap();
         cx.run_until_parked();
 
-        let updated_first = make_thread(
-            "Thread A",
-            Utc.with_ymd_and_hms(2024, 1, 3, 0, 0, 0).unwrap(),
-        );
+        let updated_first = make_thread("Thread A", utc(2024, 1, 3, 0, 0, 0));
         let update_task = thread_store.update(cx, |store, cx| {
             store.save_thread(first_id.clone(), updated_first, PathList::default(), cx)
         });

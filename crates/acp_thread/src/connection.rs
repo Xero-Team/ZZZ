@@ -1,10 +1,10 @@
 use crate::{AcpThread, ElicitationStore};
 use agent_client_protocol::v1::schema as acp;
 use anyhow::Result;
-use chrono::{DateTime, Utc};
 use collections::{HashMap, HashSet, IndexMap};
 use gpui::{App, Entity, SharedString, Task};
 use icons::IconName;
+use jiff::Timestamp;
 use language_model::LanguageModelProviderId;
 use project::{AgentId, Project};
 use serde::{Deserialize, Serialize};
@@ -341,8 +341,8 @@ pub struct AgentSessionInfo {
     pub session_id: acp::SessionId,
     pub work_dirs: Option<PathList>,
     pub title: Option<SharedString>,
-    pub updated_at: Option<DateTime<Utc>>,
-    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<Timestamp>,
+    pub created_at: Option<Timestamp>,
     pub meta: Option<acp::Meta>,
 }
 

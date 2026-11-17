@@ -1,7 +1,7 @@
 use crate::{PlatformDispatcher, RunnableMeta};
 use async_task::Runnable;
-use chrono::{DateTime, Utc};
 use futures::channel::oneshot;
+use jiff::Timestamp;
 use scheduler::Instant;
 use scheduler::{Clock, Priority, Scheduler, SessionId, TestScheduler, Timer};
 #[cfg(not(target_family = "wasm"))]
@@ -135,8 +135,8 @@ struct PlatformClock {
 }
 
 impl Clock for PlatformClock {
-    fn utc_now(&self) -> DateTime<Utc> {
-        Utc::now()
+    fn utc_now(&self) -> Timestamp {
+        Timestamp::now()
     }
 
     fn now(&self) -> Instant {

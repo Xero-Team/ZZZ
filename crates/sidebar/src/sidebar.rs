@@ -20,7 +20,6 @@ use agent_ui::{
     CrossChannelImportOnboarding, DEFAULT_THREAD_TITLE, NewThread, TerminalId, ThreadId,
     ThreadImportModal, channels_with_threads, import_threads_from_other_channels,
 };
-use chrono::{DateTime, Utc};
 use editor::Editor;
 use feature_flags::{
     AgentThreadWorktreeLabel, AgentThreadWorktreeLabelFlag, FeatureFlag, FeatureFlagAppExt as _,
@@ -33,6 +32,7 @@ use gpui::{
     linear_gradient, list, prelude::*, px,
 };
 use i18n as app_i18n;
+use jiff::Timestamp;
 use menu::{
     Cancel, Confirm, SelectChild, SelectFirst, SelectLast, SelectNext, SelectParent, SelectPrevious,
 };
@@ -935,7 +935,7 @@ pub struct Sidebar {
     /// Updated only in response to explicit user actions (clicking a
     /// thread, confirming in the thread switcher, etc.) — never from
     /// background data changes. Used to sort the thread switcher popup.
-    thread_last_accessed: HashMap<ThreadId, DateTime<Utc>>,
+    thread_last_accessed: HashMap<ThreadId, Timestamp>,
     thread_switcher: Option<Entity<ThreadSwitcher>>,
     thread_switcher_subscriptions: Vec<gpui::Subscription>,
     pending_thread_activation: Option<agent_ui::ThreadId>,
@@ -4482,17 +4482,17 @@ impl Sidebar {
     }
 
     fn record_thread_access(&mut self, id: &ThreadId) {
-        self.thread_last_accessed.insert(*id, Utc::now());
+        self.thread_last_accessed.insert(*id, Timestamp::now());
     }
 
     fn record_thread_interacted(&mut self, thread_id: &agent_ui::ThreadId, cx: &mut App) {
         let store = ThreadMetadataStore::global(cx);
         store.update(cx, |store, cx| {
-            store.update_interacted_at(thread_id, Utc::now(), cx);
+            store.update_interacted_at(thread_id, Timestamp::now(), cx);
         })
     }
 
-    fn thread_display_time(metadata: &ThreadMetadata) -> DateTime<Utc> {
+    fn thread_display_time(metadata: &ThreadMetadata) -> Timestamp {
         metadata.interacted_at.unwrap_or(metadata.updated_at)
     }
 

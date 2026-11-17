@@ -16,7 +16,7 @@ default = []
 
 [dependencies]
 collections.workspace = true
-chrono.workspace = true
+jiff.workspace = true
 log.workspace = true
 anyhow.workspace = true
 

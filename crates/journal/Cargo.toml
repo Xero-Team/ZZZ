@@ -14,9 +14,9 @@ doctest = false
 
 [dependencies]
 anyhow.workspace = true
-chrono.workspace = true
 editor.workspace = true
 gpui.workspace = true
+jiff.workspace = true
 log.workspace = true
 serde.workspace = true
 settings.workspace = true

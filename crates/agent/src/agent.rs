@@ -14,7 +14,7 @@ pub use tool_permissions::*;
 pub use tool_protocol::*;
 pub use tools::*;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use project::AgentId;
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
@@ -24,5 +24,5 @@ pub static ZZZ_AGENT_ID: LazyLock<AgentId> = LazyLock::new(|| AgentId::new("zzz-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProjectSnapshot {
     pub worktree_snapshots: Vec<project::project_snapshot::ProjectWorktreeSnapshot>,
-    pub timestamp: DateTime<Utc>,
+    pub timestamp: Timestamp,
 }

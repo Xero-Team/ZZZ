@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Deserializer, Serialize};
 use strum::EnumString;
 
@@ -75,7 +75,7 @@ pub struct ExtensionMetadata {
     pub id: Arc<str>,
     #[serde(flatten)]
     pub manifest: ExtensionApiManifest,
-    pub published_at: DateTime<Utc>,
+    pub published_at: Timestamp,
     pub download_count: u64,
 }
 

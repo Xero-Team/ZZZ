@@ -13,7 +13,6 @@ use crate::{Agent, ArchiveSelectedThread, RemoveSelectedThread, default_thread_t
 use agent::ThreadStore;
 use agent_client_protocol::v1::schema as acp;
 use agent_settings::AgentSettings;
-use chrono::{DateTime, Datelike as _, Local, NaiveDate, TimeDelta, Utc};
 use collections::HashMap;
 use editor::Editor;
 use fs::Fs;
@@ -24,6 +23,7 @@ use gpui::{
     prelude::*, px,
 };
 use itertools::Itertools as _;
+use jiff::{SignedDuration, Timestamp, Zoned, civil::Date};
 use menu::{Confirm, SelectFirst, SelectLast, SelectNext, SelectPrevious};
 use picker::{
     Picker, PickerDelegate,
@@ -76,19 +76,20 @@ enum TimeBucket {
 }
 
 impl TimeBucket {
-    fn from_dates(reference: NaiveDate, date: NaiveDate) -> Self {
+    fn from_dates(reference: Date, date: Date) -> Self {
         if date == reference {
             return TimeBucket::Today;
         }
-        if date == reference - TimeDelta::days(1) {
+        if date == reference - SignedDuration::from_hours(24) {
             return TimeBucket::Yesterday;
         }
-        let week = date.iso_week();
-        if reference.iso_week() == week {
+        let week = date.iso_week_date();
+        let reference_week = reference.iso_week_date();
+        if (week.year(), week.week()) == (reference_week.year(), reference_week.week()) {
             return TimeBucket::ThisWeek;
         }
-        let last_week = (reference - TimeDelta::days(7)).iso_week();
-        if week == last_week {
+        let last_week = (reference - SignedDuration::from_hours(24 * 7)).iso_week_date();
+        if (week.year(), week.week()) == (last_week.year(), last_week.week()) {
             return TimeBucket::PastWeek;
         }
         TimeBucket::Older
@@ -329,7 +330,7 @@ impl ThreadsArchiveView {
             .collect::<Vec<_>>();
 
         let query = self.filter_editor.read(cx).text(cx).to_lowercase();
-        let today = Local::now().naive_local().date();
+        let today = Zoned::now().date();
 
         let mut items = Vec::with_capacity(sessions.len() + 5);
         let mut current_bucket: Option<TimeBucket> = None;
@@ -345,8 +346,7 @@ impl ThreadsArchiveView {
                 let entry_date = session
                     .created_at
                     .unwrap_or(session.updated_at)
-                    .with_timezone(&Local)
-                    .naive_local()
+                    .to_zoned(jiff::tz::TimeZone::system())
                     .date();
                 TimeBucket::from_dates(today, entry_date)
             };
@@ -1072,13 +1072,13 @@ impl ThreadsArchiveView {
     }
 }
 
-pub fn format_history_entry_timestamp(entry_time: DateTime<Utc>, cx: &App) -> String {
-    let now = Utc::now();
-    let duration = now.signed_duration_since(entry_time);
+pub fn format_history_entry_timestamp(entry_time: Timestamp, cx: &App) -> String {
+    let now = Timestamp::now();
+    let duration = now.duration_since(entry_time);
 
-    let minutes = duration.num_minutes();
-    let hours = duration.num_hours();
-    let days = duration.num_days();
+    let minutes = duration.as_mins();
+    let hours = duration.as_hours();
+    let days = duration.as_secs() / 86_400;
     let weeks = days / 7;
     let months = days / 30;
     let format_short = |key, fallback: &'static str, value: i64| {
@@ -1836,8 +1836,8 @@ mod tests {
             session_id: None,
             agent_id: AgentId::from("assistant"),
             title: Some("General discussion".into()),
-            updated_at: Utc::now(),
-            created_at: Some(Utc::now()),
+            updated_at: Timestamp::now(),
+            created_at: Some(Timestamp::now()),
             interacted_at: None,
             worktree_paths: crate::thread_metadata_store::WorktreePaths::from_folder_paths(
                 &workspace::PathList::new(&[PathBuf::from("/tmp/my-laravel-project")]),

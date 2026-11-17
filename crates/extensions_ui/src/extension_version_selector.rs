@@ -237,7 +237,7 @@ impl PickerDelegate for ExtensionVersionSelectorDelegate {
                             Label::new(
                                 extension_version
                                     .published_at
-                                    .format("%Y-%m-%d")
+                                    .strftime("%Y-%m-%d")
                                     .to_string(),
                             )
                             .when(disabled, |label| label.color(Color::Muted)),

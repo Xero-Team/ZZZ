@@ -1,7 +1,6 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
-use chrono::{DateTime, Utc};
 use collections::{HashMap, HashSet};
 use db::{
     sqlez::{
@@ -12,6 +11,7 @@ use db::{
 };
 use futures::{FutureExt, future::Shared};
 use gpui::{AppContext as _, Entity, Global, Task};
+use jiff::Timestamp;
 use remote::{RemoteConnectionOptions, same_remote_connection_identity};
 use ui::{App, Context, SharedString};
 use util::ResultExt as _;
@@ -50,7 +50,7 @@ pub struct TerminalThreadMetadata {
     pub terminal_id: TerminalId,
     pub title: SharedString,
     pub custom_title: Option<SharedString>,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
     pub worktree_paths: WorktreePaths,
     pub remote_connection: Option<RemoteConnectionOptions>,
     pub working_directory: Option<PathBuf>,
@@ -518,7 +518,7 @@ impl TerminalThreadMetadataDb {
         let terminal_id = row.terminal_id.to_key_string();
         let title = row.title.to_string();
         let custom_title = row.custom_title.as_ref().map(ToString::to_string);
-        let created_at = row.created_at.to_rfc3339();
+        let created_at = row.created_at.to_string();
         let working_directory = row
             .working_directory
             .as_ref()
@@ -633,7 +633,7 @@ impl Column for TerminalThreadMetadata {
                 custom_title: custom_title
                     .filter(|title| !title.trim().is_empty())
                     .map(SharedString::from),
-                created_at: DateTime::parse_from_rfc3339(&created_at)?.with_timezone(&Utc),
+                created_at: created_at.parse::<Timestamp>()?,
                 worktree_paths,
                 remote_connection,
                 working_directory: working_directory.map(PathBuf::from),
@@ -666,7 +666,7 @@ mod tests {
             terminal_id: TerminalId::new(),
             title: "⠋ Thinking".into(),
             custom_title: None,
-            created_at: Utc::now(),
+            created_at: Timestamp::now(),
             worktree_paths: WorktreePaths::from_folder_paths(&PathList::default()),
             remote_connection: None,
             working_directory: None,

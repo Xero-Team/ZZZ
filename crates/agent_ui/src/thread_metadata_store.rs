@@ -6,7 +6,6 @@ use std::{
 use agent::{ThreadStore, ZZZ_AGENT_ID};
 use agent_client_protocol::v1::schema as acp;
 use anyhow::Context as _;
-use chrono::{DateTime, Utc};
 use collections::{HashMap, HashSet};
 use db::{
     kvp::KeyValueStore,
@@ -21,6 +20,7 @@ use db::{
 use fs::Fs;
 use futures::{FutureExt, future::Shared};
 use gpui::{AppContext as _, Entity, Global, Subscription, Task};
+use jiff::Timestamp;
 pub use project::WorktreePaths;
 use project::{AgentId, linked_worktree_short_name};
 use remote::{RemoteConnectionOptions, same_remote_connection_identity};
@@ -307,11 +307,11 @@ pub struct ThreadMetadata {
     pub session_id: Option<acp::SessionId>,
     pub agent_id: AgentId,
     pub title: Option<SharedString>,
-    pub updated_at: DateTime<Utc>,
-    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Timestamp,
+    pub created_at: Option<Timestamp>,
     /// When a user last interacted to send a message (including queueing).
     /// Doesn't include the time when a queued message is fired.
-    pub interacted_at: Option<DateTime<Utc>>,
+    pub interacted_at: Option<Timestamp>,
     pub worktree_paths: WorktreePaths,
     pub remote_connection: Option<RemoteConnectionOptions>,
     pub archived: bool,
@@ -782,7 +782,7 @@ impl ThreadMetadataStore {
     pub fn update_interacted_at(
         &mut self,
         thread_id: &ThreadId,
-        time: DateTime<Utc>,
+        time: Timestamp,
         cx: &mut Context<Self>,
     ) {
         if let Some(thread) = self.threads.get(thread_id) {
@@ -1160,7 +1160,7 @@ impl ThreadMetadataStore {
         let session_id = Some(thread_ref.session_id().clone());
         let title = thread_ref.title();
 
-        let updated_at = Utc::now();
+        let updated_at = Timestamp::now();
 
         let created_at = existing_thread
             .and_then(|t| t.created_at)
@@ -1349,9 +1349,9 @@ impl ThreadMetadataDb {
             Some(row.agent_id.to_string())
         };
         let title = row.title.as_ref().map_or_default(|t| t.to_string());
-        let updated_at = row.updated_at.to_rfc3339();
-        let created_at = row.created_at.map(|dt| dt.to_rfc3339());
-        let interacted_at = row.interacted_at.map(|dt| dt.to_rfc3339());
+        let updated_at = row.updated_at.to_string();
+        let created_at = row.created_at.map(|dt| dt.to_string());
+        let interacted_at = row.interacted_at.map(|dt| dt.to_string());
         let serialized = row.folder_paths().serialize();
         let (folder_paths, folder_paths_order) = if row.folder_paths().is_empty() {
             (None, None)
@@ -1563,18 +1563,16 @@ impl Column for ThreadMetadata {
 
         let agent_id = agent_id.map_or(ZZZ_AGENT_ID.clone(), |id| AgentId::new(id));
 
-        let updated_at = DateTime::parse_from_rfc3339(&updated_at_str)?.with_timezone(&Utc);
+        let updated_at = updated_at_str.parse::<Timestamp>()?;
         let created_at = created_at_str
             .as_deref()
-            .map(DateTime::parse_from_rfc3339)
-            .transpose()?
-            .map(|dt| dt.with_timezone(&Utc));
+            .map(|created_at| created_at.parse::<Timestamp>())
+            .transpose()?;
 
         let interacted_at = interacted_at_str
             .as_deref()
-            .map(DateTime::parse_from_rfc3339)
-            .transpose()?
-            .map(|dt| dt.with_timezone(&Utc));
+            .map(|interacted_at| interacted_at.parse::<Timestamp>())
+            .transpose()?;
 
         let folder_paths = folder_paths_str.map_or_default(|paths| {
             PathList::deserialize(&util::path_list::SerializedPathList {
@@ -1656,6 +1654,7 @@ mod tests {
     use agent::DbThread;
     use agent_client_protocol::v1::schema as acp;
     use gpui::{TestAppContext, VisualTestContext};
+    use jiff::SignedDuration;
     use project::FakeFs;
     use project::Project;
     use remote::WslConnectionOptions;
@@ -1663,7 +1662,7 @@ mod tests {
     use std::rc::Rc;
     use workspace::MultiWorkspace;
 
-    fn make_db_thread(title: &str, updated_at: DateTime<Utc>) -> DbThread {
+    fn make_db_thread(title: &str, updated_at: Timestamp) -> DbThread {
         DbThread {
             title: title.to_string().into(),
             messages: Vec::new(),
@@ -1686,7 +1685,7 @@ mod tests {
     fn make_metadata(
         session_id: &str,
         title: &str,
-        updated_at: DateTime<Utc>,
+        updated_at: Timestamp,
         folder_paths: PathList,
     ) -> ThreadMetadata {
         ThreadMetadata {
@@ -1760,8 +1759,8 @@ mod tests {
     async fn test_store_initializes_cache_from_database(cx: &mut TestAppContext) {
         let first_paths = PathList::new(&[Path::new("/project-a")]);
         let second_paths = PathList::new(&[Path::new("/project-b")]);
-        let now = Utc::now();
-        let older = now - chrono::Duration::seconds(1);
+        let now = Timestamp::now();
+        let older = now - SignedDuration::from_secs(1);
 
         let thread = std::thread::current();
         let test_name = thread.name().unwrap_or("unknown_test");
@@ -1831,8 +1830,8 @@ mod tests {
 
         let first_paths = PathList::new(&[Path::new("/project-a")]);
         let second_paths = PathList::new(&[Path::new("/project-b")]);
-        let initial_time = Utc::now();
-        let updated_time = initial_time + chrono::Duration::seconds(1);
+        let initial_time = Timestamp::now();
+        let updated_time = initial_time + SignedDuration::from_secs(1);
 
         let initial_metadata = make_metadata(
             "session-1",
@@ -1959,15 +1958,15 @@ mod tests {
 
         let project_a_paths = PathList::new(&[Path::new("/project-a")]);
         let project_b_paths = PathList::new(&[Path::new("/project-b")]);
-        let now = Utc::now();
+        let now = Timestamp::now();
 
         let existing_metadata = ThreadMetadata {
             thread_id: ThreadId::new(),
             session_id: Some(acp::SessionId::new("a-session-0")),
             agent_id: agent::ZZZ_AGENT_ID.clone(),
             title: Some("Existing Metadata".into()),
-            updated_at: now - chrono::Duration::seconds(10),
-            created_at: Some(now - chrono::Duration::seconds(10)),
+            updated_at: now - SignedDuration::from_secs(10),
+            created_at: Some(now - SignedDuration::from_secs(10)),
             interacted_at: None,
             worktree_paths: WorktreePaths::from_folder_paths(&project_a_paths),
             remote_connection: None,
@@ -1993,19 +1992,19 @@ mod tests {
                 "a-session-1",
                 "Thread A1",
                 project_a_paths.clone(),
-                now + chrono::Duration::seconds(1),
+                now + SignedDuration::from_secs(1),
             ),
             (
                 "b-session-0",
                 "Thread B0",
                 project_b_paths.clone(),
-                now + chrono::Duration::seconds(2),
+                now + SignedDuration::from_secs(2),
             ),
             (
                 "projectless",
                 "Projectless",
                 PathList::default(),
-                now + chrono::Duration::seconds(3),
+                now + SignedDuration::from_secs(3),
             ),
         ];
 
@@ -2084,7 +2083,7 @@ mod tests {
         init_test(cx);
 
         let project_paths = PathList::new(&[Path::new("/project-a")]);
-        let existing_updated_at = Utc::now();
+        let existing_updated_at = Timestamp::now();
 
         let existing_metadata = ThreadMetadata {
             thread_id: ThreadId::new(),
@@ -2114,7 +2113,7 @@ mod tests {
                     acp::SessionId::new("existing-session"),
                     make_db_thread(
                         "Updated Native Thread Title",
-                        existing_updated_at + chrono::Duration::seconds(1),
+                        existing_updated_at + SignedDuration::from_secs(1),
                     ),
                     project_paths.clone(),
                     cx,
@@ -2146,7 +2145,7 @@ mod tests {
 
         let folder_paths =
             PathList::new(&[Path::new("/remote-project-thread-remote-backfill-test")]);
-        let updated_at = Utc::now();
+        let updated_at = Timestamp::now();
         let metadata = make_metadata(
             "remote-session",
             "Remote Thread",
@@ -2223,7 +2222,7 @@ mod tests {
 
         let project_a_paths = PathList::new(&[Path::new("/project-a")]);
         let project_b_paths = PathList::new(&[Path::new("/project-b")]);
-        let now = Utc::now();
+        let now = Timestamp::now();
 
         // Create 7 threads for project A and 3 for project B
         let mut threads_to_save = Vec::new();
@@ -2232,7 +2231,7 @@ mod tests {
                 format!("a-session-{i}"),
                 format!("Thread A{i}"),
                 project_a_paths.clone(),
-                now + chrono::Duration::seconds(i as i64),
+                now + SignedDuration::from_secs(i as i64),
             ));
         }
         for i in 0..3 {
@@ -2240,7 +2239,7 @@ mod tests {
                 format!("b-session-{i}"),
                 format!("Thread B{i}"),
                 project_b_paths.clone(),
-                now + chrono::Duration::seconds(i as i64),
+                now + SignedDuration::from_secs(i as i64),
             ));
         }
 
@@ -2321,13 +2320,13 @@ mod tests {
         // save path in this crate), then park to make sure the rows are on
         // disk and `ThreadStore`'s in-memory cache is populated.
         let project_paths = PathList::new(&[Path::new("/project-a")]);
-        let now = Utc::now();
+        let now = Timestamp::now();
         for i in 0..3 {
             let save_task = cx.update(|cx| {
                 let thread_store = ThreadStore::global(cx);
                 let session_id = format!("legacy-session-{i}");
                 let title = format!("Legacy Thread {i}");
-                let updated_at = now + chrono::Duration::seconds(i as i64);
+                let updated_at = now + SignedDuration::from_secs(i as i64);
                 let paths = project_paths.clone();
                 thread_store.update(cx, |store, cx| {
                     store.save_thread(
@@ -2605,7 +2604,7 @@ mod tests {
 
     #[test]
     fn test_dedup_db_operations_keeps_latest_operation_for_session() {
-        let now = Utc::now();
+        let now = Timestamp::now();
 
         let meta = make_metadata("session-1", "First Thread", now, PathList::default());
         let thread_id = meta.thread_id;
@@ -2619,8 +2618,8 @@ mod tests {
 
     #[test]
     fn test_dedup_db_operations_keeps_latest_insert_for_same_session() {
-        let now = Utc::now();
-        let later = now + chrono::Duration::seconds(1);
+        let now = Timestamp::now();
+        let later = now + SignedDuration::from_secs(1);
 
         let old_metadata = make_metadata("session-1", "Old Title", now, PathList::default());
         let shared_thread_id = old_metadata.thread_id;
@@ -2640,7 +2639,7 @@ mod tests {
 
     #[test]
     fn test_dedup_db_operations_preserves_distinct_sessions() {
-        let now = Utc::now();
+        let now = Timestamp::now();
 
         let metadata1 = make_metadata("session-1", "First Thread", now, PathList::default());
         let metadata2 = make_metadata("session-2", "Second Thread", now, PathList::default());
@@ -2659,7 +2658,7 @@ mod tests {
         init_test(cx);
 
         let paths = PathList::new(&[Path::new("/project-a")]);
-        let now = Utc::now();
+        let now = Timestamp::now();
         let metadata = make_metadata("session-1", "Thread 1", now, paths.clone());
         let thread_id = metadata.thread_id;
 
@@ -2742,13 +2741,13 @@ mod tests {
         init_test(cx);
 
         let paths = PathList::new(&[Path::new("/project-a")]);
-        let now = Utc::now();
+        let now = Timestamp::now();
 
         let metadata1 = make_metadata("session-1", "Active Thread", now, paths.clone());
         let metadata2 = make_metadata(
             "session-2",
             "Archived Thread",
-            now - chrono::Duration::seconds(1),
+            now - SignedDuration::from_secs(1),
             paths.clone(),
         );
         let session2_thread_id = metadata2.thread_id;
@@ -2798,7 +2797,7 @@ mod tests {
 
         let main_paths = PathList::new(&[Path::new("/project-a")]);
         let linked_paths = PathList::new(&[Path::new("/wt-feature")]);
-        let now = Utc::now();
+        let now = Timestamp::now();
 
         let remote_a = RemoteConnectionOptions::Mock(remote::MockConnectionOptions { id: 1 });
         let remote_b = RemoteConnectionOptions::Mock(remote::MockConnectionOptions { id: 2 });
@@ -2809,7 +2808,7 @@ mod tests {
         let mut remote_a_thread = make_metadata(
             "remote-a-session",
             "Remote A Thread",
-            now - chrono::Duration::seconds(1),
+            now - SignedDuration::from_secs(1),
             main_paths.clone(),
         );
         remote_a_thread.remote_connection = Some(remote_a.clone());
@@ -2817,7 +2816,7 @@ mod tests {
         let mut remote_b_thread = make_metadata(
             "remote-b-session",
             "Remote B Thread",
-            now - chrono::Duration::seconds(2),
+            now - SignedDuration::from_secs(2),
             main_paths.clone(),
         );
         remote_b_thread.remote_connection = Some(remote_b.clone());
@@ -2844,8 +2843,8 @@ mod tests {
             session_id: Some(acp::SessionId::new("remote-linked")),
             agent_id: agent::ZZZ_AGENT_ID.clone(),
             title: Some("Remote Linked".into()),
-            updated_at: now - chrono::Duration::seconds(1),
-            created_at: Some(now - chrono::Duration::seconds(1)),
+            updated_at: now - SignedDuration::from_secs(1),
+            created_at: Some(now - SignedDuration::from_secs(1)),
             interacted_at: None,
             worktree_paths: linked_worktree_paths,
             remote_connection: Some(remote_a.clone()),
@@ -2909,19 +2908,19 @@ mod tests {
         init_test(cx);
 
         let paths = PathList::new(&[Path::new("/project-a")]);
-        let now = Utc::now();
+        let now = Timestamp::now();
 
         let m1 = make_metadata("session-1", "Thread One", now, paths.clone());
         let m2 = make_metadata(
             "session-2",
             "Thread Two",
-            now - chrono::Duration::seconds(1),
+            now - SignedDuration::from_secs(1),
             paths.clone(),
         );
         let m3 = make_metadata(
             "session-3",
             "Thread Three",
-            now - chrono::Duration::seconds(2),
+            now - SignedDuration::from_secs(2),
             paths,
         );
 
@@ -2964,7 +2963,7 @@ mod tests {
         init_test(cx);
 
         let paths = PathList::new(&[Path::new("/project-a")]);
-        let now = Utc::now();
+        let now = Timestamp::now();
         let metadata = make_metadata("session-1", "Thread 1", now, paths.clone());
         let thread_id = metadata.thread_id;
 
@@ -3048,7 +3047,7 @@ mod tests {
         init_test(cx);
 
         let paths = PathList::new(&[Path::new("/project-a")]);
-        let now = Utc::now();
+        let now = Timestamp::now();
         let metadata = make_metadata("session-1", "Thread 1", now, paths);
         let thread_id = metadata.thread_id;
 
@@ -3233,7 +3232,12 @@ mod tests {
             Path::new("/projects/worktree-b"),
             Path::new("/other/unrelated"),
         ]);
-        let meta = make_metadata("session-multi", "Multi Thread", Utc::now(), original_paths);
+        let meta = make_metadata(
+            "session-multi",
+            "Multi Thread",
+            Timestamp::now(),
+            original_paths,
+        );
         let thread_id = meta.thread_id;
 
         store.update(cx, |store, cx| {
@@ -3271,7 +3275,12 @@ mod tests {
 
         let original_paths =
             PathList::new(&[Path::new("/projects/worktree-a"), Path::new("/other/path")]);
-        let meta = make_metadata("session-partial", "Partial", Utc::now(), original_paths);
+        let meta = make_metadata(
+            "session-partial",
+            "Partial",
+            Timestamp::now(),
+            original_paths,
+        );
         let thread_id = meta.thread_id;
 
         store.update(cx, |store, cx| {
