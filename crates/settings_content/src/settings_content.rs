@@ -113,7 +113,7 @@ pub enum HideMouseMode {
 }
 
 #[with_fallible_options]
-#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Debug, PartialEq, Default, Clone, Serialize, JsonSchema, MergeFrom)]
 pub struct SettingsContent {
     #[serde(flatten)]
     pub project: ProjectSettingsContent,
@@ -270,6 +270,19 @@ pub struct SettingsContent {
     pub terminal_mode: Option<TerminalModeSettingsContent>,
 }
 
+fallible_options::flattened_deserialize!(SettingsContent {
+    sections: { project, theme, extension, workspace, editor, remote },
+    options: {
+        file_finder, git_panel, telegram_panel, telegram, tabs, tab_bar, tab_switcher, status_bar,
+        preview_tabs, agent, agent_servers, audio, auto_update, base_keymap, debugger, database,
+        diagnostics, git, global_lsp_settings, image_viewer, markdown_preview, repl, helix_mode,
+        hide_mouse, journal, log, line_indicator_format, outline_panel, project_panel, node, proxy,
+        server_url, credentials_url, session, terminal, title_bar, vim_mode, which_key, vim,
+        modeline_lines, feature_flags, instrumentation, terminal_mode,
+    },
+    defaults: {},
+});
+
 /// Configuration for developer-oriented instrumentation tools that collect
 /// diagnostic data about a running ZZZ instance.
 #[with_fallible_options]
@@ -410,7 +423,7 @@ pub struct SettingsProfile {
 }
 
 #[with_fallible_options]
-#[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize, JsonSchema, MergeFrom)]
+#[derive(Debug, Default, PartialEq, Clone, Serialize, JsonSchema, MergeFrom)]
 pub struct UserSettingsContent {
     #[serde(flatten)]
     pub content: Box<SettingsContent>,
@@ -424,6 +437,12 @@ pub struct UserSettingsContent {
     #[serde(default)]
     pub profiles: IndexMap<String, SettingsProfile>,
 }
+
+fallible_options::flattened_deserialize!(UserSettingsContent {
+    sections: { content, release_channel_overrides, platform_overrides },
+    options: {},
+    defaults: { profiles },
+});
 
 pub struct ExtensionsSettingsContent {
     pub all_languages: AllLanguageSettingsContent,
