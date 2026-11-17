@@ -32,6 +32,7 @@ use ui::CopyButton;
 use util::maybe;
 
 use std::borrow::Cow;
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::mem;
 use std::ops::Range;
@@ -44,12 +45,13 @@ use collections::{HashMap, HashSet};
 use gpui::{
     AnyElement, App, BorderStyle, Bounds, ClipboardItem, CursorStyle, DispatchPhase, Edges, Entity,
     FocusHandle, Focusable, FontStyle, FontWeight, GlobalElementId, Hitbox, Hsla, Image,
-    ImageFormat, ImageSource, KeyContext, Length, MouseButton, MouseDownEvent, MouseEvent,
-    MouseMoveEvent, MouseUpEvent, Pixels, Point, ScrollHandle, Stateful, StrikethroughStyle,
-    StyleRefinement, StyledText, Subscription, Task, TextAlign, TextLayout, TextRun, TextStyle,
-    TextStyleRefinement, WrappedLineLayout, actions, img, point, quad, relative,
+    ImageFormat, ImageSource, InputHandler, KeyContext, Length, MouseButton, MouseDownEvent,
+    MouseEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, ScrollHandle, Stateful,
+    StrikethroughStyle, StyleRefinement, StyledText, Subscription, Task, TextAlign, TextLayout,
+    TextRun, TextStyle, TextStyleRefinement, UTF16Selection, WrappedLineLayout, actions, img,
+    point, quad, relative, size,
 };
-use language::{CharClassifier, Language, LanguageRegistry, Rope};
+use language::{Bias, CharClassifier, Language, LanguageRegistry, OffsetUtf16, Rope};
 use parser::CodeBlockMetadata;
 use parser::{
     MarkdownEvent, MarkdownTag, MarkdownTagEnd, ParsedMetadataBlock, parse_links_only,
@@ -1725,6 +1727,7 @@ pub struct MarkdownElement {
     markdown: Entity<Markdown>,
     style: MarkdownStyle,
     code_block_renderer: CodeBlockRenderer,
+    input_focus_handle: Option<FocusHandle>,
     on_url_click: Option<Rc<dyn Fn(SharedString, &mut Window, &mut App)>>,
     code_span_link: Option<CodeSpanLinkCallback>,
     on_source_click: Option<SourceClickCallback>,
@@ -1812,6 +1815,7 @@ impl MarkdownElement {
                 wrap_button_visibility: WrapButtonVisibility::Hidden,
                 border: false,
             },
+            input_focus_handle: None,
             on_url_click: None,
             code_span_link: None,
             on_source_click: None,
@@ -1824,6 +1828,13 @@ impl MarkdownElement {
             #[cfg(test)]
             on_render: None,
         }
+    }
+
+    /// Registers a focus handle whose set text is exposed to the platform input
+    /// handler, so macOS Look Up can read the rendered Markdown.
+    pub fn input_focus_handle(mut self, focus_handle: FocusHandle) -> Self {
+        self.input_focus_handle = Some(focus_handle);
+        self
     }
 
     /// Override paragraph line breaking for this element.
@@ -3588,6 +3599,10 @@ impl Element for MarkdownElement {
 
         let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
         rendered_markdown.element.prepaint(window, cx);
+        rendered_markdown
+            .text
+            .visible_bounds
+            .set(Some(bounds.intersect(&window.content_mask().bounds)));
         self.autoscroll(&rendered_markdown.text, window, cx);
         hitbox
     }
@@ -3605,6 +3620,23 @@ impl Element for MarkdownElement {
         let mut context = KeyContext::default();
         context.add("Markdown");
         window.set_key_context(context);
+
+        let markdown_focus_handle = self.markdown.read(cx).focus_handle.clone();
+        let input_focus_handle = if markdown_focus_handle.is_focused(window) {
+            Some(markdown_focus_handle)
+        } else {
+            self.input_focus_handle
+                .clone()
+                .filter(|focus_handle| focus_handle.is_focused(window))
+        };
+        if let Some(input_focus_handle) = input_focus_handle {
+            window.handle_input(
+                &input_focus_handle,
+                MarkdownInputHandler::new(self.markdown.clone(), rendered_markdown.text.clone()),
+                cx,
+            );
+        }
+
         window.on_action(std::any::TypeId::of::<crate::Copy>(), {
             let entity = self.markdown.clone();
             let text = rendered_markdown.text.clone();
@@ -4443,6 +4475,7 @@ impl MarkdownElementBuilder {
                 lines: self.rendered_lines.into(),
                 links: self.rendered_links.into(),
                 footnote_refs: self.rendered_footnote_refs.into(),
+                visible_bounds: Rc::new(Cell::new(None)),
             },
         }
     }
@@ -4643,6 +4676,10 @@ struct RenderedText {
     lines: Rc<[RenderedLine]>,
     links: Rc<[RenderedLink]>,
     footnote_refs: Rc<[RenderedFootnoteRef]>,
+    /// Clip region recorded during prepaint, so hit-testing cannot resolve
+    /// text that is scrolled out of the viewport. Shared so that a clone taken
+    /// before prepaint observes the bounds recorded afterwards.
+    visible_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
 }
 
 struct WrappedLineSegment {
@@ -4822,6 +4859,83 @@ impl RenderedText {
                 row_top += line_height;
             }
         }
+    }
+
+    fn utf16_index_for_source_index(&self, source_index: usize) -> usize {
+        self.text_for_range(0..source_index).encode_utf16().count()
+    }
+
+    fn utf16_range_for_source_range(&self, range: Range<usize>) -> Range<usize> {
+        self.utf16_index_for_source_index(range.start)..self.utf16_index_for_source_index(range.end)
+    }
+
+    fn source_index_for_utf16_index(&self, utf16_index: usize) -> usize {
+        let mut line_start_utf16 = 0;
+        let mut last_source_end = 0;
+
+        for (line_index, line) in self.lines.iter().enumerate() {
+            let line_text = line.layout.text();
+            let line_utf16_len = line_text.encode_utf16().count();
+            let line_end_utf16 = line_start_utf16 + line_utf16_len;
+            last_source_end = line.source_end;
+
+            if utf16_index <= line_end_utf16 {
+                let local_utf16_index = utf16_index.saturating_sub(line_start_utf16);
+                let rendered_text = Rope::from(line_text.as_str());
+                let rendered_index = rendered_text.offset_utf16_to_offset(
+                    rendered_text.clip_offset_utf16(OffsetUtf16(local_utf16_index), Bias::Left),
+                );
+                return line.source_index_for_rendered_index(rendered_index);
+            }
+
+            line_start_utf16 = line_end_utf16;
+            if line_index + 1 < self.lines.len() {
+                line_start_utf16 += 1;
+            }
+        }
+
+        last_source_end
+    }
+
+    fn source_range_for_utf16_range(&self, range_utf16: Range<usize>) -> Range<usize> {
+        self.source_index_for_utf16_index(range_utf16.start)
+            ..self.source_index_for_utf16_index(range_utf16.end)
+    }
+
+    fn text_for_utf16_range(
+        &self,
+        range_utf16: Range<usize>,
+        adjusted_range: &mut Option<Range<usize>>,
+    ) -> String {
+        let mut rendered_text = String::new();
+        for (line_index, line) in self.lines.iter().enumerate() {
+            if line_index > 0 {
+                rendered_text.push('\n');
+            }
+            rendered_text.push_str(&line.layout.text());
+        }
+
+        let rendered_text = Rope::from(rendered_text);
+        let start = rendered_text.clip_offset_utf16(OffsetUtf16(range_utf16.start), Bias::Left);
+        let end = rendered_text.clip_offset_utf16(OffsetUtf16(range_utf16.end), Bias::Right);
+
+        if (start.0..end.0) != range_utf16 {
+            adjusted_range.replace(start.0..end.0);
+        }
+
+        rendered_text
+            .chunks_in_range(
+                rendered_text.offset_utf16_to_offset(start)
+                    ..rendered_text.offset_utf16_to_offset(end),
+            )
+            .collect()
+    }
+
+    fn source_index_for_visible_position(&self, position: Point<Pixels>) -> Option<usize> {
+        if !self.visible_bounds.get()?.contains(&position) {
+            return None;
+        }
+        self.source_index_for_position(position).ok()
     }
 
     fn source_index_for_position(&self, position: Point<Pixels>) -> Result<usize, usize> {
@@ -5004,11 +5118,125 @@ impl RenderedText {
     }
 }
 
+struct MarkdownInputHandler {
+    markdown: Entity<Markdown>,
+    rendered_text: RenderedText,
+}
+
+impl MarkdownInputHandler {
+    fn new(markdown: Entity<Markdown>, rendered_text: RenderedText) -> Self {
+        Self {
+            markdown,
+            rendered_text,
+        }
+    }
+}
+
+impl InputHandler for MarkdownInputHandler {
+    fn selected_text_range(
+        &mut self,
+        _: bool,
+        _: &mut Window,
+        cx: &mut App,
+    ) -> Option<UTF16Selection> {
+        self.markdown.update(cx, |markdown, _cx| {
+            let range = markdown.selection.start..markdown.selection.end;
+            Some(UTF16Selection {
+                range: self.rendered_text.utf16_range_for_source_range(range),
+                reversed: markdown.selection.reversed,
+            })
+        })
+    }
+
+    fn marked_text_range(&mut self, _: &mut Window, _: &mut App) -> Option<Range<usize>> {
+        None
+    }
+
+    fn text_for_range(
+        &mut self,
+        range_utf16: Range<usize>,
+        adjusted_range: &mut Option<Range<usize>>,
+        _: &mut Window,
+        _: &mut App,
+    ) -> Option<String> {
+        if range_utf16.start > range_utf16.end {
+            return None;
+        }
+
+        Some(
+            self.rendered_text
+                .text_for_utf16_range(range_utf16, adjusted_range),
+        )
+    }
+
+    fn replace_text_in_range(
+        &mut self,
+        _: Option<Range<usize>>,
+        _: &str,
+        _: &mut Window,
+        _: &mut App,
+    ) {
+    }
+
+    fn replace_and_mark_text_in_range(
+        &mut self,
+        _: Option<Range<usize>>,
+        _: &str,
+        _: Option<Range<usize>>,
+        _: &mut Window,
+        _: &mut App,
+    ) {
+    }
+
+    fn unmark_text(&mut self, _: &mut Window, _: &mut App) {}
+
+    fn bounds_for_range(
+        &mut self,
+        range_utf16: Range<usize>,
+        _: &mut Window,
+        _: &mut App,
+    ) -> Option<Bounds<Pixels>> {
+        let source_range = self.rendered_text.source_range_for_utf16_range(range_utf16);
+        self.rendered_text
+            .bounds_for_source_range(source_range.clone())
+            .into_iter()
+            .next()
+            .or_else(|| {
+                self.rendered_text
+                    .position_for_source_index(source_range.start)
+                    .map(|(position, line_height)| Bounds {
+                        origin: position,
+                        size: size(px(0.), line_height),
+                    })
+            })
+    }
+
+    fn character_index_for_point(
+        &mut self,
+        point: Point<Pixels>,
+        _: &mut Window,
+        _: &mut App,
+    ) -> Option<usize> {
+        let source_index = self
+            .rendered_text
+            .source_index_for_visible_position(point)?;
+        Some(
+            self.rendered_text
+                .utf16_index_for_source_index(source_index),
+        )
+    }
+
+    fn accepts_text_input(&mut self, _: &mut Window, _: &mut App) -> bool {
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use gpui::{RenderImage, TestAppContext, UpdateGlobal, VisualTestContext, size};
     use language::{Language, LanguageConfig, LanguageMatcher};
+    use std::cell::RefCell;
     use std::sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -5121,6 +5349,142 @@ mod tests {
                 (6, 84),
             ]],
         );
+    }
+
+    #[gpui::test]
+    fn test_lookup_rejects_clipped_text(cx: &mut TestAppContext) {
+        struct MarkdownTestView {
+            markdown: Entity<Markdown>,
+            style: MarkdownStyle,
+            rendered_text: Rc<RefCell<Option<RenderedText>>>,
+        }
+
+        impl Render for MarkdownTestView {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                let rendered_text = self.rendered_text.clone();
+                MarkdownElement::new(self.markdown.clone(), self.style.clone())
+                    .on_render(move |text| *rendered_text.borrow_mut() = Some(text))
+                    .code_block_renderer(CodeBlockRenderer::Default {
+                        copy_button_visibility: CopyButtonVisibility::Hidden,
+                        wrap_button_visibility: WrapButtonVisibility::Hidden,
+                        border: false,
+                    })
+            }
+        }
+
+        struct ClippedMarkdownView(Entity<MarkdownTestView>);
+
+        impl Render for ClippedMarkdownView {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                let mut container = div()
+                    .id("clipped-markdown")
+                    .w(px(300.))
+                    .h(px(80.))
+                    .overflow_y_scroll();
+                container.style().restrict_scroll_to_axis = Some(true);
+                container.child(self.0.clone())
+            }
+        }
+
+        ensure_theme_initialized(cx);
+        let source = indoc::indoc! {r#"
+            ```txt
+            one_extremely_long_code_line_that_overflows_the_viewport_and_keeps_going_and_going
+            ```
+
+            first paragraph
+
+            second paragraph
+
+            last paragraph
+        "#};
+        let markdown = cx.new(|cx| Markdown::new(source.into(), None, None, cx));
+        cx.run_until_parked();
+        let rendered_text = Rc::new(RefCell::new(None));
+        let (_, cx) = cx.add_window_view({
+            let rendered_text = rendered_text.clone();
+            let markdown = markdown.clone();
+            move |_, cx| {
+                ClippedMarkdownView(cx.new(|_| MarkdownTestView {
+                    markdown,
+                    style: MarkdownStyle {
+                        code_block_overflow_x_scroll: true,
+                        ..MarkdownStyle::default()
+                    },
+                    rendered_text,
+                }))
+            }
+        });
+        cx.simulate_resize(size(px(1000.), px(200.)));
+        cx.run_until_parked();
+        let rendered = rendered_text.borrow().clone().expect("rendered");
+        assert!(
+            rendered.visible_bounds.get().is_some(),
+            "prepaint must record the clip region for hit-testing"
+        );
+        let first_line = &rendered.lines[0];
+        let clipped_character_index = 60;
+        let horizontal_clipped_position = first_line
+            .layout
+            .position_for_index(clipped_character_index)
+            .expect("clipped character position")
+            + point(px(0.1), first_line.layout.line_height() / 2.);
+        assert!(
+            horizontal_clipped_position.x > px(300.),
+            "test point must lie outside viewport: {horizontal_clipped_position:?}"
+        );
+        assert!(
+            horizontal_clipped_position.x < px(1000.),
+            "test point must remain inside the window"
+        );
+        let visible_character_index = 2;
+        let visible_position = first_line
+            .layout
+            .position_for_index(visible_character_index)
+            .expect("visible character position")
+            + point(px(0.1), first_line.layout.line_height() / 2.);
+        let last_line = rendered.lines.last().expect("last paragraph");
+        let vertical_clipped_position = last_line
+            .layout
+            .position_for_index(visible_character_index)
+            .expect("paragraph position")
+            + point(px(0.1), last_line.layout.line_height() / 2.);
+        assert!(vertical_clipped_position.y > px(80.));
+        assert!(vertical_clipped_position.y < px(200.));
+
+        let mut handler = MarkdownInputHandler::new(markdown.clone(), rendered);
+        assert_eq!(
+            cx.update(|window, cx| handler.character_index_for_point(
+                horizontal_clipped_position,
+                window,
+                cx
+            )),
+            None,
+            "point outside visible viewport must not expose clipped text: {horizontal_clipped_position:?}"
+        );
+        assert_eq!(
+            cx.update(|window, cx| handler.character_index_for_point(
+                vertical_clipped_position,
+                window,
+                cx
+            )),
+            None,
+        );
+        assert_eq!(
+            cx.update(|window, cx| handler.character_index_for_point(visible_position, window, cx)),
+            Some(visible_character_index),
+        );
+    }
+
+    #[gpui::test]
+    fn test_text_for_utf16_range_uses_rendered_text(cx: &mut TestAppContext) {
+        let rendered = render_markdown("**世界** 😄", cx);
+        let mut adjusted_range = None;
+        assert_eq!(
+            rendered.text_for_utf16_range(3..4, &mut adjusted_range),
+            "😄"
+        );
+        assert_eq!(adjusted_range, Some(3..5));
     }
 
     fn render_markdown(markdown: &str, cx: &mut TestAppContext) -> RenderedText {
