@@ -550,6 +550,7 @@ mod tests {
                             token_type: TokenType(0),
                             token_modifiers: 0,
                             server_id: LanguageServerId(0),
+                            precedence: 0,
                         };
                         Arc::make_mut(&mut display_map.semantic_token_highlights).insert(
                             snapshot.remote_id(),
