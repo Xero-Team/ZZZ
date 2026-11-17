@@ -317,17 +317,20 @@ impl Conversation {
         let PermissionOptions::DropdownWithPatterns { patterns, .. } = request.options else {
             return;
         };
-        let pattern_count = patterns.len();
+        if pattern_index >= patterns.len() {
+            return;
+        }
         match self.permission_selections.get_mut(&request_id) {
             Some(selection @ thread_view::PermissionSelection::SelectedPatterns(_)) => {
                 selection.toggle_pattern(pattern_index);
+                if !selection.has_any_checked_patterns() {
+                    self.permission_selections.remove(&request_id);
+                }
             }
             _ => {
                 self.permission_selections.insert(
                     request_id,
-                    thread_view::PermissionSelection::SelectedPatterns(
-                        (0..pattern_count).collect(),
-                    ),
+                    thread_view::PermissionSelection::SelectedPatterns(vec![pattern_index]),
                 );
             }
         }
@@ -8025,6 +8028,78 @@ pub(crate) mod tests {
                 "Should have selected index 0"
             );
         });
+    }
+
+    #[gpui::test]
+    async fn test_toggle_command_pattern_toggles_only_clicked_pattern(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        let tool_call_id = acp::ToolCallId::new("pipeline-1");
+        let tool_call =
+            acp::ToolCall::new(tool_call_id.clone(), "Run `ls && git status && git log`");
+        // A chained command gets one pattern row per sub-command (`ls`, `git status`, `git log`).
+        let permission_options = ToolPermissionContext::new(
+            TerminalTool::NAME,
+            vec!["ls && git status && git log".to_string()],
+        )
+        .build_permission_options();
+        let connection =
+            StubAgentConnection::new().with_permission_requests(HashMap::from_iter([(
+                tool_call_id.clone(),
+                permission_options,
+            )]));
+        connection.set_next_prompt_updates(vec![acp::SessionUpdate::ToolCall(tool_call)]);
+
+        let (conversation_view, cx) =
+            setup_conversation_view(StubAgentServer::new(connection), cx).await;
+
+        message_editor(&conversation_view, cx).update_in(cx, |editor, window, cx| {
+            editor.set_text("run these", window, cx);
+        });
+        active_thread(&conversation_view, cx)
+            .update_in(cx, |view, window, cx| view.send(window, cx));
+        cx.run_until_parked();
+
+        let (session_id, conversation, request_id) = active_thread(&conversation_view, cx)
+            .read_with(cx, |view, cx| {
+                let session_id = view.thread.read(cx).session_id().clone();
+                let conversation = view.conversation.clone();
+                let request_id = *conversation
+                    .read(cx)
+                    .permission_requests
+                    .get(&session_id)
+                    .and_then(|requests| requests.first())
+                    .expect("a tool authorization request should be pending");
+                (session_id, conversation, request_id)
+            });
+
+        let toggle = |pattern_index, cx: &mut VisualTestContext| {
+            conversation.update(cx, |conversation, cx| {
+                conversation.toggle_permission_pattern(&session_id, request_id, pattern_index, cx);
+                match conversation.permission_selections.get(&request_id) {
+                    Some(thread_view::PermissionSelection::SelectedPatterns(checked)) => {
+                        let mut checked = checked.clone();
+                        checked.sort();
+                        Some(checked)
+                    }
+                    Some(thread_view::PermissionSelection::Choice(_)) => {
+                        panic!("toggling a pattern must not select a dropdown choice")
+                    }
+                    None => None,
+                }
+            })
+        };
+
+        // An index with no matching row must not enter pattern mode.
+        assert_eq!(toggle(99, cx), None);
+        // The first click on a row other than the first checks only that row.
+        assert_eq!(toggle(1, cx), Some(vec![1]));
+        // Later clicks add only their own row...
+        assert_eq!(toggle(0, cx), Some(vec![0, 1]));
+        // ...and remove only their own row.
+        assert_eq!(toggle(1, cx), Some(vec![0]));
+        // Unchecking the last row goes back to the default selection.
+        assert_eq!(toggle(0, cx), None);
     }
 
     #[gpui::test]
