@@ -9,3 +9,37 @@
 # Format: <sha-prefix>  <reason>
 
 66b6bbb6c8  The rejection still covers upstream's `crates/zed` release tooling; the 1.28.0 bump adopted only the app version number.
+
+# Provider and edit-prediction rows absorbed before the ACP-only cleanup.
+# `91a2911a68` and `75e7e83732` deleted every path those commits touched,
+# so the decision rows were corrected from A/B to C on 2026-11-17 and the
+# SHAs entered the ledger (issue #67). The history keeps the absorption
+# trailers, which is why each SHA needs an entry here. Do not delete these
+# lines unless the cleanup is reverted.
+6dcb0e57  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+65308f40  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+a4916265  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+2cb57850  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+24e25552  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+30f73707  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+78712609  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+1b86941c  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+4c4b19a2  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+a1cc2548  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+693140ab  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+38c5dd7c  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+081a45f6  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+283460f5  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+28e52a28  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+c91e24a9  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+10fb4986  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+16c9aa7e  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+75e9bb2f  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+bc6dd34d  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+9e636045  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+53fcf4be  Absorbed before the ACP-only provider cleanup; the absorbed code no longer exists.
+
+# The ACP dedicated-thread port was reverted after it landed.
+# `dcafe24237` still carries the absorption trailer, but `16d51d6962`
+# reverted it and nothing re-ported it, so the row is `C` (issue #65).
+9bde578e  Port reverted by 16d51d6962; the helper it needs is absent locally.

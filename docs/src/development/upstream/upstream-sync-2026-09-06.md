@@ -46,7 +46,7 @@ that landed on `main`. No class changed.
 | ba6b83f8 | C     | --                     | Window-title template rewrite spans collab indicators, MultiWorkspace-divergent workspace.rs, and lockfile churn. |
 | 510a624a | A     | e1e322c572             | Cherry-picked with `-x -s`.                                                                                       |
 | e0ae50d1 | C     | --                     | Unused public `KeyBinding::default_visibility` with no ZZZ caller.                                                |
-| c91e24a9 | B     | 68cbdae16f             | Register Gemini 3.8 Flash on local google_ai APIs; omit thinking-level helpers ZZZ does not have.                 |
+| c91e24a9 | C     | 68cbdae16f             | Absorbed by `68cbdae16f`; `91a2911a68` deleted the crate.                                                         |
 | c8c07aea | C     | --                     | Native Agent Panel `disable_ai` menu wiring.                                                                      |
 | 9bda6b4e | B     | f5b69cf392             | Disable WebKit canvas touch callouts on ZZZ's per-property gpui_web style path.                                   |
 
@@ -130,3 +130,12 @@ NOT RUN cargo fmt --check (known edition-2024 formatting drift on this host)
 
 The reviewed baseline is `9bda6b4e0342f22680bc1e7fcd847f4697c48874`.
 Work remains on `sync/upstream-2026-09-06` and has not been merged to `main`.
+
+## Corrections
+
+2026-11-17: one row in this report move from `A`/`B` to `C`. The recorded
+local commits still exist and are ancestors of `main`, but `91a2911a68` deleted the crate it touched, so the
+absorbed behaviour is gone under the ACP-only policy. The local commits stay in
+the disposition text, and the upstream SHAs now enter
+`upstream-rejected.tsv` so a later batch does not re-triage them from scratch.
+Tracked by issue #67.

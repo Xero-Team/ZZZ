@@ -24,7 +24,7 @@ covered `d7f28899..25185402` (3 A, 5 B, 12 C). The third covered
 `739fdbef..06e889c4` (4 A, 8 B, 8 C). The seventh covered `06e889c4..9d956a09`
 (1 A, 4 B, 15 C). The eighth covered `9d956a09..0d08af1e` (7 A, 4 B, 9 C). The
 ninth batch covered the remaining 11 commits through the live head (4 A, 1 B,
-6 C). Totals: 35 A, 46 B, and 90 C across 171 commits. The reviewed baseline
+6 C). Totals: 35 A, 43 B, and 93 C across 171 commits. The reviewed baseline
 is now `b961b4950febbc050081554bafe976b5d1b93f39`; 0 commits remain through
 the queried live head.
 
@@ -67,7 +67,7 @@ same pass.
 | d3865b09 | B     | 49910ae7           | macOS path prompts on objc2; `MainThreadMarker::new()` instead of a platform tuple field.         |
 | 290cbcb9 | B     | a11825dc           | Remote `path_to_buffer_id` update on file move; omit conflicting telemetry test.                  |
 | 6ad3c7f2 | C     | --                 | gpui_web keyboard-focus rewrite; `ime_mirror.rs` and related GPUI APIs are absent.                |
-| 9e636045 | B     | bc811a59           | Inline assistant uses `default_model()` fallback.                                                 |
+| 9e636045 | C     | bc811a59           | Absorbed by `bc811a59`; `91a2911a68` deleted the crate.                                           |
 | 86b2cf96 | C     | --                 | Screen-capture `get_sources` needs new `objc2-screen-capture-kit` and `MacPlatform` marker field. |
 | 595d6286 | B     | 288e5a4a           | `comment_empty_lines` on `editor.rs`; omit deleted `input.rs` and vscode.json keymaps.            |
 | 7e0b34ba | C     | --                 | Anthropic `ProviderErrorCategory::PaymentRequired` is absent.                                     |
@@ -143,7 +143,7 @@ same pass.
 | 55a43c22 | B     | 4accd27f           | Document git_panel keys ZZZ ships; skip collab and folder_indicator.                              |
 | 95c0d74b | A     | 4b4db376           | Cherry-picked with `-x -s`.                                                                       |
 | fe1dd2d3 | A     | 366a88b3           | Cherry-picked with `-x -s`.                                                                       |
-| 53fcf4be | B     | 4ba1980d           | DeepSeek Flash 4.1 plus images; omit OpenCode subscription table.                                 |
+| 53fcf4be | C     | 4ba1980d           | Absorbed by `4ba1980d`; `91a2911a68` deleted the crate.                                           |
 | 5c9efb75 | B     | 7797983b           | std Mutex on GPUI queues and web mailbox; omit hello_web tests.                                   |
 | 3c82de74 | A     | --                 | Already equivalent: `.github/CODEOWNERS.hold` is absent.                                          |
 | e4d73588 | C     | --                 | Guild `REVIEWERS.conl` removal.                                                                   |
@@ -188,7 +188,7 @@ same pass.
 | c24e309d | B     | 0699228199         | Relative gpui.rc manifest path; keep local non-Windows OUT_DIR staging.                           |
 | 19096d4c | A     | 35e55715a1         | Cherry-picked with `-x -s`.                                                                       |
 | 74646bf2 | A     | 672b314ef2         | Cherry-picked with `-x -s`.                                                                       |
-| 10fb4986 | B     | 7dd236601d         | GPT-6 Astra catalog plus temperature omit; no ReasoningEffort::Max.                               |
+| 10fb4986 | C     | 7dd236601d         | Absorbed by `7dd236601d`; `91a2911a68` deleted the crate.                                         |
 | 6872711f | C     | --                 | Native Agent Panel terminal-thread double spawn.                                                  |
 | 49276a3d | C     | --                 | GitHub Actions / xtask gate tests on check_style.                                                 |
 | d0ae2f05 | C     | --                 | Native-agent sidebar terminal-thread selection flicker.                                           |
@@ -899,3 +899,12 @@ PASS git diff --check
 NOT RUN macOS / Windows / wasm32 runtime tests
 NOT RUN cargo test --workspace
 ```
+
+## Corrections
+
+2026-11-17: three rows in this report move from `A`/`B` to `C`. The recorded
+local commits still exist and are ancestors of `main`, but `91a2911a68` deleted every crate they touched, so the
+absorbed behaviour is gone under the ACP-only policy. The local commits stay in
+the disposition text, and the upstream SHAs now enter
+`upstream-rejected.tsv` so a later batch does not re-triage them from scratch.
+Tracked by issue #67.

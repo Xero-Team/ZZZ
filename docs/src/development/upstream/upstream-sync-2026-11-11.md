@@ -46,8 +46,8 @@ ZZZ keeps upstream's `crates/zed/` files under `crates/zzz/`, so
 | 912159c7ad | B     | dbcad809f5   | Disambiguates repository names in the repository selector and the panel footer. `GitStore::display_names` and `disambiguated_display_names` landed, and the selector and footer consume them; the selector's local helper functions were kept.                                                                                                |
 | 92cc693f0e | C     | --           | Documents hosted Claude pricing. ZZZ has no `docs/src/account/`; hosted-model docs are rejected.                                                                                                                                                                                                                                              |
 | cffa8d94a8 | B     | 770bd7a166   | Stops which-key from dismissing an open modal. ZZZ's slimmed `which_key.rs` takes the single-line `has_active_modal` check; the upstream workspace-level test harness was omitted as test-only.                                                                                                                                               |
-| 82f2558e17 | C     | --           | Streams the directory check instead of joining all futures. A behaviour-neutral refactor that reshapes three public path APIs ZZZ rewrote in the previous batch and returns the same boolean, so there is no behaviour to gain.                                                                                                               |
-| cd4902bfa2 | C     | --           | Bumps Zed to v1.30.0. Upstream release metadata; ZZZ tracks its own version.                                                                                                                                                                                                                                                                  |
+| 82f2558e17 | C     | --           | Streams the directory check instead of joining all futures. The only behavioural hunk is the `resolve_open_behavior` early exit in `crates/zed/src/zed/open_listener.rs`, and that function has no local counterpart, so there is no behaviour to gain.                                                                                       |
+| cd4902bfa2 | B     | 9e705ee956   | Bumps Zed to v1.30.0. Version follow applied to the `zzz` package and its lockfile entry.                                                                                                                                                                                                                                                     |
 | a19e19440d | C     | --           | Adds a backup Ubuntu package mirror to CI. Upstream CI infra.                                                                                                                                                                                                                                                                                 |
 | 20f87a421d | C     | --           | Rejects unknown fields in the agent grep tool input. ZZZ's `crates/agent/src/tools/` carries only `context_server_registry.rs`; the grep tool is absent locally.                                                                                                                                                                              |
 
@@ -156,10 +156,14 @@ setup; ZZZ's module has no such harness and its tests cover only
 `visibility_for_paths`, `visibility_for_subpaths`, and
 `find_existing_workspace` become `&[impl AsRef<Path>]`, the
 `Vec<PathBuf>` conversion disappears, and `join_all(...).any(...)` becomes a
-`FuturesUnordered` `.any(...)`. The boolean result is identical, and the
-`open_listener` region was rewritten by the previous batch's `597c383bcd` port
-(`preferred_workspace_target`). Reshaping three public signatures for a
-behaviour-neutral micro-optimisation is churn, not absorption.
+`FuturesUnordered` `.any(...)` early exit.
+
+Re-checked 2026-11-17: the three signatures are untouched locally and still take
+`&[PathBuf]` (`crates/project/src/project.rs:2260`, `:2303`,
+`crates/workspace/src/workspace.rs:9180`), so those hunks apply. The blocking
+hunk is the `has_directory` early exit, which lives in `resolve_open_behavior` in
+`crates/zed/src/zed/open_listener.rs`; ZZZ has no such function, so there is no
+call site for the streaming check and nothing to gain from the widening alone.
 
 ## Verification
 

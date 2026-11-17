@@ -22,6 +22,15 @@ BACKFILL = ROOT / "script" / "backfill-upstream-ledger"
 SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
 ABSORBED_RE = re.compile(r"(?:Upstream: |cherry picked from commit )([0-9a-f]{7,40})")
 
+# A disposition that names a crate source path or a Rust symbol is describing a
+# local surface, so binning it as infrastructure hides the real reason.
+INFRA_REASONS = ("upstream-infra", "release-metadata")
+LOCAL_SURFACE_RE = re.compile(
+    r"crates/[a-z_0-9]+/"
+    r"|`[A-Za-z_][A-Za-z_0-9]*(?:::[A-Za-z_0-9]+)+`"
+    r"|`[A-Z][A-Za-z0-9]+`"
+)
+
 # Keep in sync with REASONS in script/backfill-upstream-ledger.
 REASONS = (
     "philosophy",
@@ -152,6 +161,26 @@ def check_absorbed(seen):
             fail("stale allowlist entry " + prefix + ": not an absorbed commit")
 
 
+def check_infra_notes(rows):
+    for fields in rows:
+        if len(fields) != 5:
+            continue
+        sha, reason, note = fields[0], fields[2], fields[3]
+        if reason not in INFRA_REASONS:
+            continue
+        match = LOCAL_SURFACE_RE.search(note)
+        if match:
+            fail(
+                "row "
+                + sha
+                + " is binned "
+                + reason
+                + " but its note names a local surface ("
+                + match.group(0)
+                + ")"
+            )
+
+
 def main():
     if not LEDGER.is_file():
         print("FAIL: missing " + str(LEDGER), file=sys.stderr)
@@ -162,6 +191,7 @@ def main():
     rows = data_rows(actual)
     seen = check_rows(rows)
     check_absorbed(seen)
+    check_infra_notes(rows)
 
     if failures:
         print(

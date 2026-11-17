@@ -40,7 +40,7 @@ resolve; they now name the commits that landed on `main`.
 | 417d0330 | B     | f7e177b8     | Web RAF wakes only on demand.                                  |
 | 4ed3738c | B     | a910a8e7     | Phase-locked repeating spinners.                               |
 | 38ca9106 | B     | 3efaf5c6     | Hover listeners after layout.                                  |
-| 65308f40 | B     | bad00395     | Gemini 3.6 Flash.                                              |
+| 65308f40 | C     | bad00395     | Absorbed by `bad00395`; `91a2911a68` deleted the crate.        |
 | 3b90a9be | C     | --           | Timed RPC log groups need absent elapsed tracker.              |
 | d2779c34 | A     | 53146bd0     | Cherry-picked with `-x -s`.                                    |
 | 803467f3 | C     | --           | Text finder regex highlight needs missing picker preview API.  |
@@ -51,7 +51,7 @@ resolve; they now name the commits that landed on `main`.
 | 371a7d4b | C     | --           | `crates/lsp_locations` is absent.                              |
 | 1271f8b0 | C     | --           | rustc 1.97 bump is 66-file lockfile/agent/collab churn.        |
 | f99aad78 | C     | --           | Guild labeling workflow.                                       |
-| 492acd6c | C     | --           | Process-group revert unisolatable from local terminal.         |
+| 492acd6c | C     | --           | Revert of a commit ZZZ never absorbed; absent locally.         |
 | 0812d210 | C     | --           | GPT-5.6 Sol default mixed with subscribed provider.            |
 | 4e8057d7 | C     | --           | CI assignee workflow.                                          |
 | d4010e91 | C     | --           | Project-panel undo trash confirm unisolatable.                 |
@@ -65,7 +65,7 @@ resolve; they now name the commits that landed on `main`.
 | bd1b83a4 | B     | 7b31575964   | Git panel collapsible sections; ported after review.           |
 | c6b01d8a | B     | df614fd0aa   | Optional git stash message; ported after review.               |
 | 7807e4b1 | A     | acfaeb99     | Cherry-picked with `-x -s`.                                    |
-| a4916265 | B     | 40a14e53c1   | OpenAI reasoning-summary separators; ported after review.      |
+| a4916265 | C     | 40a14e53c1   | Absorbed by `40a14e53c1`; `91a2911a68` deleted the crate.      |
 | c83adb3d | C     | --           | `SymbolKind` RPC; `language_core` conflict.                    |
 | d71f1461 | C     | --           | `stacksafe` lockfile-only bump.                                |
 | 992c7d46 | B     | 68ae4e5bfd   | GitHub release request timeout; ported after review.           |
@@ -103,9 +103,9 @@ resolve; they now name the commits that landed on `main`.
 | cd6d7055 | C     | --           | Extension publishing docs split.                               |
 | d8664715 | B     | a0f9c9dafd   | CSV preview cell and header copy on right click.               |
 | 0ad5441b | C     | --           | Display-position selections; editor conflict.                  |
-| 2cb57850 | A     | 9693b5d5     | Cherry-picked with `-x -s`.                                    |
+| 2cb57850 | C     | 9693b5d5     | Absorbed by `9693b5d5`; `91a2911a68` deleted the crate.        |
 | 47825fe0 | B     | 821655aebe   | Measure invisible replacement width; ported after review.      |
-| 24e25552 | A     | f10fa494     | Cherry-picked with `-x -s`.                                    |
+| 24e25552 | C     | f10fa494     | Absorbed by `f10fa494`; `91a2911a68` deleted the crate.        |
 | 30f806c4 | B     | 2a0ae83be4   | JetBrains CamelHump subword navigation; ported after review.   |
 | 5fa87423 | A     | ba9894c3     | Cherry-picked with `-x -s`.                                    |
 | cdc537c6 | C     | --           | csv_preview tabular rewrite.                                   |
@@ -114,7 +114,7 @@ resolve; they now name the commits that landed on `main`.
 | f0685e0a | C     | --           | Parent-revision blame; git/proto conflict.                     |
 | 3cf86bed | C     | --           | OpenAI subscribed account models.                              |
 | 9f164a0d | C     | --           | Native agent Chat Completions share.                           |
-| 9bde578e | A     | dcafe24237   | Cherry-picked with `-x -s` after `spawn_dedicated` landed.     |
+| 9bde578e | C     | --           | Port reverted by `16d51d6962`; helper absent locally.          |
 | 1e3d8b5a | B     | 51d2122f4a   | Share the search snapshot behind an Arc; ported after review.  |
 | 56b1e79a | A     | 4cc4126f     | Cherry-picked with `-x -s`.                                    |
 | 939d2d70 | A     | --           | Already equivalent title_bar test-support.                     |
@@ -131,11 +131,11 @@ resolve; they now name the commits that landed on `main`.
 | 8968bf78 | C     | --           | Non-UTF-8 git blobs; staged_diff deleted.                      |
 | 984bf4d4 | C     | --           | Anthropic compaction; provider conflict.                       |
 | eedd2016 | A     | b8238eb7     | Cherry-picked with `-x -s`.                                    |
-| 91a6890d | C     | --           | Sidebar onboarding title wrap.                                 |
+| 91a6890d | B     | cd15c09f3f   | Sidebar onboarding title wraps in a narrow panel.              |
 | 511ac170 | A     | bdb2b214     | Cherry-picked with `-x -s`.                                    |
 | 90eb566f | C     | --           | Sidebar reorder; MultiWorkspace conflict.                      |
 | dbf7f638 | C     | --           | Anthropic compaction context; completion conflict.             |
-| 30f73707 | B     | fd3438cd     | Gemini 3.7 Flash.                                              |
+| 30f73707 | C     | fd3438cd     | Absorbed by `fd3438cd`; `91a2911a68` deleted the crate.        |
 | bf65fd4d | C     | --           | Legal ToS/Privacy absolute URLs.                               |
 | e0931d5a | C     | --           | Invisibles reuse; display_map/benchmarks deleted.              |
 | db7c1d38 | C     | --           | Community CI permissions.                                      |
@@ -149,7 +149,7 @@ resolve; they now name the commits that landed on `main`.
 | 8b1497db | C     | --           | Unused spring animation API.                                   |
 | 7bddd16a | A     | bdce4cc5     | Cherry-picked with `-x -s`.                                    |
 | 07a0bd12 | C     | --           | Unused frame-time debug overlay.                               |
-| 6721ea2e | C     | --           | Reset dock panels; workspace conflict.                         |
+| 6721ea2e | B     | cfe7c99672   | Dock reset covers every panel in the sizing mode.              |
 | 64d14ea8 | C     | --           | System pinentry; askpass conflict.                             |
 | fd90c0af | A     | 20b57034     | Cherry-picked with `-x -s`.                                    |
 | aa371861 | C     | --           | Autofix workflow clippy flag.                                  |
@@ -164,8 +164,12 @@ upstream remote was created.
 App version followed upstream: `crates/zzz` is now `1.17.0`.
 
 `9bde578e` was cherry-picked then fully reverted after `cargo check` failed on
-absent `SchedulerLocalExecutor` / `spawn_dedicated`; it was absorbed later
-as `dcafe24237` once `spawn_dedicated` landed. `4efba716` was adapted to
+absent `SchedulerLocalExecutor` / `spawn_dedicated`. Re-checked 2026-11-17: the
+re-application `dcafe24237` was itself reverted by `16d51d6962` the same day and
+nothing re-ported it, so `crates/gpui/src/executor.rs` still has no
+`spawn_dedicated` and `crates/agent_servers/src/acp.rs:982` still starts the
+connection future with `background_spawn`. The decision row is therefore `C`
+(issue #65), not `A`. `4efba716` was adapted to
 `LineHint`. Duplicate `#[test]` from the `4ed3738c` port was dropped in
 `1d63e442`.
 
@@ -198,6 +202,13 @@ tracker, deleted editor modules (`completions.rs`, `code_actions.rs`,
 Unisolatable conflicts: git_panel, markdown, askpass, csv_preview, rustc 1.97
 66-file bump.
 
+`492acd6c` is not a conflict at all: it reverts `6297c88f`, which ZZZ never
+absorbed. Local `crates/terminal/src/pty_info.rs:210` still carries the
+reverted-to `terminate_child_process`, `crates/terminal/src/terminal.rs:1589`
+still calls it from `Drop`, and `TerminalProcessIds`, `capture_process_ids`, and
+`terminate_processes_with_grace_period` do not exist in `crates/terminal`, so
+there is nothing for the revert to undo. Re-checked 2026-11-17.
+
 The 2026-09-22 re-audit ported `83dc1967`, `1e3d8b5a`, `a4916265`,
 `992c7d46`, `30f806c4`, `47825fe0`, `f543a764`, `c6b01d8a`, `6634c945`, and
 `bd1b83a4`; see `upstream-sync-audit-2026-09-22.md`.
@@ -225,3 +236,12 @@ NOT RUN cargo test --workspace
 The reviewed baseline is `aa3718614b3ade75524be6f8b2e101bd1166e02c`.
 Work remains on `sync/upstream-2026-08-18` at `2fe4b4bd4d` and has not been
 merged to `main`.
+
+## Corrections
+
+2026-11-17: five rows in this report move from `A`/`B` to `C`. The recorded
+local commits still exist and are ancestors of `main`, but `91a2911a68` deleted every provider crate they touched, so the
+absorbed behaviour is gone under the ACP-only policy. The local commits stay in
+the disposition text, and the upstream SHAs now enter
+`upstream-rejected.tsv` so a later batch does not re-triage them from scratch.
+Tracked by issue #67.

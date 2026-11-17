@@ -252,7 +252,7 @@ This batch remains fixed at twenty commits; later commits remain queued.
 | 24aabd3fa6 | C     | --                     | Community-board label automation is upstream maintenance infrastructure.                                            |
 | 2a4326a256 | C     | --                     | Duplicate-issue bot tracking is upstream maintenance infrastructure.                                                |
 | 2239fa76b1 | C     | --                     | New `Label::text_center` public API has no current ZZZ caller.                                                      |
-| 7c7b171ff  | B     | db6e989c54             | Copy buttons now use parsed code text, excluding enclosing blockquote and list syntax.                              |
+| 7c7b171ff  | B     | 4f4562d54f             | Copy buttons use parsed code text; re-applied after a later Markdown rework dropped it.                             |
 | 403589312e | C     | --                     | ACP v2 prompt-capability models have no negotiated v2 caller and include native-agent producers.                    |
 | 78a0da201  | B     | 1b276e217f             | ACP defaults now apply sequentially from each complete server response and refresh local watchers.                  |
 | 53421b7f3  | A     | 68e5f2259f             | Clean absorption of Go package-level test gutter support.                                                           |
@@ -439,3 +439,18 @@ The four direct `A` changes used `git cherry-pick -x -s`. Every `B` commit has
 
 The general reviewed baseline advances to
 `6110aa61e1da78837dd3f91d5323ce43f098779a`.
+
+### Re-application: `7c7b171ff` (2026-11-17)
+
+The `B` row above kept its local commit but lost its mechanism. A later Markdown
+rework replaced the `current_code_block_text` accumulator with a slice of the raw
+source range, so the copy button for a code block inside a blockquote copied the
+`>` prefixes again.
+
+The fix is re-applied on top of the current element code: the accumulator lives
+in `MarkdownEventState` and is filled from the `Text` and `SubstitutedText`
+events. Upstream's regression test `test_copy_code_block_uses_parsed_text` is
+ported with it, covering nested quotes, admonitions, list indentation, an
+unclosed fence, and a blockquote containing a second quote. Tracked by issue
+#66; the row's local commit stays `db6e989c54` until the re-application is
+committed.

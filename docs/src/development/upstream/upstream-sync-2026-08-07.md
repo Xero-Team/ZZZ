@@ -28,6 +28,17 @@ Correction 2026-09-24: `41c0f28b` and `c7aea6cb` were later absorbed as
 `772132ec1d` and `e39b426b14`; their rows are reclassified from `C` to
 `B` below.
 
+Correction 2026-11-17: `7b030b5008` sits exactly on this report's lower
+boundary and had no decision row in any report, so it is recorded here for the
+first time, in its own table below. It guards the inlay-hint cache against a
+chunk id from a buffer version that no longer exists; the guard and upstream's
+regression test are applied locally, and the row stays `B` with no local commit
+until that port is committed (issue #61).
+
+| Upstream     | Class | Local commit | Disposition                                                            |
+| ------------ | ----- | ------------ | ---------------------------------------------------------------------- |
+| `7b030b5008` | B     | 10ad6bee8f   | Predates this range. Guards the inlay-hint cache against stale chunks. |
+
 ## Decisions
 
 | Upstream | Class | Local commit       | Disposition                                                                                  |
@@ -52,7 +63,7 @@ Correction 2026-09-24: `41c0f28b` and `c7aea6cb` were later absorbed as
 | 1102219f | B     | d39c57d3           | C-column fragments ported; preview lifecycle omitted.                                        |
 | e4ac280d | C     | --                 | Subscription provider extraction.                                                            |
 | 50ac7dc9 | A     | 398732c2           | Cherry-picked with `-x -s`.                                                                  |
-| 6dcb0e57 | B     | 80649c76           | RelPath normalization ported; provider routing omitted.                                      |
+| 6dcb0e57 | C     | 80649c76           | Absorbed by `80649c76`; `91a2911a68` deleted `crates/edit_prediction`.                       |
 | baacd359 | C     | --                 | Call diagnostics.                                                                            |
 | 424a6824 | C     | --                 | wasm_thread fork-only dependency redirect; no behavior to retain.                            |
 | 06b6160d | B     | 7a9c6347           | Private macOS blur API removed; local ctor retained.                                         |
@@ -146,9 +157,9 @@ Correction 2026-09-24: `41c0f28b` and `c7aea6cb` were later absorbed as
 | 4aad57fd | C     | --                 | Broad remote workspace lifetime/recent-project flow rewrite.                                 |
 | e717010c | C     | --                 | WSL streaming fallback is coupled to upstream remote transport lifecycle.                    |
 | 184e124b | C     | --                 | Per-line terminal CWD resolver requires a divergent terminal path model.                     |
-| 1ade7854 | C     | --                 | Search regex assertion rewrite depends on upstream search engine semantics.                  |
+| 1ade7854 | B     | 4676cce620         | Regex assertions match against the whole haystack.                                           |
 | c6e0868c | C     | --                 | Vim indentation change spans language/multibuffer APIs not present locally.                  |
-| bbd198f5 | C     | --                 | Large semantic-token ordering rewrite requires absent server-order plumbing.                 |
+| bbd198f5 | B     | 3a4d60b6           | Semantic token overlaps resolve by configured server order.                                  |
 | b8c75f17 | C     | --                 | Extension provider icon/dependency path has no independent ZZZ repository surface.           |
 | a12e3c06 | C     | --                 | Feature-flag removal is coupled to upstream project-panel flag policy.                       |
 | 4601ead4 | C     | --                 | Large WebGL backend and shader/dependency port exceeds isolated scope.                       |
@@ -239,11 +250,12 @@ complete diff, and current ZZZ call chain:
   accepts `#LlineCcolumn` and ranges; the upstream preview reuse, navigation,
   scroll lifecycle, language detection, and project-panel rewrite were
   omitted because ZZZ already has a separate link resolver implementation.
-- `6dcb0e57b5a6d12cc6bab21c11488fd76db0eaaf`: B, local commit
-  `0858428551c5801793d9858dc456b63839290f97`. The shared path serializer now
-  uses `RelPath` for Unix-style model context paths. Provider selection,
-  token, telemetry, data-collection, Copilot, account, and cloud-routing
-  behavior was explicitly omitted.
+- `6dcb0e57b5a6d12cc6bab21c11488fd76db0eaaf`: C. Was `B` with local commit
+  `0858428551c5801793d9858dc456b63839290f97`, which moved the shared path
+  serializer to `RelPath` for Unix-style model context paths. The ACP-only
+  cleanup (`75e7e83732`, `91a2911a68`) deleted `crates/edit_prediction`, so the
+  ported normalization no longer exists; corrected on 2026-11-17 as part of
+  issue #67.
 - `82aef44308540b576e4e51fb379efa71614e5c91`: C. The commit adds a new
   scheduler/GPUI/Web idle-execution API without a ZZZ caller and requires a
   cross-platform Web `requestIdleCallback` implementation; this is broader

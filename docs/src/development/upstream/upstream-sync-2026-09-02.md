@@ -168,28 +168,28 @@ This continuation reviewed the next 20 commits. Counts: 3 A, 7 B, and
 
 ### Decisions
 
-| Upstream | Class | Local commit       | Disposition                                                                                                                                              |
-| -------- | ----- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| c4bc69e5 | C     | --                 | Corgi sandbox/glob and bootstrap configuration is upstream build infrastructure without independent ZZZ product behavior.                                |
-| 22945084 | C     | --                 | Broad BufferDiff/GitStore/editor hunk-operation refactor is not isolatable onto ZZZ's divergent diff architecture.                                       |
-| a49de953 | B     | f7c61d2e           | Enabled Wayland backend logging while retaining ZZZ's newer dependency versions; the upstream lockfile conflicted.                                       |
-| 8ce383f2 | B     | 4bc73f19, 76666dbf | Added and documented `close_panel_on_toggle`, adapting the settings UI to ZZZ's `UiText` and field shape.                                                |
-| d1446d66 | B     | c2042a37, cd1d0eee | Queried the configured Ollama server for FIM-capable models and gated the provider on edit-prediction settings; omitted Sweep support absent from ZZZ.   |
-| 0855410c | C     | --                 | Long-press gesture recognition is coupled to the unabsorbed touch/IME gesture architecture.                                                              |
-| 283460f5 | B     | f4fc7594, cd1d0eee | Added Anthropic Fable 5.1 thinking-binding controls and forced-tool gating; omitted unavailable compaction metadata and deleted Copilot product changes. |
-| d3e54c97 | C     | --                 | Requires the absent `fs_embed!` architecture; ZZZ uses direct rust-embed paths.                                                                          |
-| 239d0aa1 | C     | --                 | Release/test workflow changes are upstream CI and SDK bootstrap infrastructure.                                                                          |
-| ac5af8b9 | C     | --                 | License-manifest and symlink relicensing has no independent ZZZ product behavior and conflicts with current package metadata.                            |
-| 2551721a | C     | --                 | Follow-up `fs_embed!` debug embedding depends on the absent upstream macro surface.                                                                      |
-| 520d8bda | A     | 28eab08d           | Cherry-picked with `-x -s`; corrected fractional-scale avatar borders.                                                                                   |
-| 97b1e64a | C     | --                 | Adds hang-trigger telemetry and release telemetry plumbing, rejected by ZZZ's no-telemetry boundary.                                                     |
-| d56dca80 | C     | --                 | GitHub issue-triage workflow only; no product behavior.                                                                                                  |
-| 83726412 | A     | 777a6117           | Cherry-picked with `-x -s`; preserves the correct pre-modal focus handle.                                                                                |
-| a24cafa9 | B     | 29611f1d           | Removed the completion-row shrink flag using ZZZ's existing flex API spelling.                                                                           |
-| 480d81bf | C     | --                 | ChatGPT Subscription setup/cancellation is an explicitly rejected account-bound surface.                                                                 |
-| dbfeae77 | B     | 72e44182           | Avoided persisting commit-template text as a user draft; adapted the logic to ZZZ's git panel.                                                           |
-| 6309c722 | B     | 1c05fa31, cd1d0eee | Classified Anthropic prompt-too-long HTTP 400s using ZZZ's existing completion error model.                                                              |
-| c3cf80c0 | A     | 0026815a           | Cherry-picked with `-x -s`; Git Graph now participates in pane navigation history.                                                                       |
+| Upstream | Class | Local commit       | Disposition                                                                                                                                            |
+| -------- | ----- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| c4bc69e5 | C     | --                 | Corgi sandbox/glob and bootstrap configuration is upstream build infrastructure without independent ZZZ product behavior.                              |
+| 22945084 | C     | --                 | Broad BufferDiff/GitStore/editor hunk-operation refactor is not isolatable onto ZZZ's divergent diff architecture.                                     |
+| a49de953 | B     | f7c61d2e           | Enabled Wayland backend logging while retaining ZZZ's newer dependency versions; the upstream lockfile conflicted.                                     |
+| 8ce383f2 | B     | 4bc73f19, 76666dbf | Added and documented `close_panel_on_toggle`, adapting the settings UI to ZZZ's `UiText` and field shape.                                              |
+| d1446d66 | B     | c2042a37, cd1d0eee | Queried the configured Ollama server for FIM-capable models and gated the provider on edit-prediction settings; omitted Sweep support absent from ZZZ. |
+| 0855410c | C     | --                 | Long-press gesture recognition is coupled to the unabsorbed touch/IME gesture architecture.                                                            |
+| 283460f5 | C     | f4fc7594, cd1d0eee | Absorbed by `f4fc7594, cd1d0eee`; `91a2911a68` deleted the crate.                                                                                      |
+| d3e54c97 | C     | --                 | Requires the absent `fs_embed!` architecture; ZZZ uses direct rust-embed paths.                                                                        |
+| 239d0aa1 | C     | --                 | Release/test workflow changes are upstream CI and SDK bootstrap infrastructure.                                                                        |
+| ac5af8b9 | C     | --                 | License-manifest and symlink relicensing has no independent ZZZ product behavior and conflicts with current package metadata.                          |
+| 2551721a | C     | --                 | Follow-up `fs_embed!` debug embedding depends on the absent upstream macro surface.                                                                    |
+| 520d8bda | A     | 28eab08d           | Cherry-picked with `-x -s`; corrected fractional-scale avatar borders.                                                                                 |
+| 97b1e64a | C     | --                 | Adds hang-trigger telemetry and release telemetry plumbing, rejected by ZZZ's no-telemetry boundary.                                                   |
+| d56dca80 | C     | --                 | GitHub issue-triage workflow only; no product behavior.                                                                                                |
+| 83726412 | A     | 777a6117           | Cherry-picked with `-x -s`; preserves the correct pre-modal focus handle.                                                                              |
+| a24cafa9 | B     | 29611f1d           | Removed the completion-row shrink flag using ZZZ's existing flex API spelling.                                                                         |
+| 480d81bf | C     | --                 | ChatGPT Subscription setup/cancellation is an explicitly rejected account-bound surface.                                                               |
+| dbfeae77 | B     | 72e44182           | Avoided persisting commit-template text as a user draft; adapted the logic to ZZZ's git panel.                                                         |
+| 6309c722 | B     | 1c05fa31, cd1d0eee | Classified Anthropic prompt-too-long HTTP 400s using ZZZ's existing completion error model.                                                            |
+| c3cf80c0 | A     | 0026815a           | Cherry-picked with `-x -s`; Git Graph now participates in pane navigation history.                                                                     |
 
 ### Applied work
 
@@ -317,3 +317,12 @@ NOT RUN cargo test --workspace
 
 The reviewed baseline is `5f2d7ad735c266854503c1f40e9b490a8fd0e3a0`.
 Work remains on `sync/upstream-2026-09-02` and has not been merged to `main`.
+
+## Corrections
+
+2026-11-17: one row in this report moves from `B` to `C`. The recorded local
+commits still exist and are ancestors of `main`, but `91a2911a68` deleted every
+provider crate they touched, so the absorbed behaviour is gone under the
+ACP-only policy. The local commits stay in the disposition text, and the
+upstream SHA now enters `upstream-rejected.tsv` so a later batch does not
+re-triage it from scratch. Tracked by issue #67.

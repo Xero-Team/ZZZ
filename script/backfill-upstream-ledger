@@ -26,17 +26,39 @@ PATTERNS = (
     ("philosophy", r"telemetry|account|billing|subscription|trial|upgrade|copilot|chatgpt|collab|native agent|zed agent|hosted|cloud|discord|onboarding|mercury|zeta|sign"),
     ("release-metadata", r"release metadata|version follow|bump zed|bump zzz"),
     ("upstream-infra", r"release|lockfile|npm|benchmark|workflow|marketing|triage|infra|bloat|flaky|upstream-only|metadata|docs"),
-    ("absent-api", r"absent|does not exist|not present|no local|missing|deleted|no zzz caller|not compile"),
+    ("absent-api", r"absent|does not exist|not present|no local|missing|deleted|no zzz caller|not compile|no caller|has no"),
     ("diverged", r"diverg|conflict"),
-    ("unisolatable", r"unisolat|rewrite|refactor|entangl|multiworkspace"),
+    ("unisolatable", r"unisolat|rewrite|refactor|entangl|multiworkspace|cannot be isolated"),
 )
+
+# Tie-break order for equally specific matches. Product-behavior classes come
+# before the catch-all infrastructure bin so that a disposition which happens to
+# mention a benchmark or a workflow is not filed as infrastructure.
+PRIORITY = (
+    "philosophy",
+    "release-metadata",
+    "absent-api",
+    "diverged",
+    "upstream-infra",
+    "unisolatable",
+)
+
+# A disposition that names a crate path or an inline code span is describing a
+# local surface, so falling through to `untriaged` would hide the reason.
+NAMES_LOCAL_SURFACE = re.compile(r"crates/[a-z_0-9]+/|`[a-z_0-9]+`")
 
 
 def reason_for(note):
     low = note.lower()
-    for code, pattern in PATTERNS:
-        if re.search(pattern, low):
-            return code
+    matched = [
+        code for code, pattern in PATTERNS if re.search(pattern, low)
+    ]
+    if matched:
+        for code in PRIORITY:
+            if code in matched:
+                return code
+    if NAMES_LOCAL_SURFACE.search(low):
+        return "absent-api"
     return "untriaged"
 
 

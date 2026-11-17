@@ -40,7 +40,7 @@ the queried range.
 | 5b055fa7 | C     | --           | Cloud notification websocket plus telemetry `system_id` refresh.                                          |
 | 59b0c714 | C     | --           | GitHub young-account / Zed Business sign-in layout.                                                       |
 | 49d01146 | C     | --           | OpenAI 404 retry needs `ProviderRejection`/`is_transient` and native agent `thread.rs`.                   |
-| 28e52a28 | B     | 48d6d695     | Always send OpenCode session headers; omit native-agent/sidebar request wiring.                           |
+| 28e52a28 | C     | 48d6d695     | Absorbed by `48d6d695`; `91a2911a68` deleted the crate.                                                   |
 | 206a863a | C     | --           | gpui_web example-only `run_embedded` migration; no product caller and the local example already diverged. |
 | 1057c2cf | B     | 565242e8     | Redact docker exec environment secrets and reject invalid env names.                                      |
 
@@ -91,3 +91,12 @@ NOT RUN cargo fmt --check (known edition-2024 formatting drift on this host)
 
 The reviewed baseline is `1057c2cf3d5b4aefd04755e1387c7826a4d7fba6`.
 Work remains on `sync/upstream-2026-09-04` and has not been merged to `main`.
+
+## Corrections
+
+2026-11-17: one row in this report move from `A`/`B` to `C`. The recorded
+local commits still exist and are ancestors of `main`, but `91a2911a68` deleted the crate it touched, so the
+absorbed behaviour is gone under the ACP-only policy. The local commits stay in
+the disposition text, and the upstream SHAs now enter
+`upstream-rejected.tsv` so a later batch does not re-triage them from scratch.
+Tracked by issue #67.

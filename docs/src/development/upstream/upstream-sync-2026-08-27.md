@@ -37,7 +37,7 @@ fixed default.
 | Upstream | Class | Local commit | Disposition                                                     |
 | -------- | ----- | ------------ | --------------------------------------------------------------- |
 | 83f3a8e3 | C     | --           | ChatGPT Subscription Responses transport; `HttpSend` absent.    |
-| 78712609 | A     | 3762f194     | Cherry-picked with `-x -s`.                                     |
+| 78712609 | C     | 3762f194     | Absorbed by `3762f194`; `91a2911a68` deleted the crate.         |
 | 4bdf188c | C     | --           | Stash tracked/staged options; git_panel and git.proto conflict. |
 | 2893b86b | B     | ee6b0e7e     | macOS simple fullscreen covering the notch.                     |
 | 1274a5dc | B     | c4632655     | VS Code npm task `path` property.                               |
@@ -210,8 +210,8 @@ Previous baseline: `7f2a2c3c3ee2f23f28772dee7661fb98d3910990`.
 | 6805d952 | A     | a311f5b5           | Make slang-server the default SystemVerilog LSP.                 |
 | 93f07f6d | B     | 9fbc3e58           | Preserve modal focus when terminals appear.                      |
 | d6449a9e | B     | a84bd703           | Bound oversized LSP hover content.                               |
-| 1b86941c | B     | 5240ab9c           | Add Gemini 3.5 Flash-Lite metadata.                              |
-| 4c4b19a2 | B     | aed5da94           | Retire deprecated Gemini models and aliases.                     |
+| 1b86941c | C     | 5240ab9c           | Absorbed by `5240ab9c`; `91a2911a68` deleted the crate.          |
+| 4c4b19a2 | C     | aed5da94           | Absorbed by `aed5da94`; `91a2911a68` deleted the crate.          |
 | b9d1fe59 | A     | 5de5e5a1           | Document Elixir debug adapter support.                           |
 | 99b0ed6b | B     | 090a4940           | Preserve configured workspace session state on close.            |
 | fdfd00e4 | C     | --                 | GitHub Enterprise Copilot cloud-account routing.                 |
@@ -624,7 +624,7 @@ queried live head.
 | 4c763e15 | B     | 8fc13bfb     | Preserve Git context-menu bindings during initial focus.                  |
 | 53dbfe40 | C     | --           | Typed transport-error rewrite does not match ZZZ's OpenAI request APIs.   |
 | 51a3ac29 | A     | 965546a8     | Validate extension manifest metadata before builds.                       |
-| a7e23df6 | C     | --           | Attempted port failed test compilation; reverted per B-port rule.         |
+| a7e23df6 | B     | 02ceb1939d   | Fallback language highlighting for untagged code blocks.                  |
 | 1ea16c1a | C     | --           | Needs upstream global `GitDiffBaseSetting` toggle path absent in ZZZ.     |
 | 107ee1a6 | C     | --           | Large terminal/dock restoration rewrite is unisolatable from ZZZ layout.  |
 | f36aec82 | C     | --           | `ask_user` tool/default is absent from ZZZ's ACP surface.                 |
@@ -719,7 +719,7 @@ queried live head.
 
 | Upstream | Class | Local commit       | Disposition                                                                           |
 | -------- | ----- | ------------------ | ------------------------------------------------------------------------------------- |
-| a1cc2548 | B     | d4d0f39d, 099e4646 | Port OpenRouter effort reasoning onto local provider APIs.                            |
+| a1cc2548 | C     | d4d0f39d, 099e4646 | Absorbed by `d4d0f39d, 099e4646`; `91a2911a68` deleted the crate.                     |
 | 3b90a968 | B     | 062ca142           | Release completed ACP PTY resources while retaining history metadata.                 |
 | 8fc1a8a0 | C     | --                 | Web text-input/IME architecture conflicts with ZZZ's input path.                      |
 | fc9258b4 | C     | --                 | File-permalink rewrite is not isolatable across local RPC/workspace divergences.      |
@@ -825,9 +825,9 @@ queried live head.
 | e9735934 | B     | 8cbe4800          | Port preview typography onto the existing Markdown renderer.                |
 | 41d72f6c | B     | 490f5a71          | Make stacksafe opt-in while retaining ZZZ desktop protection.               |
 | 91ebd505 | B     | e7299c31          | Serialize the latest selected ACP agent task.                               |
-| 693140ab | B     | 3c9cc819          | Accept nullable OpenAI prompt-cache usage fields.                           |
+| 693140ab | C     | 3c9cc819          | Absorbed by `3c9cc819`; `91a2911a68` deleted the crate.                     |
 | 96382d8e | B     | 30aada9f, 4defce7 | Add ACP agent retry controls.                                               |
-| 38c5dd7c | A     | 2ac1f5c6          | Default missing Mistral stream `object` values.                             |
+| 38c5dd7c | C     | 2ac1f5c6          | Absorbed by `2ac1f5c6`; `91a2911a68` deleted the crate.                     |
 | b20c4694 | A     | 1d8ba8da          | Account for removed lines when diffing overwritten files.                   |
 | 0969b0db | B     | dac519b2          | Ignore uninstalled custom agents during restoration.                        |
 | 224373ab | C     | --                | Web IME/input rewrite conflicts with ZZZ's web window path.                 |
@@ -838,7 +838,7 @@ queried live head.
 | e0f913b0 | C     | --                | Targets upstream `tabular_data_preview`, replaced locally by `csv_preview`. |
 | d4cd310e | C     | --                | Modifies the deleted upstream action-profiler module.                       |
 | 7040aa56 | A     | dff2e50f          | Clear Windows COLR emoji render targets before compositing.                 |
-| 081a45f6 | A     | a1a74f16          | Add Grok 4.5 and 4.6 manual-provider models.                                |
+| 081a45f6 | C     | a1a74f16          | Absorbed by `a1a74f16`; `91a2911a68` deleted the crate.                     |
 | 5dd0666d | A     | 0e72b82a          | Terminate X11 `WM_CLASS` with a second NUL byte.                            |
 
 ### Applied work
@@ -937,7 +937,7 @@ queried live head.
 | 839ab7a9 | C     | --           | Shallow-diff UI/protocol rewrite needs absent git APIs and askpass UI.    |
 | 279da638 | C     | --           | Broad persistence shutdown rewrite conflicts with local lifecycle APIs.   |
 | c595091b | C     | --           | Dependency, lockfile, and crate-graph churn without independent behavior. |
-| 34241d5f | C     | --           | LLVM/settings deserializer rewrite failed on removed ZZZ fields.          |
+| 34241d5f | B     | 6ee8fa5e1b   | Flattened settings sections deserialize by path.                          |
 | ea701d40 | C     | --           | Agent persistence worker targets deleted/diverged native-agent paths.     |
 | 4a9a863c | C     | --           | Auto-indentation patch requires deleted `editor/src/input.rs`.            |
 | ac099b4a | B     | 8ad9315d1e   | Version follow to v1.19.0; local version bump retained.                   |
@@ -1007,3 +1007,12 @@ The reviewed baseline is now
 `01acd0ee8e906dd0ec8b526fe08da94444a5e2af`; 6 commits remain through the
 queried live head. Work remains on `sync/upstream-2026-08-27` and has not been
 merged to `main`.
+
+## Corrections
+
+2026-11-17: seven rows in this report move from `A`/`B` to `C`. The recorded
+local commits still exist and are ancestors of `main`, but `91a2911a68` deleted every provider crate they touched, so the
+absorbed behaviour is gone under the ACP-only policy. The local commits stay in
+the disposition text, and the upstream SHAs now enter
+`upstream-rejected.tsv` so a later batch does not re-triage them from scratch.
+Tracked by issue #67.

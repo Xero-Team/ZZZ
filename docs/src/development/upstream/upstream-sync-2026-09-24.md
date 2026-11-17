@@ -280,10 +280,10 @@ This continuation reviews the next twenty commits of the range, from
 | d3600d66   | B     | 70c7282c     | ACP output drains before the exit error is reported, bounded to 250ms.                                                                            |
 | 18ad8d11   | A     | --           | Already equivalent: `AddSelectionToThread` already accepts empty selections and reads the current line.                                           |
 | a9829490   | B     | 4fafb31e     | Reversed row-highlight anchors no longer crash; `highlight_rows` test adapted to the local `Hsla` API.                                            |
-| 16c9aa7e   | B     | ddc08697     | Grok 4.7 added to the manual xAI provider; the Supergrok half is omitted.                                                                         |
+| 16c9aa7e   | C     | ddc08697     | Absorbed by `ddc08697`; `91a2911a68` deleted the crate.                                                                                           |
 | e5221fa2   | C     | --           | Native `spawn_agent` subagent model selection; the native agent tools are absent.                                                                 |
 
-Totals: four `A`, eight `B`, eight `C`.
+Totals: four `A`, seven `B`, nine `C`.
 
 ### Applied work
 
@@ -447,9 +447,9 @@ This continuation reviews the next twenty commits of the range, from
 | ---------- | ----- | ------------ | --------------------------------------------------------------------------------------------------- |
 | 96e95edac4 | B     | 6a162de286   | Atlas texture lookups return `Option`; a released texture skips the sprite batch.                   |
 | ee8dd5f861 | C     | --           | ChatGPT subscription model picker; the account-bound provider is absent.                            |
-| 75e9bb2fea | B     | fcce37d31e   | Claude Opus 5.5 BYOK model behavior; hosted half and compaction omitted.                            |
-| bc6dd34d4c | B     | 1218fa972b   | GPT-6 Sol and Luna models; the compaction matrix is omitted.                                        |
-| 5299a14401 | C     | --           | macOS Look Up needs the upstream markdown element refactor; local rendering has diverged.           |
+| 75e9bb2fea | C     | fcce37d31e   | Absorbed by `fcce37d31e`; `91a2911a68` deleted the crate.                                           |
+| bc6dd34d4c | C     | 1218fa972b   | Absorbed by `1218fa972b`; `91a2911a68` deleted the crate.                                           |
+| 5299a14401 | B     | 6c8aa3849f   | macOS Look Up reads the rendered Markdown through the input handler.                                |
 | ba42ab9d98 | B     | 2f93addb94   | Standalone modifiers reach keystroke interceptors; the test module is omitted.                      |
 | 7fecbb2c4b | C     | --           | which-key and pending-indicator unification rewrites a module ZZZ has trimmed.                      |
 | b7be0f185b | B     | 1706daa522   | REPL output copy uses `CopyButton`; the localized tooltip is kept.                                  |
@@ -466,7 +466,7 @@ This continuation reviews the next twenty commits of the range, from
 | eb2f43d982 | C     | --           | `*Map` randomized-test fix depends on an unabsorbed `path_key` excerpt-reuse rewrite.               |
 | b89471c52d | C     | --           | Upstream-only `gpui_apple` dependency cleanup and xtask workspace plumbing; macOS-only tooling.     |
 
-Totals: two `A`, eight `B`, ten `C`.
+Totals: two `A`, six `B`, twelve `C`.
 
 ### Applied work
 
@@ -1132,3 +1132,12 @@ new regression test was ported, after which the check passes.
 `crates/project/src/agent_registry_store.rs` drift recorded in Run 1.
 There are no macOS- or Windows-only hunks in this batch, so platform
 runtime checks were not required.
+
+## Corrections
+
+2026-11-17: three rows in this report move from `A`/`B` to `C`. The recorded
+local commits still exist and are ancestors of `main`, but `91a2911a68` deleted every crate they touched, so the
+absorbed behaviour is gone under the ACP-only policy. The local commits stay in
+the disposition text, and the upstream SHAs now enter
+`upstream-rejected.tsv` so a later batch does not re-triage them from scratch.
+Tracked by issue #67.
