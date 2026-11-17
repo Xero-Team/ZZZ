@@ -357,8 +357,7 @@ pub fn worktree_info_from_thread_paths<S: std::hash::BuildHasher>(
                 .unwrap_or_default();
             let project_name = main_path
                 .file_name()
-                .map(|n| SharedString::from(n.to_string_lossy().to_string()))
-                .unwrap_or_default();
+                .map_or_default(|n| SharedString::from(n.to_string_lossy().to_string()));
             linked_short_names.push((short_name.clone(), project_name));
             infos.push(ThreadItemWorktreeInfo {
                 worktree_name: Some(short_name),
@@ -671,23 +670,21 @@ impl ThreadMetadataStore {
         if metadata.session_id.is_none() {
             debug_panic!("cannot store thread metadata without a session_id");
             return;
-        };
+        }
 
         if let Some(thread) = self.threads.get(&metadata.thread_id) {
-            if thread.folder_paths() != metadata.folder_paths() {
-                if let Some(thread_ids) = self.threads_by_paths.get_mut(thread.folder_paths()) {
-                    thread_ids.remove(&metadata.thread_id);
-                }
+            if thread.folder_paths() != metadata.folder_paths()
+                && let Some(thread_ids) = self.threads_by_paths.get_mut(thread.folder_paths())
+            {
+                thread_ids.remove(&metadata.thread_id);
             }
             if thread.main_worktree_paths() != metadata.main_worktree_paths()
                 && !thread.main_worktree_paths().is_empty()
-            {
-                if let Some(thread_ids) = self
+                && let Some(thread_ids) = self
                     .threads_by_main_paths
                     .get_mut(thread.main_worktree_paths())
-                {
-                    thread_ids.remove(&metadata.thread_id);
-                }
+            {
+                thread_ids.remove(&metadata.thread_id);
             }
         }
 
@@ -794,7 +791,7 @@ impl ThreadMetadataStore {
                 ..thread.clone()
             });
             cx.notify();
-        };
+        }
     }
 
     pub fn archive(
@@ -1050,13 +1047,12 @@ impl ThreadMetadataStore {
             if let Some(thread_ids) = self.threads_by_paths.get_mut(thread.folder_paths()) {
                 thread_ids.remove(&thread_id);
             }
-            if !thread.main_worktree_paths().is_empty() {
-                if let Some(thread_ids) = self
+            if !thread.main_worktree_paths().is_empty()
+                && let Some(thread_ids) = self
                     .threads_by_main_paths
                     .get_mut(thread.main_worktree_paths())
-                {
-                    thread_ids.remove(&thread_id);
-                }
+            {
+                thread_ids.remove(&thread_id);
             }
         }
         self.threads.remove(&thread_id);
@@ -1096,7 +1092,7 @@ impl ThreadMetadataStore {
         .detach();
 
         let (tx, rx) = async_channel::unbounded();
-        let _db_operations_task = cx.background_spawn({
+        let db_operations_task = cx.background_spawn({
             let db = db.clone();
             async move {
                 while let Ok(first_update) = rx.recv().await {
@@ -1129,7 +1125,7 @@ impl ThreadMetadataStore {
             conversation_subscriptions: HashMap::default(),
             pending_thread_ops_tx: tx,
             in_flight_archives: HashMap::default(),
-            _db_operations_task,
+            _db_operations_task: db_operations_task,
         };
         drop(this.reload(cx));
         this
@@ -1352,11 +1348,7 @@ impl ThreadMetadataDb {
         } else {
             Some(row.agent_id.to_string())
         };
-        let title = row
-            .title
-            .as_ref()
-            .map(|t| t.to_string())
-            .unwrap_or_default();
+        let title = row.title.as_ref().map_or_default(|t| t.to_string());
         let updated_at = row.updated_at.to_rfc3339();
         let created_at = row.created_at.map(|dt| dt.to_rfc3339());
         let interacted_at = row.interacted_at.map(|dt| dt.to_rfc3339());
@@ -1584,23 +1576,19 @@ impl Column for ThreadMetadata {
             .transpose()?
             .map(|dt| dt.with_timezone(&Utc));
 
-        let folder_paths = folder_paths_str
-            .map(|paths| {
-                PathList::deserialize(&util::path_list::SerializedPathList {
-                    paths,
-                    order: folder_paths_order_str.unwrap_or_default(),
-                })
+        let folder_paths = folder_paths_str.map_or_default(|paths| {
+            PathList::deserialize(&util::path_list::SerializedPathList {
+                paths,
+                order: folder_paths_order_str.unwrap_or_default(),
             })
-            .unwrap_or_default();
+        });
 
-        let main_worktree_paths = main_worktree_paths_str
-            .map(|paths| {
-                PathList::deserialize(&util::path_list::SerializedPathList {
-                    paths,
-                    order: main_worktree_paths_order_str.unwrap_or_default(),
-                })
+        let main_worktree_paths = main_worktree_paths_str.map_or_default(|paths| {
+            PathList::deserialize(&util::path_list::SerializedPathList {
+                paths,
+                order: main_worktree_paths_order_str.unwrap_or_default(),
             })
-            .unwrap_or_default();
+        });
 
         let remote_connection = remote_connection_json
             .as_deref()

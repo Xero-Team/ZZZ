@@ -3,13 +3,13 @@ use agent_client_protocol::v1::schema as acp;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use collections::{HashMap, HashSet, IndexMap};
-use gpui::{Entity, SharedString, Task};
+use gpui::{App, Entity, SharedString, Task};
+use icons::IconName;
 use language_model::LanguageModelProviderId;
 use project::{AgentId, Project};
 use serde::{Deserialize, Serialize};
 use std::{any::Any, error::Error, fmt, path::PathBuf, rc::Rc, sync::Arc};
 use task::{HideStrategy, SpawnInTerminal, TaskId};
-use ui::{App, IconName};
 use util::path_list::PathList;
 use uuid::Uuid;
 
@@ -1004,7 +1004,7 @@ mod test_support {
             } else {
                 for update in self.next_prompt_updates.lock().drain(..) {
                     let thread = thread.clone();
-                    let update = update.clone();
+                    let update = update;
                     let permission_request = if let acp::SessionUpdate::ToolCall(tool_call) =
                         &update
                         && let Some(options) = self.permission_requests.get(&tool_call.tool_call_id)
@@ -1106,7 +1106,7 @@ mod test_support {
                     id: AgentModelId::new("visual-test-model"),
                     name: "Visual Test Model".into(),
                     description: Some("A stub model for visual testing".into()),
-                    icon: Some(AgentModelIcon::Named(ui::IconName::ZZZAssistant)),
+                    icon: Some(AgentModelIcon::Named(IconName::ZZZAssistant)),
                     is_latest: false,
                     cost: None,
                 })),

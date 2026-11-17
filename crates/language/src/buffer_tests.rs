@@ -4139,8 +4139,9 @@ fn test_trailing_whitespace_ranges(mut rng: StdRng) {
     }
 
     match rng.random_range(0..10) {
-        // sometimes remove the last newline
-        0..=1 => drop(text.pop()), //
+        // Sometimes remove the last newline. The popped character is unused, and
+        // `Option` is `#[must_use]`, so it has to go through `drop` to discard it.
+        0..=1 => drop(text.pop()),
 
         // sometimes add extra newlines
         2..=3 => text.push_str(&"\n".repeat(rng.random_range(1..5))),
@@ -4175,6 +4176,8 @@ fn test_trailing_whitespace_ranges_in_rows(mut rng: StdRng) {
         text.push('\n');
     }
     match rng.random_range(0..10) {
+        // Sometimes remove the last newline. The popped character is unused, and
+        // `Option` is `#[must_use]`, so it has to go through `drop` to discard it.
         0..=1 => drop(text.pop()),
         2..=3 => text.push_str(&"\n".repeat(rng.random_range(1..5))),
         _ => {}
@@ -4974,6 +4977,54 @@ fn test_random_chunk_bitmaps(cx: &mut App, mut rng: StdRng) {
             }
         }
     }
+}
+
+#[gpui::test]
+fn test_chunks_seek_out_of_unnecessary_diagnostic(cx: &mut TestAppContext) {
+    cx.update(|cx| init_settings(cx, |_| {}));
+
+    let first_row = "let unused = 1;\n";
+    let second_row = "let used = 2;\n";
+    let buffer = cx.new(|cx| {
+        let mut buffer = Buffer::local(format!("{first_row}{second_row}"), cx);
+        let diagnostics = DiagnosticSet::new(
+            [DiagnosticEntry {
+                range: PointUtf16::new(0, 4)..PointUtf16::new(0, 10),
+                diagnostic: Diagnostic {
+                    is_unnecessary: true,
+                    ..Default::default()
+                },
+            }],
+            &buffer,
+        );
+        buffer.update_diagnostics(LanguageServerId(0), diagnostics, cx);
+        buffer
+    });
+    let snapshot = buffer.read_with(cx, |buffer, _| buffer.snapshot());
+
+    let mut chunks = snapshot.chunks(
+        0..snapshot.len(),
+        LanguageAwareStyling {
+            tree_sitter: false,
+            diagnostics: true,
+        },
+    );
+    let unnecessary_chunk = chunks.find(|chunk| chunk.is_unnecessary);
+    assert_eq!(
+        unnecessary_chunk.map(|chunk| chunk.text),
+        Some("unused"),
+        "the diagnostic range must be reported as unnecessary before seeking"
+    );
+
+    chunks.seek(first_row.len()..snapshot.len());
+    let chunks_after_seek = chunks
+        .map(|chunk| (chunk.text, chunk.is_unnecessary))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        chunks_after_seek,
+        vec![(second_row, false)],
+        "seeking away from an unnecessary diagnostic must not leave later text marked unnecessary"
+    );
 }
 
 #[gpui::test]

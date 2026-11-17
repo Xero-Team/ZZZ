@@ -84,7 +84,7 @@ impl SidebarStatus {
         multi_workspace
             .as_ref()
             .and_then(|mw| mw.upgrade())
-            .map(|mw| {
+            .map_or_default(|mw| {
                 let mw = mw.read(cx);
                 let enabled = mw.multi_workspace_enabled(cx);
                 Self {
@@ -94,7 +94,6 @@ impl SidebarStatus {
                     show_toggle: enabled,
                 }
             })
-            .unwrap_or_default()
     }
 }
 
@@ -103,7 +102,7 @@ pub struct StatusBar {
     right_items: Vec<Box<dyn StatusItemViewHandle>>,
     active_pane: Entity<Pane>,
     multi_workspace: Option<WeakEntity<MultiWorkspace>>,
-    _observe_active_pane: Subscription,
+    observe_active_pane: Subscription,
 }
 
 impl Render for StatusBar {
@@ -328,7 +327,7 @@ impl StatusBar {
             right_items: Default::default(),
             active_pane: active_pane.clone(),
             multi_workspace,
-            _observe_active_pane: cx.observe_in(active_pane, window, |this, _, window, cx| {
+            observe_active_pane: cx.observe_in(active_pane, window, |this, _, window, cx| {
                 this.update_active_pane_item(window, cx)
             }),
         };
@@ -432,7 +431,7 @@ impl StatusBar {
         cx: &mut Context<Self>,
     ) {
         self.active_pane = active_pane.clone();
-        self._observe_active_pane = cx.observe_in(active_pane, window, |this, _, window, cx| {
+        self.observe_active_pane = cx.observe_in(active_pane, window, |this, _, window, cx| {
             this.update_active_pane_item(window, cx)
         });
         self.update_active_pane_item(window, cx);

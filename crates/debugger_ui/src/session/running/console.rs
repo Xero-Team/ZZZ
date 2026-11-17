@@ -110,7 +110,7 @@ impl Console {
             editor
         });
 
-        let _subscriptions = vec![
+        let subscriptions = vec![
             cx.subscribe(&stack_frame_list, Self::handle_stack_frame_list_events),
             cx.on_focus(&focus_handle, window, |console, window, cx| {
                 if console.is_running(cx) {
@@ -124,7 +124,7 @@ impl Console {
             console,
             query_bar,
             variable_list,
-            _subscriptions,
+            _subscriptions: subscriptions,
             stack_frame_list,
             update_output_task: None,
             last_token: OutputToken(0),

@@ -160,7 +160,7 @@ impl FsProviderCore {
         // returning the file's metadata. Single-file worktrees mount the file
         // itself as the provider root, so the empty relative path must resolve to
         // the root unchanged.
-        if relative.as_os_str().is_empty() {
+        if relative.is_empty() {
             Ok(self.root.as_ref().to_path_buf())
         } else {
             Ok(self.root.join(relative))
@@ -534,11 +534,11 @@ impl FsProviderCore {
                     metadata,
                 },
             );
-            if entries.len() > page_limit {
-                if let Some(last_key) = entries.last_key_value().map(|(key, _)| key.clone()) {
-                    entries.remove(&last_key);
-                    has_more = true;
-                }
+            if entries.len() > page_limit
+                && let Some(last_key) = entries.last_key_value().map(|(key, _)| key.clone())
+            {
+                entries.remove(&last_key);
+                has_more = true;
             }
         }
         let next_cursor = if has_more {

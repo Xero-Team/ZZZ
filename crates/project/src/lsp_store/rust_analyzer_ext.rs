@@ -14,6 +14,7 @@ pub const CARGO_DIAGNOSTICS_SOURCE_NAME: &str = "rustc";
 ///
 /// [Rust Analyzer Specification](https://rust-analyzer.github.io/book/contributing/lsp-extensions.html#server-status)
 #[derive(Debug)]
+#[allow(clippy::empty_enums)] // uninhabited marker; each LSP request needs a distinct type
 enum ServerStatus {}
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
@@ -125,7 +126,7 @@ pub fn cancel_flycheck(
                     }
                 })
                 .context("lsp ext cancel flycheck")?;
-        };
+        }
         anyhow::Ok(())
     })
 }
@@ -182,7 +183,7 @@ pub fn run_flycheck(
                     }
                 })
                 .context("lsp ext run flycheck")?;
-        };
+        }
         anyhow::Ok(())
     })
 }
@@ -231,7 +232,7 @@ pub fn clear_flycheck(
                     }
                 })
                 .context("lsp ext clear flycheck")?;
-        };
+        }
         anyhow::Ok(())
     })
 }

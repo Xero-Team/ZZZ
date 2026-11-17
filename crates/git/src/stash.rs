@@ -105,8 +105,7 @@ fn parse_stash_index(input: &str) -> Result<usize> {
     }
 
     let index_str = trimmed
-        .strip_prefix("stash@{")
-        .and_then(|s| s.strip_suffix('}'))
+        .strip_circumfix("stash@{", '}')
         .ok_or_else(|| anyhow!("Failed to extract index from stash reference"))?;
 
     index_str
@@ -121,8 +120,14 @@ fn parse_stash_index(input: &str) -> Result<usize> {
 /// - "On <branch>: <message>" -> (Some(branch), message)
 /// - "<message>" -> (None, message)
 fn parse_stash_message(input: &str) -> (Option<&str>, &str) {
-    // Handle "WIP on <branch>: <message>" pattern
-    if let Some(stripped) = input.strip_prefix("WIP on ")
+    // Both prefixes share the "<branch>: <message>" layout. They are mutually
+    // exclusive (different first letters), so selecting whichever matches with
+    // one `or_else` keeps the parsing body in a single place.
+    let stripped = input
+        .strip_prefix("WIP on ")
+        .or_else(|| input.strip_prefix("On "));
+
+    if let Some(stripped) = stripped
         && let Some(colon_pos) = stripped.find(": ")
     {
         let branch = &stripped[..colon_pos];
@@ -132,18 +137,6 @@ fn parse_stash_message(input: &str) -> (Option<&str>, &str) {
         }
     }
 
-    // Handle "On <branch>: <message>" pattern
-    if let Some(stripped) = input.strip_prefix("On ")
-        && let Some(colon_pos) = stripped.find(": ")
-    {
-        let branch = &stripped[..colon_pos];
-        let message = &stripped[colon_pos + 2..];
-        if !branch.is_empty() && !message.is_empty() {
-            return (Some(branch), message);
-        }
-    }
-
-    // Fallback: treat entire input as message with no branch
     (None, input)
 }
 
@@ -187,6 +180,12 @@ mod tests {
         let (branch, message) = parse_stash_message("On branch-name:");
         assert_eq!(branch, None);
         assert_eq!(message, "On branch-name:");
+
+        // A matching "On " prefix with an empty message still falls back. This
+        // covers the second `or_else` prefix and the `!message.is_empty()` guard.
+        let (branch, message) = parse_stash_message("On main: ");
+        assert_eq!(branch, None);
+        assert_eq!(message, "On main: ");
     }
 
     #[test]

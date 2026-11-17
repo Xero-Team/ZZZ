@@ -113,12 +113,8 @@ pub(crate) fn resolve_agent_image(
         // Try the destination as written, then as relative to every worktree
         // root. `find_project_path` works in remote workspaces too, since it
         // matches against the worktree's own (remote) absolute path.
-        let mut candidate_paths = vec![decoded.clone()];
-        candidate_paths.extend(
-            worktree_roots
-                .iter()
-                .map(|root| root.join(&decoded).to_string_lossy().into_owned()),
-        );
+        let mut candidate_paths = vec![PathBuf::from(decoded.as_str())];
+        candidate_paths.extend(worktree_roots.iter().map(|root| root.join(&decoded)));
 
         for candidate in &candidate_paths {
             let project_path = project.read(cx).find_project_path(candidate, cx);
@@ -574,14 +570,15 @@ impl Agent {
         }
     }
 
-    /// The bindings are the only localized variant, so this stays `_cx` outside
-    /// of test builds.
-    pub fn localized_label(&self, _cx: &App) -> SharedString {
+    /// Only the test-only `Stub` variant is localized, so `cx` goes unread in a
+    /// build without `test-support`.
+    #[cfg_attr(not(any(test, feature = "test-support")), allow(unused_variables))]
+    pub fn localized_label(&self, cx: &App) -> SharedString {
         match self {
             Self::Absent => SharedString::default(),
             Self::Custom { id, .. } => id.0.clone(),
             #[cfg(any(test, feature = "test-support"))]
-            Self::Stub => tr(_cx, "agent_ui.agent.stub", "Stub Agent"),
+            Self::Stub => tr(cx, "agent_ui.agent.stub", "Stub Agent"),
         }
     }
 
@@ -811,6 +808,7 @@ fn update_command_palette_filter(cx: &mut App) {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use agent_settings::{AgentProfileId, AgentSettings};
     use command_palette_hooks::CommandPaletteFilter;

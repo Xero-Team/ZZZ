@@ -77,9 +77,7 @@ fn install_local(args: LocalInstallArgs) -> Result<()> {
     } else {
         Profile::Release
     };
-    let channel = args
-        .channel
-        .unwrap_or_else(|| Channel::detect_shipping(&workspace));
+    let channel = args.channel.unwrap_or_else(Channel::detect_shipping);
     let target = Target::host_default();
 
     let update_explanation = format!(

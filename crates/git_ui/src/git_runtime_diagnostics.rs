@@ -420,7 +420,7 @@ async fn run_capturing(program: &str, args: &[&str]) -> anyhow::Result<String> {
             String::from_utf8_lossy(&output.stderr)
         );
     }
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    Ok(String::from_utf8_lossy_owned(output.stdout))
 }
 
 #[cfg(target_os = "macos")]

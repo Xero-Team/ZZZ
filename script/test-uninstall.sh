@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 uninstall_script="$script_dir/uninstall.sh"
 test_root=$(mktemp -d "${TMPDIR:-/tmp}/zzz-uninstall-test.XXXXXX")
 trap 'rm -rf "$test_root"' EXIT HUP INT TERM

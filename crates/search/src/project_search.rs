@@ -888,7 +888,7 @@ impl ProjectSearchView {
     }
 
     fn toggle_filters(&mut self, cx: &mut Context<Self>) {
-        self.filters_enabled = !self.filters_enabled;
+        self.filters_enabled.toggle();
         ActiveSettings::update_global(cx, |settings, cx| {
             settings.0.insert(
                 self.entity.read(cx).project.downgrade(),
@@ -927,7 +927,7 @@ impl ProjectSearchView {
     }
 
     fn toggle_replace(&mut self, _: &ToggleReplace, window: &mut Window, cx: &mut Context<Self>) {
-        self.replace_enabled = !self.replace_enabled;
+        self.replace_enabled.toggle();
         let editor_to_focus = if self.replace_enabled {
             self.replacement_editor.focus_handle(cx)
         } else {
@@ -956,7 +956,7 @@ impl ProjectSearchView {
     }
 
     fn toggle_opened_only(&mut self, _window: &mut Window, _cx: &mut Context<Self>) {
-        self.included_opened_only = !self.included_opened_only;
+        self.included_opened_only.toggle();
     }
 
     fn update_locale(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1428,14 +1428,29 @@ impl ProjectSearchView {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
-        let query = workspace.active_item(cx).and_then(|item| {
+        enum QuerySeed {
+            /// Content of the buffer search bar: already query syntax, with
+            /// escaping already applied if it was seeded in regex mode, so it
+            /// must never be re-escaped. It's carried over verbatim even if
+            /// the buffer search's mode differs from the project search's.
+            Query(String),
+            /// Raw text from the editor's selection or the word under the
+            /// cursor, so it gets escaped when entering a regex query.
+            Text(String),
+        }
+
+        let query_seed = workspace.active_item(cx).and_then(|item| {
             if let Some(buffer_search_query) = buffer_search_query(workspace, item.as_ref(), cx) {
-                return Some(buffer_search_query);
+                return Some(QuerySeed::Query(buffer_search_query));
             }
 
             let editor = item.act_as::<Editor>(cx)?;
             let query = editor.query_suggestion(None, window, cx);
-            if query.is_empty() { None } else { Some(query) }
+            if query.is_empty() {
+                None
+            } else {
+                Some(QuerySeed::Text(query))
+            }
         });
 
         let search = if let Some(existing) = existing {
@@ -1484,13 +1499,19 @@ impl ProjectSearchView {
                     cx,
                 );
             }
-            let query = action
-                .query
-                .as_deref()
-                .filter(|q| !q.is_empty())
-                .or(query.as_deref());
-            if let Some(query) = query {
+            if let Some(query) = action.query.as_deref().filter(|query| !query.is_empty()) {
                 search.set_query(query, window, cx);
+            } else if let Some(query_seed) = query_seed {
+                let query = match query_seed {
+                    QuerySeed::Query(query) => query,
+                    QuerySeed::Text(text)
+                        if search.search_options.contains(SearchOptions::REGEX) =>
+                    {
+                        regex::escape(&text)
+                    }
+                    QuerySeed::Text(text) => text,
+                };
+                search.set_query(&query, window, cx);
             }
             if let Some(included_files) = action.included_files.as_deref() {
                 search
@@ -2160,7 +2181,7 @@ impl ProjectSearchBar {
     fn focus_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(search_view) = self.active_project_search.as_ref() {
             search_view.update(cx, |search_view, cx| {
-                search_view.query_editor.focus_handle(cx).focus(window, cx);
+                search_view.focus_query_editor(window, cx);
             });
         }
     }
@@ -3005,14 +3026,15 @@ pub mod tests {
     };
 
     use super::*;
-    use editor::{DisplayPoint, display_map::DisplayRow};
+    use editor::{DisplayPoint, SelectionEffects, display_map::DisplayRow};
     use gpui::{Action, TestAppContext, VisualTestContext, WindowHandle};
-    use language::{FakeLspAdapter, rust_lang};
+    use language::{FakeLspAdapter, Point as BufferPoint, rust_lang};
     use pretty_assertions::assert_eq;
     use project::{FakeFs, Fs};
     use serde_json::json;
     use settings::{
-        InlayHintSettingsContent, SettingsStore, ThemeColorsContent, ThemeStyleContent,
+        InlayHintSettingsContent, SearchSettingsContent, SeedQuerySetting, SettingsStore,
+        ThemeColorsContent, ThemeStyleContent,
     };
     use util::{path, paths::PathStyle, rel_path::rel_path};
     use util_macros::perf;
@@ -4188,8 +4210,8 @@ pub mod tests {
         }) else {
             panic!("Search view expected to appear after new search event trigger")
         };
-        assert!(
-            search_view_2 != search_view,
+        assert_ne!(
+            search_view_2, search_view,
             "New search view should be open after `workspace::NewSearch` event"
         );
 
@@ -5260,6 +5282,81 @@ pub mod tests {
             .expect("unable to update search view");
     }
 
+    #[gpui::test]
+    async fn test_focus_search_selects_existing_query(cx: &mut TestAppContext) {
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.background_executor.clone());
+        fs.insert_tree(
+            path!("/dir"),
+            json!({
+                "one.rs": "const ONE: usize = 1;\n",
+            }),
+        )
+        .await;
+        let project = Project::test(fs, [path!("/dir").as_ref()], cx).await;
+        let window = cx.add_window(|window, cx| MultiWorkspace::test_new(project, window, cx));
+        let workspace = window
+            .read_with(cx, |mw, _| mw.workspace().clone())
+            .expect("window should contain a workspace");
+        let cx = &mut VisualTestContext::from_window(window.into(), cx);
+        let search_bar = window.build_entity(cx, |_, _| ProjectSearchBar::new());
+
+        workspace.update_in(cx, |workspace, window, cx| {
+            let pane = workspace.active_pane();
+            pane.update(cx, |pane, cx| {
+                pane.toolbar().update(cx, |toolbar, cx| {
+                    toolbar.add_item(search_bar.clone(), window, cx)
+                })
+            });
+            ProjectSearchView::deploy_search(
+                workspace,
+                &workspace::DeploySearch::default(),
+                window,
+                cx,
+            )
+        });
+
+        let search_view = cx.read(|cx| {
+            workspace
+                .read(cx)
+                .active_item(cx)
+                .and_then(|item| item.downcast::<ProjectSearchView>())
+                .expect("project search view should be active after deploying the search")
+        });
+
+        let query = "ONE";
+        search_view.update_in(cx, |search_view, window, cx| {
+            search_view.query_editor.update(cx, |query_editor, cx| {
+                query_editor.set_text(query, window, cx)
+            });
+            search_view.search(cx);
+        });
+        cx.run_until_parked();
+
+        search_bar.update_in(cx, |search_bar, window, cx| {
+            search_bar.focus_search(window, cx);
+        });
+
+        search_view.update_in(cx, |search_view, window, cx| {
+            assert!(
+                search_view.query_editor.focus_handle(cx).is_focused(window),
+                "refocusing the search bar should focus the query editor",
+            );
+            search_view.query_editor.update(cx, |query_editor, cx| {
+                let display_map = query_editor
+                    .display_map
+                    .update(cx, |map, cx| map.snapshot(cx));
+                let selection = query_editor.selections.newest::<BufferPoint>(&display_map);
+                assert_eq!(
+                    selection.start..selection.end,
+                    BufferPoint::new(0, 0)..BufferPoint::new(0, query.len() as u32),
+                    "refocusing the search bar should select the whole existing query",
+                );
+            });
+        });
+    }
+
     #[perf]
     #[gpui::test]
     async fn test_buffer_search_query_reused(cx: &mut TestAppContext) {
@@ -5338,6 +5435,109 @@ pub mod tests {
                 buffer_search_query,
                 "Project search should take the query from the buffer search bar since it got focused and had a query inside"
             );
+        });
+    }
+
+    #[gpui::test]
+    async fn test_seeded_project_search_query_is_escaped_in_regex_mode(cx: &mut TestAppContext) {
+        init_test(cx);
+        cx.update(|cx| {
+            SettingsStore::update_global(cx, |store, cx| {
+                store.update_user_settings(cx, |settings| {
+                    settings.editor.seed_search_query_from_cursor =
+                        Some(SeedQuerySetting::Selection);
+                    settings.editor.search = Some(SearchSettingsContent {
+                        regex: Some(true),
+                        ..Default::default()
+                    });
+                });
+            });
+        });
+
+        let fs = FakeFs::new(cx.background_executor.clone());
+        fs.insert_tree(
+            path!("/dir"),
+            json!({
+                "one.rs": "z.d\nzed\n",
+            }),
+        )
+        .await;
+        let project = Project::test(fs.clone(), [path!("/dir").as_ref()], cx).await;
+        let worktree_id = project.update(cx, |project, cx| {
+            project
+                .worktrees(cx)
+                .next()
+                .expect("project should have a worktree")
+                .read(cx)
+                .id()
+        });
+        let window =
+            cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+        let workspace = window
+            .read_with(cx, |multi_workspace, _| multi_workspace.workspace().clone())
+            .expect("window should contain a workspace");
+        let mut cx = VisualTestContext::from_window(window.into(), cx);
+
+        let editor = workspace
+            .update_in(&mut cx, |workspace, window, cx| {
+                workspace.open_path((worktree_id, rel_path("one.rs")), None, true, window, cx)
+            })
+            .await
+            .expect("should open test file")
+            .downcast::<Editor>()
+            .expect("opened item should be an editor");
+        cx.run_until_parked();
+
+        editor.update_in(&mut cx, |editor, window, cx| {
+            editor.change_selections(SelectionEffects::no_scroll(), window, cx, |selections| {
+                selections.select_ranges([BufferPoint::new(0, 0)..BufferPoint::new(0, 3)])
+            });
+        });
+
+        workspace.update_in(&mut cx, |workspace, window, cx| {
+            ProjectSearchView::deploy_search(workspace, &DeploySearch::default(), window, cx)
+        });
+        cx.run_until_parked();
+
+        let project_search_view = workspace
+            .read_with(&cx, |workspace, cx| {
+                workspace
+                    .active_pane()
+                    .read(cx)
+                    .active_item()
+                    .and_then(|item| item.downcast::<ProjectSearchView>())
+            })
+            .expect("should open a project search view");
+        project_search_view.update(&mut cx, |search_view, cx| {
+            assert_eq!(search_view.search_query_text(cx), r"z\.d");
+            search_view.search(cx);
+        });
+        cx.run_until_parked();
+
+        project_search_view.update(&mut cx, |search_view, cx| {
+            assert_eq!(search_view.entity.read(cx).match_ranges.len(), 1);
+        });
+
+        workspace.update_in(&mut cx, |workspace, window, cx| {
+            ProjectSearchView::deploy_search(
+                workspace,
+                &DeploySearch {
+                    query: Some("z.d".into()),
+                    regex: Some(true),
+                    ..Default::default()
+                },
+                window,
+                cx,
+            )
+        });
+        project_search_view.update(&mut cx, |search_view, cx| {
+            assert_eq!(search_view.search_query_text(cx), "z.d");
+            search_view.search(cx);
+        });
+        cx.run_until_parked();
+
+        project_search_view.update(&mut cx, |search_view, cx| {
+            assert_eq!(search_view.entity.read(cx).match_ranges.len(), 2);
         });
     }
 

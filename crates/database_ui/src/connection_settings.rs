@@ -10,29 +10,53 @@ use std::path::{Path, PathBuf};
 use database_core::{ConnectionConfig, ConnectionId, DataSource};
 use fs::Fs;
 use futures::channel::oneshot;
-use gpui::App;
-use settings::{RegisterSetting, Settings, SettingsContent, update_settings_file_with_completion};
+use gpui::{App, Pixels, px};
+use settings::{
+    DockSide, RegisterSetting, Settings, SettingsContent, update_settings_file_with_completion,
+};
 
-/// Saved connections as read from settings.
-#[derive(Debug, Default, Clone, RegisterSetting)]
+/// Saved connections and panel placement as read from settings.
+#[derive(Debug, Clone, RegisterSetting)]
 pub struct DatabaseSettings {
     pub connections: Vec<ConnectionConfig>,
+    pub button: bool,
+    pub default_width: Pixels,
+    pub dock: DockSide,
+}
+
+impl Default for DatabaseSettings {
+    fn default() -> Self {
+        Self {
+            connections: Vec::new(),
+            button: true,
+            default_width: px(280.),
+            dock: DockSide::Left,
+        }
+    }
 }
 
 impl Settings for DatabaseSettings {
     fn from_settings(content: &SettingsContent) -> Self {
-        let connections = content
-            .database
-            .as_ref()
-            .map(|database| {
-                database
-                    .connections
-                    .iter()
-                    .filter_map(connection_from_content)
-                    .collect()
-            })
-            .unwrap_or_default();
-        Self { connections }
+        let database = content.database.as_ref();
+        let connections = database.map_or_default(|database| {
+            database
+                .connections
+                .iter()
+                .filter_map(connection_from_content)
+                .collect()
+        });
+        Self {
+            connections,
+            button: database
+                .and_then(|database| database.button)
+                .unwrap_or(true),
+            default_width: database
+                .and_then(|database| database.default_width)
+                .map_or(px(280.), px),
+            dock: database
+                .and_then(|database| database.dock)
+                .unwrap_or(DockSide::Left),
+        }
     }
 }
 

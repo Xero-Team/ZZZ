@@ -669,6 +669,7 @@ async fn read_package_json(
     Ok(None)
 }
 
+#[allow(clippy::empty_enums)] // uninhabited marker; each LSP request needs a distinct type
 enum Format {}
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -705,6 +706,7 @@ impl lsp::request::Request for Format {
     const METHOD: &'static str = "prettier/format";
 }
 
+#[allow(clippy::empty_enums)] // uninhabited marker; each LSP request needs a distinct type
 enum ClearCache {}
 
 impl lsp::request::Request for ClearCache {
@@ -1123,7 +1125,7 @@ mod tests {
                 assert!(message.contains("/root/work/full-stack-foundations/exercises/03.loading/01.problem.loader"), "Error message should mention which project had prettier defined");
                 assert!(message.contains("/root/work/full-stack-foundations"), "Error message should mention potential candidates without prettier node_modules contents");
             },
-        };
+        }
     }
 
     #[gpui::test]

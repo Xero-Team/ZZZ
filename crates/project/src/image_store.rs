@@ -126,6 +126,7 @@ struct ProjectImageSource {
     path: ProjectPath,
 }
 
+#[allow(clippy::empty_enums)] // uninhabited marker; distinct from the other Asset markers
 enum ProjectImageAsset {}
 
 impl Asset for ProjectImageAsset {

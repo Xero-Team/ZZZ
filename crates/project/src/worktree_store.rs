@@ -774,8 +774,53 @@ impl WorktreeStore {
                 }
             };
 
+            // The cleanup lives in its own detached task rather than in the
+            // task handed to each caller: callers are cancelled routinely, and
+            // an entry left in `loading_worktrees` would pin the resolved
+            // worktree (and keep `initial_scan_complete` false) forever.
+            let loading_task = cx.spawn({
+                let abs_path = abs_path.clone();
+                async move |this, cx| {
+                    let result = task.await;
+                    this.update(cx, |this, cx| {
+                        this.loading_worktrees.remove(&abs_path);
+                        if !visible || !this.scanning_enabled || result.is_err() {
+                            this.update_initial_scan_state(cx);
+                        }
+                    })
+                    .log_err();
+
+                    if let Ok(worktree) = &result {
+                        if let Some((trusted_worktrees, worktree_store)) = this
+                            .update(cx, |_, cx| {
+                                TrustedWorktrees::try_get_global(cx).zip(Some(cx.entity()))
+                            })
+                            .ok()
+                            .flatten()
+                        {
+                            trusted_worktrees.update(cx, |trusted_worktrees, cx| {
+                                trusted_worktrees.can_trust(
+                                    &worktree_store,
+                                    worktree.read(cx).id(),
+                                    cx,
+                                );
+                            });
+                        }
+
+                        this.update(cx, |this, cx| {
+                            if this.scanning_enabled && visible {
+                                this.observe_worktree_scan_completion(worktree, cx);
+                            }
+                        })
+                        .log_err();
+                    }
+
+                    result
+                }
+            });
+
             self.loading_worktrees
-                .insert(abs_path.clone(), task.shared());
+                .insert(abs_path.clone(), loading_task.shared());
 
             if visible && self.scanning_enabled {
                 *self.initial_scan_complete.0.borrow_mut() = false;
@@ -786,45 +831,7 @@ impl WorktreeStore {
             .get(&abs_path)
             .expect("entry should be present")
             .clone();
-        cx.spawn(async move |this, cx| {
-            let result = task.await;
-            this.update(cx, |this, cx| {
-                this.loading_worktrees.remove(&abs_path);
-                if !visible || !this.scanning_enabled || result.is_err() {
-                    this.update_initial_scan_state(cx);
-                }
-            })
-            .log_err();
-
-            match result {
-                Ok(worktree) => {
-                    if let Some((trusted_worktrees, worktree_store)) = this
-                        .update(cx, |_, cx| {
-                            TrustedWorktrees::try_get_global(cx).zip(Some(cx.entity()))
-                        })
-                        .ok()
-                        .flatten()
-                    {
-                        trusted_worktrees.update(cx, |trusted_worktrees, cx| {
-                            trusted_worktrees.can_trust(
-                                &worktree_store,
-                                worktree.read(cx).id(),
-                                cx,
-                            );
-                        });
-                    }
-
-                    this.update(cx, |this, cx| {
-                        if this.scanning_enabled && visible {
-                            this.observe_worktree_scan_completion(&worktree, cx);
-                        }
-                    })
-                    .log_err();
-                    Ok(worktree)
-                }
-                Err(err) => Err((*err).cloned()),
-            }
-        })
+        cx.background_spawn(async move { task.await.map_err(|error| (*error).cloned()) })
     }
 
     fn create_remote_worktree(
@@ -1117,7 +1124,7 @@ impl WorktreeStore {
                 let push_strong_handle =
                     self.retain_worktrees || old_worktree.read(cx).is_visible();
                 let handle = if push_strong_handle {
-                    WorktreeHandle::Strong(old_worktree.clone())
+                    WorktreeHandle::Strong(old_worktree)
                 } else {
                     WorktreeHandle::Weak(old_worktree.downgrade())
                 };

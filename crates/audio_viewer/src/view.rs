@@ -83,9 +83,9 @@ pub struct AudioView {
     pub(crate) volume_track_bounds: Option<Bounds<Pixels>>,
     pub(crate) scrub: Option<Scrub>,
     load_generation: u64,
-    _load_task: Task<()>,
-    _waveform_task: Option<Task<()>>,
-    _position_task: Option<Task<()>>,
+    load_task: Task<()>,
+    waveform_task: Option<Task<()>>,
+    position_task: Option<Task<()>>,
     volume_persist_task: Option<Task<()>>,
     _worktree_subscription: Subscription,
 }
@@ -143,9 +143,9 @@ impl AudioView {
             volume_track_bounds: None,
             scrub: None,
             load_generation: 0,
-            _load_task: Task::ready(()),
-            _waveform_task: None,
-            _position_task: None,
+            load_task: Task::ready(()),
+            waveform_task: None,
+            position_task: None,
             volume_persist_task: None,
             _worktree_subscription: worktree_subscription,
         };
@@ -183,10 +183,10 @@ impl AudioView {
 
     fn start_load(&mut self, cx: &mut Context<Self>) {
         let generation = advance_load_generation(&mut self.load_generation);
-        drop(self._waveform_task.take());
-        drop(mem::replace(&mut self._load_task, Task::ready(())));
+        drop(self.waveform_task.take());
+        drop(mem::replace(&mut self.load_task, Task::ready(())));
 
-        self._load_task = cx.spawn(async move |this, cx| {
+        self.load_task = cx.spawn(async move |this, cx| {
             let prepared = this.update(cx, |view, cx| {
                 let item = view.audio_item.read(cx);
                 let format_hint = view
@@ -349,8 +349,8 @@ impl AudioView {
         let generation = loaded.generation;
         let waveform_cache = WaveformCache::default_cache();
 
-        drop(self._waveform_task.take());
-        self._waveform_task = Some(cx.spawn(async move |this, cx| {
+        drop(self.waveform_task.take());
+        self.waveform_task = Some(cx.spawn(async move |this, cx| {
             let result = cx
                 .background_spawn(async move {
                     let cache_key = waveform_cache.key_for_path(
@@ -599,7 +599,7 @@ impl AudioView {
     }
 
     fn start_position_tick(&mut self, cx: &mut Context<Self>) {
-        self._position_task = Some(cx.spawn(async move |this, cx| {
+        self.position_task = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(POSITION_TICK).await;
                 let Ok(keep_ticking) = this.update(cx, |view, cx| {
@@ -675,7 +675,7 @@ impl AudioView {
         self.playback_error = None;
         self.position = Duration::ZERO;
         self.last_notified_position = Duration::ZERO;
-        self._position_task = None;
+        self.position_task = None;
     }
 
     fn clamp_position(&self, position: Duration) -> Duration {
@@ -756,7 +756,7 @@ impl AudioView {
                     handle.pause();
                 }
                 self.playback = PlaybackStatus::Paused;
-                self._position_task = None;
+                self.position_task = None;
                 cx.notify();
             }
             PlaybackStatus::Paused => {
@@ -781,12 +781,12 @@ impl AudioView {
     }
 
     pub(crate) fn toggle_repeat(&mut self, cx: &mut Context<Self>) {
-        self.repeat = !self.repeat;
+        self.repeat.toggle();
         cx.notify();
     }
 
     pub(crate) fn toggle_lyrics(&mut self, cx: &mut Context<Self>) {
-        self.lyrics_visible = !self.lyrics_visible;
+        self.lyrics_visible.toggle();
         cx.notify();
     }
 
@@ -1164,7 +1164,7 @@ mod tests {
 
     #[test]
     fn format_timestamp_hours() {
-        assert_eq!(format_timestamp(Duration::from_secs(3600)), "1:00:00");
+        assert_eq!(format_timestamp(Duration::from_hours(1)), "1:00:00");
         assert_eq!(format_timestamp(Duration::from_secs(3661)), "1:01:01");
     }
 
@@ -1217,13 +1217,13 @@ mod tests {
 
     #[test]
     fn playback_retry_preserves_position_until_end() {
-        let duration = Some(Duration::from_secs(60));
+        let duration = Some(Duration::from_mins(1));
         assert_eq!(
             playback_start_position(Duration::from_secs(42), duration),
             Duration::from_secs(42)
         );
         assert_eq!(
-            playback_start_position(Duration::from_secs(60), duration),
+            playback_start_position(Duration::from_mins(1), duration),
             Duration::ZERO
         );
         assert_eq!(

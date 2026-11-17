@@ -64,7 +64,7 @@ impl Editor {
         }
 
         self.next_scroll_position = self.next_scroll_position.next();
-        self._scroll_cursor_center_top_bottom_task = cx.spawn(async move |editor, cx| {
+        self.scroll_cursor_center_top_bottom_task = cx.spawn(async move |editor, cx| {
             cx.background_executor()
                 .timer(SCROLL_CENTER_TOP_BOTTOM_DEBOUNCE_TIMEOUT)
                 .await;

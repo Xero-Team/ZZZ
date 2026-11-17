@@ -573,7 +573,7 @@ impl Hash for HighlightStyle {
         self.underline.hash(state);
         self.strikethrough.hash(state);
         state.write_u32(u32::from_be_bytes(
-            self.fade_out.map(|f| f.to_be_bytes()).unwrap_or_default(),
+            self.fade_out.map_or_default(|f| f.to_be_bytes()),
         ));
     }
 }
@@ -671,7 +671,9 @@ impl Style {
             .to_pixels(rem_size)
             .clamp_radii_for_quad_size(bounds.size);
 
-        window.paint_shadows(bounds, corner_radii, &self.box_shadow);
+        if !self.box_shadow.is_empty() && !cx.is_software_rendering() {
+            window.paint_shadows(bounds, corner_radii, &self.box_shadow);
+        }
 
         let background_color = self.background.as_ref().and_then(Fill::color);
         if background_color.is_some_and(|color| !color.is_transparent()) {
@@ -681,11 +683,9 @@ impl Style {
                     | BackgroundTag::PatternSlash
                     | BackgroundTag::Checkerboard => color.solid,
 
-                    BackgroundTag::LinearGradient => color
-                        .colors
-                        .first()
-                        .map(|stop| stop.color)
-                        .unwrap_or_default(),
+                    BackgroundTag::LinearGradient => {
+                        color.colors.first().map_or_default(|stop| stop.color)
+                    }
                 },
                 None => Hsla::default(),
             };

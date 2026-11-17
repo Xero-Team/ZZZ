@@ -4,6 +4,10 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 allowlist="$root/script/philosophy-allowlist"
 failures=0
+# Meta-assertions record that they ran; the final guard fails if one of them
+# was removed from the run list (deleting its own `check` line would otherwise
+# disable the guard that is supposed to detect exactly that).
+meta_assertions_ran=""
 
 check() {
     local description="$1"
@@ -416,10 +420,28 @@ check_crash_reporting_is_local() {
             "$root/crates/crashes/src/crashes.rs"
 }
 
+# Every host in the shipped defaults and the client must be registered. The
+# `if ! "$@"` wrapper suppresses `set -e` inside this function and the old
+# `2>/dev/null` hid a failed scan, so an empty URL set (missing/renamed inputs,
+# emptied files, or an `rg` failure) made the loop below accept nothing and
+# silently disabled the gate. Assert the inputs and a non-empty scan result.
 check_allowlisted_hosts() {
-    local urls
-    urls=$(rg --no-filename -o 'https?://[^"` )]+' "$root/assets/settings/default.json" "$root/crates/client/src/client.rs" \
+    local urls source host
+    for source in \
+        "$root/assets/settings/default.json" \
+        "$root/crates/client/src/client.rs"; do
+        if [[ ! -f "$source" ]]; then
+            echo "host allowlist scan input is missing: $source" >&2
+            return 1
+        fi
+    done
+    urls=$(rg --no-filename -o 'https?://[^"` )]+' \
+        "$root/assets/settings/default.json" "$root/crates/client/src/client.rs" \
         2>/dev/null | sed -E 's#https?://([^/:]+).*#\1#; s/[][{}]//g' | sort -u)
+    if [[ -z "$urls" ]]; then
+        echo "host allowlist scan found no URLs; default settings must keep a server_url" >&2
+        return 1
+    fi
     while read -r host; do
         [[ -z "$host" ]] && continue
         if ! rg -qxF "$host" "$allowlist"; then
@@ -427,6 +449,133 @@ check_allowlisted_hosts() {
             return 1
         fi
     done <<< "$urls"
+}
+
+check_no_telemetry_macro() {
+    ! rg -n -F 'telemetry::event!' "$root/crates" --glob '*.rs'
+}
+
+# Every assertion above must also appear in the run list below. A check_*
+# function that is never invoked, or an invocation with no matching function,
+# silently weakens the gate; fail closed instead of letting the omission pass.
+check_all_assertions_are_wired() {
+    local script defined invoked
+    meta_assertions_ran+=" wired"
+    script="${BASH_SOURCE[0]}"
+    defined=$(sed -nE 's/^(check_[a-z0-9_]+)\(\).*/\1/p' "$script" | sort -u)
+    invoked=$(sed -nE 's/^check "[^"]*" (check_[a-z0-9_]+)$/\1/p' "$script" | sort -u)
+    # The `check` wrapper suppresses `set -e` and both lists come from one
+    # file; if that file is unreadable or emptied, both lists become empty and
+    # compare equal, so the guard would pass with zero assertions protecting it.
+    if [[ -z "$defined" || -z "$invoked" ]]; then
+        echo "assertion wiring scan found no check_* definitions or invocations" >&2
+        return 1
+    fi
+    if [[ "$defined" != "$invoked" ]]; then
+        echo "defined but not run: $(comm -23 <(echo "$defined") <(echo "$invoked") | tr '\n' ' ')" >&2
+        echo "run but not defined: $(comm -13 <(echo "$defined") <(echo "$invoked") | tr '\n' ' ')" >&2
+        return 1
+    fi
+}
+
+check_deleted_crates_absent() {
+    # REFERENCE.md lists these crates as removed with their plan/sign-in UX.
+    # The six collab/call crates have their own assertion (check_collab_absent);
+    # these had only narrower call-site checks, so recreating one as a crate or
+    # workspace member went unnoticed.
+    local directory
+    for directory in \
+        copilot copilot_ui copilot_chat ai_onboarding edit_prediction_ui; do
+        if test -d "$root/crates/$directory" \
+            || rg -q -F "\"crates/$directory\"" "$root/Cargo.toml"; then
+            echo "removed crate reintroduced: $directory" >&2
+            return 1
+        fi
+    done
+}
+
+# These hosts stay in philosophy-allowlist for runtime URLs a user configures
+# by hand, but they must never appear in shipped product paths. Without this,
+# check_allowlisted_hosts would let a reintroduction into default settings or
+# client.rs pass, because the host is already registered in the allowlist.
+check_no_legacy_collab_hosts() {
+    ! rg -n 'cloud\.zed\.dev|collab\.zed\.dev|staging\.zed\.dev|staging-collab\.zed\.dev' \
+        "$root/crates" "$root/assets" "$root/script/install.sh" \
+        --glob '!**/vendor/**'
+}
+
+# The hosted edit-prediction data-collection UX was removed with the
+# edit_prediction crates (see REFERENCE.md). These identifiers covered its
+# feature gate, rating modal, and menu entry; recreating any of them is a
+# regression, not a local-only feature.
+check_no_edit_prediction_collection_ux() {
+    ! rg -n 'can_collect_data|rate_prediction_modal|Training Data Collection|training_data_collection' \
+        "$root/crates" "$root/assets" --glob '!**/vendor/**'
+}
+
+# docs/AGENTS.md and REFERENCE.md forbid hotlinking upstream-hosted images.
+# Other docs assertions cover community links and hosted documentation pages,
+# but not `zed.dev/img/...` or `images.zed.dev/...`, so a reintroduced hotlink
+# would pass the gate silently.
+check_no_hosted_image_hotlinks() {
+    ! rg -n 'https?://(www\.)?(zed\.dev/img/|images\.zed\.dev/)' \
+        "$root/docs/src" --glob '*.md'
+}
+
+# REFERENCE.md records the local-first promises these three legal files make.
+# The existing check_privacy_policy_no_zed_industries is purely negative (it
+# rejects Zed-specific opt-out copy in one file), and the commercial-identifier
+# check rejects added sales identifiers. Neither notices the positive
+# commitments being deleted or rewritten, so assert their presence directly.
+check_legal_local_first_promises() {
+    local file
+    for file in \
+        "$root/legal/subprocessors.md" \
+        "$root/legal/privacy-policy.md" \
+        "$root/legal/third-party-terms.md"; do
+        test -f "$file" || return 1
+    done
+    rg -q -F 'no default subprocessors' "$root/legal/subprocessors.md" \
+        && rg -q -F 'no default subprocessors' "$root/legal/privacy-policy.md" \
+        && rg -q -F 'does not host third-party services' "$root/legal/third-party-terms.md" \
+        && rg -q -F 'collect telemetry' "$root/legal/privacy-policy.md"
+}
+
+# `rg` exits 2 on a missing path, and every "X must be absent" assertion is
+# spelled `! rg ... "$path"`. The negation turns that error into a *passing*
+# assertion, so deleting or renaming a scanned file silently disables every
+# check that guarded it. Assert that each concrete path those assertions scan
+# still exists, except paths a sibling `! test -f/-d` guards as deliberately
+# absent. This fails closed on the deletion instead of letting the gate go
+# green; a brand-new negative assertion pointing at a missing path must either
+# create the file or add an explicit absence guard.
+check_negative_rg_targets_exist() {
+    local script targets deliberate target missing=0
+    meta_assertions_ran+=" targets"
+    script="${BASH_SOURCE[0]}"
+    targets=$(sed -e :a -e '/\\$/N; s/\\\n/ /; ta' "$script" \
+        | grep -E '(^|&&)[[:space:]]*![[:space:]]*rg[[:space:]]' \
+        | grep -oE '\$root/[A-Za-z0-9_.*/-]+' \
+        | sed 's#^\$root/##; s/[",;)]*$//' \
+        | grep -v '\*' | sort -u)
+    deliberate=$(grep -oE '(![[:space:]]*test[[:space:]]+-[fd]|\[[[:space:]]*![[:space:]]*-[fd])[[:space:]]+"?\$root/[A-Za-z0-9_.*/-]+' "$script" \
+        | grep -oE '\$root/[A-Za-z0-9_.*/-]+' \
+        | sed 's#^\$root/##; s/["]*$//' | sort -u)
+    # An empty target set makes the loop below check nothing and return success,
+    # so an unreadable/emptied script source would silently disable this guard.
+    if [[ -z "$targets" ]]; then
+        echo "negative rg assertion scan found no paths to check" >&2
+        return 1
+    fi
+    while IFS= read -r target; do
+        [[ -z "$target" ]] && continue
+        grep -qxF "$target" <<< "$deliberate" && continue
+        if [[ ! -e "$root/$target" ]]; then
+            echo "negative rg assertion scans a missing path: $target" >&2
+            missing=$((missing + 1))
+        fi
+    done <<< "$targets"
+    (( missing == 0 ))
 }
 
 check "default settings are local-first" check_default_settings
@@ -497,6 +646,24 @@ check "internal user search API is absent" check_no_internal_user_api
 check "telemetry directories are absent" check_telemetry_dirs_absent
 check "crash reporting is local-only" check_crash_reporting_is_local
 check "network hosts are allowlisted" check_allowlisted_hosts
+check "telemetry::event! is absent" check_no_telemetry_macro
+check "removed crates are absent" check_deleted_crates_absent
+check "legacy collab hosts are absent from product paths" check_no_legacy_collab_hosts
+check "edit-prediction data-collection UX is absent" check_no_edit_prediction_collection_ux
+check "docs do not hotlink upstream-hosted images" check_no_hosted_image_hotlinks
+check "legal files keep their local-first promises" check_legal_local_first_promises
+check "negative rg assertions scan existing paths" check_negative_rg_targets_exist
+check "every assertion is wired into the run list" check_all_assertions_are_wired
+
+# The two meta-assertions guard the run list itself. Deleting either one's own
+# `check` line would otherwise disable the very guard meant to detect that, so
+# verify their run markers here, independently of the `check` wrapper.
+for marker in wired targets; do
+    if [[ "$meta_assertions_ran" != *" $marker"* ]]; then
+        echo "FAIL: meta-assertion '$marker' did not run" >&2
+        failures=$((failures + 1))
+    fi
+done
 
 if (( failures > 0 )); then
     echo "philosophy check failed with $failures violation(s)" >&2

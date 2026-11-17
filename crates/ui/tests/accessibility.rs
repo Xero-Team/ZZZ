@@ -558,7 +558,9 @@ fn components_emit_roles_labels_and_state() {
         .update
         .nodes
         .iter()
-        .find(|(_, node)| node.role() == gpui::accesskit::Role::ListItem)
+        .find(|(_, node)| {
+            node.role() == gpui::accesskit::Role::ListItem && node.label() == Some("Item")
+        })
         .expect("list item semantic node should exist");
     assert_eq!(list_item.label(), Some("Item"));
     assert_eq!(list_item.is_expanded(), Some(true));

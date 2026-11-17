@@ -692,7 +692,7 @@ mod tests {
             .output()
             .expect("failed to spawn sh");
 
-        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+        let stdout = String::from_utf8_lossy_owned(output.stdout);
 
         assert_eq!(
             stdout,

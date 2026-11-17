@@ -168,7 +168,7 @@ fn compute_bracket_ranges(
                     multi_buffer_snapshot.anchor_in_buffer(anchors.start)?
                         ..multi_buffer_snapshot.anchor_in_buffer(anchors.end)?,
                 );
-            };
+            }
 
             if context.start <= pair.close_range.start && pair.close_range.end <= context.end {
                 let anchors = buffer_snapshot.anchor_range_inside(pair.close_range);
@@ -176,7 +176,7 @@ fn compute_bracket_ranges(
                     multi_buffer_snapshot.anchor_in_buffer(anchors.start)?
                         ..multi_buffer_snapshot.anchor_in_buffer(anchors.end)?,
                 );
-            };
+            }
 
             Some((color_index % accents_count, ranges))
         })

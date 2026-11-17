@@ -57,11 +57,11 @@ impl PickerPrompt {
         cx: &mut Context<Self>,
     ) -> Self {
         let picker = cx.new(|cx| Picker::uniform_list(delegate, window, cx));
-        let _subscription = cx.subscribe(&picker, |_, _, _, cx| cx.emit(DismissEvent));
+        let subscription = cx.subscribe(&picker, |_, _, _, cx| cx.emit(DismissEvent));
         Self {
             picker,
             rem_width,
-            _subscription,
+            _subscription: subscription,
         }
     }
 }

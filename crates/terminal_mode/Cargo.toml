@@ -32,12 +32,14 @@ serde.workspace = true
 serde_json.workspace = true
 settings.workspace = true
 terminal.workspace = true
+terminal_mode_core.workspace = true
 terminal_view.workspace = true
 ui.workspace = true
 ui_input.workspace = true
 util.workspace = true
 vfs.workspace = true
 workspace.workspace = true
+workspace_modes.workspace = true
 worktree.workspace = true
 
 [dev-dependencies]

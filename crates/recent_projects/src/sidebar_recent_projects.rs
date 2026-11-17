@@ -62,7 +62,7 @@ impl SidebarRecentProjects {
                 picker.delegate.focus_handle = picker_focus_handle;
             });
 
-            let _subscription =
+            let subscription =
                 cx.subscribe(&picker, |_this: &mut Self, _, _, cx| cx.emit(DismissEvent));
 
             let db = WorkspaceDb::global(cx);
@@ -90,7 +90,7 @@ impl SidebarRecentProjects {
 
             Self {
                 picker,
-                _subscription,
+                _subscription: subscription,
             }
         })
     }
@@ -282,7 +282,7 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
                     if let RemoteConnectionOptions::Ssh(connection) = &mut connection {
                         crate::RemoteSettings::get_global(cx)
                             .fill_connection_options_from_settings(connection);
-                    };
+                    }
                     let paths = recent_workspace.paths.paths().to_vec();
                     cx.spawn_in(window, async move |_, cx| {
                         open_remote_project(connection.clone(), paths, app_state, open_options, cx)
@@ -353,8 +353,12 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
             .ordered_paths()
             .map(|p| p.compact())
             .map(|path| {
-                let (label, path_match) =
-                    highlights_for_path(path.as_ref(), &hit.positions, path_start_offset);
+                let (label, path_match) = highlights_for_path(
+                    path.as_ref(),
+                    workspace.effective_path_style(),
+                    &hit.positions,
+                    path_start_offset,
+                );
                 path_start_offset += path_match.text.len();
                 label
             })
@@ -369,7 +373,7 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
 
         let highlighted_match = HighlightedMatchWithPaths {
             prefix,
-            match_label: HighlightedMatch::join(match_labels.into_iter().flatten(), ", "),
+            match_label: HighlightedMatch::join(match_labels.into_iter(), ", "),
             paths: Vec::new(),
             active: false,
         };

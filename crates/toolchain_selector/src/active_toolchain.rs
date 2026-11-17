@@ -19,7 +19,7 @@ pub struct ActiveToolchain {
     term: SharedString,
     workspace: WeakEntity<Workspace>,
     active_buffer: Option<(WorktreeId, WeakEntity<Buffer>, Subscription)>,
-    _update_toolchain_task: Task<Option<()>>,
+    update_toolchain_task: Task<Option<()>>,
 }
 
 impl ActiveToolchain {
@@ -51,7 +51,7 @@ impl ActiveToolchain {
             term: tr(cx, "toolchain_selector.active.term", "Toolchain").into(),
             workspace: workspace.weak_handle(),
 
-            _update_toolchain_task: Self::spawn_tracker_task(window, cx),
+            update_toolchain_task: Self::spawn_tracker_task(window, cx),
         }
     }
     fn spawn_tracker_task(window: &mut Window, cx: &mut Context<Self>) -> Task<Option<()>> {
@@ -139,12 +139,12 @@ impl ActiveToolchain {
             window,
             |this, _, event: &BufferEvent, window, cx| {
                 if matches!(event, BufferEvent::LanguageChanged(_)) {
-                    this._update_toolchain_task = Self::spawn_tracker_task(window, cx);
+                    this.update_toolchain_task = Self::spawn_tracker_task(window, cx);
                 }
             },
         );
         self.active_buffer = Some((worktree_id, buffer.downgrade(), subscription));
-        self._update_toolchain_task = Self::spawn_tracker_task(window, cx);
+        self.update_toolchain_task = Self::spawn_tracker_task(window, cx);
 
         cx.notify();
     }
@@ -158,7 +158,7 @@ impl ActiveToolchain {
     fn clear_active_buffer(&mut self) {
         self.active_buffer = None;
         self.active_toolchain = None;
-        self._update_toolchain_task = Task::ready(None);
+        self.update_toolchain_task = Task::ready(None);
     }
 
     fn active_toolchain(

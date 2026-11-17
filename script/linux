@@ -52,8 +52,10 @@ if [[ -n $apt ]]; then
     lld
     llvm
     jq
+    ripgrep
     git
     curl
+    shellcheck
     gettext-base
     elfutils
     libsqlite3-dev
@@ -99,8 +101,9 @@ if [[ -n $apt ]]; then
     deps+=( clang-18 libstdc++-11-dev )
   fi
 
-  $maysudo "$apt" update
-  $maysudo "$apt" install -y "${deps[@]}"
+  source "$(dirname "$0")/lib/apt.sh"
+  apt_retry $maysudo "$apt" update
+  apt_retry $maysudo "$apt" install -y "${deps[@]}"
 
   finalize
   exit 0
@@ -132,6 +135,7 @@ if [[ -n $dnf ]] || [[ -n $yum ]]; then
     pipewire
     xdg-desktop-portal
     jq
+    ripgrep
     git
     tar
   )
@@ -192,6 +196,7 @@ if [[ -n $zyp ]]; then
     git
     gzip
     jq
+    ripgrep
     libvulkan1
     libX11-devel
     libxcb-devel
@@ -237,6 +242,7 @@ if [[ -n $pacman ]]; then
     pipewire
     xdg-desktop-portal
     jq
+    ripgrep
     git
   )
   $maysudo "$pacman" -Syu --needed --noconfirm "${deps[@]}"
@@ -253,6 +259,7 @@ if [[ -n $xbps ]]; then
     clang
     cmake
     jq
+    ripgrep
     elfutils-devel
     gcc
     alsa-lib-devel
@@ -293,6 +300,7 @@ if [[ -n $emerge ]]; then
     x11-libs/libxkbcommon
     dev-db/sqlite
     media-video/pipewire
+    sys-apps/ripgrep
     sys-apps/xdg-desktop-portal
   )
   $maysudo "$emerge" -u "${deps[@]}"

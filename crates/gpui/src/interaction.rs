@@ -34,6 +34,9 @@ pub(crate) struct InteractionOwner {
     pub(crate) focus: Option<FocusId>,
     pub(crate) focus_generation: u64,
     pub(crate) focus_enabled: bool,
+    /// Focus path recorded while focus-lost listeners are dispatched, so they can
+    /// restore focus to an ancestor of the element that lost it.
+    pub(crate) focus_lost_path: SmallVec<[FocusId; 8]>,
     pub(crate) pending_input: Option<PendingInput>,
     pub(crate) pending_modifier: ModifierState,
     pub(crate) pending_input_observers: SubscriberSet<(), AnyObserver>,
@@ -66,6 +69,7 @@ impl InteractionOwner {
             focus: None,
             focus_generation: 0,
             focus_enabled: true,
+            focus_lost_path: SmallVec::new(),
             pending_input: None,
             pending_modifier: ModifierState::default(),
             pending_input_observers: SubscriberSet::new(),

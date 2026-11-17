@@ -1,0 +1,18 @@
+This crate ports code from zed-ZH_CN
+(https://github.com/ReachForStar/zed-ZH_CN) at
+4595b8478bf0e47b4a3d545cc99b73a043f4ead7.
+
+Upstream license: GNU General Public License version 3 or later.
+The full license text is in the repository root LICENSE-GPL file.
+
+Ported files:
+- src/office_preview.rs
+- src/document.rs
+- src/docx.rs
+- src/markup.rs
+- src/pptx.rs
+- src/spreadsheet.rs
+- src/persistence.rs
+- src/view.rs
+
+PDF rendering was dropped because ZZZ already ships pdf_viewer.

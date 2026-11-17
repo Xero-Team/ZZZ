@@ -1,0 +1,39 @@
+# Owners for the paths that can weaken ZZZ's own gates.
+#
+# `docs/src/development/review-policy.md` makes these paths high tier: a change
+# here can silence the check that is supposed to catch it, so it needs an owner
+# to sign off on top of the usual review. Everything else is owned by whoever
+# reviews it, and adding a catch-all `*` entry would put one person in front of
+# every pull request.
+#
+# Keep this list in sync with `TIERS["high"]` in `script/check-review-tier`.
+# The classifier decides the tier; this file decides who must approve it.
+
+# Workflows, templates, and the gate scripts they call.
+/.github/                                    @BegoniaHe
+
+# Repository gates. Editing one of these edits the review process itself.
+/script/                                     @BegoniaHe
+
+# Build tooling, including the `check` gate list.
+/tooling/                                    @BegoniaHe
+
+# Agent instructions: skills and agents change how future changes are written.
+/.agents/                                    @BegoniaHe
+
+# Project rules and the rejection ledger.
+/.rules                                      @BegoniaHe
+/docs/src/development/upstream-rejected.tsv  @BegoniaHe
+
+# Dependency and toolchain surface.
+/Cargo.toml                                  @BegoniaHe
+/Cargo.lock                                  @BegoniaHe
+/rust-toolchain.toml                         @BegoniaHe
+/clippy.toml                                 @BegoniaHe
+/rustfmt.toml                                @BegoniaHe
+/typos.toml                                  @BegoniaHe
+/deny.toml                                   @BegoniaHe
+/vendor/                                     @BegoniaHe
+
+# Every user-visible string, plus the fallback parity the locale gates enforce.
+/assets/locales/                             @BegoniaHe

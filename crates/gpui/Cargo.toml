@@ -2,6 +2,7 @@
 name = "gpui"
 version = "0.2.2"
 edition.workspace = true
+rust-version.workspace = true
 authors = ["Nathan Sobo <nathan@zed.dev>"]
 description = "ZZZ's GPU-accelerated UI framework"
 repository = "https://github.com/Xero-Team/ZZZ"
@@ -79,13 +80,13 @@ raw-window-handle = "0.6"
 regex.workspace = true
 refineable.workspace = true
 scheduler.workspace = true
-resvg = { version = "0.49.0", default-features = false, features = [
+resvg = { version = "0.50.0", default-features = false, features = [
     "text",
     "system-fonts",
     "memmap-fonts",
     "raster-images"
 ] }
-usvg = { version = "0.49.0", default-features = false }
+usvg = { version = "0.50.0", default-features = false }
 skrifa.workspace = true
 util_macros.workspace = true
 schemars.workspace = true

@@ -16,7 +16,7 @@ use picker::{Picker, PickerDelegate};
 use project::Project;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use settings::Settings;
+use settings::{RegisterSetting, Settings, SettingsContent};
 use std::{cmp::Reverse, sync::Arc};
 use ui::{
     DecoratedIcon, IconDecoration, IconDecorationKind, ListItem, ListItemSpacing, Tooltip,
@@ -28,6 +28,23 @@ use workspace::{
     item::{ItemHandle, ItemSettings, ShowDiagnostics, TabContentParams},
     pane::{render_item_indicator, tab_details},
 };
+
+#[derive(Clone, Copy, Debug, RegisterSetting)]
+pub struct TabSwitcherSettings {
+    pub show_file_preview: bool,
+}
+
+impl Settings for TabSwitcherSettings {
+    fn from_settings(content: &SettingsContent) -> Self {
+        Self {
+            show_file_preview: content
+                .tab_switcher
+                .as_ref()
+                .and_then(|tab_switcher| tab_switcher.show_file_preview)
+                .unwrap_or(true),
+        }
+    }
+}
 
 const PANEL_WIDTH_REMS: f32 = 28.;
 
@@ -295,8 +312,7 @@ impl TabMatch {
                 let entry = project.entry_for_path(&path, cx)?;
                 let git_status = project
                     .project_path_git_status(&path, cx)
-                    .map(|status| status.summary())
-                    .unwrap_or_default();
+                    .map_or_default(|status| status.summary());
                 Some(entry_git_aware_label_color(
                     git_status,
                     entry.is_ignored,
@@ -380,7 +396,7 @@ impl TabSwitcherDelegate {
                     })
                 }
                 _ => {}
-            };
+            }
         })
         .detach();
     }
@@ -738,7 +754,9 @@ impl PickerDelegate for TabSwitcherDelegate {
     ) {
         self.selected_index = index;
 
-        if self.mode != TabSwitcherMode::OpenInActivePane {
+        if self.mode != TabSwitcherMode::OpenInActivePane
+            && TabSwitcherSettings::get_global(cx).show_file_preview
+        {
             let Some(selected_match) = self.matches.get(self.selected_index()) else {
                 return;
             };

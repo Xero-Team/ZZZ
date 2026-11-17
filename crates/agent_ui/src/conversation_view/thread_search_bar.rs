@@ -138,8 +138,8 @@ pub struct ThreadSearchBar {
     thread_view: WeakEntity<ThreadView>,
     on_activate_match: Arc<dyn Fn(usize, &mut Window, &mut App)>,
     is_active: bool,
-    _update_matches_task: Option<Task<()>>,
-    _search_task: Option<Task<()>>,
+    update_matches_task: Option<Task<()>>,
+    search_task: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -185,7 +185,7 @@ impl ThreadSearchBar {
                     event,
                     EditorEvent::Edited { .. } | EditorEvent::BufferEdited
                 ) {
-                    this._update_matches_task = None;
+                    this.update_matches_task = None;
                     this.update_matches(window, cx);
                 }
             },
@@ -223,8 +223,8 @@ impl ThreadSearchBar {
             thread_view,
             on_activate_match,
             is_active: false,
-            _update_matches_task: None,
-            _search_task: None,
+            update_matches_task: None,
+            search_task: None,
             _subscriptions: vec![editor_subscription, thread_subscription],
         }
     }
@@ -244,7 +244,7 @@ impl ThreadSearchBar {
     }
 
     fn schedule_update_matches(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self._update_matches_task = Some(cx.spawn_in(window, async move |this, cx| {
+        self.update_matches_task = Some(cx.spawn_in(window, async move |this, cx| {
             cx.background_executor().timer(SEARCH_UPDATE_DEBOUNCE).await;
             let Some(this) = this.upgrade() else {
                 return;
@@ -368,7 +368,7 @@ impl ThreadSearchBar {
             return;
         }
 
-        self._search_task = Some(cx.spawn_in(window, async move |this, cx| {
+        self.search_task = Some(cx.spawn_in(window, async move |this, cx| {
             let scanned = cx
                 .background_spawn(async move {
                     targets
@@ -646,14 +646,14 @@ impl ThreadSearchBar {
     fn clear_highlights_impl(&mut self, cx: &mut App) {
         self.clear_results(cx);
         self.is_active = false;
-        self._update_matches_task = None;
+        self.update_matches_task = None;
     }
 
     fn clear_results(&mut self, cx: &mut App) {
         self.clear_match_highlights(cx);
         self.matches.clear();
         self.active_match = None;
-        self._search_task = None;
+        self.search_task = None;
     }
 
     fn clear_match_highlights(&mut self, cx: &mut App) {

@@ -678,14 +678,9 @@ impl VfsService {
     fn remove_registered_mount(&self, mount_id: MountId) -> VfsResult<()> {
         let child_snapshots = {
             let mut archive_mounts = self.inner.archive_mounts.lock();
-            let child_keys = archive_mounts
-                .keys()
-                .filter(|key| key.source_mount_id == mount_id)
-                .cloned()
-                .collect::<Vec<_>>();
-            child_keys
-                .into_iter()
-                .filter_map(|key| archive_mounts.remove(&key))
+            archive_mounts
+                .extract_if(.., |key, _| key.source_mount_id == mount_id)
+                .map(|(_, snapshot)| snapshot)
                 .collect::<Vec<_>>()
         };
         for child_snapshot in child_snapshots {
@@ -699,13 +694,11 @@ impl VfsService {
             .retain(|_, handle| handle.mount_id != mount_id);
         let cancellations = {
             let mut operations = self.inner.operations.lock();
-            let keys = operations
-                .keys()
-                .filter(|(operation_mount_id, _)| *operation_mount_id == mount_id)
-                .copied()
-                .collect::<Vec<_>>();
-            keys.into_iter()
-                .filter_map(|key| operations.remove(&key))
+            operations
+                .extract_if(.., |(operation_mount_id, _), _| {
+                    *operation_mount_id == mount_id
+                })
+                .map(|(_, cancellation)| cancellation)
                 .collect::<Vec<_>>()
         };
         for cancellation in cancellations {

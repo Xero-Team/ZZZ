@@ -808,7 +808,7 @@ pub trait InteractiveElement: Sized {
 
     #[cfg(any(test, feature = "test-support"))]
     /// Set a key that can be used to look up this element's bounds
-    /// in the [`crate::VisualTestContext::debug_bounds`] map
+    /// in the `crate::VisualTestContext::debug_bounds` map
     /// This is a noop in release builds
     fn debug_selector(mut self, f: impl FnOnce() -> String) -> Self {
         self.interactivity().debug_selector = Some(f());
@@ -817,7 +817,7 @@ pub trait InteractiveElement: Sized {
 
     #[cfg(not(any(test, feature = "test-support")))]
     /// Set a key that can be used to look up this element's bounds
-    /// in the [`crate::VisualTestContext::debug_bounds`] map
+    /// in the `crate::VisualTestContext::debug_bounds` map
     /// This is a noop in release builds
     #[inline]
     fn debug_selector(self, _: impl FnOnce() -> String) -> Self {
@@ -1653,15 +1653,14 @@ impl Element for Div {
     #[cfg(feature = "accessibility")]
     fn register_a11y_actions(&mut self, node_id: accesskit::NodeId, window: &mut Window) {
         if let Some(focus_handle) = self.interactivity.tracked_focus_handle.clone() {
-            if focus_handle.is_focused(window) {
-                if let Err(error) = window
+            if focus_handle.is_focused(window)
+                && let Err(error) = window
                     .interaction
                     .next_frame
                     .accessibility_builder
                     .set_focus(node_id)
-                {
-                    log::error!("failed to map semantic focus: {error:?}");
-                }
+            {
+                log::error!("failed to map semantic focus: {error:?}");
             }
             window
                 .interaction
@@ -1956,14 +1955,16 @@ impl Interactivity {
     pub fn request_layout(
         &mut self,
         global_id: Option<&GlobalElementId>,
-        _inspector_id: Option<&InspectorElementId>,
+        inspector_id: Option<&InspectorElementId>,
         window: &mut Window,
         cx: &mut App,
         f: impl FnOnce(Style, &mut Window, &mut App) -> LayoutId,
     ) -> LayoutId {
+        #[cfg(not(any(feature = "inspector", debug_assertions)))]
+        let _ = inspector_id;
         #[cfg(any(feature = "inspector", debug_assertions))]
         window.with_inspector_state(
-            _inspector_id,
+            inspector_id,
             cx,
             |inspector_state: &mut Option<DivInspectorState>, _window| {
                 if let Some(inspector_state) = inspector_state {
@@ -2041,18 +2042,20 @@ impl Interactivity {
     pub fn prepaint<R>(
         &mut self,
         global_id: Option<&GlobalElementId>,
-        _inspector_id: Option<&InspectorElementId>,
+        inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         content_size: Size<Pixels>,
         window: &mut Window,
         cx: &mut App,
         f: impl FnOnce(&Style, Point<Pixels>, Option<Hitbox>, &mut Window, &mut App) -> R,
     ) -> R {
+        #[cfg(not(any(feature = "inspector", debug_assertions)))]
+        let _ = inspector_id;
         self.content_size = content_size;
 
         #[cfg(any(feature = "inspector", debug_assertions))]
         window.with_inspector_state(
-            _inspector_id,
+            inspector_id,
             cx,
             |inspector_state: &mut Option<DivInspectorState>, _window| {
                 if let Some(inspector_state) = inspector_state {
@@ -2215,13 +2218,15 @@ impl Interactivity {
     pub fn paint(
         &mut self,
         global_id: Option<&GlobalElementId>,
-        _inspector_id: Option<&InspectorElementId>,
+        inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         hitbox: Option<&Hitbox>,
         window: &mut Window,
         cx: &mut App,
         f: impl FnOnce(&Style, &mut Window, &mut App),
     ) {
+        #[cfg(not(any(feature = "inspector", debug_assertions)))]
+        let _ = inspector_id;
         self.hovered = hitbox.map(|hitbox| hitbox.is_hovered(window));
         window.with_optional_element_state::<InteractiveElementState, _>(
             global_id,
@@ -2299,11 +2304,15 @@ impl Interactivity {
                                         self.paint_keyboard_listeners(window, cx);
                                         f(&style, window, cx);
 
-                                        if let Some(_hitbox) = hitbox {
+                                        #[cfg_attr(
+                                            not(any(feature = "inspector", debug_assertions)),
+                                            allow(unused_variables)
+                                        )]
+                                        if let Some(hitbox) = hitbox {
                                             #[cfg(any(feature = "inspector", debug_assertions))]
                                             window.insert_inspector_hitbox(
-                                                _hitbox.id,
-                                                _inspector_id,
+                                                hitbox.id,
+                                                inspector_id,
                                                 cx,
                                             );
 
@@ -2556,11 +2565,12 @@ impl Interactivity {
                 let was_hovered = hover_state
                     .as_ref()
                     .is_some_and(|state| state.borrow().element);
-                if phase == DispatchPhase::Capture && hovered != was_hovered {
-                    if let Some(hover_state) = &hover_state {
-                        hover_state.borrow_mut().element = hovered;
-                        cx.notify(current_view);
-                    }
+                if phase == DispatchPhase::Capture
+                    && hovered != was_hovered
+                    && let Some(hover_state) = &hover_state
+                {
+                    hover_state.borrow_mut().element = hovered;
+                    cx.notify(current_view);
                 }
             });
         }
@@ -3167,35 +3177,33 @@ impl Interactivity {
             }
         }
 
-        if let Some(hitbox) = hitbox {
-            if let Some(drag) = cx.active_drag.take() {
-                let mut can_drop = true;
-                if let Some(can_drop_predicate) = &self.can_drop_predicate {
-                    can_drop = can_drop_predicate(drag.value.as_ref(), window, cx);
-                }
-
-                if can_drop {
-                    for (state_type, group_drag_style) in &self.group_drag_over_styles {
-                        if let Some(group_hitbox_id) =
-                            GroupHitboxes::get(&group_drag_style.group, cx)
-                            && *state_type == drag.value.as_ref().type_id()
-                            && group_hitbox_id.is_hovered(window)
-                        {
-                            style.refine(&group_drag_style.style);
-                        }
-                    }
-
-                    for (state_type, build_drag_over_style) in &self.drag_over_styles {
-                        if *state_type == drag.value.as_ref().type_id() && hitbox.is_hovered(window)
-                        {
-                            style.refine(&build_drag_over_style(drag.value.as_ref(), window, cx));
-                        }
-                    }
-                }
-
-                style.mouse_cursor = drag.cursor_style;
-                cx.active_drag = Some(drag);
+        if let Some(hitbox) = hitbox
+            && let Some(drag) = cx.active_drag.take()
+        {
+            let mut can_drop = true;
+            if let Some(can_drop_predicate) = &self.can_drop_predicate {
+                can_drop = can_drop_predicate(drag.value.as_ref(), window, cx);
             }
+
+            if can_drop {
+                for (state_type, group_drag_style) in &self.group_drag_over_styles {
+                    if let Some(group_hitbox_id) = GroupHitboxes::get(&group_drag_style.group, cx)
+                        && *state_type == drag.value.as_ref().type_id()
+                        && group_hitbox_id.is_hovered(window)
+                    {
+                        style.refine(&group_drag_style.style);
+                    }
+                }
+
+                for (state_type, build_drag_over_style) in &self.drag_over_styles {
+                    if *state_type == drag.value.as_ref().type_id() && hitbox.is_hovered(window) {
+                        style.refine(&build_drag_over_style(drag.value.as_ref(), window, cx));
+                    }
+                }
+            }
+
+            style.mouse_cursor = drag.cursor_style;
+            cx.active_drag = Some(drag);
         }
 
         if let Some(element_state) = element_state {
@@ -3739,7 +3747,7 @@ where
 }
 
 /// Represents an element that can be scrolled *to* in its parent element.
-/// Contrary to [ScrollHandle::scroll_to_active_item], an anchored element does not have to be an immediate child of the parent.
+/// Contrary to `ScrollHandle::scroll_to_active_item`, an anchored element does not have to be an immediate child of the parent.
 #[derive(Clone)]
 pub struct ScrollAnchor {
     handle: ScrollHandle,
@@ -3866,7 +3874,7 @@ impl ScrollHandle {
         self.0.borrow().child_bounds.get(ix).cloned()
     }
 
-    /// Update [ScrollHandleState]'s active item for scrolling to in prepaint
+    /// Update `ScrollHandleState`'s active item for scrolling to in prepaint
     pub fn scroll_to_item(&self, ix: usize) {
         let mut state = self.0.borrow_mut();
         state.active_item = Some(ScrollActiveItem {
@@ -3875,7 +3883,7 @@ impl ScrollHandle {
         });
     }
 
-    /// Update [ScrollHandleState]'s active item for scrolling to in prepaint
+    /// Update `ScrollHandleState`'s active item for scrolling to in prepaint
     /// This scrolls the minimal amount to ensure that the child is the first visible element
     pub fn scroll_to_top_of_item(&self, ix: usize) {
         let mut state = self.0.borrow_mut();
@@ -3988,6 +3996,7 @@ impl ScrollHandle {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use crate::{
         AnyWindowHandle, AppContext as _, Context, InputEvent, Keystroke, MouseMoveEvent,

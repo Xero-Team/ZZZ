@@ -130,6 +130,7 @@ pub(super) async fn connect_socks_proxy_stream(
 
 #[cfg(test)]
 mod tests {
+
     use url::Url;
 
     use super::*;

@@ -1,14 +1,18 @@
 ---
 name: auditing-upstream
 description:
-  "Re-audits ZZZ's recorded Zed upstream absorption decisions. Use when
-  reviewing past A/B/C classifications, re-checking rejected (C) commits,
-  correcting stale upstream-sync-*.md reports, backfilling or verifying
-  docs/src/development/upstream-rejected.tsv, or writing
-  upstream-sync-audit-YYYY-MM-DD.md."
+  "Re-audits ZZZ's recorded Zed upstream decisions. Use when reviewing
+  A/B/C classifications, re-checking rejected commits, or repairing
+  upstream-sync reports. Do not use for forward batches."
 license: CC-BY-4.0
 compatibility: opencode
+version: 1.0.0
 metadata:
+  author: Xero Team <maintainers@example.com>
+  tags:
+    - upstream
+    - audit
+    - workflow
   prompt-language: English
   user-language: Simplified Chinese
 ---
@@ -22,6 +26,12 @@ rejected machinery so a port compiles.
 You re-audit ZZZ's recorded upstream decisions. Forward absorption belongs
 to the `absorbing-upstream` skill; this skill corrects the record and
 recovers commits that were rejected too quickly.
+
+## Purpose
+
+Keep the upstream decision record honest: every rejected commit is either
+re-checked against current ZZZ or left `C` for a stated reason, and the
+reports, counts, and generated ledger agree with the tree.
 
 ## Communication Rules
 
@@ -57,6 +67,12 @@ those.
 - Do not add an `upstream` remote, push, open a PR, or run
   `script/cherry-pick`.
 
+## Prerequisites
+
+- A clean worktree and a checkout that contains the full local history.
+- `cargo` with the pinned toolchain for `cargo xtask check`.
+- Node for Prettier on the touched reports.
+
 ## Procedure
 
 1. Read `README.md`, `AGENTS.md`, `.agents/skills/absorbing-upstream/`
@@ -75,6 +91,33 @@ those.
    `cargo xtask check upstream-ledger`. Remove stale allowlist entries.
 7. Write `docs/src/development/upstream/upstream-sync-audit-YYYY-MM-DD.md` and
    format only that file with Prettier.
+
+## Examples
+
+```text
+Re-audit every C row in the 2026-10-27 upstream report.
+```
+
+```text
+Verify docs/src/development/upstream-rejected.tsv against the report tables.
+```
+
+## Troubleshooting
+
+- `cargo xtask check upstream-ledger` fails before the audit: stop and
+  report the failing row instead of auditing around it.
+- A reclassification has no local commit: keep the old class; never
+  record a move without evidence.
+- The ledger disagrees with a report: fix the report table, then rerun
+  `./script/backfill-upstream-ledger`.
+
+## Limitations
+
+- The audit covers decision rows that exist in reports; unrecorded
+  upstream commits stay invisible until a forward batch reviews them.
+- Local history is the tie-breaker, so a shallow clone weakens every
+  cross-reference.
+- Counts in the report are a snapshot and drift with each later sync.
 
 ## Final Response
 

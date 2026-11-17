@@ -257,7 +257,7 @@ impl DebugAdapter for JsDebugAdapter {
                     map.insert("cwd".into(), cwd.to_string_lossy().into_owned().into());
                 }
             }
-        };
+        }
 
         Ok(DebugScenario {
             adapter: zzz_scenario.adapter,

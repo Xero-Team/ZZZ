@@ -284,7 +284,7 @@ pub struct ProfilePickerDelegate {
     hovered_index: Option<usize>,
     query: String,
     cancel: Option<Arc<AtomicBool>>,
-    _refresh_search_task: Option<Task<()>>,
+    refresh_search_task: Option<Task<()>>,
     focus_handle: FocusHandle,
 }
 
@@ -312,7 +312,7 @@ impl ProfilePickerDelegate {
             hovered_index: None,
             query: String::new(),
             cancel: None,
-            _refresh_search_task: None,
+            refresh_search_task: None,
             focus_handle,
         };
 
@@ -338,7 +338,7 @@ impl ProfilePickerDelegate {
             self.filtered_entries.clear();
             self.selected_index = 0;
             let refresh_search_task = self.update_matches(query, window, cx);
-            self._refresh_search_task = Some(refresh_search_task);
+            self.refresh_search_task = Some(refresh_search_task);
             cx.notify();
         }
     }
@@ -500,7 +500,7 @@ impl PickerDelegate for ProfilePickerDelegate {
         if let Some(previous_cancel) = self.cancel.take() {
             previous_cancel.store(true, Ordering::Relaxed);
         }
-        self._refresh_search_task = None;
+        self.refresh_search_task = None;
 
         if query.is_empty() {
             self.reset_filtered_entries(cx);
@@ -801,7 +801,7 @@ mod tests {
                 hovered_index: None,
                 query: String::new(),
                 cancel: None,
-                _refresh_search_task: None,
+                refresh_search_task: None,
                 focus_handle,
             };
 
@@ -848,7 +848,7 @@ mod tests {
                 selected_index: 0,
                 query: String::new(),
                 cancel: None,
-                _refresh_search_task: None,
+                refresh_search_task: None,
                 focus_handle,
             };
 

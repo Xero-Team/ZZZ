@@ -4,8 +4,9 @@ use agent_settings::AgentProfileId;
 use anyhow::{Context as _, Result, anyhow};
 use chrono::{DateTime, Utc};
 use collections::HashMap;
+use db::ZZZ_STATELESS;
 use futures::{FutureExt, future::Shared};
-use gpui::{BackgroundExecutor, Global, Task};
+use gpui::{App, BackgroundExecutor, Global, SharedString, Task};
 use indoc::indoc;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -14,10 +15,11 @@ use sqlez::{
     connection::Connection,
     statement::Statement,
 };
-use std::sync::Arc;
-use ui::{App, SharedString};
+use std::{
+    io::{BufWriter, Write as _},
+    sync::Arc,
+};
 use util::{ResultExt, path_list::PathList};
-use zzz_env_vars::ZZZ_STATELESS;
 
 pub type DbMessage = serde_json::Value;
 pub type DbLanguageModel = serde_json::Value;
@@ -351,14 +353,22 @@ impl ThreadsDatabase {
                     Some(serialized_folder_paths.order),
                 )
             };
-        let json_data = serde_json::to_string(&SerializedThread {
-            thread,
-            version: DbThread::VERSION,
-        })?;
+        let mut encoder = zstd::stream::Encoder::new(Vec::new(), COMPRESSION_LEVEL)?;
+        {
+            let mut writer = BufWriter::new(&mut encoder);
+            serde_json::to_writer(
+                &mut writer,
+                &SerializedThread {
+                    thread,
+                    version: DbThread::VERSION,
+                },
+            )?;
+            writer.flush()?;
+        }
+        let compressed = encoder.finish()?;
 
         let connection = connection.lock();
 
-        let compressed = zstd::encode_all(json_data.as_bytes(), COMPRESSION_LEVEL)?;
         let data_type = DataType::Zstd;
         let data = compressed;
 
@@ -424,14 +434,12 @@ impl ThreadsDatabase {
                 created_at,
             ) in rows
             {
-                let folder_paths = folder_paths
-                    .map(|paths| {
-                        PathList::deserialize(&util::path_list::SerializedPathList {
-                            paths,
-                            order: folder_paths_order.unwrap_or_default(),
-                        })
+                let folder_paths = folder_paths.map_or_default(|paths| {
+                    PathList::deserialize(&util::path_list::SerializedPathList {
+                        paths,
+                        order: folder_paths_order.unwrap_or_default(),
                     })
-                    .unwrap_or_default();
+                });
                 let created_at = created_at
                     .as_deref()
                     .map(DateTime::parse_from_rfc3339)
@@ -601,6 +609,43 @@ mod tests {
             draft_prompt: None,
             ui_scroll_position: None,
         }
+    }
+
+    #[gpui::test]
+    async fn test_save_thread_stores_versioned_json(cx: &mut TestAppContext) {
+        let database = ThreadsDatabase::new(cx.executor()).unwrap();
+        let thread_id = session_id("versioned-thread");
+        let mut thread = make_thread(
+            "Thread \"雪\"",
+            Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+        );
+        thread.detailed_summary = Some(
+            "A long summary with \"quotes\", \\ and 雪\n"
+                .repeat(8192)
+                .into(),
+        );
+        let expected = serde_json::to_value(&thread).unwrap();
+
+        database
+            .save_thread(thread_id.clone(), thread, PathList::default())
+            .await
+            .unwrap();
+
+        let (data_type, data) = {
+            let connection = database.connection.lock();
+            let mut select = connection
+                .select_bound::<Arc<str>, (DataType, Vec<u8>)>(
+                    "SELECT data_type, data FROM threads WHERE id = ?",
+                )
+                .unwrap();
+            select(thread_id.0).unwrap().into_iter().next().unwrap()
+        };
+        assert_eq!(data_type, DataType::Zstd);
+        let json = zstd::decode_all(data.as_slice()).unwrap();
+        let saved_json: serde_json::Value = serde_json::from_slice(&json).unwrap();
+        assert_eq!(saved_json["version"], DbThread::VERSION);
+        let restored = DbThread::from_json(&json).unwrap();
+        assert_eq!(serde_json::to_value(restored).unwrap(), expected);
     }
 
     #[gpui::test]

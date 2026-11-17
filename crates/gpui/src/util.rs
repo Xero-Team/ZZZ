@@ -113,16 +113,9 @@ impl<T: Future> Future for WithTimeout<T> {
 /// Increment the given atomic counter if it is not zero.
 /// Return the new value of the counter.
 pub(crate) fn atomic_incr_if_not_zero(counter: &AtomicUsize) -> usize {
-    let mut loaded = counter.load(SeqCst);
-    loop {
-        if loaded == 0 {
-            return 0;
-        }
-        match counter.compare_exchange_weak(loaded, loaded + 1, SeqCst, SeqCst) {
-            Ok(x) => return x + 1,
-            Err(actual) => loaded = actual,
-        }
-    }
+    counter
+        .try_update(SeqCst, SeqCst, |value| (value != 0).then_some(value + 1))
+        .map_or(0, |previous| previous + 1)
 }
 
 /// Rounds to the nearest integer with 0.5 ties toward zero.

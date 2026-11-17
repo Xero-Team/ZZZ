@@ -219,7 +219,7 @@ pub fn editor_content_with_blocks_and_size(
                         for i in 1..height as usize {
                             if row.0 as usize + i >= lines.len() {
                                 lines.push(String::new());
-                            };
+                            }
                             lines[row.0 as usize + i].push_str("§ ");
                             lines[row.0 as usize + i].push_str(block_lines[i].trim_end());
                         }

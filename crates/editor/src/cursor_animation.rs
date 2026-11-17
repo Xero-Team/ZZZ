@@ -576,10 +576,9 @@ impl CursorAnimationState {
 
     fn advance(&mut self, elapsed: Duration) {
         let elapsed_seconds = elapsed.as_secs_f32();
-        let max_trail_distance = self
-            .target_geometry
-            .map(|geometry| geometry.width.max(geometry.height) * MAX_TRAIL_DISTANCE_FACTOR)
-            .unwrap_or_default();
+        let max_trail_distance = self.target_geometry.map_or_default(|geometry| {
+            geometry.width.max(geometry.height) * MAX_TRAIL_DISTANCE_FACTOR
+        });
         self.active = self.corners.iter_mut().fold(false, |active, corner| {
             corner.update(elapsed_seconds, max_trail_distance) || active
         });

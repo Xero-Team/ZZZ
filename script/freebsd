@@ -26,8 +26,18 @@ if [[ -n $pkg ]]; then
         llvm
         protobuf
         rustup-init
+        # GUI libraries discovered through pkg-config at build time. `pkgconf`
+        # provides pkg-config itself; the rest are the X11, audio, font,
+        # Wayland, and FFmpeg libraries the editor links against. pkg(8) pulls
+        # in their transitive dependencies (libxcb, xorgproto, ...).
+        pkgconf
         libX11
         alsa-lib
+        fontconfig
+        freetype2
+        libxkbcommon
+        wayland
+        ffmpeg
     )
     $maysudo "$pkg" install "${deps[@]}"
     finalize

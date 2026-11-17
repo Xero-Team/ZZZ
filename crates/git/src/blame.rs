@@ -352,7 +352,7 @@ impl GitBlameParser {
                     _ => {}
                 }
             }
-        };
+        }
 
         if done {
             self.push_current_entry();

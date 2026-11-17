@@ -63,7 +63,6 @@ pub struct GitCommand<G: Subcommand> {
 }
 
 impl<G: Subcommand> GitCommand<G> {
-    #[must_use]
     pub fn run(subcommand: G) -> Result<G::ParsedOutput> {
         Self { subcommand }.run_impl()
     }
@@ -112,7 +111,7 @@ pub struct VersionTag(Version, ReleaseChannel);
 impl VersionTag {
     pub fn parse(input: &str) -> Result<Self, anyhow::Error> {
         // Being a bit more lenient for human inputs
-        let version = input.strip_prefix('v').unwrap_or(input);
+        let version = input.trim_prefix('v');
 
         let (version_str, channel) = version
             .strip_suffix("-pre")
@@ -130,9 +129,10 @@ impl VersionTag {
     }
 }
 
-impl ToString for VersionTag {
-    fn to_string(&self) -> String {
-        format!(
+impl fmt::Display for VersionTag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
             "v{version}{channel_suffix}",
             version = self.0,
             channel_suffix = self.1.tag_suffix()
@@ -436,7 +436,7 @@ impl Subcommand for CommitsFromVersionToVersion {
             format!("--pretty=format:{}", CommitDetails::FORMAT_STRING),
             format!(
                 "{version}..{branch}",
-                version = self.version_tag.to_string(),
+                version = self.version_tag,
                 branch = self.branch
             ),
         ]
@@ -518,8 +518,8 @@ mod tests {
             assert!(
                 window[0].version() <= window[1].version(),
                 "{} should come before {}",
-                window[0].to_string(),
-                window[1].to_string()
+                window[0],
+                window[1]
             );
         }
         assert_eq!(list.0[0].to_string(), "v0.170.1");

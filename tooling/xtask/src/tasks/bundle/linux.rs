@@ -565,8 +565,7 @@ fn direct_libraries(binary: &Path, ffmpeg_lib: &Path) -> Result<Vec<PathBuf>> {
     for (_, path) in resolved_libraries(binary, Some(ffmpeg_lib))? {
         let name = path
             .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
+            .map_or_default(|name| name.to_string_lossy().into_owned());
         if is_direct_excluded(&name) {
             continue;
         }
@@ -614,8 +613,7 @@ fn bundle_transitive_libraries(library_dir: &Path) -> Result<()> {
         for (_, dependency) in resolved_libraries_lenient(&library) {
             let name = dependency
                 .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default();
+                .map_or_default(|name| name.to_string_lossy().into_owned());
             if runtime_deps::is_glibc_library(&name)
                 || runtime_deps::is_host_provided_family(&name)
                 || runtime_deps::is_host_keymap_library(&name)

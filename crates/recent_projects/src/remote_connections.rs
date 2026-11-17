@@ -18,7 +18,10 @@ use remote::{
 };
 pub use settings::SshConnection;
 use settings::{DevContainerConnection, ExtendingVec, RegisterSetting, Settings, WslConnection};
-use util::{ResultExt, paths::PathWithPosition};
+use util::{
+    ResultExt,
+    paths::{PathStyle, PathWithPosition, url_path_to_path},
+};
 use workspace::{AppState, MultiWorkspace, OpenOptions, Workspace, find_existing_workspace};
 
 pub use remote_connection::{
@@ -501,11 +504,11 @@ pub async fn open_remote_project(
         .update(cx, |multi_workspace: &mut MultiWorkspace, _, cx| {
             let workspace = multi_workspace.workspace().clone();
             workspace.update(cx, |workspace, cx| {
-                if let Some(client) = workspace.project().read(cx).remote_client() {
-                    if let Some(extension_store) = ExtensionStore::try_global(cx) {
-                        extension_store
-                            .update(cx, |store, cx| store.register_remote_client(client, cx));
-                    }
+                if let Some(client) = workspace.project().read(cx).remote_client()
+                    && let Some(extension_store) = ExtensionStore::try_global(cx)
+                {
+                    extension_store
+                        .update(cx, |store, cx| store.register_remote_client(client, cx));
                 }
             });
         })
@@ -550,20 +553,29 @@ pub(crate) async fn determine_paths_with_positions(
     mut paths: Vec<PathBuf>,
 ) -> (Vec<PathBuf>, Vec<PathWithPosition>) {
     let mut paths_with_positions = Vec::<PathWithPosition>::new();
+    url_paths_to_paths(&mut paths, remote_connection.path_style());
     for path in &mut paths {
         if let Some(path_str) = path.to_str() {
             let path_with_position = PathWithPosition::parse_str(&path_str);
-            if path_with_position.row.is_some() {
-                if !path_exists(&remote_connection, &path).await {
-                    *path = path_with_position.path.clone();
-                    paths_with_positions.push(path_with_position);
-                    continue;
-                }
+            if path_with_position.row.is_some() && !path_exists(&remote_connection, &path).await {
+                *path = path_with_position.path.clone();
+                paths_with_positions.push(path_with_position);
+                continue;
             }
         }
         paths_with_positions.push(PathWithPosition::from_path(path.clone()))
     }
     (paths, paths_with_positions)
+}
+
+/// `ssh://` URL paths are converted here rather than when the URL is parsed, because the remote's
+/// path style is only known once connected.
+fn url_paths_to_paths(paths: &mut [PathBuf], path_style: PathStyle) {
+    for path in paths {
+        if let Some(url_path) = path.to_str() {
+            *path = PathBuf::from(url_path_to_path(url_path, path_style));
+        }
+    }
 }
 
 async fn path_exists(connection: &Arc<dyn RemoteConnection>, path: &Path) -> bool {
@@ -602,6 +614,50 @@ mod tests {
     use serde_json::json;
     use util::path;
     use workspace::{find_existing_workspace, open_paths};
+
+    // Each remote path style is set explicitly, so the client and remote styles differ on every
+    // platform the tests run on.
+    #[gpui::test]
+    async fn test_determine_paths_with_positions_converts_url_paths_for_remote_path_style(
+        cx: &mut TestAppContext,
+        server_cx: &mut TestAppContext,
+    ) {
+        init_test(cx);
+        // As parsed from `ssh://host/C:/`, `ssh://host/C:/project/src/lib.rs` and `ssh://host/a:12`.
+        let url_paths = ["/C:/", "/C:/project/src/lib.rs", "/a:12"];
+        for (path_style, expected_paths) in [
+            (PathStyle::Windows, ["C:/", "C:/project/src/lib.rs", "/a"]),
+            (PathStyle::Posix, ["/C:/", "/C:/project/src/lib.rs", "/a"]),
+        ] {
+            let (opts, _server_session, connect_guard) = RemoteClient::fake_server(cx, server_cx);
+            cx.update(|cx| remote::MockConnection::set_path_style(&opts, path_style, cx));
+            drop(connect_guard);
+            let connection =
+                remote::connect(opts, Arc::new(remote::MockDelegate), &mut cx.to_async())
+                    .await
+                    .unwrap();
+
+            let (paths, paths_with_positions) = determine_paths_with_positions(
+                &connection,
+                url_paths.iter().map(PathBuf::from).collect(),
+            )
+            .await;
+
+            let expected_paths = expected_paths.map(PathBuf::from).to_vec();
+            assert_eq!(paths, expected_paths, "{path_style:?}");
+            assert_eq!(
+                paths_with_positions
+                    .iter()
+                    .map(|path| (path.path.clone(), path.row))
+                    .collect::<Vec<_>>(),
+                expected_paths
+                    .into_iter()
+                    .zip([None, None, Some(12)])
+                    .collect::<Vec<_>>(),
+                "{path_style:?}"
+            );
+        }
+    }
 
     #[gpui::test]
     async fn test_open_remote_project_with_mock_connection(
@@ -983,7 +1039,7 @@ mod tests {
                 reuses_expected_workspace,
                 "a local file opens in the active local workspace: {path}, wait: {wait}"
             );
-            expected_workspace = result.workspace.clone();
+            expected_workspace = result.workspace;
             assert_eq!(cx.update(|cx| cx.windows().len()), 1);
             window
                 .read_with(cx, |multi_workspace, _| {

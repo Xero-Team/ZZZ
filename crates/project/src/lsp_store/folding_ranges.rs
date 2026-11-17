@@ -57,26 +57,25 @@ impl LspStore {
                 .unwrap_or_default()
         });
 
-        if let Some(lsp_data) = self.current_lsp_data(buffer_id) {
-            if let Some(cached) = &lsp_data.folding_ranges {
-                if !version_queried_for.changed_since(&lsp_data.buffer_version) {
-                    let has_different_servers =
-                        current_language_servers.is_some_and(|current_language_servers| {
-                            current_language_servers != cached.ranges.keys().copied().collect()
-                        });
-                    if !has_different_servers {
-                        let snapshot = buffer.read(cx).snapshot();
-                        return Task::ready(
-                            cached
-                                .ranges
-                                .values()
-                                .flatten()
-                                .cloned()
-                                .sorted_by(|a, b| a.range.start.cmp(&b.range.start, &snapshot))
-                                .collect(),
-                        );
-                    }
-                }
+        if let Some(lsp_data) = self.current_lsp_data(buffer_id)
+            && let Some(cached) = &lsp_data.folding_ranges
+            && !version_queried_for.changed_since(&lsp_data.buffer_version)
+        {
+            let has_different_servers =
+                current_language_servers.is_some_and(|current_language_servers| {
+                    current_language_servers != cached.ranges.keys().copied().collect()
+                });
+            if !has_different_servers {
+                let snapshot = buffer.read(cx).snapshot();
+                return Task::ready(
+                    cached
+                        .ranges
+                        .values()
+                        .flatten()
+                        .cloned()
+                        .sorted_by(|a, b| a.range.start.cmp(&b.range.start, &snapshot))
+                        .collect(),
+                );
             }
         }
 
@@ -84,12 +83,11 @@ impl LspStore {
             .latest_lsp_data(buffer, cx)
             .folding_ranges
             .get_or_insert_default();
-        if let Some((updating_for, running_update)) = &folding_lsp_data.ranges_update {
-            if !version_queried_for.changed_since(updating_for) {
-                let running = running_update.clone();
-                return cx
-                    .background_spawn(async move { running.await.log_err().unwrap_or_default() });
-            }
+        if let Some((updating_for, running_update)) = &folding_lsp_data.ranges_update
+            && !version_queried_for.changed_since(updating_for)
+        {
+            let running = running_update.clone();
+            return cx.background_spawn(async move { running.await.log_err().unwrap_or_default() });
         }
 
         let cancel_rx = super::supersede(&mut folding_lsp_data.ranges_update_cancel);

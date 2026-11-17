@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify repository URLs from SOURCES.tsv with non-interactive git ls-remote."""
+"""Verify repository URLs from sources.tsv with non-interactive git ls-remote."""
 
 from __future__ import annotations
 
@@ -39,7 +39,12 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sources", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--timeout", type=int, default=30)
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=60,
+        help="per-repository ls-remote timeout in seconds; large histories with thousands of refs need more",
+    )
     parser.add_argument(
         "--strict",
         action="store_true",

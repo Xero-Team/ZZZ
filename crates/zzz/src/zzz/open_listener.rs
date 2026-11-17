@@ -26,7 +26,7 @@ use std::thread;
 use std::time::Duration;
 use ui::SharedString;
 use util::ResultExt;
-use util::paths::PathWithPosition;
+use util::paths::{PathStyle, PathWithPosition, url_path_to_path};
 use workspace::PathList;
 use workspace::item::ItemHandle;
 use workspace::{AppState, MultiWorkspace, OpenOptions, OpenResult, SerializedWorkspaceLocation};
@@ -158,9 +158,9 @@ impl OpenRequest {
                     index: action_index.parse()?,
                 });
             } else if let Some(file) = url.strip_prefix("file://") {
-                this.parse_file_path(file)
+                this.parse_local_file_path(file)
             } else if let Some(file) = url.strip_prefix("zzz://file") {
-                this.parse_file_path(file)
+                this.parse_local_file_path(file)
             } else if let Some(file) = url.strip_prefix("zzz://ssh") {
                 let ssh_url = "ssh:/".to_owned() + file;
                 this.parse_ssh_file_path(&ssh_url, cx)?
@@ -204,9 +204,16 @@ impl OpenRequest {
         }
     }
 
+    fn parse_local_file_path(&mut self, file: &str) {
+        if let Some(decoded) = urlencoding::decode(file).log_err() {
+            self.open_paths
+                .push(url_path_to_path(&decoded, PathStyle::local()).to_owned())
+        }
+    }
+
     fn parse_agent_url(&mut self, agent_path: &str) {
         // Format: "" or "?prompt=<text>".
-        let agent_path = agent_path.strip_prefix('/').unwrap_or(agent_path);
+        let agent_path = agent_path.trim_prefix('/');
         let external_source_prompt = agent_path.strip_prefix('?').and_then(|query| {
             url::form_urlencoded::parse(query.as_bytes())
                 .find_map(|(key, value)| (key == "prompt").then_some(value))
@@ -221,7 +228,7 @@ impl OpenRequest {
         let skill_path = url
             .strip_prefix(SKILL_URL_PREFIX)
             .context("invalid skill url: unsupported prefix")?;
-        let skill_path = skill_path.strip_prefix('/').unwrap_or(skill_path);
+        let skill_path = skill_path.trim_prefix('/');
 
         let encoded = if let Some(query) = skill_path.strip_prefix('?') {
             url::form_urlencoded::parse(query.as_bytes())
@@ -246,7 +253,7 @@ impl OpenRequest {
 
     fn parse_git_clone_url(&mut self, clone_path: &str) -> Result<()> {
         // Format: /?repo=<url> or ?repo=<url>
-        let clone_path = clone_path.strip_prefix('/').unwrap_or(clone_path);
+        let clone_path = clone_path.trim_prefix('/');
 
         let query = clone_path
             .strip_prefix('?')
@@ -302,8 +309,9 @@ impl OpenRequest {
             Some(urlencoding::decode(url.username())?.into_owned())
         };
         let port = url.port();
+        // Refuse earlier local paths; earlier ssh paths are left to the connection check below.
         anyhow::ensure!(
-            self.open_paths.is_empty(),
+            self.open_paths.is_empty() || self.remote_connection.is_some(),
             "cannot open both local and ssh paths"
         );
         let mut connection_options =
@@ -494,10 +502,9 @@ pub async fn open_paths_with_positions(
             multi_workspace.workspace().update(cx, |workspace, cx| {
                 MultiDiffView::open(diff_paths.to_vec(), workspace, window, cx)
             })
-        }) {
-            if let Some(diff_view) = diff_view.await.log_err() {
-                items.push(Some(Ok(Box::new(diff_view))));
-            }
+        }) && let Some(diff_view) = diff_view.await.log_err()
+        {
+            items.push(Some(Ok(Box::new(diff_view))));
         }
     } else {
         let workspace_weak = multi_workspace.read_with(cx, |multi_workspace, _cx| {
@@ -542,10 +549,9 @@ pub async fn open_paths_with_positions(
                     window,
                     cx,
                 )
-            }) {
-                if let Some(diff_view) = diff_view.await.log_err() {
-                    items.push(Some(Ok(Box::new(diff_view))))
-                }
+            }) && let Some(diff_view) = diff_view.await.log_err()
+            {
+                items.push(Some(Ok(Box::new(diff_view))))
             }
         }
     }
@@ -614,7 +620,7 @@ pub async fn handle_cli_connection(
                             .log_err();
                         responses.send(CliResponse::Exit { status: 1 }).log_err();
                     }
-                };
+                }
             });
             return;
         }
@@ -826,7 +832,19 @@ async fn open_local_workspace(
         && !diff_paths.is_empty()
         && let Some(cwd) = cwd
     {
-        workspace_paths.push(cwd.to_string_lossy().to_string());
+        // Avoid adding cwd as a root to the focused window with `--add`.
+        // Without a focused local window, retain cwd for workspace matching.
+        let add_to_active_window = open_options.workspace_matching
+            == workspace::WorkspaceMatching::MatchSubdirectory
+            && cx.update(|cx| {
+                let active_window = cx.active_window();
+                workspace::workspace_windows_for_location(&SerializedWorkspaceLocation::Local, cx)
+                    .into_iter()
+                    .any(|window| Some(window.into()) == active_window)
+            });
+        if !add_to_active_window {
+            workspace_paths.push(cwd.to_string_lossy().to_string());
+        }
     }
 
     let paths_with_position =
@@ -1019,6 +1037,8 @@ fn looks_like_parenthesized_position_suffix(path: &Path) -> bool {
 // than aborting on the first foreign call.
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use crate::zzz::{open_listener::open_local_workspace, tests::init_test};
     use cli::CliResponse;
@@ -1271,6 +1291,69 @@ mod tests {
 
     #[gpui::test]
     #[cfg_attr(miri, ignore)]
+    fn test_parse_ssh_urls_of_one_connection(cx: &mut TestAppContext) {
+        let _app_state = init_test(cx);
+
+        let request = cx.update(|cx| {
+            OpenRequest::parse(
+                RawOpenRequest {
+                    urls: vec![
+                        "ssh://me@host/project".into(),
+                        "ssh://me@host/project/README.md".into(),
+                    ],
+                    ..Default::default()
+                },
+                cx,
+            )
+            .unwrap()
+        });
+        assert_eq!(
+            request.remote_connection.unwrap(),
+            RemoteConnectionOptions::Ssh(SshConnectionOptions {
+                host: "host".into(),
+                username: Some("me".into()),
+                ..Default::default()
+            })
+        );
+        assert_eq!(request.open_paths, vec!["/project", "/project/README.md"]);
+    }
+
+    #[gpui::test]
+    #[cfg_attr(miri, ignore)]
+    fn test_reject_ssh_urls_with_other_paths(cx: &mut TestAppContext) {
+        let _app_state = init_test(cx);
+
+        for (urls, expected) in [
+            (
+                ["file:///tmp/local", "ssh://me@host/project"],
+                "cannot open both local and ssh paths",
+            ),
+            (
+                ["ssh://me@host/project", "ssh://me@other/project"],
+                "cannot open multiple different remote connections",
+            ),
+            (
+                ["ssh://me@host/project", "ssh://you@host/project"],
+                "cannot open multiple different remote connections",
+            ),
+        ] {
+            let error = cx
+                .update(|cx| {
+                    OpenRequest::parse(
+                        RawOpenRequest {
+                            urls: urls.iter().map(|url| url.to_string()).collect(),
+                            ..Default::default()
+                        },
+                        cx,
+                    )
+                })
+                .unwrap_err();
+            assert_eq!(error.to_string(), expected, "{urls:?}");
+        }
+    }
+
+    #[gpui::test]
+    #[cfg_attr(miri, ignore)]
     fn test_parse_ssh_url_preserves_open_behavior(cx: &mut TestAppContext) {
         let _app_state = init_test(cx);
 
@@ -1486,8 +1569,9 @@ mod tests {
                 )
                 .unwrap()
             });
-            assert!(
-                matches!(request.kind, Some(OpenRequestKind::FocusApp)),
+            assert_matches!(
+                request.kind,
+                Some(OpenRequestKind::FocusApp),
                 "expected FocusApp for {url}, got {:?}",
                 request.kind
             );
@@ -1718,7 +1802,7 @@ mod tests {
 
         cx.background_executor.run_until_parked();
         assert_eq!(cx.windows().len(), 1);
-        assert!(matches!(poll!(&mut done_rx), Poll::Pending));
+        assert_matches!(poll!(&mut done_rx), Poll::Pending);
 
         let window = cx.windows()[0];
         cx.update_window(window, |_, window, _| window.remove_window())

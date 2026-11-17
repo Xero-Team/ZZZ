@@ -1643,18 +1643,18 @@ impl VfsFile for CacheFile {
             length,
             source_version,
         };
-        if length <= self.provider.limits.maximum_cacheable_range.get() {
-            if let Some(cached) = self.provider.lookup_range(&key) {
-                let read_length = cached.len().min(buffer.len());
-                if let (Some(target), Some(source)) =
-                    (buffer.get_mut(..read_length), cached.get(..read_length))
-                {
-                    target.copy_from_slice(source);
-                }
-                self.validate_source_version(&source_version_guard, context, VfsOperation::Read)
-                    .await?;
-                return Ok(read_length);
+        if length <= self.provider.limits.maximum_cacheable_range.get()
+            && let Some(cached) = self.provider.lookup_range(&key)
+        {
+            let read_length = cached.len().min(buffer.len());
+            if let (Some(target), Some(source)) =
+                (buffer.get_mut(..read_length), cached.get(..read_length))
+            {
+                target.copy_from_slice(source);
             }
+            self.validate_source_version(&source_version_guard, context, VfsOperation::Read)
+                .await?;
+            return Ok(read_length);
         }
         let validation_context = context.clone();
         let read_length = self

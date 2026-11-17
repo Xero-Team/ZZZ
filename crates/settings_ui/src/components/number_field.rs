@@ -628,7 +628,7 @@ impl<T: NumberFieldType> RenderOnce for NumberField<T> {
                                                         {
                                                             on_change(&new_value, window, cx);
                                                         }
-                                                    };
+                                                    }
                                                 }
                                             })
                                             .detach();

@@ -611,10 +611,10 @@ impl RemoteConnection for DockerExecConnection {
         cx: &mut AsyncApp,
     ) -> Task<Result<i32>> {
         // We'll try connecting anew every time we open a devcontainer, so proactively try to kill any old connections.
-        if !self.has_been_killed() {
-            if let Err(e) = self.kill_inner() {
-                return Task::ready(Err(e));
-            };
+        if !self.has_been_killed()
+            && let Err(e) = self.kill_inner()
+        {
+            return Task::ready(Err(e));
         }
 
         delegate.set_status(Some(RemoteConnectionStatus::StartingProxy), cx);
@@ -732,7 +732,7 @@ impl RemoteConnection for DockerExecConnection {
 
             const TILDE_PREFIX: &'static str = "~/";
             if working_dir.starts_with(TILDE_PREFIX) {
-                let working_dir = working_dir.trim_start_matches("~").trim_start_matches("/");
+                let working_dir = working_dir.trim_start_matches('~').trim_start_matches('/');
                 parsed_working_dir =
                     Some(format!("{}/{}", self.remote_dir_for_server, working_dir));
             } else {
@@ -750,7 +750,7 @@ impl RemoteConnection for DockerExecConnection {
         } else {
             inner_program.push(self.shell());
             inner_program.push("-l".to_owned());
-        };
+        }
 
         let mut docker_args = vec![
             "exec".to_owned(),

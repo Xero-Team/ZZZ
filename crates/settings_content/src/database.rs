@@ -2,13 +2,33 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings_macros::MergeFrom;
 
-/// Configuration for saved database connections.
+use crate::DockSide;
+
+/// Configuration for saved database connections and the database panel.
 #[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct DatabaseSettingsContent {
     /// Saved connections. Secrets are never stored here; they live in the
     /// platform keychain under the connection's stable id.
     #[serde(default)]
     pub connections: Vec<DatabaseConnectionContent>,
+    /// Whether to show the database panel button in the status bar.
+    ///
+    /// Default: true
+    #[serde(default)]
+    pub button: Option<bool>,
+    /// Customize the default width (in pixels) of the database panel.
+    ///
+    /// Default: 280
+    #[serde(
+        default,
+        serialize_with = "crate::serialize_optional_f32_with_two_decimal_places"
+    )]
+    pub default_width: Option<f32>,
+    /// Where to dock the database panel. Can be `left` or `right`.
+    ///
+    /// Default: left
+    #[serde(default)]
+    pub dock: Option<DockSide>,
 }
 
 /// One saved database connection. Only non-sensitive fields are persisted.

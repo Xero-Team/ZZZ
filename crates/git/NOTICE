@@ -1,0 +1,15 @@
+This crate contains the Fossil SCM backend absorbed from fzed
+(https://github.com/pekeler/fzed) at
+04a2955e19dec5f459566657c0767223b49a5b9c.
+
+Upstream license: GNU General Public License version 3 or later.
+The full license text is in the repository root LICENSE-GPL file.
+
+Absorbed file:
+- src/fossil.rs (upstream `crates/git/src/fossil.rs`, reduced to a read-only
+  slice: checkout detection, status, diffs, and remotes; check-in, sync, stash,
+  history, and blame report "not supported yet")
+
+Upstream files that were read for context but not absorbed:
+- crates/git_ui/src/fossil_setup.rs (Fossil clone/init/open dialogs)
+- FZED_FOSSIL_PLAN.md

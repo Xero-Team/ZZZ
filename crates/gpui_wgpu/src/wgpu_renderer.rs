@@ -1,4 +1,4 @@
-use crate::{CompositorGpuHint, WgpuAtlas, WgpuContext};
+use crate::{CompositorGpuHint, SoftwareAdapterPolicy, WgpuAtlas, WgpuContext};
 #[cfg(all(feature = "test-support", not(target_family = "wasm")))]
 use gpui::AtlasPolicy;
 use gpui::{
@@ -67,6 +67,12 @@ pub struct WgpuRenderer {
     device_lost: std::sync::Arc<std::sync::atomic::AtomicBool>,
     surface_configured: bool,
     needs_redraw: bool,
+    /// Adapter policy for recreating the context after a device loss (unused on Web).
+    #[cfg_attr(
+        target_family = "wasm",
+        allow(dead_code, reason = "native device recovery is unavailable on Web")
+    )]
+    recovery_adapter_policy: SoftwareAdapterPolicy,
     #[cfg(test)]
     fail_after_surface_acquire: bool,
 }
@@ -111,9 +117,10 @@ impl WgpuRenderer {
     /// multiple windows. The first window to create a renderer will initialize the
     /// context; subsequent windows will share it.
     ///
-    /// # Safety
-    /// The caller must ensure that the window handle remains valid for the lifetime
-    /// of the returned renderer.
+    /// The surface created here borrows the window handle without owning it, so the caller has to
+    /// keep `window` and the protocol objects behind it alive for as long as the returned renderer.
+    /// The platform layer upholds this by dropping the renderer before the window, which is why this
+    /// is a safe constructor rather than an `unsafe` one.
     #[cfg(not(target_family = "wasm"))]
     pub fn new<W>(
         gpu_context: GpuContext,
@@ -142,9 +149,9 @@ impl WgpuRenderer {
             |ctx| ctx.instance.clone(),
         );
 
-        // Safety: The caller guarantees that the window handle is valid for the
-        // lifetime of this renderer. In practice, the RawWindow struct is created
-        // from the native window handles and the surface is dropped before the window.
+        // SAFETY: `target` only carries the handle obtained from `window` above, whose lifetime is
+        // the documented precondition of this constructor; wgpu stores the raw handle without
+        // taking ownership, so nothing here outlives the caller's guarantee.
         let surface = unsafe {
             instance
                 .create_surface_unsafe(target)
@@ -163,6 +170,7 @@ impl WgpuRenderer {
                 &surface,
                 &config,
                 compositor_gpu,
+                SoftwareAdapterPolicy::Allow,
             )?),
         };
 
@@ -335,10 +343,8 @@ impl WgpuRenderer {
             )?;
         // Adapter selection configures the surface with this same configuration when it
         // creates the context, so only configure it here when that did not happen.
-        if !context_configured_surface {
-            if let Some(surface) = &surface {
-                surface.configure(&context.device, &surface_config);
-            }
+        if !context_configured_surface && let Some(surface) = &surface {
+            surface.configure(&context.device, &surface_config);
         }
 
         let surface_format = surface_config.format;
@@ -497,6 +503,7 @@ impl WgpuRenderer {
             device_lost: context.device_lost_flag(),
             surface_configured: true,
             needs_redraw: false,
+            recovery_adapter_policy: context.recovery_policy(),
             #[cfg(test)]
             fail_after_surface_acquire: false,
         })
@@ -1001,6 +1008,11 @@ impl WgpuRenderer {
         self.dual_source_blending
     }
 
+    /// The adapter policy this renderer uses when recreating its context after a device loss.
+    pub fn recovery_adapter_policy(&self) -> SoftwareAdapterPolicy {
+        self.recovery_adapter_policy
+    }
+
     pub fn gpu_specs(&self) -> GpuSpecs {
         let mut specs = GpuSpecs::default();
         specs.is_software_emulated = self.adapter_info.device_type == wgpu::DeviceType::Cpu;
@@ -1312,7 +1324,21 @@ impl WgpuRenderer {
         }
     }
 
+    /// Reinterprets GPU instance structs as the raw bytes handed to the instance buffer.
+    ///
+    /// # Safety
+    ///
+    /// Every byte of `instances` must be initialized, because the returned `&[u8]` gives safe code
+    /// read access to all of them. Compiler-inserted padding is never written by a struct literal,
+    /// so a `T` with padding makes this function undefined behavior even though the bytes are never
+    /// looked at as `u8` values. The callers in `drawing.rs` therefore pass `#[repr(C)]` instance
+    /// structs that carry an explicit pad field rather than relying on the compiler's alignment
+    /// rules, and `instance_types_contain_no_padding` fails if that invariant ever stops holding.
     unsafe fn instance_bytes<T>(instances: &[T]) -> &[u8] {
+        // SAFETY: the caller guarantees every byte behind `instances` is initialized. The length is
+        // `size_of_val(instances)`, so the new slice covers exactly the memory of the original one
+        // and stays within its allocation, and the `'_` in the return type keeps that memory
+        // borrowed for as long as the result is live.
         unsafe {
             std::slice::from_raw_parts(
                 instances.as_ptr().cast::<u8>(),
@@ -1486,19 +1512,22 @@ impl WgpuRenderer {
             self.resources = None;
             *gpu_context.borrow_mut() = None;
 
-            // Wait briefly for the GPU driver to stabilize, then try to
-            // recreate the context without software renderers. If this fails
-            // the caller should request another frame and retry — the real GPU
-            // may need more time to come back (e.g. after suspend/resume).
+            // Wait briefly for the GPU driver to stabilize, then recreate the context with
+            // the policy that matches the adapter this renderer was using: a hardware adapter
+            // must not silently fall back to software rendering, while a context that already
+            // runs on a CPU adapter has to be allowed to select one again. If this fails the
+            // caller should request another frame and retry — the real GPU may need more time
+            // to come back (e.g. after suspend/resume).
             std::thread::sleep(std::time::Duration::from_millis(350));
 
             let instance = WgpuContext::instance(Box::new(window.clone()));
             let surface = create_surface(&instance, window_handle.as_raw())?;
-            let new_context = WgpuContext::new_rejecting_software(
+            let new_context = WgpuContext::new(
                 instance,
                 &surface,
                 &config,
                 self.compositor_gpu,
+                self.recovery_adapter_policy,
             )?;
             *gpu_context.borrow_mut() = Some(new_context);
             surface
@@ -1533,11 +1562,19 @@ impl WgpuRenderer {
     }
 }
 
+/// Creates a wgpu surface from a raw window handle.
+///
+/// The returned surface is `'static` because wgpu erases the handle's lifetime, so the caller has
+/// to keep `raw_window_handle` and the protocol objects it names alive for as long as the surface
+/// exists. `WgpuRenderer` upholds this by storing the surface in resources that the platform layer
+/// drops before the window.
 #[cfg(not(target_family = "wasm"))]
 fn create_surface(
     instance: &wgpu::Instance,
     raw_window_handle: raw_window_handle::RawWindowHandle,
 ) -> anyhow::Result<wgpu::Surface<'static>> {
+    // SAFETY: the surface outlives the handle only by the caller's obligation described above, which
+    // is the single requirement `create_surface_unsafe` places on its caller.
     unsafe {
         instance
             .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {

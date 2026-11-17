@@ -35,19 +35,26 @@ You are a code review agent.
 
 ## Required And Common Fields
 
-Required:
+`description` is the only field a discoverable subagent needs; every other
+frontmatter field is optional at runtime. For this repository always set
+`description` and `mode`.
 
-- `description`: required discovery surface; include concrete trigger phrases
+- `description`: the discovery surface the model reads when it chooses an
+  agent; include concrete trigger phrases
+- `mode`: `primary`, `subagent`, or `all`. A new custom agent defaults to
+  `primary` when the field is omitted
+- `model`: `provider/model`, with an optional `#variant`
+- `permissions`: ordered `{ action, resource, effect }` rules
+- `steps`: maximum model steps before OpenCode removes tools and asks for a
+  summary
+- `hidden`: removes the agent from listings and the subagent catalog; this is
+  visibility, not security
+- `color`: six-digit hex display color
+- `disabled`: removes a built-in or custom agent at that point in configuration
 
-Common:
-
-- `mode`: `primary`, `subagent`, or `all`
-- `tools`: enable or disable tools for the agent
-- `permission`: control whether tool use is allowed, denied, or asks first
-- `model`: override model selection when needed
-- `temperature`: lower for deterministic analysis, higher for exploratory work
-- `steps`: cap agent iterations when cost or speed matters
-- `hidden`: only for `subagent`; hides it from `@` autocomplete
+Do not write the deprecated V1 top-level fields `tools`, `permission`,
+`temperature`, `top_p`, `prompt`, `disable`, or `maxSteps`. Put the prompt in
+the Markdown body, which becomes the agent's `system` prompt.
 
 ## Mode Selection
 
@@ -59,32 +66,36 @@ Default to `subagent` unless the user clearly wants a main working mode.
 
 ## Tool Model
 
-OpenCode tools are enabled by configuration, but behavior is controlled by
-permissions.
+Built-in tools are `read`, `glob`, `grep`, `edit`, `write`, `patch`, `shell`,
+`webfetch`, `websearch`, `question`, `skill`, `subagent`, and `execute`.
+Availability is not a frontmatter switch in V2; behavior is controlled by
+`permissions`.
 
-Authoring-critical rule:
+Authoring-critical rules:
 
 - `edit` permission governs file modification tools including `edit`, `write`,
   and `patch`
+- `shell` permission governs command execution
+- `patch` is offered only to supported models; other models receive `edit` and
+  `write`
 
 Do not describe `write` as independently safe if `edit` is denied.
 
 ## Built-In Tools To Consider
 
-- `read`: read file contents
-- `grep`: search file contents by regex
+- `read`: read file contents or a non-recursive directory listing
 - `glob`: find files by pattern
-- `edit`: modify existing files; also governs `write` and `patch`
+- `grep`: search file contents by regular expression or literal text
+- `edit`: modify existing files
 - `write`: create new files or overwrite existing ones; controlled by `edit`
-- `patch`: apply diffs; controlled by `edit`
-- `bash`: run shell commands
+- `patch`: apply a multi-file patch; controlled by `edit`
+- `shell`: run shell commands in the host user's shell
 - `question`: ask the user concise clarification questions
 - `webfetch`: fetch a known URL
 - `websearch`: discover information on the web
 - `skill`: load a skill file
-- `todowrite`: manage a todo list; disabled for subagents by default unless
-  explicitly enabled
-- `lsp`: experimental code intelligence if available in the environment
+- `subagent`: launch a configured child session
+- `execute`: run JavaScript in Code Mode to compose catalog tools
 
 ## Tool Choice Heuristics
 
@@ -92,41 +103,53 @@ Use the narrowest set that fits the job.
 
 - Review / analysis agents: usually `read`, `grep`, `glob`; maybe `webfetch`
 - Planning agents: usually `read`, `grep`, `glob`, `question`
-- Documentation agents: may add `edit`; add `bash` only if command execution is
+- Documentation agents: may add `edit`; add `shell` only if command execution is
   explicitly part of the job
-- Debug agents: may add `bash`; only add `edit` when fixes are in scope
-- Implementation agents: may add `edit` and `bash` if the task truly requires
+- Debug agents: may add `shell`; only add `edit` when fixes are in scope
+- Implementation agents: may add `edit` and `shell` if the task truly requires
   both
 
 ## Permission Model
 
-Permissions support these values:
-
-- `allow`
-- `ask`
-- `deny`
-
-You can define them globally or per agent. Relevant examples:
+`permissions` is an ordered list of rules. Each rule has an `action`, a
+`resource`, and an `effect` of `allow`, `ask`, or `deny`. The last matching rule
+wins, so put broad rules before exceptions.
 
 ```yaml
-permission:
-  edit: deny
-  bash: ask
-  webfetch: allow
+permissions:
+  - action: "*"
+    resource: "*"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: shell
+    resource: "*"
+    effect: deny
 ```
 
-For shell commands, command-specific rules can be narrower than broad `bash`
-access:
+Actions that matter for authoring: `shell` (command execution), `edit` (`edit`,
+`write`, and `patch`), `subagent` (child agents), `read`, `glob`, `grep`,
+`webfetch`, `websearch`, and `skill`. Global rules apply before agent rules, so
+an agent can refine a broader global policy.
+
+For shell commands, narrow the `resource` to the command text instead of
+granting broad `shell` access:
 
 ```yaml
-permission:
-  bash:
-    "*": ask
-    "git status *": allow
-    "grep *": allow
+permissions:
+  - action: shell
+    resource: "*"
+    effect: ask
+  - action: shell
+    resource: "git status *"
+    effect: allow
+  - action: shell
+    resource: "grep *"
+    effect: allow
 ```
 
-Prefer command-specific bash permissions when the user wants shell access with
+Prefer command-specific `shell` rules when the user wants shell access with
 guardrails.
 
 ## Web Tool Split
@@ -153,9 +176,9 @@ can hide files unless the environment explicitly allows them.
 
 - Writing a vague `description` that is hard to discover
 - Choosing `all` when only one mode is needed
-- Granting `bash` or `edit` without a task-driven reason
+- Granting `shell` or `edit` without a task-driven reason
 - Forgetting that `write` and `patch` are covered by `edit`
-- Adding `todowrite` assumptions to subagents without enabling it explicitly
+- Writing a V1 `tools` or `permission` map instead of V2 `permissions` rules
 - Using `websearch` when the task already has a concrete URL
 
 ## Example: Read-Only Reviewer
@@ -164,9 +187,13 @@ can hide files unless the environment explicitly allows them.
 ---
 description: "Reviews code for bugs, regressions, and maintainability risks"
 mode: subagent
-permission:
-  edit: deny
-  bash: deny
+permissions:
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: shell
+    resource: "*"
+    effect: deny
 ---
 
 You are a read-only review agent.
@@ -178,9 +205,13 @@ You are a read-only review agent.
 ---
 description: "Writes and maintains project documentation files"
 mode: subagent
-permission:
-  edit: allow
-  bash: deny
+permissions:
+  - action: edit
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "*"
+    effect: deny
 ---
 
 You are a documentation agent.

@@ -307,9 +307,7 @@ pub async fn match_path_sets<'a, Set: PathMatchCandidateSet<'a>>(
 
     let num_cpus = executor.num_cpus().min(path_count);
     let segment_size = path_count.div_ceil(num_cpus);
-    let mut segment_results = (0..num_cpus)
-        .map(|_| Vec::with_capacity(max_results))
-        .collect::<Vec<_>>();
+    let mut segment_results = Vec::from_fn(num_cpus, |_| Vec::with_capacity(max_results));
     let mut config = nucleo::Config::DEFAULT;
     config.set_match_paths();
     let mut matchers = matcher::get_matchers(num_cpus, config);
@@ -368,7 +366,7 @@ pub async fn match_path_sets<'a, Set: PathMatchCandidateSet<'a>>(
         return Vec::new();
     }
 
-    let mut results = segment_results.concat();
+    let mut results = segment_results.into_iter().flatten().collect::<Vec<_>>();
     util::truncate_to_bottom_n_sorted_by(&mut results, max_results, &|a, b| b.cmp(a));
     results
 }

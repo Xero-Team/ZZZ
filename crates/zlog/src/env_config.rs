@@ -25,7 +25,7 @@ pub fn parse(filter: &str) -> Result<EnvFilter> {
             };
             anyhow::ensure!(max_level.is_none(), "Cannot set multiple max levels");
             max_level.replace(level);
-        };
+        }
     }
 
     Ok(EnvFilter {

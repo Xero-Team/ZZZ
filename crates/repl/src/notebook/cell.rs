@@ -524,10 +524,7 @@ impl MarkdownCell {
     pub fn current_source(&self, cx: &App) -> String {
         let editor = self.editor.read(cx);
         let buffer = editor.buffer().read(cx);
-        buffer
-            .as_singleton()
-            .map(|b| b.read(cx).text())
-            .unwrap_or_default()
+        buffer.as_singleton().map_or_default(|b| b.read(cx).text())
     }
 
     pub fn is_dirty(&self, cx: &App) -> bool {
@@ -557,10 +554,7 @@ impl MarkdownCell {
     pub fn reparse_markdown(&mut self, cx: &mut Context<Self>) {
         let editor = self.editor.read(cx);
         let buffer = editor.buffer().read(cx);
-        let source = buffer
-            .as_singleton()
-            .map(|b| b.read(cx).text())
-            .unwrap_or_default();
+        let source = buffer.as_singleton().map_or_default(|b| b.read(cx).text());
 
         self.source = source.clone();
         self.markdown.update(cx, |markdown, cx| {
@@ -814,10 +808,7 @@ impl CodeCell {
     pub fn current_source(&self, cx: &App) -> String {
         let editor = self.editor.read(cx);
         let buffer = editor.buffer().read(cx);
-        buffer
-            .as_singleton()
-            .map(|b| b.read(cx).text())
-            .unwrap_or_default()
+        buffer.as_singleton().map_or_default(|b| b.read(cx).text())
     }
 
     pub fn is_dirty(&self, cx: &App) -> bool {
@@ -1398,6 +1389,7 @@ impl Render for RawCell {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     use collections::HashSet;

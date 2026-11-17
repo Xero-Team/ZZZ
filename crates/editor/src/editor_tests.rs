@@ -5891,7 +5891,7 @@ async fn test_newline_comments(cx: &mut TestAppContext) {
         //s
         // ˇ
     "}
-            .replace("s", " ") // s is used as space placeholder to prevent format on save
+            .replace('s', " ") // s is used as space placeholder to prevent format on save
             .as_str(),
         );
         // Ensure that we add comment prefix when existing line does not contain space
@@ -6134,7 +6134,7 @@ async fn test_newline_documentation_comments(cx: &mut TestAppContext) {
          * ˇ
          */
     "}
-            .replace("s", " ") // s is used as space placeholder to prevent format on save
+            .replace('s', " ") // s is used as space placeholder to prevent format on save
             .as_str(),
         );
         // Ensure that delimiter space is preserved when newline on already
@@ -6147,7 +6147,7 @@ async fn test_newline_documentation_comments(cx: &mut TestAppContext) {
          * ˇ
          */
     "}
-            .replace("s", " ") // s is used as space placeholder to prevent format on save
+            .replace('s', " ") // s is used as space placeholder to prevent format on save
             .as_str(),
         );
         // Ensure that delimiter space is preserved when space is not
@@ -32577,6 +32577,162 @@ async fn test_gutter_context_menu_anchor_in_multibuffer(cx: &mut TestAppContext)
     });
 }
 
+async fn build_gutter_action_test_editor(
+    saved: bool,
+    cx: &mut TestAppContext,
+) -> EditorTestContext {
+    init_test(cx, |_| {});
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/a"),
+        json!({
+            "main.rs": "fn main() {}\n",
+        }),
+    )
+    .await;
+    let project = Project::test(fs, [path!("/a").as_ref()], cx).await;
+
+    let buffer = if saved {
+        let worktree_id = project.read_with(cx, |project, cx| {
+            project.worktrees(cx).next().unwrap().read(cx).id()
+        });
+        project
+            .update(cx, |project, cx| {
+                project.open_buffer((worktree_id, rel_path("main.rs")), cx)
+            })
+            .await
+            .unwrap()
+    } else {
+        let buffer = project
+            .update(cx, |project, cx| project.create_buffer(None, true, cx))
+            .await
+            .unwrap();
+        buffer.update(cx, |buffer, cx| {
+            buffer.edit([(0..0, "fn main() {}\n")], None, cx);
+        });
+        buffer
+    };
+
+    let window = cx.add_window(|window, cx| {
+        let editor = build_editor_with_project(
+            project,
+            MultiBuffer::build_from_buffer(buffer, cx),
+            window,
+            cx,
+        );
+        window.focus(&editor.focus_handle(cx), cx);
+        editor
+    });
+
+    EditorTestContext::for_editor(window, cx).await
+}
+
+fn gutter_row_zero_bounds(cx: &mut EditorTestContext) -> gpui::Point<gpui::Pixels> {
+    cx.cx.update(|window, cx| {
+        window.refresh();
+        let _ = window.draw(cx);
+    });
+
+    cx.update_editor(|editor, _, _| {
+        editor
+            .last_position_map
+            .as_ref()
+            .expect("expected editor position map")
+            .gutter_hitbox
+            .bounds
+            .center()
+    })
+}
+
+#[gpui::test]
+async fn test_gutter_hover_button_shown_for_saved_buffer(cx: &mut TestAppContext) {
+    let mut editor_cx = build_gutter_action_test_editor(true, cx).await;
+
+    let hover_position = gutter_row_zero_bounds(&mut editor_cx);
+    editor_cx
+        .cx
+        .simulate_mouse_move(hover_position, None, Modifiers::none());
+    editor_cx.update_editor(|editor, _, _| {
+        assert!(
+            editor.gutter_hover_button.0.is_some(),
+            "expected gutter hover button to be armed for a saved buffer"
+        );
+        assert!(!editor.gutter_hover_button.0.as_ref().unwrap().is_active);
+    });
+
+    cx.executor().advance_clock(Duration::from_millis(250));
+    editor_cx.run_until_parked();
+    editor_cx.update_editor(|editor, _, _| {
+        assert!(
+            editor
+                .gutter_hover_button
+                .0
+                .as_ref()
+                .is_some_and(|indicator| indicator.is_active),
+            "expected gutter hover button to become active after the debounce"
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_gutter_hover_button_hidden_for_unsaved_buffer(cx: &mut TestAppContext) {
+    let mut editor_cx = build_gutter_action_test_editor(false, cx).await;
+
+    let hover_position = gutter_row_zero_bounds(&mut editor_cx);
+    editor_cx
+        .cx
+        .simulate_mouse_move(hover_position, None, Modifiers::none());
+    editor_cx.update_editor(|editor, _, _| {
+        assert!(
+            editor.gutter_hover_button.0.is_none(),
+            "expected no gutter hover button for an unsaved buffer"
+        );
+        assert!(
+            editor.gutter_hover_button.1.is_none(),
+            "expected no debounce task to be armed for an unsaved buffer"
+        );
+    });
+
+    cx.executor().advance_clock(Duration::from_millis(250));
+    editor_cx.run_until_parked();
+    editor_cx.update_editor(|editor, _, _| {
+        assert!(editor.gutter_hover_button.0.is_none());
+    });
+}
+
+#[gpui::test]
+async fn test_gutter_context_menu_shown_for_saved_buffer(cx: &mut TestAppContext) {
+    let mut editor_cx = build_gutter_action_test_editor(true, cx).await;
+
+    let click_position = gutter_row_zero_bounds(&mut editor_cx);
+    editor_cx
+        .cx
+        .simulate_mouse_down(click_position, MouseButton::Right, Modifiers::none());
+    editor_cx.update_editor(|editor, _, _| {
+        assert!(
+            editor.mouse_context_menu.is_some(),
+            "expected gutter context menu to open for a saved buffer"
+        );
+    });
+}
+
+#[gpui::test]
+async fn test_gutter_context_menu_hidden_for_unsaved_buffer(cx: &mut TestAppContext) {
+    let mut editor_cx = build_gutter_action_test_editor(false, cx).await;
+
+    let click_position = gutter_row_zero_bounds(&mut editor_cx);
+    editor_cx
+        .cx
+        .simulate_mouse_down(click_position, MouseButton::Right, Modifiers::none());
+    editor_cx.update_editor(|editor, _, _| {
+        assert!(
+            editor.mouse_context_menu.is_none(),
+            "expected no gutter context menu for an unsaved buffer"
+        );
+    });
+}
+
 #[gpui::test]
 async fn test_breakpoint_after_save_as_existing_path(cx: &mut TestAppContext) {
     init_test(cx, |_| {});
@@ -39716,7 +39872,7 @@ async fn test_next_prev_reference(cx: &mut TestAppContext) {
             ))
         });
 
-    let _move = async |direction, count, cx: &mut EditorLspTestContext| {
+    let navigate = async |direction, count, cx: &mut EditorLspTestContext| {
         cx.update_editor(|editor, window, cx| {
             editor.go_to_reference_before_or_after_position(direction, count, window, cx)
         })
@@ -39725,36 +39881,36 @@ async fn test_next_prev_reference(cx: &mut TestAppContext) {
         .unwrap()
     };
 
-    _move(Direction::Next, 1, &mut cx).await;
+    navigate(Direction::Next, 1, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[1]);
 
-    _move(Direction::Next, 1, &mut cx).await;
+    navigate(Direction::Next, 1, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[2]);
 
-    _move(Direction::Next, 1, &mut cx).await;
+    navigate(Direction::Next, 1, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[3]);
 
     // loops back to the start
-    _move(Direction::Next, 1, &mut cx).await;
+    navigate(Direction::Next, 1, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[0]);
 
     // loops back to the end
-    _move(Direction::Prev, 1, &mut cx).await;
+    navigate(Direction::Prev, 1, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[3]);
 
-    _move(Direction::Prev, 1, &mut cx).await;
+    navigate(Direction::Prev, 1, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[2]);
 
-    _move(Direction::Prev, 1, &mut cx).await;
+    navigate(Direction::Prev, 1, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[1]);
 
-    _move(Direction::Prev, 1, &mut cx).await;
+    navigate(Direction::Prev, 1, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[0]);
 
-    _move(Direction::Next, 3, &mut cx).await;
+    navigate(Direction::Next, 3, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[3]);
 
-    _move(Direction::Prev, 2, &mut cx).await;
+    navigate(Direction::Prev, 2, &mut cx).await;
     cx.assert_editor_state(CYCLE_POSITIONS[1]);
 }
 
@@ -40183,7 +40339,7 @@ async fn test_newline_task_list_continuation(cx: &mut TestAppContext) {
         - [ ]$$
         ˇ
     "}
-        .replace("$", " ")
+        .replace('$', " ")
         .as_str(),
     );
 
@@ -40317,7 +40473,7 @@ async fn test_newline_unordered_list_continuation(cx: &mut TestAppContext) {
         - $
         ˇ
     "}
-        .replace("$", " ")
+        .replace('$', " ")
         .as_str(),
     );
 
@@ -40408,7 +40564,7 @@ async fn test_newline_unordered_list_continuation(cx: &mut TestAppContext) {
         indoc! {"
         $$$$$$- ˇ
     "}
-        .replace("$", " ")
+        .replace('$', " ")
         .as_str(),
     );
     cx.update_editor(|e, window, cx| e.newline(&Newline, window, cx));
@@ -40417,7 +40573,7 @@ async fn test_newline_unordered_list_continuation(cx: &mut TestAppContext) {
         indoc! {"
         $$$$- ˇ
     "}
-        .replace("$", " ")
+        .replace('$', " ")
         .as_str(),
     );
 }
@@ -40476,7 +40632,7 @@ async fn test_newline_ordered_list_continuation(cx: &mut TestAppContext) {
         1. $
         ˇ
     "}
-        .replace("$", " ")
+        .replace('$', " ")
         .as_str(),
     );
 
@@ -40591,7 +40747,7 @@ async fn test_tab_list_indent(cx: &mut TestAppContext) {
     let expected = indoc! {"
         $$- ˇitem
     "};
-    cx.assert_editor_state(expected.replace("$", " ").as_str());
+    cx.assert_editor_state(expected.replace('$', " ").as_str());
 
     // Case 2: Task list - cursor after prefix
     cx.set_state(indoc! {"
@@ -40602,7 +40758,7 @@ async fn test_tab_list_indent(cx: &mut TestAppContext) {
     let expected = indoc! {"
         $$- [ ] ˇtask
     "};
-    cx.assert_editor_state(expected.replace("$", " ").as_str());
+    cx.assert_editor_state(expected.replace('$', " ").as_str());
 
     // Case 3: Ordered list - cursor after prefix
     cx.set_state(indoc! {"
@@ -40613,19 +40769,19 @@ async fn test_tab_list_indent(cx: &mut TestAppContext) {
     let expected = indoc! {"
         $$1. ˇfirst
     "};
-    cx.assert_editor_state(expected.replace("$", " ").as_str());
+    cx.assert_editor_state(expected.replace('$', " ").as_str());
 
     // Case 4: With existing indentation - adds more indent
     let initial = indoc! {"
         $$- ˇitem
     "};
-    cx.set_state(initial.replace("$", " ").as_str());
+    cx.set_state(initial.replace('$', " ").as_str());
     cx.update_editor(|e, window, cx| e.tab(&Tab, window, cx));
     cx.wait_for_autoindent_applied().await;
     let expected = indoc! {"
         $$$$- ˇitem
     "};
-    cx.assert_editor_state(expected.replace("$", " ").as_str());
+    cx.assert_editor_state(expected.replace('$', " ").as_str());
 
     // Case 5: Empty list item
     cx.set_state(indoc! {"
@@ -40636,7 +40792,7 @@ async fn test_tab_list_indent(cx: &mut TestAppContext) {
     let expected = indoc! {"
         $$- ˇ
     "};
-    cx.assert_editor_state(expected.replace("$", " ").as_str());
+    cx.assert_editor_state(expected.replace('$', " ").as_str());
 
     // Case 6: Cursor at end of line with content
     cx.set_state(indoc! {"
@@ -40647,7 +40803,7 @@ async fn test_tab_list_indent(cx: &mut TestAppContext) {
     let expected = indoc! {"
         $$- itemˇ
     "};
-    cx.assert_editor_state(expected.replace("$", " ").as_str());
+    cx.assert_editor_state(expected.replace('$', " ").as_str());
 
     // Case 7: Cursor at start of list item, indents it
     cx.set_state(indoc! {"
@@ -45676,4 +45832,76 @@ async fn test_soft_wrap_indent_updated_when_first_excerpt_changes(cx: &mut gpui:
             );
         })
         .unwrap();
+}
+
+#[gpui::test]
+async fn test_markdown_save_respects_disabled_trailing_whitespace_removal(cx: &mut TestAppContext) {
+    init_test(cx, |settings| {
+        settings.defaults.ensure_final_newline_on_save = Some(false);
+        settings.languages.0.insert(
+            "Markdown".into(),
+            LanguageSettingsContent {
+                remove_trailing_whitespace_on_save: Some(false),
+                ..Default::default()
+            },
+        );
+    });
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_file(
+        path!("/.editorconfig"),
+        "root = true\n[*]\ntrim_trailing_whitespace = true\n"
+            .as_bytes()
+            .to_vec(),
+    )
+    .await;
+    fs.insert_file(path!("/README.md"), Vec::new()).await;
+
+    let project = Project::test(fs.clone(), [path!("/").as_ref()], cx).await;
+    let language_registry = project.read_with(cx, |project, _| project.languages().clone());
+    language_registry.add(markdown_lang());
+
+    let buffer = project
+        .update(cx, |project, cx| {
+            project.open_local_buffer(path!("/README.md"), cx)
+        })
+        .await
+        .unwrap();
+
+    let buffer = cx.new(|cx| MultiBuffer::singleton(buffer, cx));
+    let (editor, cx) = cx.add_window_view(|window, cx| {
+        build_editor_with_project(project.clone(), buffer, window, cx)
+    });
+    editor.update_in(cx, |editor, window, cx| {
+        editor.set_text("line with spaces  \n", window, cx)
+    });
+
+    let save = editor
+        .update_in(cx, |editor, window, cx| {
+            editor.save(
+                SaveOptions {
+                    format: true,
+                    force_format: false,
+                    autosave: false,
+                    force: false,
+                },
+                project.clone(),
+                window,
+                cx,
+            )
+        })
+        .unwrap();
+    save.await;
+
+    assert_eq!(
+        editor.update(cx, |editor, cx| editor.text(cx)),
+        "line with spaces  \n"
+    );
+    assert_eq!(
+        fs.load(path!("/README.md").as_ref())
+            .await
+            .unwrap()
+            .replace("\r\n", "\n"),
+        "line with spaces  \n"
+    );
 }

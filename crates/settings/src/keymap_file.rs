@@ -902,41 +902,40 @@ impl KeymapFile {
             target,
             target_keybind_source,
         } = &operation
+            && *target_keybind_source == KeybindSource::User
         {
-            if *target_keybind_source == KeybindSource::User {
-                let target_action_value = target
-                    .action_value()
-                    .context("Failed to generate target action JSON value")?;
-                let Some(binding_location) = find_binding(
-                    &keymap,
-                    target,
-                    &target_action_value,
-                    keyboard_mapper,
-                    deprecated_aliases,
-                ) else {
-                    anyhow::bail!("Failed to find keybinding to remove");
-                };
-                let is_only_binding = binding_location.is_only_entry_in_section(&keymap);
-                let key_path: &[&str] = if is_only_binding {
-                    &[]
-                } else {
-                    &[
-                        binding_location.kind.key_path(),
-                        binding_location.keystrokes_str,
-                    ]
-                };
-                let (replace_range, replace_value) = replace_top_level_array_value_in_json_text(
-                    &keymap_contents,
-                    key_path,
-                    None,
-                    None,
-                    binding_location.index,
-                    tab_size,
-                );
-                keymap_contents.replace_range(replace_range, &replace_value);
+            let target_action_value = target
+                .action_value()
+                .context("Failed to generate target action JSON value")?;
+            let Some(binding_location) = find_binding(
+                &keymap,
+                target,
+                &target_action_value,
+                keyboard_mapper,
+                deprecated_aliases,
+            ) else {
+                anyhow::bail!("Failed to find keybinding to remove");
+            };
+            let is_only_binding = binding_location.is_only_entry_in_section(&keymap);
+            let key_path: &[&str] = if is_only_binding {
+                &[]
+            } else {
+                &[
+                    binding_location.kind.key_path(),
+                    binding_location.keystrokes_str,
+                ]
+            };
+            let (replace_range, replace_value) = replace_top_level_array_value_in_json_text(
+                &keymap_contents,
+                key_path,
+                None,
+                None,
+                binding_location.index,
+                tab_size,
+            );
+            keymap_contents.replace_range(replace_range, &replace_value);
 
-                return Ok(keymap_contents);
-            }
+            return Ok(keymap_contents);
         }
 
         if let KeybindUpdateOperation::Replace { source, target, .. } = operation {

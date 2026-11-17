@@ -50,6 +50,7 @@ impl Focusable for GoToLine {
 }
 impl EventEmitter<DismissEvent> for GoToLine {}
 
+#[allow(clippy::empty_enums)] // uninhabited marker; each highlight needs a distinct type
 enum GoToLineRowHighlights {}
 
 impl GoToLine {
@@ -977,16 +978,17 @@ mod tests {
                 .map(|s| s.start..s.end)
                 .collect::<Vec<_>>()
         });
-        assert!(
-            selections.len() == 1,
+        assert_eq!(
+            selections.len(),
+            1,
             "Expected one caret selection but got: {selections:?}"
         );
         let selection = selections
             .into_iter()
             .next()
             .expect("checked selection count");
-        assert!(
-            selection.start == selection.end,
+        assert_eq!(
+            selection.start, selection.end,
             "Expected a single caret selection, but got: {selection:?}"
         );
         selection

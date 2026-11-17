@@ -274,7 +274,7 @@ impl FoldMapWriter<'_> {
         for range in ranges.into_iter() {
             let range = range.start.to_offset(buffer)..range.end.to_offset(buffer);
             let mut folds_cursor =
-                intersecting_folds(&snapshot, &self.0.snapshot.folds, range.clone(), inclusive);
+                intersecting_folds(&snapshot, &self.0.snapshot.folds, range, inclusive);
             while let Some(fold) = folds_cursor.item() {
                 let offset_range =
                     fold.range.start.to_offset(buffer)..fold.range.end.to_offset(buffer);
@@ -335,7 +335,7 @@ impl FoldMapWriter<'_> {
                     ..inlay_snapshot.to_inlay_offset(buffer_end);
                 edits.push(InlayEdit {
                     old: inlay_range.clone(),
-                    new: inlay_range.clone(),
+                    new: inlay_range,
                 });
 
                 self.0.snapshot.fold_metadata_by_id.insert(
@@ -1111,7 +1111,7 @@ fn consolidate_inlay_edits(mut edits: Vec<InlayEdit>) -> Vec<InlayEdit> {
             .then_with(|| b.old.end.cmp(&a.old.end))
     });
 
-    let _old_alloc_ptr = edits.as_ptr();
+    let old_alloc_ptr = edits.as_ptr();
     let mut inlay_edits = edits.into_iter();
 
     if let Some(mut first_edit) = inlay_edits.next() {
@@ -1132,7 +1132,7 @@ fn consolidate_inlay_edits(mut edits: Vec<InlayEdit>) -> Vec<InlayEdit> {
             .filter_map(|x| x)
             .collect();
         v.push(first_edit.clone());
-        debug_assert_eq!(_old_alloc_ptr, v.as_ptr(), "Inlay edits were reallocated");
+        debug_assert_eq!(old_alloc_ptr, v.as_ptr(), "Inlay edits were reallocated");
         v
     } else {
         vec![]
@@ -2029,7 +2029,7 @@ mod tests {
                     log::info!("editing {:?}", edits);
                     buffer_edits.extend(edits);
                 }),
-            };
+            }
 
             let (inlay_snapshot, new_inlay_edits) =
                 inlay_map.sync(buffer_snapshot.clone(), buffer_edits);
@@ -2041,7 +2041,7 @@ mod tests {
             let (snapshot, edits) = map.read(inlay_snapshot.clone(), inlay_edits);
             snapshot_edits.push((snapshot.clone(), edits));
 
-            let mut expected_text: String = inlay_snapshot.text().clone();
+            let mut expected_text: String = inlay_snapshot.text();
             for fold_range in map.merged_folds().into_iter().rev() {
                 let fold_inlay_start = inlay_snapshot.to_inlay_offset(fold_range.start);
                 let fold_inlay_end = inlay_snapshot.to_inlay_offset(fold_range.end);

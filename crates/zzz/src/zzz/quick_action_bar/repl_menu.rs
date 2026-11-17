@@ -292,18 +292,17 @@ impl QuickActionBar {
         };
 
         let store = repl::ReplStore::global(cx);
-        if !store.read(cx).has_python_kernelspecs(worktree_id) {
-            if let Some(project) = editor
+        if !store.read(cx).has_python_kernelspecs(worktree_id)
+            && let Some(project) = editor
                 .read(cx)
                 .workspace()
                 .map(|workspace| workspace.read(cx).project().clone())
-            {
-                store
-                    .update(cx, |store, cx| {
-                        store.refresh_python_kernelspecs(worktree_id, &project, cx)
-                    })
-                    .detach_and_log_err(cx);
-            }
+        {
+            store
+                .update(cx, |store, cx| {
+                    store.refresh_python_kernelspecs(worktree_id, &project, cx)
+                })
+                .detach_and_log_err(cx);
         }
 
         let session = repl::session(editor.downgrade(), cx);

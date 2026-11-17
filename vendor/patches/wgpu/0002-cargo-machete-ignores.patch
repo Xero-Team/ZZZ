@@ -1,0 +1,11 @@
+diff --git a/naga-test/Cargo.toml b/naga-test/Cargo.toml
+--- a/naga-test/Cargo.toml
++++ b/naga-test/Cargo.toml
+@@ -34,3 +34,7 @@
+ bitflags.workspace = true
+ serde_json.workspace = true
+ serde.workspace = true
++
++[package.metadata.cargo-machete]
++# Vendored third-party crate; its unused deps are upstream's to decide.
++ignored = ["serde_json"]

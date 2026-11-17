@@ -17,6 +17,7 @@ test-support = []
 
 [dependencies]
 anyhow.workspace = true
+env_var.workspace = true
 gpui.workspace = true
 indoc.workspace = true
 inventory.workspace = true
@@ -27,7 +28,6 @@ sqlez.workspace = true
 sqlez_macros.workspace = true
 util.workspace = true
 uuid.workspace = true
-zzz_env_vars.workspace = true
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }

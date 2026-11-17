@@ -227,9 +227,14 @@ impl QuerySession {
         if let Some(handle) = self.current_query.take() {
             handle.cancel();
             self.manager.finish_query(&self.connection_id, handle.id());
-        }
-        if let Some(result_set) = &mut self.result_set {
-            result_set.mark_cancelled();
+            // Mark the result cancelled only when a query was actually running.
+            // `execute_cancellable` calls this at the start of every run, and a
+            // statement that fails while preparing returns before installing a
+            // new result set; re-labelling the completed result here would make
+            // that failure look like a user cancellation to `is_cancelled`.
+            if let Some(result_set) = &mut self.result_set {
+                result_set.mark_cancelled();
+            }
         }
     }
 
@@ -266,18 +271,15 @@ impl QuerySession {
                 .iter()
                 .all(|(key, value)| self.applied_edits.get(key) == Some(value))
         });
-        if fully_applied {
-            if let Some(result_set) = &mut self.result_set {
-                for ((row_index, column_index), value) in
-                    std::mem::take(&mut result_set.pending_edits)
+        if fully_applied && let Some(result_set) = &mut self.result_set {
+            for ((row_index, column_index), value) in std::mem::take(&mut result_set.pending_edits)
+            {
+                if let Some(cell) = result_set
+                    .rows
+                    .get_mut(row_index)
+                    .and_then(|row| row.0.get_mut(column_index))
                 {
-                    if let Some(cell) = result_set
-                        .rows
-                        .get_mut(row_index)
-                        .and_then(|row| row.0.get_mut(column_index))
-                    {
-                        *cell = value;
-                    }
+                    *cell = value;
                 }
             }
         }
@@ -705,6 +707,8 @@ pub fn column_label(column: &Column) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use crate::error::DatabaseErrorKind;
     use crate::export::{ExportFormat, export_csv, export_result_set};
@@ -1300,6 +1304,40 @@ mod tests {
     }
 
     #[test]
+    fn a_failed_statement_does_not_mark_the_previous_result_cancelled() {
+        futures::executor::block_on(async {
+            let mut session = new_session().await;
+
+            // A completed query leaves a Ready result set and no in-flight
+            // handle.
+            session.execute("SELECT 1", &[]).await.expect("first query");
+            assert_eq!(
+                session.result_set().map(|set| set.state),
+                Some(ResultSetState::Ready)
+            );
+
+            // The next statement fails while preparing, so `execute` returns
+            // before installing a new result set. `cancel_current()` at the
+            // start of the run must not re-label the completed result as a user
+            // cancellation: the UI would report "Cancelled." instead of the
+            // real error and keep showing stale rows.
+            assert!(
+                session.execute("THIS IS NOT VALID SQL", &[]).await.is_err(),
+                "an invalid statement must fail"
+            );
+            assert!(
+                !session.is_cancelled(),
+                "a failed statement must not look like a user cancellation"
+            );
+            assert_eq!(
+                session.result_set().map(|set| set.state),
+                Some(ResultSetState::Ready),
+                "the completed result set must keep its terminal state"
+            );
+        });
+    }
+
+    #[test]
     fn a_cancel_that_races_the_query_handle_is_honoured() {
         let canceller = QueryCanceller::new();
         // The user cancels before the driver returned a handle.
@@ -1405,10 +1443,10 @@ mod tests {
             let failure = session
                 .import_csv(&TableRef::new("users"), "id,email\n3,carol@example.com\n")
                 .await;
-            assert!(matches!(
+            assert_matches!(
                 failure,
                 Err(ImportFailure::Parse(ImportError::UnknownColumn(column))) if column == "email"
-            ));
+            );
             assert!(!session.has_open_transaction());
         });
     }

@@ -260,7 +260,8 @@ pub struct LanguageSettingsContent {
     /// Default: same
     pub soft_wrap_indent: Option<SoftWrapIndent>,
     /// The column at which to soft-wrap lines, for buffers where soft-wrap
-    /// is enabled.
+    /// is enabled. The `editor::Rewrap` action also wraps to this column by
+    /// default, whether or not soft-wrap is enabled.
     ///
     /// Default: 80
     pub preferred_line_length: Option<u32>,
@@ -995,6 +996,7 @@ pub enum IndentGuideBackgroundColoring {
 
 #[cfg(test)]
 mod test {
+    use std::assert_matches;
 
     use crate::{ParseStatus, fallible_options, merge_from::MergeFrom};
 
@@ -1071,7 +1073,7 @@ mod test {
     fn test_formatter_deserialization_invalid() {
         let raw_auto = "{\"formatter\": {}}";
         let (_, result) = fallible_options::parse_json::<LanguageSettingsContent>(raw_auto);
-        assert!(matches!(result, ParseStatus::Failed { .. }));
+        assert_matches!(result, ParseStatus::Failed { .. });
     }
 
     #[test]

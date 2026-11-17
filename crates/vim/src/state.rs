@@ -1397,7 +1397,7 @@ impl RegistersView {
                 if let Some(register) = globals.read_register(Some(name), None, cx) {
                     matches.push(RegisterMatch {
                         name,
-                        contents: register.text.clone(),
+                        contents: register.text,
                     })
                 }
             }
@@ -1415,7 +1415,7 @@ impl RegistersView {
             for (name, register) in &globals.registers {
                 if ['"', '+', '*', '%'].contains(name) {
                     continue;
-                };
+                }
                 matches.push(RegisterMatch {
                     name: *name,
                     contents: register.text.clone(),

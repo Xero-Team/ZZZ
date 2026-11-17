@@ -1979,7 +1979,7 @@ mod tests {
                     log::info!("editing {:?}", edits);
                     buffer_edits.extend(edits);
                 }),
-            };
+            }
 
             let (new_inlay_snapshot, new_inlay_edits) =
                 inlay_map.sync(buffer_snapshot.clone(), buffer_edits);

@@ -1,7 +1,7 @@
 use std::ops::Range;
 use std::path::PathBuf;
 
-use editor::{Editor, HighlightKey, MultiBuffer, RowHighlightOptions};
+use editor::{Editor, EditorSettings, HighlightKey, MultiBuffer, RowHighlightOptions};
 use gpui::{App, AppContext, Context, Entity, Task, Window};
 use gpui_util::ResultExt as _;
 use i18n::tr;
@@ -9,6 +9,7 @@ use language::{Bias, Buffer, HighlightedText, ToPoint};
 use project::{Project, Symbol};
 use rope::Point;
 use ui::{IntoElement, Pixels, prelude::*, px};
+use workspace::item::Settings;
 
 /// The preview window of a [`Picker`](crate::Picker).
 pub struct Preview {
@@ -109,6 +110,7 @@ impl EditorPreview {
             let capability = language::Capability::ReadWrite;
             let multi_buffer = cx.new(|_| MultiBuffer::without_headers(capability));
             let mut editor = Editor::for_multibuffer(multi_buffer, None, window, cx);
+            let editor_settings = EditorSettings::get_global(cx).clone();
 
             editor.set_read_only(true);
             editor.set_input_enabled(false);
@@ -118,8 +120,8 @@ impl EditorPreview {
             editor.disable_diagnostics(cx);
             editor.disable_expand_excerpt_buttons(cx);
             editor.disable_mouse_wheel_zoom();
-            editor.set_show_gutter(true, cx);
-            editor.set_show_line_numbers(true, cx);
+            editor.set_show_gutter(editor_settings.gutter.line_numbers, cx);
+            editor.set_show_line_numbers(editor_settings.gutter.line_numbers, cx);
             editor.set_show_breakpoints(false, cx);
             editor.set_show_bookmarks(false, cx);
             editor.set_show_code_actions(false, cx);
@@ -238,16 +240,13 @@ impl EditorPreview {
             (window.viewport_size().height / MIN_LINE_HEIGHT_PX).ceil() as u32 + MARGIN;
 
         self.preview_editor.update(cx, |editor, cx| {
-            let focus_row = highlight
-                .as_ref()
-                .map(|location| {
-                    location
-                        .anchor_range
-                        .start
-                        .to_point(&buffer.read(cx).text_snapshot())
-                        .row
-                })
-                .unwrap_or_default();
+            let focus_row = highlight.as_ref().map_or_default(|location| {
+                location
+                    .anchor_range
+                    .start
+                    .to_point(&buffer.read(cx).text_snapshot())
+                    .row
+            });
 
             let multi_buffer = editor.buffer().clone();
             multi_buffer.update(cx, |multi_buffer, cx| {

@@ -1501,7 +1501,7 @@ impl<'a> sum_tree::Dimension<'a, TransformSummary> for WrapPoint {
 }
 
 fn consolidate_wrap_edits(edits: Vec<WrapEdit>) -> Vec<WrapEdit> {
-    let _old_alloc_ptr = edits.as_ptr();
+    let old_alloc_ptr = edits.as_ptr();
     let mut wrap_edits = edits.into_iter();
 
     if let Some(mut first_edit) = wrap_edits.next() {
@@ -1521,7 +1521,7 @@ fn consolidate_wrap_edits(edits: Vec<WrapEdit>) -> Vec<WrapEdit> {
             .filter_map(|x| x)
             .collect();
         v.push(first_edit.clone());
-        debug_assert_eq!(v.as_ptr(), _old_alloc_ptr, "Wrap edits were reallocated");
+        debug_assert_eq!(v.as_ptr(), old_alloc_ptr, "Wrap edits were reallocated");
         v
     } else {
         vec![]
@@ -1880,8 +1880,8 @@ mod tests {
 
         let mut next_inlay_id = 0;
         let mut edits = Vec::new();
-        for _i in 0..operations {
-            log::info!("{} ==============================================", _i);
+        for i in 0..operations {
+            log::info!("{} ==============================================", i);
 
             let mut buffer_edits = Vec::new();
             match rng.random_range(0..=100) {

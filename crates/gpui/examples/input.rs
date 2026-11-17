@@ -144,7 +144,7 @@ impl TextInput {
 
     fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
-            self.replace_text_in_range(None, &text.replace("\n", " "), window, cx);
+            self.replace_text_in_range(None, &text.replace('\n', " "), window, cx);
         }
     }
 
@@ -200,9 +200,9 @@ impl TextInput {
             self.selected_range.start = offset
         } else {
             self.selected_range.end = offset
-        };
+        }
         if self.selected_range.end < self.selected_range.start {
-            self.selection_reversed = !self.selection_reversed;
+            self.selection_reversed.toggle();
             self.selected_range = self.selected_range.end..self.selected_range.start;
         }
         cx.notify()

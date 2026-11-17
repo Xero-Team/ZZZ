@@ -158,8 +158,7 @@ impl DevContainerManifest {
                             "${containerWorkspaceFolder}",
                             &self
                                 .remote_workspace_folder()
-                                .map(|path| path.display().to_string())
-                                .unwrap_or_default()
+                                .map_or_default(|path| path.display().to_string())
                                 .replace('\\', "/"),
                         )
                         .replace(
@@ -316,17 +315,13 @@ impl DevContainerManifest {
     /// If no such image is available, return an error
     async fn get_base_image_from_config(&self) -> Result<String, DevContainerError> {
         match self.dev_container().build_type() {
-            DevContainerBuildType::Image(image) => {
-                return Ok(image);
-            }
+            DevContainerBuildType::Image(image) => Ok(image),
             DevContainerBuildType::Dockerfile(build) => {
                 let dockerfile_contents = self.expanded_dockerfile_content().await?;
-                return image_from_dockerfile(dockerfile_contents, &build.target).ok_or_else(
-                    || {
-                        log::error!("Unable to find base image in Dockerfile");
-                        DevContainerError::DevContainerParseFailed
-                    },
-                );
+                image_from_dockerfile(dockerfile_contents, &build.target).ok_or_else(|| {
+                    log::error!("Unable to find base image in Dockerfile");
+                    DevContainerError::DevContainerParseFailed
+                })
             }
             DevContainerBuildType::DockerCompose => {
                 let docker_compose_manifest = self.docker_compose_manifest().await?;
@@ -353,11 +348,11 @@ impl DevContainerManifest {
                 }
 
                 log::error!("No valid base image found in docker-compose configuration");
-                return Err(DevContainerError::DevContainerParseFailed);
+                Err(DevContainerError::DevContainerParseFailed)
             }
             DevContainerBuildType::None => {
                 log::error!("Not a valid devcontainer config for build");
-                return Err(DevContainerError::NotInValidProject);
+                Err(DevContainerError::NotInValidProject)
             }
         }
     }
@@ -643,15 +638,13 @@ impl DevContainerManifest {
             dev_container.build.as_ref().and_then(|b| b.target.clone())
         };
 
-        let dockerfile_content = dockerfile_base_content
-            .map(|content| {
-                dockerfile_inject_alias(
-                    &content,
-                    "dev_container_auto_added_stage_label",
-                    build_target,
-                )
-            })
-            .unwrap_or_default();
+        let dockerfile_content = dockerfile_base_content.map_or_default(|content| {
+            dockerfile_inject_alias(
+                &content,
+                "dev_container_auto_added_stage_label",
+                build_target,
+            )
+        });
 
         let dockerfile_content = self.generate_dockerfile_extended(
             &container_user,
@@ -800,7 +793,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
             ];
 
             for entrypoint in self.features.iter().filter_map(|f| f.entrypoint()) {
-                entrypoint_script_lines.push(entrypoint.clone());
+                entrypoint_script_lines.push(entrypoint);
             }
             entrypoint_script_lines.append(&mut vec![
                 "exec \"$@\"".to_owned(),
@@ -858,13 +851,11 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
                 log::debug!("Using docker compose. Building extended compose files");
                 let docker_compose_resources = self.build_and_extend_compose_files().await?;
 
-                return Ok(DevContainerBuildResources::DockerCompose(
+                Ok(DevContainerBuildResources::DockerCompose(
                     docker_compose_resources,
-                ));
+                ))
             }
-            DevContainerBuildType::None => {
-                return Err(DevContainerError::DevContainerParseFailed);
-            }
+            DevContainerBuildType::None => Err(DevContainerError::DevContainerParseFailed),
         }
     }
 
@@ -1235,7 +1226,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
         }
 
         for (k, v) in self.identifying_labels() {
-            runtime_labels.insert(k.to_owned(), v.clone());
+            runtime_labels.insert(k.to_owned(), v);
         }
 
         let config_volumes: HashMap<String, DockerComposeVolume> = resources
@@ -1355,7 +1346,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${{PATH:-\3}}/g' /etc/profile || true
             DevContainerBuildType::DockerCompose | DevContainerBuildType::None => {
                 return Err(DevContainerError::DevContainerParseFailed);
             }
-        };
+        }
 
         let mut command = self.create_docker_build()?;
 
@@ -1961,8 +1952,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
         self.dev_container()
             .customizations
             .as_ref()
-            .map(|c| c.zzz.extensions.clone())
-            .unwrap_or_default()
+            .map_or_default(|c| c.zzz.extensions.clone())
     }
 
     async fn build_and_run(&mut self) -> Result<DevContainerUp, DevContainerError> {
@@ -2024,16 +2014,14 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
                 .await?;
             }
         }
-        if container_started {
-            if let Some(post_start_command) = &config.post_start_command {
-                self.run_remote_script_commands(
-                    devcontainer_up,
-                    &remote_folder,
-                    "post start",
-                    post_start_command,
-                )
-                .await?;
-            }
+        if container_started && let Some(post_start_command) = &config.post_start_command {
+            self.run_remote_script_commands(
+                devcontainer_up,
+                &remote_folder,
+                "post start",
+                post_start_command,
+            )
+            .await?;
         }
         if let Some(post_attach_command) = &config.post_attach_command {
             self.run_remote_script_commands(
@@ -2875,17 +2863,17 @@ fn get_remote_user_from_config(
     }
     if let Some(metadata) = &docker_config.config.labels.metadata {
         for metadatum in metadata {
-            if let Some(remote_user) = metadatum.get("remoteUser") {
-                if let Some(remote_user_str) = remote_user.as_str() {
-                    return Ok(remote_user_str.to_owned());
-                }
+            if let Some(remote_user) = metadatum.get("remoteUser")
+                && let Some(remote_user_str) = remote_user.as_str()
+            {
+                return Ok(remote_user_str.to_owned());
             }
         }
     }
-    if let Some(image_user) = &docker_config.config.image_user {
-        if !image_user.is_empty() {
-            return Ok(image_user.clone());
-        }
+    if let Some(image_user) = &docker_config.config.image_user
+        && !image_user.is_empty()
+    {
+        return Ok(image_user.clone());
     }
     Ok("root".to_owned())
 }
@@ -2900,10 +2888,10 @@ fn get_container_user_from_config(
     }
     if let Some(metadata) = &docker_config.config.labels.metadata {
         for metadatum in metadata {
-            if let Some(container_user) = metadatum.get("containerUser") {
-                if let Some(container_user_str) = container_user.as_str() {
-                    return Ok(container_user_str.to_owned());
-                }
+            if let Some(container_user) = metadatum.get("containerUser")
+                && let Some(container_user_str) = container_user.as_str()
+            {
+                return Ok(container_user_str.to_owned());
             }
         }
     }
@@ -3069,14 +3057,14 @@ mod test {
             .lock()
             .expect("recorded commands");
         assert_eq!(commands.len(), 2);
-        assert_eq!(commands[0]._inner_command.get_program(), "/bin/sh");
+        assert_eq!(commands[0].inner_command.get_program(), "/bin/sh");
         assert_eq!(
-            commands[0]._inner_command.get_args().collect::<Vec<_>>(),
+            commands[0].inner_command.get_args().collect::<Vec<_>>(),
             [OsStr::new("-c"), OsStr::new("echo post-start")]
         );
-        assert_eq!(commands[1]._inner_command.get_program(), "/bin/sh");
+        assert_eq!(commands[1].inner_command.get_program(), "/bin/sh");
         assert_eq!(
-            commands[1]._inner_command.get_args().collect::<Vec<_>>(),
+            commands[1].inner_command.get_args().collect::<Vec<_>>(),
             [OsStr::new("-c"), OsStr::new("echo post-attach")]
         );
     }
@@ -3505,7 +3493,7 @@ mod test {
                 .as_ref()
                 .and_then(|env| env.get("LOCAL_WORKSPACE_FOLDER")),
             // We replace backslashes with forward slashes during variable replacement for JSON safety
-            Some(&TEST_PROJECT_PATH.replace("\\", "/"))
+            Some(&TEST_PROJECT_PATH.replace('\\', "/"))
         );
 
         // ${localEnv:VARIABLE_NAME}
@@ -3645,7 +3633,7 @@ mod test {
                 .as_ref()
                 .and_then(|env| env.get("LOCAL_WORKSPACE_FOLDER")),
             // We replace backslashes with forward slashes during variable replacement for JSON safety
-            Some(&TEST_PROJECT_PATH.replace("\\", "/"))
+            Some(&TEST_PROJECT_PATH.replace('\\', "/"))
         );
     }
 
@@ -6278,7 +6266,7 @@ RUN echo $RUBY_VERSION2
         pub(crate) _remote_folder: String,
         pub(crate) _user: String,
         pub(crate) env: HashMap<String, String>,
-        pub(crate) _inner_command: Command,
+        pub(crate) inner_command: Command,
     }
 
     pub(crate) struct FakeDocker {
@@ -6605,7 +6593,7 @@ RUN echo $RUBY_VERSION2
                 _remote_folder: remote_folder.to_string(),
                 _user: user.to_string(),
                 env: env.clone(),
-                _inner_command: inner_command,
+                inner_command,
             });
             Ok(())
         }

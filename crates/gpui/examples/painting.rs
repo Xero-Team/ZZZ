@@ -14,7 +14,7 @@ struct PaintingViewer {
     lines: Vec<Vec<Point<Pixels>>>,
     start: Point<Pixels>,
     dashed: bool,
-    _painting: bool,
+    painting: bool,
 }
 
 impl PaintingViewer {
@@ -291,7 +291,7 @@ impl PaintingViewer {
             lines: vec![],
             start: point(px(0.), px(0.)),
             dashed: false,
-            _painting: false,
+            painting: false,
         }
     }
 
@@ -402,14 +402,14 @@ impl Render for PaintingViewer {
                     .on_mouse_down(
                         gpui::MouseButton::Left,
                         cx.listener(|this, ev: &MouseDownEvent, _, _| {
-                            this._painting = true;
+                            this.painting = true;
                             this.start = ev.position;
                             let path = vec![ev.position];
                             this.lines.push(path);
                         }),
                     )
                     .on_mouse_move(cx.listener(|this, ev: &gpui::MouseMoveEvent, _, cx| {
-                        if !this._painting {
+                        if !this.painting {
                             return;
                         }
 
@@ -435,7 +435,7 @@ impl Render for PaintingViewer {
                     .on_mouse_up(
                         gpui::MouseButton::Left,
                         cx.listener(|this, _, _, _| {
-                            this._painting = false;
+                            this.painting = false;
                         }),
                     ),
             )

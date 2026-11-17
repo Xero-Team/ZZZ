@@ -872,7 +872,7 @@ impl Session {
                         local
                             .send_breakpoints_from_path(path.clone(), *reason, &store, cx)
                             .detach();
-                    };
+                    }
                 }
                 BreakpointStoreEvent::BreakpointsCleared(paths) => {
                     if let Some(local) = (!this.ignore_breakpoints)
@@ -997,7 +997,7 @@ impl Session {
                     SessionState::Running(_) => {
                         debug_panic!("Attempting to boot a session that is already running");
                     }
-                };
+                }
                 this.state = SessionState::Running(mode);
                 cx.emit(SessionStateEvent::Running);
             })?;
@@ -1353,7 +1353,7 @@ impl Session {
                     Some(ThreadStatus::Stopped)
                 ) {
                     return;
-                };
+                }
                 let path = breakpoint.path.clone();
                 local_mode.tmp_breakpoint = Some(breakpoint);
                 let task = local_mode.send_breakpoints_from_path(
@@ -1385,7 +1385,7 @@ impl Session {
     ) -> (impl Iterator<Item = &dap::OutputEvent>, OutputToken) {
         if self.output_token.0 == 0 {
             return (self.output.range(0..0), OutputToken(0));
-        };
+        }
 
         let events_since = self.output_token.0.checked_sub(since.0).unwrap_or(0);
 
@@ -1485,7 +1485,7 @@ impl Session {
                     cx,
                 )
                 .detach();
-        };
+        }
 
         if event.all_threads_stopped.unwrap_or_default() || event.thread_id.is_none() {
             self.active_snapshot.thread_states.stop_all_threads();
@@ -2063,7 +2063,7 @@ impl Session {
 
     pub fn toggle_data_breakpoint(&mut self, id: &str, cx: &mut Context<'_, Session>) {
         if let Some(state) = self.data_breakpoints.get_mut(id) {
-            state.is_enabled = !state.is_enabled;
+            state.is_enabled.toggle();
             self.send_exception_breakpoints(cx);
         }
     }
@@ -2624,8 +2624,7 @@ impl Session {
         self.session_state()
             .stack_frames
             .get(&stack_frame_id)
-            .map(|frame| frame.scopes.as_slice())
-            .unwrap_or_default()
+            .map_or_default(|frame| frame.scopes.as_slice())
     }
 
     pub fn variables_by_stack_frame_id(
@@ -2690,8 +2689,7 @@ impl Session {
     pub fn refresh_watchers(&mut self, frame_id: u64, cx: &mut Context<Self>) {
         let watches = self.watchers.clone();
         for (_, watch) in watches.into_iter() {
-            self.add_watcher(watch.expression.clone(), frame_id, cx)
-                .detach();
+            self.add_watcher(watch.expression, frame_id, cx).detach();
         }
     }
 
@@ -2869,7 +2867,7 @@ impl Session {
                         };
                         this.push_output(event);
                     }
-                };
+                }
                 cx.notify();
             })
             .ok();
@@ -3051,7 +3049,7 @@ impl Session {
                 background_tasks.push(cx.spawn(async move |_| {
                     forward_ports_process.status().await.log_err();
                 }));
-            };
+            }
             if let Some(mut companion_process) = companion_process {
                 if let Some(stderr) = companion_process.stderr.take() {
                     let mut console_output = console_output.clone();

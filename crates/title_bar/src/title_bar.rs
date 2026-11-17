@@ -1,5 +1,6 @@
 mod application_menu;
 mod title_bar_settings;
+mod workspace_mode_control;
 
 use crate::application_menu::{ApplicationMenu, show_menus};
 use agent_settings::{AgentSettings, WindowLayout};
@@ -175,17 +176,16 @@ pub struct TitleBar {
 
 impl Render for TitleBar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.multi_workspace.is_none() {
-            if let Some(mw) = self
+        if self.multi_workspace.is_none()
+            && let Some(mw) = self
                 .workspace
                 .upgrade()
                 .and_then(|ws| ws.read(cx).multi_workspace().cloned())
-            {
-                self.multi_workspace = Some(mw.clone());
-                self.platform_titlebar.update(cx, |titlebar, _cx| {
-                    titlebar.set_multi_workspace(mw);
-                });
-            }
+        {
+            self.multi_workspace = Some(mw.clone());
+            self.platform_titlebar.update(cx, |titlebar, _cx| {
+                titlebar.set_multi_workspace(mw);
+            });
         }
 
         let title_bar_settings = *TitleBarSettings::get_global(cx);
@@ -303,20 +303,14 @@ impl Render for TitleBar {
                 .into_any_element(),
         );
 
+        children.push(workspace_mode_control::ModeControl::new().into_any_element());
+
         let status = self.client.status();
         let status = &*status.borrow();
-        let user = self.user_store.read(cx).current_user();
 
-        let signed_in = user.is_some();
         children.push(
             h_flex()
-                .map(|this| {
-                    if signed_in {
-                        this.pr_1p5()
-                    } else {
-                        this.pr_1()
-                    }
-                })
+                .pr_1()
                 .gap_1()
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .children(self.render_connection_status(status, cx))
@@ -824,8 +818,7 @@ impl TitleBar {
             .multi_workspace
             .as_ref()
             .and_then(|mw| mw.upgrade())
-            .map(|mw| mw.read(cx).project_group_keys())
-            .unwrap_or_default();
+            .map_or_default(|mw| mw.read(cx).project_group_keys());
 
         PopoverMenu::new("recent-projects-menu")
             .menu(move |window, cx| {
@@ -882,8 +875,7 @@ impl TitleBar {
             .multi_workspace
             .as_ref()
             .and_then(|mw| mw.upgrade())
-            .map(|mw| mw.read(cx).project_group_keys())
-            .unwrap_or_default();
+            .map_or_default(|mw| mw.read(cx).project_group_keys());
 
         PopoverMenu::new("sidebar-title-recent-projects-menu")
             .menu(move |window, cx| {

@@ -8,7 +8,7 @@ use gpui::{AnyElement, App, Hsla, IntoElement, ParentElement, Styled};
 use i18n::tr;
 use ui::{Color, Label, LabelSize, ProgressBar, prelude::*};
 
-use crate::metrics::{ServerMetrics, format_bytes, format_rate, format_uptime};
+use terminal_mode_core::{ServerMetrics, format_bytes, format_rate, format_uptime};
 
 /// Renders the monitor section for the active session.
 ///

@@ -99,7 +99,7 @@ pub struct StackFrameList {
     list_filter: StackFrameFilter,
     filter_entries_indices: Vec<usize>,
     error: Option<SharedString>,
-    _refresh_task: Task<()>,
+    refresh_task: Task<()>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -120,7 +120,7 @@ impl StackFrameList {
     ) -> Self {
         let focus_handle = cx.focus_handle();
 
-        let _subscription =
+        let subscription =
             cx.subscribe_in(&session, window, |this, _, event, window, cx| match event {
                 SessionEvent::Threads => {
                     this.schedule_refresh(false, window, cx);
@@ -154,7 +154,7 @@ impl StackFrameList {
             workspace,
             focus_handle,
             state,
-            _subscription,
+            _subscription: subscription,
             entries: Default::default(),
             filter_entries_indices: Vec::default(),
             error: None,
@@ -162,7 +162,7 @@ impl StackFrameList {
             opened_stack_frame_id: None,
             list_filter,
             list_state,
-            _refresh_task: Task::ready(()),
+            refresh_task: Task::ready(()),
         };
         this.schedule_refresh(true, window, cx);
         this
@@ -246,7 +246,7 @@ impl StackFrameList {
     ) {
         const REFRESH_DEBOUNCE: Duration = Duration::from_millis(20);
 
-        self._refresh_task = cx.spawn_in(window, async move |this, cx| {
+        self.refresh_task = cx.spawn_in(window, async move |this, cx| {
             let debounce = this
                 .update(cx, |this, cx| {
                     let new_stack_frames = this.stack_frames(cx);

@@ -140,7 +140,7 @@ impl FollowableItem for Editor {
                                 cx,
                             );
                         }
-                    };
+                    }
 
                     if let Some(title) = &state.title {
                         multibuffer = multibuffer.with_title(title.clone())
@@ -914,23 +914,8 @@ impl Item for Editor {
         self.capability(cx)
     }
 
-    // Note: this mirrors the logic in `Editor::toggle_read_only`, but is reachable
-    // without relying on focus-based action dispatch.
-    fn toggle_read_only(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(buffer) = self.buffer.read(cx).as_singleton() {
-            buffer.update(cx, |buffer, cx| {
-                buffer.set_capability(
-                    match buffer.capability() {
-                        Capability::ReadWrite => Capability::Read,
-                        Capability::Read => Capability::ReadWrite,
-                        Capability::ReadOnly => Capability::ReadOnly,
-                    },
-                    cx,
-                );
-            });
-        }
-        cx.notify();
-        window.refresh();
+    fn read_only_toggle_buffer(&self, cx: &App) -> Option<Entity<Buffer>> {
+        self.buffer.read(cx).as_singleton()
     }
 
     fn has_deleted_file(&self, cx: &App) -> bool {
@@ -1129,14 +1114,13 @@ impl Item for Editor {
             .next()
             .is_some();
 
-        if !has_folds {
-            if let Some(workspace_id) = workspace.database_id()
-                && let Some(file_path) = self.buffer().read(cx).as_singleton().and_then(|buffer| {
-                    project::File::from_dyn(buffer.read(cx).file()).map(|file| file.abs_path(cx))
-                })
-            {
-                self.load_folds_from_db(workspace_id, file_path, window, cx);
-            }
+        if !has_folds
+            && let Some(workspace_id) = workspace.database_id()
+            && let Some(file_path) = self.buffer().read(cx).as_singleton().and_then(|buffer| {
+                project::File::from_dyn(buffer.read(cx).file()).map(|file| file.abs_path(cx))
+            })
+        {
+            self.load_folds_from_db(workspace_id, file_path, window, cx);
         }
     }
 
@@ -2299,10 +2283,8 @@ fn path_for_file<'a>(
     // The full_path method allocates, so avoid calling it if height is zero.
     if height > 0 {
         let mut full_path = file.full_path(cx);
-        if !include_filename {
-            if !full_path.pop() {
-                return None;
-            }
+        if !include_filename && !full_path.pop() {
+            return None;
         }
         Some(full_path.to_string_lossy().into_owned().into())
     } else {
@@ -2474,6 +2456,38 @@ mod tests {
     use serde_json::json;
     use std::path::{Path, PathBuf};
     use util::{path, rel_path::RelPath};
+
+    #[gpui::test]
+    fn test_read_only_toggle_requires_singleton_buffer(cx: &mut gpui::TestAppContext) {
+        use workspace::item::ItemHandle as _;
+
+        init_test(cx, |_| {});
+
+        let buffer = cx.new(|cx| Buffer::local("text", cx));
+        let (singleton_editor, cx) = cx.add_window_view({
+            let buffer = buffer.clone();
+            |window, cx| Editor::for_buffer(buffer, None, window, cx)
+        });
+        let multibuffer = cx.new(|_| MultiBuffer::new(Capability::ReadWrite));
+        let multibuffer_editor = cx.new_window_entity(|window, cx| {
+            Editor::for_multibuffer(multibuffer.clone(), None, window, cx)
+        });
+
+        cx.update(|window, cx| {
+            assert_eq!(
+                singleton_editor.read_only_toggle_buffer(cx).as_ref(),
+                Some(&buffer)
+            );
+            singleton_editor.toggle_read_only(window, cx);
+            assert_eq!(buffer.read(cx).capability(), Capability::Read);
+            singleton_editor.toggle_read_only(window, cx);
+            assert_eq!(buffer.read(cx).capability(), Capability::ReadWrite);
+
+            assert_eq!(multibuffer_editor.read_only_toggle_buffer(cx), None);
+            multibuffer_editor.toggle_read_only(window, cx);
+            assert_eq!(multibuffer.read(cx).capability(), Capability::ReadWrite);
+        });
+    }
 
     #[gpui::test]
     fn test_path_for_file(cx: &mut App) {

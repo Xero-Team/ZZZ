@@ -646,6 +646,17 @@ enum DeleteEntryOutcome {
     Failed,
 }
 
+enum RemovalKind {
+    Trash,
+    Delete,
+}
+
+struct RemovalPrompt {
+    message: String,
+    detail: Option<String>,
+    confirmation_label: String,
+}
+
 impl ProjectPanel {
     pub fn new(
         project: Entity<Project>,
@@ -1629,7 +1640,7 @@ impl ProjectPanel {
             {
                 return child.kind.is_dir();
             }
-        };
+        }
         false
     }
 
@@ -1844,7 +1855,7 @@ impl ProjectPanel {
                         expanded_entries.retain(|entry_id| entry_id == &id);
                     }
                     None => *expanded_entries = Default::default(),
-                };
+                }
             });
 
         self.update_visible_entries(None, false, false, window, cx);
@@ -2271,7 +2282,7 @@ impl ProjectPanel {
                     {
                         already_exists = true;
                     }
-                };
+                }
                 if already_exists {
                     edit_state.validation_state = ValidationState::Error(
                         tr(
@@ -2398,7 +2409,7 @@ impl ProjectPanel {
                     new_project_path,
                 )))
                 .collect();
-        };
+        }
 
         if refocus {
             window.focus(&self.focus_handle, cx);
@@ -2663,10 +2674,10 @@ impl ProjectPanel {
                 }
             } else {
                 return;
-            };
+            }
         } else {
             return;
-        };
+        }
 
         self.marked_entries.clear();
         self.state.edit_state = Some(EditState {
@@ -2882,12 +2893,11 @@ impl ProjectPanel {
                                 .buffer_store()
                                 .read(cx)
                                 .buffer_id_for_project_path(&project_path)
+                                && let Some(buffer) = project.buffer_for_id(*buffer_id, cx)
                             {
-                                if let Some(buffer) = project.buffer_for_id(*buffer_id, cx) {
-                                    buffer.update(cx, |buffer, cx| {
-                                        drop(buffer.reload(cx));
-                                    });
-                                }
+                                buffer.update(cx, |buffer, cx| {
+                                    drop(buffer.reload(cx));
+                                });
                             }
                         })
                     })
@@ -2925,24 +2935,24 @@ impl ProjectPanel {
                 repository.update(cx, |repo, _| repo.add_path_to_gitignore(&repo_path, is_dir));
 
             cx.spawn(async move |_, cx| {
-                if let Err(e) = receiver.await? {
-                    if let Some(workspace) = workspace.upgrade() {
-                        cx.update(|cx| {
-                            let message = tr(
-                                cx,
-                                "project_panel.gitignore.failed",
-                                "Failed to add to .gitignore: {}",
-                            )
-                            .replacen("{}", &e.to_string(), 1);
-                            let toast = StatusToast::new(message, cx, |this, _| {
-                                this.icon(Icon::new(IconName::XCircle).color(Color::Error))
-                                    .dismiss_button(true)
-                            });
-                            workspace.update(cx, |workspace, cx| {
-                                workspace.toggle_status_toast(toast, cx);
-                            });
+                if let Err(e) = receiver.await?
+                    && let Some(workspace) = workspace.upgrade()
+                {
+                    cx.update(|cx| {
+                        let message = tr(
+                            cx,
+                            "project_panel.gitignore.failed",
+                            "Failed to add to .gitignore: {}",
+                        )
+                        .replacen("{}", &e.to_string(), 1);
+                        let toast = StatusToast::new(message, cx, |this, _| {
+                            this.icon(Icon::new(IconName::XCircle).color(Color::Error))
+                                .dismiss_button(true)
                         });
-                    }
+                        workspace.update(cx, |workspace, cx| {
+                            workspace.toggle_status_toast(toast, cx);
+                        });
+                    });
                 }
                 anyhow::Ok(())
             })
@@ -2977,24 +2987,24 @@ impl ProjectPanel {
             });
 
             cx.spawn(async move |_, cx| {
-                if let Err(e) = receiver.await? {
-                    if let Some(workspace) = workspace.upgrade() {
-                        cx.update(|cx| {
-                            let message = tr(
-                                cx,
-                                "project_panel.git_info_exclude.failed",
-                                "Failed to add to .git/info/exclude: {}",
-                            )
-                            .replacen("{}", &e.to_string(), 1);
-                            let toast = StatusToast::new(message, cx, |this, _| {
-                                this.icon(Icon::new(IconName::XCircle).color(Color::Error))
-                                    .dismiss_button(true)
-                            });
-                            workspace.update(cx, |workspace, cx| {
-                                workspace.toggle_status_toast(toast, cx);
-                            });
+                if let Err(e) = receiver.await?
+                    && let Some(workspace) = workspace.upgrade()
+                {
+                    cx.update(|cx| {
+                        let message = tr(
+                            cx,
+                            "project_panel.git_info_exclude.failed",
+                            "Failed to add to .git/info/exclude: {}",
+                        )
+                        .replacen("{}", &e.to_string(), 1);
+                        let toast = StatusToast::new(message, cx, |this, _| {
+                            this.icon(Icon::new(IconName::XCircle).color(Color::Error))
+                                .dismiss_button(true)
                         });
-                    }
+                        workspace.update(cx, |workspace, cx| {
+                            workspace.toggle_status_toast(toast, cx);
+                        });
+                    });
                 }
                 anyhow::Ok(())
             })
@@ -3002,6 +3012,127 @@ impl ProjectPanel {
 
             Some(())
         });
+    }
+
+    /// Builds the confirmation prompt shared by direct removal and undo/redo.
+    ///
+    /// The `names` slice must contain every path being removed, and this
+    /// function will apply markdown formatting and display truncation. The
+    /// `dirty_buffers` parameter should be the number of those paths that have
+    /// unsaved changes.
+    fn build_removal_prompt<S>(
+        kind: RemovalKind,
+        names: &[S],
+        dirty_buffers: usize,
+        cx: &App,
+    ) -> RemovalPrompt
+    where
+        S: AsRef<str>,
+    {
+        let trash = matches!(kind, RemovalKind::Trash);
+        let confirmation_label = if trash {
+            tr(cx, "project_panel.delete.trash", "Trash")
+        } else {
+            tr(cx, "project_panel.delete.delete", "Delete")
+        };
+
+        let message = if let [name] = names {
+            let unsaved_warning = if dirty_buffers > 0 {
+                tr(
+                    cx,
+                    "project_panel.delete.unsaved_single",
+                    "\n\nIt has unsaved changes, which will be lost.",
+                )
+            } else {
+                String::new()
+            };
+
+            let (key, fallback) = if trash {
+                (
+                    "project_panel.delete.trash_single_prompt",
+                    "Do you want to trash {}?{}",
+                )
+            } else {
+                (
+                    "project_panel.delete.delete_single_prompt",
+                    "Are you sure you want to permanently delete {}?{}",
+                )
+            };
+
+            tr(cx, key, fallback)
+                .replacen("{}", &MarkdownInlineCode(name.as_ref()).to_string(), 1)
+                .replacen("{}", &unsaved_warning, 1)
+        } else {
+            const CUTOFF_POINT: usize = 10;
+            let mut listed_names = names
+                .iter()
+                .take(CUTOFF_POINT)
+                .map(|name| MarkdownInlineCode(name.as_ref()).to_string())
+                .collect::<Vec<_>>();
+            let omitted_count = names.len().saturating_sub(CUTOFF_POINT);
+            if omitted_count == 1 {
+                listed_names.push(tr(
+                    cx,
+                    "project_panel.delete.one_file_not_shown",
+                    ".. 1 file not shown",
+                ));
+            } else if omitted_count > 1 {
+                listed_names.push(
+                    tr(
+                        cx,
+                        "project_panel.delete.files_not_shown",
+                        ".. {} files not shown",
+                    )
+                    .replacen("{}", &omitted_count.to_string(), 1),
+                );
+            }
+
+            let unsaved_warning = match dirty_buffers {
+                0 => String::new(),
+                1 => tr(
+                    cx,
+                    "project_panel.delete.unsaved_one_of_many",
+                    "\n\n1 of these has unsaved changes, which will be lost.",
+                ),
+                dirty_buffers => tr(
+                    cx,
+                    "project_panel.delete.unsaved_many",
+                    "\n\n{} of these have unsaved changes, which will be lost.",
+                )
+                .replacen("{}", &dirty_buffers.to_string(), 1),
+            };
+
+            let (key, fallback) = if trash {
+                (
+                    "project_panel.delete.trash_multi_prompt",
+                    "Do you want to trash the following {} files?\n{}{}",
+                )
+            } else {
+                (
+                    "project_panel.delete.delete_multi_prompt",
+                    "Are you sure you want to permanently delete the following {} files?\n{}{}",
+                )
+            };
+
+            tr(cx, key, fallback)
+                .replacen("{}", &names.len().to_string(), 1)
+                .replacen("{}", &listed_names.join("\n"), 1)
+                .replacen("{}", &unsaved_warning, 1)
+        };
+
+        let detail = (!trash).then(|| {
+            tr(
+                cx,
+                "project_panel.delete.detail_irreversible",
+                "This cannot be undone.",
+            )
+        });
+
+        RemovalPrompt {
+            message,
+            detail,
+            confirmation_label,
+        }
     }
 
     fn remove(
@@ -3039,126 +3170,22 @@ impl ProjectPanel {
             let answer = if skip_prompt {
                 None
             } else {
-                let operation = if trash {
-                    tr(cx, "project_panel.delete.trash", "Trash")
+                let names = file_paths
+                    .iter()
+                    .map(|(_, _, name)| name.as_str())
+                    .collect::<Vec<_>>();
+                let removal_kind = if trash {
+                    RemovalKind::Trash
                 } else {
-                    tr(cx, "project_panel.delete.delete", "Delete")
+                    RemovalKind::Delete
                 };
-                let prompt = match file_paths.first() {
-                    Some((_, _, path)) if file_paths.len() == 1 => {
-                        let unsaved_warning = if dirty_buffers > 0 {
-                            tr(
-                                cx,
-                                "project_panel.delete.unsaved_single",
-                                "\n\nIt has unsaved changes, which will be lost.",
-                            )
-                        } else {
-                            String::new()
-                        };
-
-                        let key = if trash {
-                            "project_panel.delete.trash_single_prompt"
-                        } else {
-                            "project_panel.delete.delete_single_prompt"
-                        };
-                        let fallback = if trash {
-                            "Do you want to trash {}?{}"
-                        } else {
-                            "Are you sure you want to permanently delete {}?{}"
-                        };
-
-                        tr(cx, key, fallback)
-                            .replacen("{}", &MarkdownInlineCode(path).to_string(), 1)
-                            .replacen("{}", &unsaved_warning, 1)
-                    }
-                    _ => {
-                        const CUTOFF_POINT: usize = 10;
-                        let names = if file_paths.len() > CUTOFF_POINT {
-                            let truncated_path_counts = file_paths.len() - CUTOFF_POINT;
-                            let mut paths = file_paths
-                                .iter()
-                                .map(|(_, _, path)| MarkdownInlineCode(path).to_string())
-                                .take(CUTOFF_POINT)
-                                .collect::<Vec<String>>();
-                            paths.truncate(CUTOFF_POINT);
-                            if truncated_path_counts == 1 {
-                                paths.push(tr(
-                                    cx,
-                                    "project_panel.delete.one_file_not_shown",
-                                    ".. 1 file not shown",
-                                ));
-                            } else {
-                                paths.push(
-                                    tr(
-                                        cx,
-                                        "project_panel.delete.files_not_shown",
-                                        ".. {} files not shown",
-                                    )
-                                    .replacen(
-                                        "{}",
-                                        &truncated_path_counts.to_string(),
-                                        1,
-                                    ),
-                                );
-                            }
-                            paths
-                        } else {
-                            file_paths
-                                .iter()
-                                .map(|(_, _, path)| MarkdownInlineCode(path).to_string())
-                                .collect()
-                        };
-                        let unsaved_warning = if dirty_buffers == 0 {
-                            String::new()
-                        } else if dirty_buffers == 1 {
-                            tr(
-                                cx,
-                                "project_panel.delete.unsaved_one_of_many",
-                                "\n\n1 of these has unsaved changes, which will be lost.",
-                            )
-                        } else {
-                            tr(
-                                cx,
-                                "project_panel.delete.unsaved_many",
-                                "\n\n{} of these have unsaved changes, which will be lost.",
-                            )
-                            .replacen(
-                                "{}",
-                                &dirty_buffers.to_string(),
-                                1,
-                            )
-                        };
-
-                        let key = if trash {
-                            "project_panel.delete.trash_multi_prompt"
-                        } else {
-                            "project_panel.delete.delete_multi_prompt"
-                        };
-                        let fallback = if trash {
-                            "Do you want to trash the following {} files?\n{}{}"
-                        } else {
-                            "Are you sure you want to permanently delete the following {} files?\n{}{}"
-                        };
-
-                        tr(cx, key, fallback)
-                            .replacen("{}", &file_paths.len().to_string(), 1)
-                            .replacen("{}", &names.join("\n"), 1)
-                            .replacen("{}", &unsaved_warning, 1)
-                    }
-                };
-                let detail = (!trash).then(|| {
-                    tr(
-                        cx,
-                        "project_panel.delete.detail_irreversible",
-                        "This cannot be undone.",
-                    )
-                });
+                let prompt = Self::build_removal_prompt(removal_kind, &names, dirty_buffers, cx);
                 let cancel = tr(cx, "prompt.common.cancel", "Cancel");
                 Some(window.prompt(
                     PromptLevel::Info,
-                    &prompt,
-                    detail.as_deref(),
-                    &[operation.as_str(), cancel.as_str()],
+                    &prompt.message,
+                    prompt.detail.as_deref(),
+                    &[prompt.confirmation_label.as_str(), cancel.as_str()],
                     cx,
                 ))
             };
@@ -4094,11 +4121,7 @@ impl ProjectPanel {
 
             if entry.is_file() {
                 // Single file: use just the filename
-                let filename = entry
-                    .path
-                    .file_name()
-                    .map(str::to_owned)
-                    .unwrap_or_default();
+                let filename = entry.path.file_name().map_or_default(str::to_owned);
                 files_to_download.push((
                     selected.worktree_id,
                     entry.path.clone(),
@@ -4106,11 +4129,7 @@ impl ProjectPanel {
                 ));
             } else if entry.is_dir() {
                 // Directory: collect all files recursively, preserving relative paths
-                let dir_name = entry
-                    .path
-                    .file_name()
-                    .map(str::to_owned)
-                    .unwrap_or_default();
+                let dir_name = entry.path.file_name().map_or_default(str::to_owned);
                 let base_path = entry.path.clone();
 
                 // Use traverse_from_path to iterate all entries under this directory
@@ -4126,11 +4145,7 @@ impl ProjectPanel {
                         let relative_path = child_entry.path.strip_prefix(&base_path).map_or_else(
                             |_| {
                                 PathBuf::from(
-                                    child_entry
-                                        .path
-                                        .file_name()
-                                        .map(str::to_owned)
-                                        .unwrap_or_default(),
+                                    child_entry.path.file_name().map_or_default(str::to_owned),
                                 )
                             },
                             |p| PathBuf::from(dir_name.clone()).join(p.as_unix_str()),
@@ -4164,9 +4179,35 @@ impl ProjectPanel {
         let notification_id =
             workspace::notifications::NotificationId::Named("download-progress".into());
         cx.spawn_in(window, async move |this, cx| {
-            if let Ok(Ok(Some(mut paths))) = destination_dir.await {
-                if let Some(dest_dir) = paths.pop() {
-                    // Show initial toast
+            if let Ok(Ok(Some(mut paths))) = destination_dir.await
+                && let Some(dest_dir) = paths.pop()
+            {
+                // Show initial toast
+                workspace
+                    .update(cx, |workspace, cx| {
+                        workspace.show_toast(
+                            workspace::Toast::new(
+                                notification_id.clone(),
+                                tr(
+                                    cx,
+                                    "project_panel.download.progress.initial",
+                                    "Downloading 0/{} files...",
+                                )
+                                .replacen(
+                                    "{}",
+                                    &total_files.to_string(),
+                                    1,
+                                ),
+                            ),
+                            cx,
+                        );
+                    })
+                    .log_err();
+
+                for (index, (worktree_id, entry_path, relative_path)) in
+                    files_to_download.into_iter().enumerate()
+                {
+                    // Update progress toast
                     workspace
                         .update(cx, |workspace, cx| {
                             workspace.show_toast(
@@ -4174,9 +4215,10 @@ impl ProjectPanel {
                                     notification_id.clone(),
                                     tr(
                                         cx,
-                                        "project_panel.download.progress.initial",
-                                        "Downloading 0/{} files...",
+                                        "project_panel.download.progress.current",
+                                        "Downloading {}/{} files...",
                                     )
+                                    .replacen("{}", &(index + 1).to_string(), 1)
                                     .replacen(
                                         "{}",
                                         &total_files.to_string(),
@@ -4188,74 +4230,39 @@ impl ProjectPanel {
                         })
                         .log_err();
 
-                    for (index, (worktree_id, entry_path, relative_path)) in
-                        files_to_download.into_iter().enumerate()
+                    let destination_path = dest_dir.join(&relative_path);
+
+                    // Create parent directories if needed
+                    if let Some(parent) = destination_path.parent()
+                        && !parent.exists()
                     {
-                        // Update progress toast
-                        workspace
-                            .update(cx, |workspace, cx| {
-                                workspace.show_toast(
-                                    workspace::Toast::new(
-                                        notification_id.clone(),
-                                        tr(
-                                            cx,
-                                            "project_panel.download.progress.current",
-                                            "Downloading {}/{} files...",
-                                        )
-                                        .replacen("{}", &(index + 1).to_string(), 1)
-                                        .replacen(
-                                            "{}",
-                                            &total_files.to_string(),
-                                            1,
-                                        ),
-                                    ),
-                                    cx,
-                                );
-                            })
-                            .log_err();
-
-                        let destination_path = dest_dir.join(&relative_path);
-
-                        // Create parent directories if needed
-                        if let Some(parent) = destination_path.parent() {
-                            if !parent.exists() {
-                                fs.create_dir(parent).await.log_err();
-                            }
-                        }
-
-                        let download_task = this.update(cx, |this, cx| {
-                            let project = this.project.clone();
-                            project.update(cx, |project, cx| {
-                                project.download_file(worktree_id, entry_path, destination_path, cx)
-                            })
-                        });
-                        if let Ok(task) = download_task {
-                            task.await.log_err();
-                        }
+                        fs.create_dir(parent).await.log_err();
                     }
 
-                    // Show completion toast
-                    workspace
-                        .update(cx, |workspace, cx| {
-                            workspace.show_toast(
-                                workspace::Toast::new(
-                                    notification_id.clone(),
-                                    tr(
-                                        cx,
-                                        "project_panel.download.complete",
-                                        "Downloaded {} files",
-                                    )
-                                    .replacen(
-                                        "{}",
-                                        &total_files.to_string(),
-                                        1,
-                                    ),
-                                ),
-                                cx,
-                            );
+                    let download_task = this.update(cx, |this, cx| {
+                        let project = this.project.clone();
+                        project.update(cx, |project, cx| {
+                            project.download_file(worktree_id, entry_path, destination_path, cx)
                         })
-                        .log_err();
+                    });
+                    if let Ok(task) = download_task {
+                        task.await.log_err();
+                    }
                 }
+
+                // Show completion toast
+                workspace
+                    .update(cx, |workspace, cx| {
+                        workspace.show_toast(
+                            workspace::Toast::new(
+                                notification_id.clone(),
+                                tr(cx, "project_panel.download.complete", "Downloaded {} files")
+                                    .replacen("{}", &total_files.to_string(), 1),
+                            ),
+                            cx,
+                        );
+                    })
+                    .log_err();
             }
         })
         .detach();
@@ -4736,10 +4743,10 @@ impl ProjectPanel {
     fn external_paths_from_system_clipboard(&self, cx: &App) -> Option<ExternalPaths> {
         let clipboard_item = cx.read_from_clipboard()?;
         for entry in clipboard_item.entries() {
-            if let GpuiClipboardEntry::ExternalPaths(paths) = entry {
-                if !paths.paths().is_empty() {
-                    return Some(paths.clone());
-                }
+            if let GpuiClipboardEntry::ExternalPaths(paths) = entry
+                && !paths.paths().is_empty()
+            {
+                return Some(paths.clone());
             }
         }
         None
@@ -4923,10 +4930,9 @@ impl ProjectPanel {
                                         }
                                     })
                                     .unwrap_or_else(|| {
-                                        old_ancestors
-                                            .get(&entry.id)
-                                            .map(|ancestor| ancestor.current_ancestor_depth)
-                                            .unwrap_or_default()
+                                        old_ancestors.get(&entry.id).map_or_default(|ancestor| {
+                                            ancestor.current_ancestor_depth
+                                        })
                                     })
                                     .min(auto_folded_ancestors.len());
                                 if let Some(edit_state) = &mut new_state.edit_state
@@ -5607,15 +5613,13 @@ impl ProjectPanel {
                             .await
                             .map_err(|err| explain_move_error(err, names.as_ref()))
                             .notify_workspace_async_err(workspace.clone(), &mut *cx)
-                        {
-                            if let (Some(old_path), Some(worktree_id)) =
+                            && let (Some(old_path), Some(worktree_id)) =
                                 (old_paths.get(&entry_id), destination_worktree_id)
-                            {
-                                changes.push(Change::Renamed(
-                                    old_path.clone(),
-                                    (worktree_id, new_entry.path).into(),
-                                ));
-                            }
+                        {
+                            changes.push(Change::Renamed(
+                                old_path.clone(),
+                                (worktree_id, new_entry.path).into(),
+                            ));
                         }
                     }
                     project_panel
@@ -6274,12 +6278,11 @@ impl ProjectPanel {
         // Since root will always have empty relative path
         let active_entry_id =
             self.current_drag_entry_id(&drag_state.active_selection, drag_state, cx);
-        if let Some(entry_path) = self.project.read(cx).path_for_entry(active_entry_id, cx) {
-            if let Some(parent_path) = entry_path.path.parent() {
-                if !parent_path.is_empty() {
-                    return true;
-                }
-            }
+        if let Some(entry_path) = self.project.read(cx).path_for_entry(active_entry_id, cx)
+            && let Some(parent_path) = entry_path.path.parent()
+            && !parent_path.is_empty()
+        {
+            return true;
         }
 
         // If parent is empty, check if different worktree
@@ -6287,10 +6290,9 @@ impl ProjectPanel {
             .project
             .read(cx)
             .worktree_id_for_entry(last_root_id, cx)
+            && drag_state.active_selection.worktree_id != last_root_worktree_id
         {
-            if drag_state.active_selection.worktree_id != last_root_worktree_id {
-                return true;
-            }
+            return true;
         }
 
         false
@@ -7135,20 +7137,20 @@ impl ProjectPanel {
                         .on_mouse_down(
                             MouseButton::Left,
                             cx.listener(move |this, _, _, cx| {
-                                if let Some(folds) = this.state.ancestors.get_mut(&entry_id) {
-                                    if folds.set_active_index(index) {
-                                        cx.notify();
-                                    }
+                                if let Some(folds) = this.state.ancestors.get_mut(&entry_id)
+                                    && folds.set_active_index(index)
+                                {
+                                    cx.notify();
                                 }
                             }),
                         )
                         .on_mouse_down(
                             MouseButton::Right,
                             cx.listener(move |this, _, _, cx| {
-                                if let Some(folds) = this.state.ancestors.get_mut(&entry_id) {
-                                    if folds.set_active_index(index) {
-                                        cx.notify();
-                                    }
+                                if let Some(folds) = this.state.ancestors.get_mut(&entry_id)
+                                    && folds.set_active_index(index)
+                                {
+                                    cx.notify();
                                 }
                             }),
                         )
@@ -7675,6 +7677,7 @@ impl Render for ProjectPanel {
         };
 
         let is_local = project.is_local();
+        let supports_undo = cx.has_flag::<ProjectPanelUndoRedoFeatureFlag>();
         let supports_trash = project
             .visible_worktrees(cx)
             .any(|worktree| worktree.read(cx).supports_trash_restore());
@@ -7809,10 +7812,6 @@ impl Render for ProjectPanel {
                 .on_action(cx.listener(Self::remove_from_project))
                 .on_action(cx.listener(Self::compare_marked_files))
                 .on_action(cx.listener(Self::open_context_menu))
-                .when(cx.has_flag::<ProjectPanelUndoRedoFeatureFlag>(), |el| {
-                    el.on_action(cx.listener(Self::undo))
-                        .on_action(cx.listener(Self::redo))
-                })
                 .when(!project.is_read_only(cx), |el| {
                     el.on_action(cx.listener(Self::new_file))
                         .on_action(cx.listener(Self::new_directory))
@@ -7826,6 +7825,10 @@ impl Render for ProjectPanel {
                         .on_action(cx.listener(Self::add_to_gitignore))
                         .on_action(cx.listener(Self::add_to_git_info_exclude))
                         .when(supports_trash, |el| el.on_action(cx.listener(Self::trash)))
+                        .when(supports_undo, |el| {
+                            el.on_action(cx.listener(Self::undo))
+                                .on_action(cx.listener(Self::redo))
+                        })
                 })
                 .when(
                     project.is_local() || project.is_via_wsl_with_host_interop(cx),

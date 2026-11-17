@@ -282,8 +282,7 @@ impl PickerDelegate for IconThemeSelectorDelegate {
                         .iter()
                         .enumerate()
                         .find(|(_, mtch)| mtch.string.as_str() == selected.0.as_ref())
-                        .map(|(ix, _)| ix)
-                        .unwrap_or_default();
+                        .map_or_default(|(ix, _)| ix);
                 } else {
                     this.delegate.selected_index = 0;
                 }

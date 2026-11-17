@@ -142,12 +142,11 @@ fn fail_to_open_window_async(e: anyhow::Error, cx: &mut AsyncApp) {
     cx.update(|cx| fail_to_open_window(e, cx));
 }
 
-fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
-    let _launch_failed = app_i18n::tr(_cx, "zzz.launch.failed_title", "ZZZ failed to launch");
+fn fail_to_open_window(e: anyhow::Error, cx: &mut App) {
     eprintln!(
         "{}: {e:?}. See the local troubleshooting documentation for help.",
         app_i18n::tr(
-            _cx,
+            cx,
             "zzz.launch.failed_to_open_window",
             "ZZZ failed to open a window"
         )
@@ -161,7 +160,10 @@ fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
     #[cfg(any(target_os = "linux", target_os = "freebsd"))]
     {
         use ashpd::desktop::notification::{Notification, NotificationProxy, Priority};
-        _cx.spawn(async move |_cx| {
+        // Only the Linux/FreeBSD notification path shows the title, so the
+        // string is translated here rather than for every platform.
+        let launch_failed = app_i18n::tr(cx, "zzz.launch.failed_title", "ZZZ failed to launch");
+        cx.spawn(async move |_cx| {
             let Ok(proxy) = NotificationProxy::new().await else {
                 process::exit(1);
             };
@@ -170,7 +172,7 @@ fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
             proxy
                 .add_notification(
                     notification_id,
-                    Notification::new(_launch_failed.as_ref())
+                    Notification::new(launch_failed.as_ref())
                         .body(Some(
                             format!("{e:?}. See the local troubleshooting documentation for help.")
                                 .as_str(),
@@ -283,7 +285,7 @@ fn main() {
         if let Err(err) = result {
             eprintln!("Could not open log file: {}... Defaulting to stdout", err);
             zlog::init_output_stdout();
-        };
+        }
     }
     ztracing::init();
 
@@ -336,7 +338,7 @@ fn main() {
         .spawn(installation_id(KeyValueStore::from_app_db(&app_db)));
     let (open_listener, mut open_rx) = OpenListener::new();
 
-    let failed_single_instance_check = if *zzz_env_vars::ZZZ_STATELESS
+    let failed_single_instance_check = if *db::ZZZ_STATELESS
         || *release_channel::RELEASE_CHANNEL == ReleaseChannel::Dev
     {
         false
@@ -573,7 +575,7 @@ fn main() {
         let installation_id = cx.foreground_executor().block_on(installation_id).ok();
         let session = cx.foreground_executor().block_on(session);
 
-        let is_new_install = matches!(&installation_id, Some(IdType::New(_)));
+        let is_new_install = matches!(&installation_id, Some(InstallationIdStatus::New));
         let app_session = cx.new(|cx| AppSession::new(session, cx));
 
         let app_state = Arc::new(AppState {
@@ -600,7 +602,7 @@ fn main() {
 
         theme_settings::init(theme::LoadThemes::All(Box::new(Assets)), cx);
         eager_load_active_theme_and_icon_theme(fs.clone(), cx);
-        theme_extension::init(
+        extension_host::theme_proxy::init(
             extension_host_proxy,
             ThemeRegistry::global(cx),
             cx.background_executor().clone(),
@@ -625,6 +627,7 @@ fn main() {
         recent_files::init(cx);
         recent_projects::init(cx);
         dev_container::init(cx);
+        idea_import::init(cx);
 
         Assets.load_fonts(cx).log_err();
         #[cfg(target_os = "linux")]
@@ -640,6 +643,7 @@ fn main() {
 
         audio::init(cx);
         workspace::init(app_state.clone(), cx);
+        workspace_modes::init(cx);
         if WorkspaceSettings::get_global(cx).use_system_prompts
             && cfg!(not(any(target_os = "linux", target_os = "freebsd")))
         {
@@ -658,6 +662,12 @@ fn main() {
         tasks_ui::init(cx);
         snippets_ui::init(cx);
         search::init(cx);
+        search_everywhere::init(cx);
+        project_bookmarks::init(cx);
+        toolbox::init(cx);
+        docker::init(cx);
+        mobile_dev::init(cx);
+        pr_ui::init(cx);
         cx.set_global(workspace::PaneSearchBarCallbacks {
             setup_search_bar: |languages, toolbar, window, cx| {
                 let search_bar = cx.new(|cx| search::BufferSearchBar::new(languages, window, cx));
@@ -685,6 +695,7 @@ fn main() {
         feedback::init(cx);
         markdown_preview::init(cx);
         csv_preview::init(cx);
+        office_preview::init(cx);
         database_ui::init(cx);
         register_database_extension_drivers(cx);
         if let Some(extension_store) = extension_host::ExtensionStore::try_global(cx) {
@@ -843,7 +854,7 @@ fn main() {
 
         let (first_window_tx, first_window_rx) = oneshot::channel::<()>();
         let first_window_tx = Rc::new(RefCell::new(Some(first_window_tx)));
-        let _first_window_subscription = cx.observe_new::<MultiWorkspace>(move |_, _, _| {
+        let first_window_subscription = cx.observe_new::<MultiWorkspace>(move |_, _, _| {
             if let Some(tx) = first_window_tx.borrow_mut().take() {
                 tx.send(()).ok();
             }
@@ -872,7 +883,7 @@ fn main() {
         component_preview::init(app_state.clone(), cx);
 
         cx.spawn(async move |cx| {
-            let _first_window_subscription = _first_window_subscription;
+            let _first_window_subscription = first_window_subscription;
             let first_window_placed = first_window_rx.shared();
             while let Some(urls) = open_rx.next().await {
                 // A macOS cold-launch CLI request can arrive after startup begins restoring.
@@ -1200,7 +1211,7 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
     }
 }
 
-async fn installation_id(db: KeyValueStore) -> Result<IdType> {
+async fn installation_id(db: KeyValueStore) -> Result<InstallationIdStatus> {
     let legacy_key_name = "device_id".to_owned();
     let key_name = "installation_id".to_owned();
 
@@ -1208,18 +1219,18 @@ async fn installation_id(db: KeyValueStore) -> Result<IdType> {
     if let Ok(Some(installation_id)) = db.read_kvp(&legacy_key_name) {
         db.write_kvp(key_name, installation_id.clone()).await?;
         db.delete_kvp(legacy_key_name).await?;
-        return Ok(IdType::Existing(installation_id));
+        return Ok(InstallationIdStatus::Existing);
     }
 
-    if let Ok(Some(installation_id)) = db.read_kvp(&key_name) {
-        return Ok(IdType::Existing(installation_id));
+    if let Ok(Some(_)) = db.read_kvp(&key_name) {
+        return Ok(InstallationIdStatus::Existing);
     }
 
     let installation_id = Uuid::new_v4().to_string();
 
     db.write_kvp(key_name, installation_id.clone()).await?;
 
-    Ok(IdType::New(installation_id))
+    Ok(InstallationIdStatus::New)
 }
 
 pub(crate) async fn restore_or_create_workspace(
@@ -1619,17 +1630,9 @@ struct Args {
 }
 
 #[derive(Clone, Debug)]
-enum IdType {
-    New(String),
-    Existing(String),
-}
-
-impl ToString for IdType {
-    fn to_string(&self) -> String {
-        match self {
-            IdType::New(id) | IdType::Existing(id) => id.clone(),
-        }
-    }
+enum InstallationIdStatus {
+    New,
+    Existing,
 }
 
 fn parse_url_arg(arg: &str) -> String {

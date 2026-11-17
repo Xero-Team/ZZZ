@@ -217,14 +217,10 @@ fn trim_metadata_range(source: &str, range: Range<usize>) -> Range<usize> {
 }
 
 fn is_br_tag(html: &str) -> bool {
-    let Some(inner) = html
-        .trim()
-        .strip_prefix('<')
-        .and_then(|s| s.strip_suffix('>'))
-    else {
+    let Some(inner) = html.trim().strip_circumfix('<', '>') else {
         return false;
     };
-    let inner = inner.strip_suffix('/').unwrap_or(inner);
+    let inner = inner.trim_suffix('/');
     inner
         .split_ascii_whitespace()
         .next()
@@ -340,22 +336,21 @@ pub(crate) fn parse_markdown_with_options(
                 if matches!(&tag, pulldown_cmark::Tag::HtmlBlock) {
                     state.push_event(range.clone(), MarkdownEvent::Start(MarkdownTag::HtmlBlock));
 
-                    if parse_html {
-                        if let Some(block) =
+                    if parse_html
+                        && let Some(block) =
                             html::html_parser::parse_html_block(&text[range.clone()], range.clone())
-                        {
-                            html_blocks.insert(range.start, block);
+                    {
+                        html_blocks.insert(range.start, block);
 
-                            while let Some((event, end_range)) = parser.next() {
-                                if event
-                                    == pulldown_cmark::Event::End(pulldown_cmark::TagEnd::HtmlBlock)
-                                {
-                                    state.push_event(
-                                        end_range,
-                                        MarkdownEvent::End(MarkdownTagEnd::HtmlBlock),
-                                    );
-                                    break;
-                                }
+                        while let Some((event, end_range)) = parser.next() {
+                            if event
+                                == pulldown_cmark::Event::End(pulldown_cmark::TagEnd::HtmlBlock)
+                            {
+                                state.push_event(
+                                    end_range,
+                                    MarkdownEvent::End(MarkdownTagEnd::HtmlBlock),
+                                );
+                                break;
                             }
                         }
                     }
@@ -570,7 +565,7 @@ pub(crate) fn parse_markdown_with_options(
 
                 let mut last_len = parsed.len();
                 let mut ranges = vec![TextRange {
-                    source_range: range.clone(),
+                    source_range: range,
                     merged_range: 0..last_len,
                     parsed,
                 }];
@@ -592,7 +587,7 @@ pub(crate) fn parse_markdown_with_options(
                     };
                     let next_len = last_len + next_text.len();
                     ranges.push(TextRange {
-                        source_range: next_range.clone(),
+                        source_range: next_range,
                         merged_range: last_len..next_len,
                         parsed: next_text,
                     });
@@ -689,10 +684,7 @@ pub(crate) fn parse_markdown_with_options(
                         for (range, event) in link_events {
                             state.push_event(range, event);
                         }
-                        state.push_event(
-                            link_range.clone(),
-                            MarkdownEvent::End(MarkdownTagEnd::Link),
-                        );
+                        state.push_event(link_range, MarkdownEvent::End(MarkdownTagEnd::Link));
                     }
                 }
 

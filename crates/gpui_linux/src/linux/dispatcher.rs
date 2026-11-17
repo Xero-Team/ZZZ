@@ -177,14 +177,22 @@ impl PlatformDispatcher for LinuxDispatcher {
     }
 
     fn dispatch_after(&self, duration: Duration, runnable: RunnableVariant) {
-        self.timer_sender
-            .send(TimerAfter { duration, runnable })
-            .ok();
+        if let Err(err) = self.timer_sender.send(TimerAfter { duration, runnable }) {
+            // The timer thread has shut down. Dropping a scheduled runnable cancels its task
+            // and makes the next poll of any awaiter panic. Leaking leaves the task pending,
+            // which is acceptable during shutdown.
+            #[allow(
+                clippy::mem_forget,
+                reason = "dropping the runnable cancels its task and panics its awaiter"
+            )]
+            std::mem::forget(err);
+        }
     }
 
     fn spawn_realtime(&self, f: Box<dyn FnOnce() + Send>) {
         std::thread::spawn(move || {
-            // SAFETY: always safe to call
+            // SAFETY: `pthread_self` takes no arguments and has no preconditions; it returns the
+            // identity of the calling thread.
             let thread_id = unsafe { libc::pthread_self() };
 
             let policy = libc::SCHED_FIFO;

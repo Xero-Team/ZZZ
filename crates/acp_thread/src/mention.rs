@@ -1,6 +1,8 @@
 use agent_client_protocol::v1::schema as acp;
 use anyhow::{Context as _, Result, bail};
 use file_icons::FileIcons;
+use gpui::{App, SharedString};
+use icons::IconName;
 use prompt_store::{PromptId, UserPromptId};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -10,7 +12,6 @@ use std::{
     path::{Path, PathBuf},
 };
 use text::LineEnding;
-use ui::{App, IconName, SharedString};
 use url::Url;
 use urlencoding::decode;
 use util::paths::{PathStyle, PathWithPosition, is_absolute};
@@ -136,7 +137,7 @@ impl MentionUri {
         match url.scheme() {
             "file" => {
                 let trimmed = if path_style.is_windows() {
-                    path.trim_start_matches("/")
+                    path.trim_start_matches('/')
                 } else {
                     path
                 };
@@ -169,7 +170,7 @@ impl MentionUri {
                             column,
                         })
                     }
-                } else if input.ends_with("/") {
+                } else if input.ends_with('/') {
                     Ok(Self::Directory {
                         abs_path: path.into(),
                     })
@@ -606,11 +607,11 @@ fn parse_hyperlink_path(
 }
 
 fn parse_line_range(fragment: &str) -> Result<RangeInclusive<u32>> {
-    let range = fragment.strip_prefix("L").unwrap_or(fragment);
-    let (start, end) = if let Some((start, end)) = range.split_once(":") {
+    let range = fragment.trim_prefix("L");
+    let (start, end) = if let Some((start, end)) = range.split_once(':') {
         (start, end)
-    } else if let Some((start, end)) = range.split_once("-") {
-        (start, end.strip_prefix("L").unwrap_or(end))
+    } else if let Some((start, end)) = range.split_once('-') {
+        (start, end.trim_prefix("L"))
     } else {
         (range, range)
     };

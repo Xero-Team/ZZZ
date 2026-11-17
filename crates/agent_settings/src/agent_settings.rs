@@ -177,8 +177,7 @@ impl AgentSettings {
         let merged = store.merged_settings();
         let user_layout = store
             .raw_user_settings()
-            .map(|u| PanelLayout::read_from(u.content.as_ref()))
-            .unwrap_or_default();
+            .map_or_default(|u| PanelLayout::read_from(u.content.as_ref()));
         let merged_layout = PanelLayout::read_from(merged);
 
         if merged_layout.is_agent_layout() {
@@ -196,8 +195,7 @@ impl AgentSettings {
         let user_layout = cx
             .global::<SettingsStore>()
             .raw_user_settings()
-            .map(|u| PanelLayout::read_from(u.content.as_ref()))
-            .unwrap_or_default();
+            .map_or_default(|u| PanelLayout::read_from(u.content.as_ref()));
 
         update_settings_file(fs, cx, move |settings, _cx| {
             PanelLayout::EDITOR.backfill_to(&user_layout, settings);
@@ -489,7 +487,7 @@ fn compile_regex_rules(
 ) -> Vec<CompiledRegex> {
     let mut compiled = Vec::new();
 
-    for rule in rules.map(|rules| rules.0).unwrap_or_default() {
+    for rule in rules.map_or_default(|rules| rules.0) {
         if rule.pattern.is_empty() {
             invalid_patterns.push(InvalidRegexPattern {
                 pattern: rule.pattern,
@@ -514,6 +512,8 @@ fn compile_regex_rules(
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use gpui::{TestAppContext, UpdateGlobal};
     use serde_json::json;
@@ -1112,7 +1112,7 @@ mod tests {
         });
 
         let layout = AgentSettings::get_layout(cx);
-        assert!(matches!(layout, WindowLayout::Agent(_)));
+        assert_matches!(layout, WindowLayout::Agent(_));
 
         // Restore the original custom layout.
         SettingsStore::update_global(cx, |store, cx| {
@@ -1171,7 +1171,7 @@ mod tests {
             });
 
             let layout = AgentSettings::get_layout(cx);
-            assert!(matches!(layout, WindowLayout::Custom(_)));
+            assert_matches!(layout, WindowLayout::Custom(_));
 
             AgentSettings::set_layout(WindowLayout::agent(), fs.clone(), cx)
         })
@@ -1192,8 +1192,7 @@ mod tests {
             let store = cx.global::<SettingsStore>();
             let user_layout = store
                 .raw_user_settings()
-                .map(|u| PanelLayout::read_from(u.content.as_ref()))
-                .unwrap_or_default();
+                .map_or_default(|u| PanelLayout::read_from(u.content.as_ref()));
 
             assert_eq!(user_layout.agent_dock, Some(DockPosition::Left));
             assert_eq!(user_layout.project_panel_dock, Some(DockSide::Right));
@@ -1203,7 +1202,7 @@ mod tests {
 
             // And the merged result should now match agent.
             let layout = AgentSettings::get_layout(cx);
-            assert!(matches!(layout, WindowLayout::Agent(_)));
+            assert_matches!(layout, WindowLayout::Agent(_));
         });
     }
 
@@ -1262,8 +1261,7 @@ mod tests {
             let store = cx.global::<SettingsStore>();
             let user_layout = store
                 .raw_user_settings()
-                .map(|u| PanelLayout::read_from(u.content.as_ref()))
-                .unwrap_or_default();
+                .map_or_default(|u| PanelLayout::read_from(u.content.as_ref()));
 
             assert_eq!(user_layout.agent_dock, Some(DockPosition::Right));
             assert_eq!(user_layout.project_panel_dock, Some(DockSide::Right));

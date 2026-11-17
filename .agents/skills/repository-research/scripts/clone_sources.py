@@ -43,6 +43,11 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--depth", type=int, default=1)
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--timeout", type=int, default=600)
+    parser.add_argument(
+        "--no-checkout",
+        action="store_true",
+        help="clone without materializing the working tree; enough for lineage and evidence checks, not for surveys",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -115,9 +120,10 @@ def inspect_or_clone(row: dict[str, str], arguments: argparse.Namespace) -> dict
         "--single-branch",
         "--no-tags",
         "--filter=blob:none",
-        raw_url,
-        str(destination),
     ]
+    if arguments.no_checkout:
+        command.append("--no-checkout")
+    command.extend([raw_url, str(destination)])
     try:
         completed = run_command(command, timeout=arguments.timeout)
     except subprocess.TimeoutExpired:

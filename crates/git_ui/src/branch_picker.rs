@@ -1,8 +1,8 @@
-use anyhow::Context as _;
 use editor::Editor;
 use fuzzy_nucleo::StringMatchCandidate;
 
 use collections::HashSet;
+use git::normalize_branch_name;
 use git::repository::{Branch, delete_branch_flag};
 use gpui::http_client::Url;
 use gpui::{
@@ -176,7 +176,8 @@ pub struct BranchList {
     width: Rems,
     pub picker: Entity<Picker<BranchListDelegate>>,
     picker_focus_handle: FocusHandle,
-    _subscriptions: Vec<Subscription>,
+    subscriptions: Vec<Subscription>,
+    _load_default_branch: Option<Task<()>>,
     embedded: bool,
 }
 
@@ -190,7 +191,7 @@ impl BranchList {
         cx: &mut Context<Self>,
     ) -> Self {
         let mut this = Self::new_inner(workspace, repository, style, width, false, window, cx);
-        this._subscriptions
+        this.subscriptions
             .push(cx.subscribe(&this.picker, |this, _, _, cx| {
                 if !this.branch_filter_menu_open(cx) {
                     cx.emit(DismissEvent);
@@ -243,7 +244,7 @@ impl BranchList {
             window,
             cx,
         );
-        this._subscriptions
+        this.subscriptions
             .push(cx.subscribe(&this.picker, |this, _, _, cx| {
                 if !this.branch_filter_menu_open(cx) {
                     cx.emit(DismissEvent);
@@ -262,15 +263,12 @@ impl BranchList {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let all_branches = repository
-            .as_ref()
-            .map(|repo| {
-                process_branches(
-                    &repo.read(cx).branch_list,
-                    !branch_selection_behavior.is_select_only(),
-                )
-            })
-            .unwrap_or_default();
+        let all_branches = repository.as_ref().map_or_default(|repo| {
+            process_branches(
+                &repo.read(cx).branch_list,
+                !branch_selection_behavior.is_select_only(),
+            )
+        });
         let branch_list_error = repository
             .as_ref()
             .and_then(|repo| repo.read(cx).branch_list_error.clone());
@@ -330,32 +328,33 @@ impl BranchList {
             ));
         }
 
-        // Fetch default branch asynchronously since it requires a git operation
-        cx.spawn_in(window, async move |this, cx| {
-            let default_branch = default_branch_request
-                .context("No active repository")?
-                .await
-                .map(Result::ok)
-                .ok()
-                .flatten()
-                .flatten();
+        // Fetch default branch asynchronously since it requires a git operation.
+        // The task is owned by the list, so closing the picker before it finishes
+        // drops it instead of logging that the entity was released.
+        let load_default_branch = default_branch_request.map(|default_branch_request| {
+            cx.spawn_in(window, async move |this, cx| {
+                let default_branch = default_branch_request
+                    .await
+                    .map(Result::ok)
+                    .ok()
+                    .flatten()
+                    .flatten();
 
-            let branch_list_update_result = this.update_in(cx, |this, _window, cx| {
-                this.picker.update(cx, |picker, _cx| {
-                    picker.delegate.default_branch = default_branch;
-                });
-            });
-            branch_list_update_result.log_err();
-
-            anyhow::Ok(())
-        })
-        .detach_and_log_err(cx);
+                this.update_in(cx, |this, _window, cx| {
+                    this.picker.update(cx, |picker, _cx| {
+                        picker.delegate.default_branch = default_branch;
+                    });
+                })
+                .log_err();
+            })
+        });
 
         Self {
             picker,
             picker_focus_handle,
             width,
-            _subscriptions: subscriptions,
+            subscriptions,
+            _load_default_branch: load_default_branch,
             embedded,
         }
     }
@@ -380,7 +379,7 @@ impl BranchList {
         this.picker.update(cx, |picker, _| {
             picker.delegate.show_footer = show_footer;
         });
-        this._subscriptions
+        this.subscriptions
             .push(cx.subscribe(&this.picker, |_, _, _, cx| {
                 cx.emit(DismissEvent);
             }));
@@ -786,12 +785,6 @@ fn delete_branch_command(is_remote: bool, branch_name: &str, force: bool) -> Str
         "branch {} {branch_name}",
         delete_branch_flag(is_remote, force)
     )
-}
-
-// Branch and remote names typed into the picker should not preserve surrounding
-// whitespace, otherwise normalization can produce invalid leading/trailing dashes.
-fn normalize_branch_name(query: &str) -> String {
-    query.trim().replace(' ', "-")
 }
 
 struct BranchDeleteForceDeletePrompt {
@@ -1887,6 +1880,7 @@ impl PickerDelegate for BranchListDelegate {
                 .child(
                     h_flex()
                         .w_full()
+                        .min_w_0()
                         .gap_2p5()
                         .flex_grow()
                         .child(
@@ -1902,6 +1896,7 @@ impl PickerDelegate for BranchListDelegate {
                             v_flex()
                                 .id("info_container")
                                 .w_full()
+                                .min_w_0()
                                 .child(entry_title)
                                 .child({
                                     let message = match entry {
@@ -2189,6 +2184,8 @@ impl PickerDelegate for BranchListDelegate {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use std::collections::HashSet;
 
     use super::*;
@@ -2370,7 +2367,7 @@ mod tests {
                         picker.delegate.focus_handle = picker_focus_handle.clone();
                     });
 
-                    let _subscription = cx.subscribe(&picker, |_, _, _, cx| {
+                    let subscription = cx.subscribe(&picker, |_, _, _, cx| {
                         cx.emit(DismissEvent);
                     });
 
@@ -2378,7 +2375,8 @@ mod tests {
                         picker,
                         picker_focus_handle,
                         width: rems(34.),
-                        _subscriptions: vec![_subscription],
+                        subscriptions: vec![subscription],
+                        _load_default_branch: None,
                         embedded: false,
                     }
                 })
@@ -3171,7 +3169,7 @@ mod tests {
                 assert!(last_match.is_new_branch());
                 assert_eq!(last_match.name(), NEW_BRANCH);
                 // State is NewBranch because no existing branches fuzzy-match the query
-                assert!(matches!(picker.delegate.state, PickerState::NewBranch));
+                assert_matches!(picker.delegate.state, PickerState::NewBranch);
                 picker.delegate.confirm(false, window, cx);
             })
         });
@@ -3204,12 +3202,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_normalize_branch_name() {
-        assert_eq!(normalize_branch_name(" branch-name "), "branch-name");
-        assert_eq!(normalize_branch_name(" fix leak "), "fix-leak");
-    }
-
     #[gpui::test]
     async fn test_remote_url_detection_https(cx: &mut TestAppContext) {
         init_test(cx);
@@ -3235,7 +3227,7 @@ mod tests {
                 branch_list.picker.update(cx, |picker, cx| {
                     let last_match = picker.delegate.matches.last().unwrap();
                     assert!(last_match.is_new_url());
-                    assert!(matches!(picker.delegate.state, PickerState::NewRemote));
+                    assert_matches!(picker.delegate.state, PickerState::NewRemote);
                     picker.delegate.confirm(false, window, cx);
                     assert_eq!(picker.delegate.matches.len(), 0);
                     if let PickerState::CreateRemote(remote_url) = &picker.delegate.state
@@ -3256,11 +3248,11 @@ mod tests {
         branch_list.update_in(cx, |branch_list, window, cx| {
             branch_list.picker.update(cx, |picker, cx| {
                 assert_eq!(picker.delegate.matches.len(), 1);
-                assert!(matches!(
+                assert_matches!(
                     picker.delegate.matches.first(),
                     Some(Entry::NewRemoteName { name, url })
                         if name == "my_new_remote" && url.as_ref() == "https://github.com/user/repo.git"
-                ));
+                );
                 picker.delegate.confirm(false, window, cx);
             })
         });
@@ -3314,16 +3306,13 @@ mod tests {
                     picker.delegate.selected_index = picker.delegate.matches.len() - 1;
                     picker.delegate.confirm(false, window, cx);
 
-                    assert!(matches!(
-                        picker.delegate.state,
-                        PickerState::CreateRemote(_)
-                    ));
+                    assert_matches!(picker.delegate.state, PickerState::CreateRemote(_));
                     if let PickerState::CreateRemote(ref url) = picker.delegate.state {
                         assert_eq!(url.as_ref(), "https://github.com/user/repo.git");
                     }
                     assert_eq!(picker.delegate.matches.len(), 0);
                     picker.delegate.dismissed(window, cx);
-                    assert!(matches!(picker.delegate.state, PickerState::List));
+                    assert_matches!(picker.delegate.state, PickerState::List);
                     let query = "main".to_string();
                     picker.delegate.update_matches(query, window, cx)
                 })
@@ -3391,12 +3380,11 @@ mod tests {
             branch_list.picker.update(cx, |picker, cx| {
                 let last_match = picker.delegate.matches.last().unwrap();
                 assert!(last_match.is_new_url());
-                assert!(matches!(picker.delegate.state, PickerState::NewRemote));
+                assert_matches!(picker.delegate.state, PickerState::NewRemote);
 
                 picker.delegate.confirm(false, window, cx);
 
-                assert!(
-                    matches!(picker.delegate.state, PickerState::CreateRemote(ref url) if url.as_ref() == REMOTE_URL),
+                assert_matches!(picker.delegate.state, PickerState::CreateRemote(ref url) if url.as_ref() == REMOTE_URL,
                     "State should transition to CreateRemote with the URL"
                 );
             });

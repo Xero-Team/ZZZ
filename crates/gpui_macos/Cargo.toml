@@ -19,9 +19,6 @@ runtime_shaders = []
 font-kit = ["dep:font-kit"]
 screen-capture = ["gpui/screen-capture"]
 
-[dependencies]
-gpui.workspace = true
-
 [target.'cfg(target_os = "macos")'.dependencies]
 accesskit = { workspace = true, optional = true }
 accesskit_macos = { workspace = true, optional = true }
@@ -43,6 +40,7 @@ dispatch2 = "0.3.1"
 font-kit = { path = "../../vendor/font-kit", optional = true }
 foreign-types = "0.5"
 futures.workspace = true
+gpui.workspace = true
 image.workspace = true
 itertools.workspace = true
 libc.workspace = true

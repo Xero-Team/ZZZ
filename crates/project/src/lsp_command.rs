@@ -1756,12 +1756,9 @@ impl LspCommand for GetDocumentSymbols {
                         kind: lsp_symbol.kind,
                         range: range_from_lsp(lsp_symbol.range),
                         selection_range: range_from_lsp(lsp_symbol.selection_range),
-                        children: lsp_symbol
-                            .children
-                            .map(|children| {
-                                children.into_iter().map(convert_symbol).collect::<Vec<_>>()
-                            })
-                            .unwrap_or_default(),
+                        children: lsp_symbol.children.map_or_default(|children| {
+                            children.into_iter().map(convert_symbol).collect::<Vec<_>>()
+                        }),
                     }
                 }
                 nested_responses.into_iter().map(convert_symbol).collect()
@@ -2699,8 +2696,7 @@ impl LspCommand for GetCodeActions {
         let available_commands = server_capabilities
             .execute_command_provider
             .as_ref()
-            .map(|options| options.commands.as_slice())
-            .unwrap_or_default();
+            .map_or_default(|options| options.commands.as_slice());
         Ok(actions
             .unwrap_or_default()
             .into_iter()
@@ -3997,10 +3993,7 @@ impl LinkedEditingRange {
         let Some(linked_editing_options) = capabilities.linked_editing_range_provider else {
             return false;
         };
-        if linked_editing_options == LinkedEditingRangeServerCapabilities::Simple(false) {
-            return false;
-        }
-        true
+        linked_editing_options != LinkedEditingRangeServerCapabilities::Simple(false)
     }
 }
 
@@ -4886,8 +4879,7 @@ impl LspCommand for GetFoldingRanges {
             collapsed_texts.push(
                 folding_range
                     .collapsed_text
-                    .map(|t| t.to_string())
-                    .unwrap_or_default(),
+                    .map_or_default(|t| t.to_string()),
             );
         }
         proto::GetFoldingRangesResponse {

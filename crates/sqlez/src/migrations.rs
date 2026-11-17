@@ -1,8 +1,7 @@
 // Migrations are constructed by domain, and stored in a table in the connection db with domain name,
 // effected tables, actual query text, and order.
-// If a migration is run and any of the query texts don't match, the app panics on startup (maybe fallback
-// to creating a new db?)
-// Otherwise any missing migrations are run on the connection
+// A migration whose stored text no longer matches the current text fails the migration with an
+// error naming both versions; missing migrations are run against the connection.
 
 use std::ffi::CString;
 
@@ -15,6 +14,11 @@ use crate::connection::Connection;
 impl Connection {
     fn eager_exec(&self, sql: &str) -> anyhow::Result<()> {
         let sql_str = CString::new(sql).context("Error creating cstr")?;
+        // SAFETY: `self.sqlite3` is a live handle owned by this connection, and `sql_str` is a
+        // NUL-terminated string alive for the whole call. Both out-parameters are null: no
+        // callback is wanted, and a null `errmsg` is what keeps SQLite from allocating a message
+        // that would then have to be released with `sqlite3_free`. The return code is not read
+        // because `last_error` below reports the same failure with more context.
         unsafe {
             sqlite3_exec(
                 self.sqlite3,
@@ -25,7 +29,7 @@ impl Connection {
             );
         }
         self.last_error()
-            .with_context(|| format!("Prepare call failed for query:\n{}", sql))?;
+            .with_context(|| format!("Exec call failed for query:\n{}", sql))?;
 
         Ok(())
     }

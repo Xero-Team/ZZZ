@@ -1191,7 +1191,7 @@ fn build_index(
         let record = ArchiveRecord {
             metadata: ArchiveRecordMetadata {
                 entry_index,
-                path: path.clone(),
+                path,
                 kind,
                 compressed_size,
                 uncompressed_size,
@@ -1294,7 +1294,7 @@ fn archive_member_path(
         .with_detail("archive member name is absolute, contains backslashes, or contains NUL"));
     }
     let directory = raw_name.ends_with(b"/");
-    let path_bytes = raw_name.strip_suffix(b"/").unwrap_or(raw_name);
+    let path_bytes = raw_name.trim_suffix(b"/");
     if path_bytes.is_empty() {
         return Err(VfsError::new(
             VfsErrorCode::InvalidPath,

@@ -35,7 +35,25 @@ impl Window {
             use_display_p3,
         } = options;
 
-        let window_bounds = window_bounds.unwrap_or_else(|| default_bounds(display_id, cx));
+        let active_window_placement = cx.active_window_placement();
+        // Explicit bounds only make sense on the display they were computed for.
+        let target_display_id = display_id.or_else(|| {
+            active_window_placement
+                .filter(|_| window_bounds.is_none())
+                .and_then(|(display_id, _)| display_id)
+        });
+        let display = target_display_id
+            .and_then(|display_id| cx.find_display(display_id))
+            .or_else(|| cx.primary_display());
+        let display_id = display
+            .as_ref()
+            .map(|display| display.id())
+            .or(target_display_id);
+        let active_window_bounds = active_window_placement
+            .filter(|(active_display_id, _)| *active_display_id == display_id)
+            .map(|(_, bounds)| bounds);
+        let window_bounds = window_bounds
+            .unwrap_or_else(|| default_bounds(active_window_bounds, display.as_deref()));
         let mut platform_window = cx.platform.open_window(
             handle,
             WindowParams {
@@ -89,11 +107,25 @@ impl Window {
             platform_window
                 .request_decorations(window_decorations.unwrap_or(WindowDecorations::Server));
         }
+        // A CPU adapter cannot cheaply blend a transparent or blurred window against the
+        // desktop, and has no compositor blur to match, so software rendering stays opaque.
+        let window_background = if cx.is_software_rendering() {
+            WindowBackgroundAppearance::Opaque
+        } else {
+            window_background
+        };
         platform_window.set_background_appearance(window_background);
 
         match window_bounds {
             WindowBounds::Fullscreen(_) => platform_window.toggle_fullscreen(),
-            WindowBounds::Maximized(_) => platform_window.zoom()?,
+            WindowBounds::Maximized(_) => {
+                // The window's bounds are already applied through WindowParams;
+                // zoom only asks the window manager to enter the maximized
+                // state. Backends that cannot zoom (web, headless, test) treat
+                // it as best-effort, so a failure must not abort window
+                // creation. Log it and open the window anyway.
+                platform_window.zoom().log_err();
+            }
             WindowBounds::Windowed(_) => {}
         }
 
@@ -458,6 +490,7 @@ impl Window {
             display_id,
             is_resizable,
             is_minimizable,
+            last_window_bounds: window_bounds,
             sprite_atlas,
             text_system,
             text_rendering_mode: cx.text_rendering_mode.clone(),
@@ -614,6 +647,20 @@ impl Window {
         self.interaction.focused(cx)
     }
 
+    /// While focus-lost listeners are being dispatched, returns the closest ancestor of the
+    /// previously focused element that can still receive focus, making it a suitable target
+    /// for focus restoration. Returns `None` at all other times, or when no such ancestor exists.
+    pub fn focus_lost_restore_target(&self, cx: &App) -> Option<FocusHandle> {
+        let (_leaf, ancestors) = self.interaction.focus_lost_path.split_last()?;
+        ancestors.iter().rev().find_map(|id| {
+            self.interaction
+                .rendered_frame
+                .dispatch_tree
+                .focusable_node_id(*id)?;
+            FocusHandle::for_id(*id, &cx.focus_handles)
+        })
+    }
+
     /// Move focus to the element associated with the given [`FocusHandle`].
     pub fn focus(&mut self, handle: &FocusHandle, cx: &mut App) {
         InteractionOwner::focus(self, handle, cx);
@@ -706,6 +753,15 @@ impl Window {
     /// after it has been closed
     pub fn window_bounds(&self) -> WindowBounds {
         self.platform_window.window_bounds()
+    }
+
+    /// The window bounds last reported by the platform, without asking the platform again.
+    pub(crate) fn last_window_bounds(&self) -> WindowBounds {
+        self.last_window_bounds
+    }
+
+    pub(crate) fn display_id(&self) -> Option<DisplayId> {
+        self.display_id
     }
 
     /// Returns the capabilities declared by this window's platform backend.
@@ -1000,6 +1056,8 @@ impl Window {
         self.scale_factor = self.platform_window.scale_factor();
         self.viewport_size = self.platform_window.content_size();
         self.display_id = self.platform_window.display().map(|display| display.id());
+        self.last_window_bounds = self.platform_window.window_bounds();
+        cx.sync_window_update_entry(self);
         self.interaction.mouse_position = self.platform_window.mouse_position();
         if self.platform_window.capabilities().accessibility {
             self.platform_window
@@ -1246,6 +1304,13 @@ impl Window {
         self.scale_factor
     }
 
+    /// Overrides the display scale factor for tests.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_scale_factor(&mut self, scale_factor: f32) {
+        self.scale_factor = scale_factor;
+        self.refresh();
+    }
+
     /// The size of an em for the base font of the application. Adjusting this value allows the
     /// UI to scale, just like zooming a web page.
     pub fn rem_size(&self) -> Pixels {
@@ -1477,7 +1542,7 @@ impl Window {
     }
 
     /// Produces a new frame and assigns it to `rendered_frame`. To actually show
-    /// the contents of the new [`Scene`], use [`Self::present`].
+    /// the contents of the new [`crate::Scene`], use `present`.
     #[profiling::function]
     pub fn draw(&mut self, cx: &mut App) -> ArenaClearNeeded {
         let atlas_frame = self.sprite_atlas.begin_frame();
@@ -1556,10 +1621,12 @@ impl Window {
             || previous_window_active != current_window_active
         {
             if !previous_focus_path.is_empty() && current_focus_path.is_empty() {
+                self.interaction.focus_lost_path = previous_focus_path.clone();
                 self.interaction
                     .focus_lost_listeners
                     .clone()
                     .retain(&(), |listener| listener(self, cx));
+                self.interaction.focus_lost_path.clear();
                 // Focus-lost fallbacks may move focus to a node outside the current tree.
                 // Track only focus changes made by listeners to avoid a redraw loop.
                 focus_before_listeners = self.interaction.focus;
@@ -1717,13 +1784,17 @@ impl Window {
         let mut request_layout_operations = 0;
         self.interaction.tooltip_bounds.take();
 
-        let _inspector_width: Pixels = rems(30.0).to_pixels(self.rem_size());
+        #[cfg_attr(
+            not(any(feature = "inspector", debug_assertions)),
+            allow(unused_variables)
+        )]
+        let inspector_width: Pixels = rems(30.0).to_pixels(self.rem_size());
         let root_size = {
             #[cfg(any(feature = "inspector", debug_assertions))]
             {
                 if self.inspector.is_some() {
                     let mut size = self.viewport_size;
-                    size.width = (size.width - _inspector_width).max(px(0.0));
+                    size.width = (size.width - inspector_width).max(px(0.0));
                     size
                 } else {
                     self.viewport_size
@@ -1759,7 +1830,7 @@ impl Window {
         root_element.prepaint_as_root(Point::default(), root_size.into(), self, cx);
 
         #[cfg(any(feature = "inspector", debug_assertions))]
-        let inspector_element = self.prepaint_inspector(_inspector_width, cx);
+        let inspector_element = self.prepaint_inspector(inspector_width, cx);
 
         self.prepaint_deferred_draws(cx);
 

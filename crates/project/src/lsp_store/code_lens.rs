@@ -43,10 +43,10 @@ impl CodeLensData {
 impl LspStore {
     pub(super) fn refresh_code_lens(&mut self, cx: &mut Context<Self>) {
         for lsp_data in self.lsp_data.values_mut() {
-            if let Some(code_lens) = lsp_data.code_lens.take() {
-                if let Some(cancel) = code_lens.update_cancel {
-                    cancel.send(()).ok();
-                }
+            if let Some(code_lens) = lsp_data.code_lens.take()
+                && let Some(cancel) = code_lens.update_cancel
+            {
+                cancel.send(()).ok();
             }
         }
 
@@ -104,23 +104,23 @@ impl LspStore {
                 .unwrap_or_default()
         });
 
-        if let Some(lsp_data) = self.current_lsp_data(buffer_id) {
-            if let Some(cached_lens) = &lsp_data.code_lens {
-                if !version_queried_for.changed_since(&lsp_data.buffer_version) {
-                    let has_different_servers = existing_servers.is_some_and(|existing_servers| {
-                        existing_servers != cached_lens.lens.keys().copied().collect()
-                    });
-                    if !has_different_servers {
-                        return Task::ready(Ok(Some(
-                            cached_lens.lens.values().flatten().cloned().collect(),
-                        )))
-                        .shared();
-                    }
-                } else if let Some((updating_for, running_update)) = cached_lens.update.as_ref() {
-                    if !version_queried_for.changed_since(updating_for) {
-                        return running_update.clone();
-                    }
+        if let Some(lsp_data) = self.current_lsp_data(buffer_id)
+            && let Some(cached_lens) = &lsp_data.code_lens
+        {
+            if !version_queried_for.changed_since(&lsp_data.buffer_version) {
+                let has_different_servers = existing_servers.is_some_and(|existing_servers| {
+                    existing_servers != cached_lens.lens.keys().copied().collect()
+                });
+                if !has_different_servers {
+                    return Task::ready(Ok(Some(
+                        cached_lens.lens.values().flatten().cloned().collect(),
+                    )))
+                    .shared();
                 }
+            } else if let Some((updating_for, running_update)) = cached_lens.update.as_ref()
+                && !version_queried_for.changed_since(updating_for)
+            {
+                return running_update.clone();
             }
         }
 
@@ -366,12 +366,12 @@ impl LspStore {
                     };
                     let mut newly_resolved = Vec::new();
                     for (server_id, index, resolved_lens) in resolved {
-                        if let Some(actions) = code_lens.lens.get_mut(&server_id) {
-                            if let Some(action) = actions.get_mut(index) {
-                                action.resolved = true;
-                                action.lsp_action = LspAction::CodeLens(resolved_lens);
-                                newly_resolved.push(action.clone());
-                            }
+                        if let Some(actions) = code_lens.lens.get_mut(&server_id)
+                            && let Some(action) = actions.get_mut(index)
+                        {
+                            action.resolved = true;
+                            action.lsp_action = LspAction::CodeLens(resolved_lens);
+                            newly_resolved.push(action.clone());
                         }
                     }
                     newly_resolved

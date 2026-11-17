@@ -587,14 +587,13 @@ impl BreakpointStore {
             let breakpoints = self
                 .breakpoints
                 .get(&abs_path)
-                .map(|breakpoint_set| {
+                .map_or_default(|breakpoint_set| {
                     breakpoint_set
                         .breakpoints
                         .iter()
                         .filter_map(|bp| bp.bp.bp.to_proto(bp.position(), &bp.session_state))
                         .collect()
-                })
-                .unwrap_or_default();
+                });
 
             if let Some(vfs_path) = vfs_path.as_ref() {
                 client
@@ -748,8 +747,7 @@ impl BreakpointStore {
     pub fn breakpoints_from_path(&self, path: &Arc<Path>) -> Vec<BreakpointWithPosition> {
         self.breakpoints
             .get(path)
-            .map(|bp| bp.breakpoints.iter().map(|bp| bp.bp.clone()).collect())
-            .unwrap_or_default()
+            .map_or_default(|bp| bp.breakpoints.iter().map(|bp| bp.bp.clone()).collect())
     }
 
     pub fn source_breakpoints_from_path(
@@ -757,27 +755,24 @@ impl BreakpointStore {
         path: &Arc<Path>,
         cx: &App,
     ) -> Vec<SourceBreakpoint> {
-        self.breakpoints
-            .get(path)
-            .map(|bp| {
-                let snapshot = bp.buffer.read(cx).snapshot();
-                bp.breakpoints
-                    .iter()
-                    .map(|bp| {
-                        let position = snapshot.summary_for_anchor::<PointUtf16>(bp.position()).row;
-                        let bp = &bp.bp;
-                        SourceBreakpoint {
-                            row: position,
-                            path: path.clone(),
-                            state: bp.bp.state,
-                            message: bp.bp.message.clone(),
-                            condition: bp.bp.condition.clone(),
-                            hit_condition: bp.bp.hit_condition.clone(),
-                        }
-                    })
-                    .collect()
-            })
-            .unwrap_or_default()
+        self.breakpoints.get(path).map_or_default(|bp| {
+            let snapshot = bp.buffer.read(cx).snapshot();
+            bp.breakpoints
+                .iter()
+                .map(|bp| {
+                    let position = snapshot.summary_for_anchor::<PointUtf16>(bp.position()).row;
+                    let bp = &bp.bp;
+                    SourceBreakpoint {
+                        row: position,
+                        path: path.clone(),
+                        state: bp.bp.state,
+                        message: bp.bp.message.clone(),
+                        condition: bp.bp.condition.clone(),
+                        hit_condition: bp.bp.hit_condition.clone(),
+                    }
+                })
+                .collect()
+        })
     }
 
     pub fn all_breakpoints(&self) -> BTreeMap<Arc<Path>, Vec<BreakpointWithPosition>> {

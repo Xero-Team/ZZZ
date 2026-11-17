@@ -73,7 +73,7 @@ pub struct RemoteServerProjects {
     dev_container_picker: Option<Entity<Picker<DevContainerPickerDelegate>>>,
     _subscriptions: Vec<Subscription>,
     filter_cancel: Arc<AtomicBool>,
-    _filter_task: Task<()>,
+    filter_task: Task<()>,
     allow_dismissal: bool,
 }
 
@@ -547,7 +547,7 @@ impl ProjectPicker {
                 nickname: None,
             },
         };
-        let _path_task = cx
+        let path_task = cx
             .spawn_in(window, {
                 let picker = picker.clone();
                 let workspace = workspace;
@@ -604,7 +604,7 @@ impl ProjectPicker {
                                         .and_then(|connections| connections.get_mut(index.0))
                                     {
                                         server.projects.insert(RemoteProject { paths });
-                                    };
+                                    }
                                 }
                                 ServerIndex::Wsl(index) => {
                                     if let Some(server) = settings
@@ -614,7 +614,7 @@ impl ProjectPicker {
                                         .and_then(|connections| connections.get_mut(index.0))
                                     {
                                         server.projects.insert(RemoteProject { paths });
-                                    };
+                                    }
                                 }
                             }
                         });
@@ -687,7 +687,7 @@ impl ProjectPicker {
             })
             .shared();
         let entity = cx.new(|_| Self {
-            _path_task,
+            _path_task: path_task,
             picker,
             data,
             recent_projects: Vec::new(),
@@ -1300,7 +1300,7 @@ impl RemoteServerProjects {
             dev_container_picker: None,
             _subscriptions: vec![settings_subscription, filter_subscription],
             filter_cancel: Arc::new(AtomicBool::new(false)),
-            _filter_task: Task::ready(()),
+            filter_task: Task::ready(()),
             allow_dismissal: true,
         }
     }
@@ -1761,7 +1761,7 @@ impl RemoteServerProjects {
 
         if query.is_empty() {
             state.filtered_servers = None;
-            self._filter_task = Task::ready(());
+            self.filter_task = Task::ready(());
             cx.notify();
             return;
         }
@@ -1771,7 +1771,7 @@ impl RemoteServerProjects {
         self.filter_cancel = cancel.clone();
         let executor = cx.background_executor().clone();
 
-        self._filter_task = cx.spawn(async move |this, cx| {
+        self.filter_task = cx.spawn(async move |this, cx| {
             let Some(results) = filter::run_async(&filter_data, &query, &cancel, executor).await
             else {
                 return;
@@ -3219,7 +3219,7 @@ impl RemoteServerProjects {
 
         if ssh_connections_changed || wsl_connections_changed {
             should_rebuild = true;
-        };
+        }
 
         if !should_rebuild && ssh_settings.read_ssh_config {
             let current_ssh_hosts: BTreeSet<SharedString> = state
@@ -3250,7 +3250,7 @@ impl RemoteServerProjects {
             // changes (rare), so the cost of doing the match under render
             // is acceptable.
             self.filter_cancel.store(true, atomic::Ordering::Release);
-            self._filter_task = Task::ready(());
+            self.filter_task = Task::ready(());
             self.mode = Mode::default_mode(&self.ssh_config_servers, cx);
             if let Mode::Default(new_state) = &mut self.mode {
                 new_state.filter_sync(query);

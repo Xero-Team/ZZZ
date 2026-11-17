@@ -27,7 +27,8 @@ pub use utils::{get_unique_name, init_logging};
         unix,
         not(target_os = "macos"),
         not(target_os = "ios"),
-        not(target_os = "android")
+        not(target_os = "android"),
+        feature = "freedesktop"
     )
 ))]
 mod os_limited {
@@ -152,7 +153,7 @@ mod os_limited {
     #[test]
     fn restore_empty() {
         init_logging();
-        trash::restore_all(vec![]).unwrap();
+        trash::os_limited::restore_all(vec![]).unwrap();
     }
 
     #[test]
@@ -221,7 +222,7 @@ mod os_limited {
             })
             .collect();
         assert_eq!(targets.len(), file_count);
-        trash::restore_all(targets).unwrap();
+        trash::os_limited::restore_all(targets).unwrap();
         let remaining = trash::os_limited::list()
             .unwrap()
             .into_iter()
@@ -245,6 +246,57 @@ mod os_limited {
         }
 
         assert_eq!(missing, Vec::<&String>::new());
+    }
+
+    /// The name of a listed item is its file name, extension included, and
+    /// restoring brings the file back under that name. On Windows the shell's
+    /// display names drop the extension of registered file types while the
+    /// "hide extensions for known file types" setting is on — the default —
+    /// so a name taken from them loses `.txt` here and the restored file is
+    /// renamed.
+    #[test]
+    #[serial]
+    fn list_and_restore_keep_the_extension() {
+        init_logging();
+        let file_name_prefix = get_unique_name();
+        let names: Vec<String> = ["txt", "png", "html"]
+            .iter()
+            .map(|ext| format!("{file_name_prefix}.{ext}"))
+            .collect();
+        for path in names.iter() {
+            File::create_new(path).unwrap();
+        }
+        trash::delete_all(&names).unwrap();
+
+        let targets: Vec<_> = trash::os_limited::list()
+            .unwrap()
+            .into_iter()
+            .filter(|x| {
+                x.name
+                    .as_encoded_bytes()
+                    .starts_with(file_name_prefix.as_bytes())
+            })
+            .collect();
+        let mut listed: Vec<OsString> = targets.iter().map(|item| item.name.clone()).collect();
+        listed.sort();
+        let mut expected: Vec<OsString> = names.iter().map(OsString::from).collect();
+        expected.sort();
+        if listed != expected {
+            // Three files that differ only in their extension would also be
+            // taken for twins of one original, and the restore refused.
+            let _ = trash::os_limited::purge_all(targets);
+            panic!("listed names {listed:?}, expected {expected:?}");
+        }
+
+        trash::os_limited::restore_all(targets).unwrap();
+        let mut missing = Vec::new();
+        for path in names.iter() {
+            if !std::path::Path::new(&path).is_file() {
+                missing.push(path.clone());
+            }
+            std::fs::remove_file(path).ok();
+        }
+        assert_eq!(missing, Vec::<String>::new());
     }
 
     #[test]
@@ -275,7 +327,7 @@ mod os_limited {
             .collect();
         targets.sort_by(|a, b| a.name.cmp(&b.name));
         assert_eq!(targets.len(), file_count);
-        let remaining_count = match trash::restore_all(targets) {
+        let remaining_count = match trash::os_limited::restore_all(targets) {
             Err(trash::Error::RestoreCollision {
                 remaining_items, ..
             }) => {
@@ -351,7 +403,7 @@ mod os_limited {
             .collect();
         targets.sort_by(|a, b| a.name.cmp(&b.name));
         assert_eq!(targets.len(), file_count + 1); // plus one for one of the twins
-        match trash::restore_all(targets) {
+        match trash::os_limited::restore_all(targets) {
             Err(trash::Error::RestoreTwins { path, items }) => {
                 assert_eq!(path.file_name().unwrap().to_str().unwrap(), twin_name);
                 trash::os_limited::purge_all(items).unwrap();

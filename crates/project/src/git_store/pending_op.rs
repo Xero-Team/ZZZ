@@ -100,7 +100,7 @@ impl PendingOps {
     }
 
     pub fn max_id(&self) -> PendingOpId {
-        self.ops.last().map(|op| op.id).unwrap_or_default()
+        self.ops.last().map_or_default(|op| op.id)
     }
 
     pub fn op_by_id(&self, id: PendingOpId) -> Option<&PendingOp> {
@@ -113,20 +113,22 @@ impl PendingOps {
 
     /// File is staged if the last job is finished and has status Staged.
     pub fn staged(&self) -> bool {
-        if let Some(last) = self.ops.last() {
-            if last.git_status == GitStatus::Staged && last.job_status == JobStatus::Finished {
-                return true;
-            }
+        if let Some(last) = self.ops.last()
+            && last.git_status == GitStatus::Staged
+            && last.job_status == JobStatus::Finished
+        {
+            return true;
         }
         false
     }
 
     /// File is staged if the last job is not finished and has status Staged.
     pub fn staging(&self) -> bool {
-        if let Some(last) = self.ops.last() {
-            if last.git_status == GitStatus::Staged && last.job_status != JobStatus::Finished {
-                return true;
-            }
+        if let Some(last) = self.ops.last()
+            && last.git_status == GitStatus::Staged
+            && last.job_status != JobStatus::Finished
+        {
+            return true;
         }
         false
     }

@@ -44,13 +44,13 @@ use crate::{
     Action, ActionBuildError, ActionRegistry, Any, AnyView, AnyWindowHandle, AppContext,
     AppLifecycleCapabilities, Arena, ArenaBox, Asset, AssetSource, BackgroundExecutor, Bounds,
     ClipboardCapabilities, ClipboardItem, CursorStyle, DispatchPhase, DisplayId, EventEmitter,
-    FocusHandle, FocusMap, ForegroundExecutor, Global, KeyBinding, KeyContext, Keymap, Keystroke,
-    LayoutId, Menu, MenuItem, OwnedMenu, PathPromptOptions, Pixels, Platform, PlatformDisplay,
-    PlatformKeyboardLayout, PlatformKeyboardMapper, Point, PowerMode, Priority, PromptBuilder,
-    PromptButton, PromptHandle, PromptLevel, Render, RenderImage, RenderablePromptHandle,
-    Reservation, ScreenCaptureSource, SharedString, SubscriberSet, Subscription, SvgRenderer, Task,
-    TextRenderingMode, TextSystem, ThermalState, Window, WindowAppearance, WindowButtonLayout,
-    WindowHandle, WindowId, WindowInvalidator,
+    FocusHandle, FocusMap, ForegroundExecutor, Global, GpuSpecs, KeyBinding, KeyContext, Keymap,
+    Keystroke, LayoutId, Menu, MenuItem, OwnedMenu, PathPromptOptions, Pixels, Platform,
+    PlatformDisplay, PlatformKeyboardLayout, PlatformKeyboardMapper, Point, PowerMode, Priority,
+    PromptBuilder, PromptButton, PromptHandle, PromptLevel, Render, RenderImage,
+    RenderablePromptHandle, Reservation, ScreenCaptureSource, SharedString, SubscriberSet,
+    Subscription, SvgRenderer, Task, TextRenderingMode, TextSystem, ThermalState, Window,
+    WindowAppearance, WindowBounds, WindowButtonLayout, WindowHandle, WindowId, WindowInvalidator,
     colors::{Colors, GlobalColors},
     hash, init_app_menus,
 };
@@ -812,7 +812,7 @@ pub struct App {
     pub(crate) name: Option<&'static str>,
     pub(crate) text_rendering_mode: Rc<Cell<TextRenderingMode>>,
 
-    pub(crate) window_update_stack: Vec<WindowId>,
+    pub(crate) window_update_stack: Vec<WindowUpdateEntry>,
     pub(crate) mode: GpuiMode,
     pub(crate) cursor_hide_mode: CursorHideMode,
     pub(crate) synced_animation_epoch: Instant,
@@ -824,6 +824,13 @@ pub struct App {
     // Otherwise it may report false positives.
     #[cfg(any(test, feature = "leak-detection"))]
     _ref_counts: Arc<RwLock<EntityRefCounts>>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct WindowUpdateEntry {
+    window_id: WindowId,
+    bounds: WindowBounds,
+    display_id: Option<DisplayId>,
 }
 
 impl App {
@@ -847,7 +854,7 @@ impl App {
         let keyboard_mapper = platform.keyboard_mapper();
 
         #[cfg(any(test, feature = "leak-detection"))]
-        let _ref_counts = entities.ref_counts_drop_handle();
+        let ref_counts = entities.ref_counts_drop_handle();
 
         let app = Rc::new_cyclic(|this| AppCell {
             borrow_origin: Cell::new(None),
@@ -915,7 +922,7 @@ impl App {
                 event_arena: Arena::new(1024 * 1024),
 
                 #[cfg(any(test, feature = "leak-detection"))]
-                _ref_counts,
+                _ref_counts: ref_counts,
             }),
         });
 
@@ -1268,6 +1275,40 @@ impl App {
         self.platform.active_window()
     }
 
+    /// Returns the display containing the window that is currently focused at the platform level.
+    pub fn active_display(&self) -> Option<Rc<dyn PlatformDisplay>> {
+        let (display_id, _) = self.active_window_placement()?;
+        self.find_display(display_id?)
+    }
+
+    pub(crate) fn active_window_placement(&self) -> Option<(Option<DisplayId>, WindowBounds)> {
+        let window_id = self.active_window()?.window_id();
+
+        if let Some(state) = self
+            .window_update_stack
+            .iter()
+            .rev()
+            .find(|state| state.window_id == window_id)
+        {
+            return Some((state.display_id, state.bounds));
+        }
+
+        let window = self.windows.get(window_id)?.as_ref()?;
+        Some((window.display_id(), window.last_window_bounds()))
+    }
+
+    pub(crate) fn sync_window_update_entry(&mut self, window: &Window) {
+        if let Some(state) = self
+            .window_update_stack
+            .iter_mut()
+            .rev()
+            .find(|state| state.window_id == window.handle.id)
+        {
+            state.bounds = window.last_window_bounds();
+            state.display_id = window.display_id();
+        }
+    }
+
     /// Opens a new window with the given option and the root view returned by the given function.
     /// The function is invoked with a `Window`, which can be used to interact with window-specific
     /// functionality.
@@ -1281,7 +1322,11 @@ impl App {
             let handle = WindowHandle::new(id);
             let result = match Window::new(handle.into(), options, cx) {
                 Ok(mut window) => {
-                    cx.window_update_stack.push(id);
+                    cx.window_update_stack.push(WindowUpdateEntry {
+                        window_id: id,
+                        bounds: window.last_window_bounds(),
+                        display_id: window.display_id(),
+                    });
                     let root_view = build_root_view(&mut window, cx);
                     cx.window_update_stack.pop();
                     window.root.replace(root_view.into());
@@ -1644,7 +1689,7 @@ impl App {
                 }
             }
             _ => {}
-        };
+        }
 
         self.pending_effects.push_back(effect);
     }
@@ -1862,7 +1907,11 @@ impl App {
 
             let root_view = window.root.clone().expect("value should be present");
 
-            cx.window_update_stack.push(window.handle.id);
+            cx.window_update_stack.push(WindowUpdateEntry {
+                window_id: window.handle.id,
+                bounds: window.last_window_bounds(),
+                display_id: window.display_id(),
+            });
             let result = update(root_view, &mut window, cx);
             fn trail(id: WindowId, window: Box<Window>, cx: &mut App) -> Option<()> {
                 cx.window_update_stack.pop();
@@ -1943,7 +1992,7 @@ impl App {
     {
         if self.quitting {
             debug_panic!("Can't spawn on main thread after on_app_quit")
-        };
+        }
 
         let mut cx = self.to_async();
 
@@ -1961,7 +2010,7 @@ impl App {
     {
         if self.quitting {
             debug_panic!("Can't spawn on main thread after on_app_quit")
-        };
+        }
 
         let mut cx = self.to_async();
 
@@ -2078,6 +2127,28 @@ impl App {
         );
         self.defer(move |_| activate());
         subscription
+    }
+
+    /// Records the GPU information reported by the platform.
+    ///
+    /// The renderer of the first window exists before that window renders, so the value is
+    /// available to rendering decisions made during the first frame.
+    pub fn set_gpu_specs(&mut self, specs: GpuSpecs) {
+        self.set_global(specs);
+    }
+
+    /// Returns the GPU information most recently reported by the platform.
+    pub fn gpu_specs(&self) -> Option<&GpuSpecs> {
+        self.try_global()
+    }
+
+    /// Whether rendering runs on a CPU adapter, such as Mesa's llvmpipe.
+    ///
+    /// Without a GPU, fill and blur cost dominate every frame, so work that only exists to
+    /// decorate the UI is skipped while this returns true.
+    pub fn is_software_rendering(&self) -> bool {
+        self.gpu_specs()
+            .is_some_and(|specs| specs.is_software_emulated)
     }
 
     /// Move the global of the given type to the stack.
@@ -2710,7 +2781,7 @@ impl AppContext for App {
             cx.push_effect(Effect::EntityCreated {
                 entity: handle.into_any(),
                 tid: TypeId::of::<T>(),
-                window: cx.window_update_stack.last().cloned(),
+                window: cx.window_update_stack.last().map(|state| state.window_id),
             });
 
             cx.entities.insert(slot, entity)
@@ -3053,10 +3124,32 @@ mod test {
     use std::os::unix::ffi::OsStringExt;
 
     use crate::{
-        AppContext, BackgroundExecutor, ForegroundExecutor, TestAppContext, TestDispatcher,
-        TestPlatform,
+        AppContext, BackgroundExecutor, ForegroundExecutor, GpuSpecs, TestAppContext,
+        TestDispatcher, TestPlatform,
     };
     use gpui_util::ResultExt as _;
+
+    #[gpui::test]
+    fn software_rendering_follows_the_reported_gpu_specs(cx: &mut TestAppContext) {
+        cx.update(|cx| assert!(!cx.is_software_rendering()));
+
+        cx.update(|cx| {
+            cx.set_gpu_specs(GpuSpecs {
+                is_software_emulated: true,
+                device_name: "llvmpipe".into(),
+                ..Default::default()
+            })
+        });
+        cx.update(|cx| assert!(cx.is_software_rendering()));
+
+        cx.update(|cx| {
+            cx.set_gpu_specs(GpuSpecs {
+                device_name: "hardware".into(),
+                ..Default::default()
+            })
+        });
+        cx.update(|cx| assert!(!cx.is_software_rendering()));
+    }
 
     #[gpui::test]
     fn app_borrow_diagnostics(cx: &mut TestAppContext) {

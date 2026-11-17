@@ -130,11 +130,13 @@
 
 //! List of "tainted files" that the user may not operate on
 
-use crate::ProjectPanel;
+use crate::{ProjectPanel, RemovalKind};
 use anyhow::{Context, Result, anyhow};
 use fs::{TrashRestoreError, TrashedEntry};
 use futures::channel::mpsc;
-use gpui::{AppContext, AsyncApp, IntoElement, SharedString, Styled, Task, WeakEntity};
+use gpui::{
+    AppContext, AsyncApp, IntoElement, PromptLevel, SharedString, Styled, Task, WeakEntity,
+};
 use i18n::tr;
 use markdown::{Markdown, MarkdownElement};
 use project::{Project, ProjectPath, WorktreeId};
@@ -144,7 +146,7 @@ use std::{collections::VecDeque, sync::Arc};
 use ui::{App, TextSize};
 use util::{ResultExt, paths::PathStyle, rel_path::RelPath};
 use workspace::{
-    Workspace,
+    Pane, SaveIntent, Workspace,
     notifications::{
         NotificationId, markdown_style, simple_message_notification::MessageNotification,
     },
@@ -166,10 +168,60 @@ enum Operation {
 }
 
 impl Operation {
-    async fn execute(self, undo_manager: &Inner, cx: &mut AsyncApp) -> Result<Change> {
+    /// Attempts to execute the operation, returning an `Err` if the operation
+    /// failed to execute or `Ok(None)` if the operation was cancelled by the
+    /// user, for example, cancelling trashing a file with unsaved edits.
+    async fn execute(self, undo_manager: &Inner, cx: &mut AsyncApp) -> Result<Option<Change>> {
         let change = match self {
             Operation::Trash(project_path) => {
-                let trash_entry = undo_manager.trash(&project_path, cx).await?;
+                let Some(trash_entry) = undo_manager.trash(&project_path, cx).await? else {
+                    return Ok(None);
+                };
+                Change::Trashed(project_path.worktree_id, trash_entry)
+            }
+            Operation::Batch(operations) => {
+                let mut trash_paths = Vec::new();
+                for operation in &operations {
+                    operation.trash_paths(&mut trash_paths);
+                }
+
+                if !trash_paths.is_empty()
+                    && !undo_manager.confirm_batch_trash(trash_paths, cx).await?
+                {
+                    return Ok(None);
+                }
+
+                let mut changes = Vec::new();
+                for operation in operations {
+                    changes.push(Box::pin(operation.execute_confirmed(undo_manager, cx)).await?);
+                }
+
+                Change::Batched(changes)
+            }
+            operation => {
+                return operation
+                    .execute_confirmed(undo_manager, cx)
+                    .await
+                    .map(Some);
+            }
+        };
+
+        Ok(Some(change))
+    }
+
+    /// Same as [`Self::execute`], but assumes the operation has already been
+    /// confirmed in order to avoid showing confirmation prompts to the user.
+    ///
+    /// Useful in scenarios where undoing a batch of operations would lead to
+    /// multiple files being trashed, in which case we only ask the user once
+    /// whether they'd like to trash the files, and then execute each trash
+    /// operation without confirming each file one by one.
+    async fn execute_confirmed(self, undo_manager: &Inner, cx: &mut AsyncApp) -> Result<Change> {
+        let change = match self {
+            Operation::Trash(project_path) => {
+                let trash_entry = undo_manager
+                    .trash_without_confirmation(&project_path, cx)
+                    .await?;
                 Change::Trashed(project_path.worktree_id, trash_entry)
             }
             Operation::Rename(from, to) => {
@@ -183,7 +235,7 @@ impl Operation {
             Operation::Batch(operations) => {
                 let mut res = Vec::new();
                 for op in operations {
-                    res.push(Box::pin(op.execute(undo_manager, cx)).await?);
+                    res.push(Box::pin(op.execute_confirmed(undo_manager, cx)).await?);
                 }
                 Change::Batched(res)
             }
@@ -198,6 +250,21 @@ impl Operation {
         };
 
         Ok(change)
+    }
+
+    fn trash_paths<'a>(&'a self, paths: &mut Vec<&'a ProjectPath>) {
+        match self {
+            Operation::Trash(path) => paths.push(path),
+            Operation::Batch(operations) => {
+                for operation in operations {
+                    operation.trash_paths(paths);
+                }
+            }
+            Operation::Rename(..)
+            | Operation::Restore(..)
+            | Operation::CreateDir(..)
+            | Operation::RemoveDir(..) => {}
+        }
     }
 }
 
@@ -495,14 +562,21 @@ impl Inner {
         // manual intervention would likely be needed in order to undo. As such,
         // we remove the change from the `history` even before attempting to
         // execute its inversion.
-        let undo_change = self
+        let change = self
             .history
             .remove(before_cursor)
-            .ok_or_else(|| anyhow!("undo history is inconsistent: can_undo was true"))?
-            .to_inverse()
-            .execute(self, cx)
-            .await?;
-        self.history.insert(before_cursor, undo_change);
+            .ok_or_else(|| anyhow!("undo history is inconsistent: can_undo was true"))?;
+        let operation = change.clone().to_inverse();
+
+        if let Some(undo_change) = operation.execute(self, cx).await? {
+            self.history.insert(before_cursor, undo_change);
+        } else {
+            // The user cancelled: put the original change back so the
+            // history stays consistent and the operation can be retried.
+            self.history.insert(before_cursor, change);
+            self.cursor += 1;
+        }
+
         Ok(())
     }
 
@@ -515,15 +589,20 @@ impl Inner {
         // manual intervention would likely be needed in order to redo. As such,
         // we remove the change from the `history` even before attempting to
         // execute its inversion.
-        let redo_change = self
+        let change = self
             .history
             .remove(self.cursor)
-            .ok_or_else(|| anyhow!("redo history is inconsistent: can_redo was true"))?
-            .to_inverse()
-            .execute(self, cx)
-            .await?;
-        self.history.insert(self.cursor, redo_change);
-        self.cursor += 1;
+            .ok_or_else(|| anyhow!("redo history is inconsistent: can_redo was true"))?;
+        let operation = change.clone().to_inverse();
+        match operation.execute(self, cx).await? {
+            Some(redo_change) => {
+                self.history.insert(self.cursor, redo_change);
+                self.cursor += 1;
+            }
+            None => {
+                self.history.insert(self.cursor, change);
+            }
+        }
         Ok(())
     }
 
@@ -662,7 +741,36 @@ impl Inner {
     /// user save or discard them.
     ///
     /// Returns `Ok(None)` if the user cancels the operation.
-    async fn trash(&self, project_path: &ProjectPath, cx: &mut AsyncApp) -> Result<TrashedEntry> {
+    async fn trash(
+        &self,
+        project_path: &ProjectPath,
+        cx: &mut AsyncApp,
+    ) -> Result<Option<TrashedEntry>> {
+        let Some(workspace) = self.workspace.upgrade() else {
+            return Err(anyhow!("Failed to obtain workspace."));
+        };
+
+        let name = workspace.update(cx, |workspace, cx| {
+            let project = workspace.project().read(cx);
+            project_path_display(project, project_path, project.path_style(cx), cx)
+        });
+
+        if !self.confirm_trash(project_path, &name, cx).await? {
+            return Ok(None);
+        }
+
+        self.trash_without_confirmation(project_path, cx)
+            .await
+            .map(Some)
+    }
+
+    /// Same as [`Self::trash`] but proceeds without asking the user whether
+    /// they actually want to trash the file.
+    async fn trash_without_confirmation(
+        &self,
+        project_path: &ProjectPath,
+        cx: &mut AsyncApp,
+    ) -> Result<TrashedEntry> {
         let Some(workspace) = self.workspace.upgrade() else {
             return Err(anyhow!("Failed to obtain workspace."));
         };
@@ -745,5 +853,118 @@ impl Inner {
                 })
             })
             .log_err();
+    }
+
+    /// Prompts the user to confirm whether they really want to trash the file.
+    /// In the case the file has unsaved changes, the prompt will ask whether
+    /// the user wants to save or discard these changes.
+    ///
+    /// Returns `true` if the user confirmed they want to trash the file,
+    /// `false` otherwise.
+    async fn confirm_trash(
+        &self,
+        project_path: &ProjectPath,
+        name: &str,
+        cx: &mut AsyncApp,
+    ) -> Result<bool> {
+        let open_item = self.workspace.update(cx, |workspace, cx| {
+            workspace.panes().iter().find_map(|pane| {
+                pane.read(cx).items().find_map(|item| {
+                    (item.is_dirty(cx)
+                        && item
+                            .project_path(cx)
+                            .iter()
+                            .any(|item_path| item_path == project_path))
+                    .then(|| (pane.clone(), item.boxed_clone()))
+                })
+            })
+        })?;
+
+        let Some((pane, item)) = open_item else {
+            return self.trash_prompt(&[name], 0, cx).await;
+        };
+
+        let mut async_window_cx = self
+            .panel
+            .update_in(cx, |_panel, window, cx| window.to_async(cx))?;
+        let project = self
+            .panel
+            .read_with(cx, |panel, _cx| panel.project.clone())?;
+
+        Pane::save_item(
+            project,
+            pane,
+            item.as_ref(),
+            SaveIntent::Close,
+            &mut async_window_cx,
+        )
+        .await
+    }
+
+    /// Prompts the user to confirm whether they really want to trash all of the
+    /// provided `trash_paths`.
+    ///
+    /// Meant to be used when executing a batch of operations that will lead to
+    /// one or more paths being trashed.
+    ///
+    /// Returns `true` if the user confirmed they want to trash the files,
+    /// `false` otherwise.
+    async fn confirm_batch_trash(
+        &self,
+        trash_paths: Vec<&ProjectPath>,
+        cx: &mut AsyncApp,
+    ) -> Result<bool> {
+        let (names, dirty_buffers) = self.workspace.update(cx, |workspace, cx| {
+            let project = workspace.project().read(cx);
+            let path_style = project.path_style(cx);
+            let dirty_buffers = project
+                .dirty_buffers(cx)
+                .filter(|dirty_path| trash_paths.contains(&dirty_path))
+                .count();
+            let names = trash_paths
+                .iter()
+                .map(|project_path| project_path_display(project, project_path, path_style, cx))
+                .collect::<Vec<_>>();
+
+            (names, dirty_buffers)
+        })?;
+
+        self.trash_prompt(&names, dirty_buffers, cx).await
+    }
+
+    /// Prompts the user to confirm whether they actually want to trash the
+    /// given files.
+    ///
+    /// Returns `true` if the user confirms, `false` otherwise.
+    async fn trash_prompt<S>(
+        &self,
+        names: &[S],
+        dirty_buffers: usize,
+        cx: &mut AsyncApp,
+    ) -> Result<bool>
+    where
+        S: AsRef<str>,
+    {
+        let answer = self
+            .panel
+            .update_in(cx, |_panel, window, cx| {
+                let prompt = ProjectPanel::build_removal_prompt(
+                    RemovalKind::Trash,
+                    names,
+                    dirty_buffers,
+                    cx,
+                );
+                let cancel = tr(cx, "prompt.common.cancel", "Cancel");
+                window.prompt(
+                    PromptLevel::Info,
+                    &prompt.message,
+                    prompt.detail.as_deref(),
+                    &[prompt.confirmation_label.as_str(), cancel.as_str()],
+                    cx,
+                )
+            })?
+            .await?;
+
+        Ok(answer == 0)
     }
 }

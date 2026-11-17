@@ -1,3 +1,6 @@
+// serde's derive emits an empty `__Field` enum for actions whose fields are all skipped.
+#![allow(clippy::empty_enums)]
+
 use crate::{
     CloseWindow, NewCenterTerminal, NewFile, NewTerminal, OpenInTerminal, OpenOptions,
     OpenTerminal, OpenVisible, SplitDirection, ToggleFileFinder, ToggleProjectSymbols, ToggleZoom,
@@ -737,10 +740,9 @@ impl Pane {
             }
         } else if self.should_display_welcome_page
             && let Some(welcome_page) = self.welcome_page.as_ref()
+            && self.focus_handle.is_focused(window)
         {
-            if self.focus_handle.is_focused(window) {
-                welcome_page.read(cx).focus_handle(cx).focus(window, cx);
-            }
+            welcome_page.read(cx).focus_handle(cx).focus(window, cx);
         }
     }
 
@@ -1679,7 +1681,7 @@ impl Pane {
             });
 
             return Task::ready(Ok(()));
-        };
+        }
 
         let active_item_id = self.active_item_id();
 
@@ -2321,7 +2323,7 @@ impl Pane {
                     .log_err();
             }
             return Ok(true);
-        };
+        }
         let Some(item_ix) = pane.read_with(cx, |pane, _| pane.index_for_item(item)) else {
             return Ok(true);
         };
@@ -3019,6 +3021,7 @@ impl Pane {
         let has_file_icon = icon.is_some();
 
         let capability = item.capability(cx);
+        let can_toggle_read_only = item.read_only_toggle_buffer(cx).is_some();
         let tab = Tab::new(ix, item.tab_content_text(detail, cx))
             .position(if is_first_item {
                 TabPosition::First
@@ -3177,7 +3180,7 @@ impl Pane {
                     .gap_1()
                     .children(if let Some(icon) = icon {
                         Some(icon)
-                    } else if !capability.editable() {
+                    } else if can_toggle_read_only && !capability.editable() {
                         Some(read_only_toggle(capability == Capability::Read).into_any_element())
                     } else {
                         None
@@ -3204,9 +3207,10 @@ impl Pane {
                         }
                         None => this,
                     })
-                    .when(capability == Capability::Read && has_file_icon, |this| {
-                        this.child(read_only_toggle(true))
-                    }),
+                    .when(
+                        can_toggle_read_only && capability == Capability::Read && has_file_icon,
+                        |this| this.child(read_only_toggle(true)),
+                    ),
             );
 
         let single_entry_to_resolve = (self.items[ix].buffer_kind(cx) == ItemBufferKind::Singleton)
@@ -3386,7 +3390,7 @@ impl Pane {
                             })
                         };
 
-                        if capability != Capability::ReadOnly {
+                        if can_toggle_read_only && capability != Capability::ReadOnly {
                             let read_only_label = if capability.editable() {
                                 tr(
                                     cx,
@@ -3548,7 +3552,7 @@ impl Pane {
                         } else {
                             menu = menu.map(pin_tab_entries);
                         }
-                    };
+                    }
 
                     // Add custom item-specific actions
                     if !extra_actions.is_empty() {
@@ -4203,7 +4207,7 @@ impl Pane {
                             Some(())
                         })
                         .detach();
-                    };
+                    }
                 });
             })
             .log_err();
@@ -9767,7 +9771,7 @@ mod tests {
                             .unwrap()
                             .clone()
                     });
-                };
+                }
 
                 assert_item_labels_active_index(
                     &pane_before,

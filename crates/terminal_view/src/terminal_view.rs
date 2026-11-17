@@ -156,7 +156,7 @@ pub struct TerminalView {
     rename_editor: Option<Entity<Editor>>,
     rename_editor_subscription: Option<Subscription>,
     _subscriptions: Vec<Subscription>,
-    _terminal_subscriptions: Vec<Subscription>,
+    terminal_subscriptions: Vec<Subscription>,
 }
 
 #[derive(Default, Clone)]
@@ -310,7 +310,7 @@ impl TerminalView {
             rename_editor: None,
             rename_editor_subscription: None,
             _subscriptions: subscriptions,
-            _terminal_subscriptions: terminal_subscriptions,
+            terminal_subscriptions,
         }
     }
 
@@ -691,8 +691,7 @@ impl TerminalView {
             .terminal
             .read(cx)
             .task()
-            .map(|task| terminal_rerun_override(&task.spawned_task.id))
-            .unwrap_or_default();
+            .map_or_default(|task| terminal_rerun_override(&task.spawned_task.id));
         window.dispatch_action(Box::new(task), cx);
     }
 
@@ -875,10 +874,10 @@ impl TerminalView {
 
     pub fn should_show_cursor(&self, focused: bool, cx: &mut Context<Self>) -> bool {
         // Hide cursor when in embedded mode and not focused (read-only output like Agent panel)
-        if let TerminalMode::Embedded { .. } = &self.mode {
-            if !focused {
-                return false;
-            }
+        if let TerminalMode::Embedded { .. } = &self.mode
+            && !focused
+        {
+            return false;
         }
 
         // For Standalone mode: always show cursor when not focused or in special modes
@@ -1116,7 +1115,7 @@ impl TerminalView {
         window: &mut Window,
         cx: &mut Context<TerminalView>,
     ) {
-        self._terminal_subscriptions =
+        self.terminal_subscriptions =
             subscribe_for_terminal_events(&terminal, self.workspace.clone(), window, cx);
         self.terminal = terminal;
     }
@@ -1989,10 +1988,7 @@ impl SerializableItem for TerminalView {
                         .get_working_directory(item_id, workspace_id)
                         .log_err()
                         .flatten();
-                    let cwd = if from_db
-                        .as_ref()
-                        .is_some_and(|from_db| !from_db.as_os_str().is_empty())
-                    {
+                    let cwd = if from_db.as_ref().is_some_and(|from_db| !from_db.is_empty()) {
                         from_db
                     } else {
                         workspace

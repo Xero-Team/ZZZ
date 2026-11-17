@@ -42,7 +42,7 @@ fn main() {
 #[cfg(target_os = "macos")]
 fn main() {
     // Set ZZZ_STATELESS early to prevent file system access to real config directories
-    // This must be done before any code accesses zzz_env_vars::ZZZ_STATELESS
+    // This must be done before any code accesses db::ZZZ_STATELESS
     // SAFETY: We're at the start of main(), before any threads are spawned
     unsafe {
         std::env::set_var("ZZZ_STATELESS", "1");

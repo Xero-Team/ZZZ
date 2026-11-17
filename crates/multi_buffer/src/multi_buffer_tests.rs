@@ -3383,7 +3383,7 @@ impl ReferenceMultibuffer {
                             remaining_newlines == usize::from(!is_last_region)
                         };
                         if region_ix < regions.len() - 1
-                            && !text[ix..].contains("\n")
+                            && !text[ix..].contains('\n')
                             && (region.status == Some(DiffHunkStatus::added_none())
                                 || region.status.is_some_and(|s| s.is_deleted()))
                             && regions[region_ix + 1].excerpt.as_ref().map(|e| &e.range)
@@ -4213,7 +4213,7 @@ fn check_multibuffer_edits(
             .text_for_range(edit.new.start..edit.new.end)
             .collect();
         text.replace_range(
-            (edit.new.start.0..edit.new.start.0 + (edit.old.end.0 - edit.old.start.0)).clone(),
+            edit.new.start.0..edit.new.start.0 + (edit.old.end.0 - edit.old.start.0),
             &new_text,
         );
         pretty_assertions::assert_eq!(
@@ -4706,12 +4706,11 @@ fn format_diff(
             let expand = info
                 .expand_info
                 .as_ref()
-                .map(|expand_info| match expand_info.direction {
+                .map_or_default(|expand_info| match expand_info.direction {
                     ExpandExcerptDirection::Up => " [↑]",
                     ExpandExcerptDirection::Down => " [↓]",
                     ExpandExcerptDirection::UpAndDown => " [↕]",
-                })
-                .unwrap_or_default();
+                });
 
             format!("{boundary_row}{marker}{line}{expand}")
         })
@@ -5442,50 +5441,50 @@ fn test_random_chunk_bitmaps_with_diffs(cx: &mut App, mut rng: StdRng) {
     multibuffer.update(cx, |multibuffer, cx| {
         let snapshot = multibuffer.snapshot(cx);
         for buffer_id in snapshot.all_buffer_ids() {
-            if rng.random_bool(0.7) {
-                if let Some(buffer_handle) = multibuffer.buffer(buffer_id) {
-                    let buffer_text = buffer_handle.read(cx).text();
-                    let mut base_text = String::new();
+            if rng.random_bool(0.7)
+                && let Some(buffer_handle) = multibuffer.buffer(buffer_id)
+            {
+                let buffer_text = buffer_handle.read(cx).text();
+                let mut base_text = String::new();
 
-                    for line in buffer_text.lines() {
-                        if rng.random_bool(0.3) {
-                            continue;
-                        }
-                        if rng.random_bool(0.3) {
-                            let line_len = rng.random_range(0..50);
-                            let modified_line = RandomCharIter::new(&mut rng)
-                                .take(line_len)
-                                .collect::<String>();
-                            base_text.push_str(&modified_line);
-                            base_text.push('\n');
-                        } else {
-                            base_text.push_str(line);
-                            base_text.push('\n');
-                        }
+                for line in buffer_text.lines() {
+                    if rng.random_bool(0.3) {
+                        continue;
                     }
-
-                    if rng.random_bool(0.5) {
-                        let extra_lines = rng.random_range(1..5);
-                        for _ in 0..extra_lines {
-                            let line_len = rng.random_range(0..50);
-                            let extra_line = RandomCharIter::new(&mut rng)
-                                .take(line_len)
-                                .collect::<String>();
-                            base_text.push_str(&extra_line);
-                            base_text.push('\n');
-                        }
+                    if rng.random_bool(0.3) {
+                        let line_len = rng.random_range(0..50);
+                        let modified_line = RandomCharIter::new(&mut rng)
+                            .take(line_len)
+                            .collect::<String>();
+                        base_text.push_str(&modified_line);
+                        base_text.push('\n');
+                    } else {
+                        base_text.push_str(line);
+                        base_text.push('\n');
                     }
-
-                    let diff = cx.new(|cx| {
-                        BufferDiff::new_with_base_text(
-                            &base_text,
-                            &buffer_handle.read(cx).text_snapshot(),
-                            cx,
-                        )
-                    });
-                    diffs.push(diff.clone());
-                    multibuffer.add_diff(diff, cx);
                 }
+
+                if rng.random_bool(0.5) {
+                    let extra_lines = rng.random_range(1..5);
+                    for _ in 0..extra_lines {
+                        let line_len = rng.random_range(0..50);
+                        let extra_line = RandomCharIter::new(&mut rng)
+                            .take(line_len)
+                            .collect::<String>();
+                        base_text.push_str(&extra_line);
+                        base_text.push('\n');
+                    }
+                }
+
+                let diff = cx.new(|cx| {
+                    BufferDiff::new_with_base_text(
+                        &base_text,
+                        &buffer_handle.read(cx).text_snapshot(),
+                        cx,
+                    )
+                });
+                diffs.push(diff.clone());
+                multibuffer.add_diff(diff, cx);
             }
         }
     });
@@ -5504,17 +5503,11 @@ fn test_random_chunk_bitmaps_with_diffs(cx: &mut App, mut rng: StdRng) {
                 }
 
                 let diff_size = rng.random_range(5..1000);
-                let mut start = rng.random_range(0..snapshot.len().0);
+                let start = rng.random_range(0..snapshot.len().0);
+                let start = text.floor_char_boundary(start);
 
-                while !text.is_char_boundary(start) {
-                    start = start.saturating_sub(1);
-                }
-
-                let mut end = rng.random_range(start..snapshot.len().0.min(start + diff_size));
-
-                while !text.is_char_boundary(end) {
-                    end = end.saturating_add(1);
-                }
+                let end = rng.random_range(start..snapshot.len().0.min(start + diff_size));
+                let end = text.ceil_char_boundary(end);
                 let start_anchor = snapshot.anchor_after(MultiBufferOffset(start));
                 let end_anchor = snapshot.anchor_before(MultiBufferOffset(end));
                 ranges.push(start_anchor..end_anchor);

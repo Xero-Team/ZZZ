@@ -798,10 +798,10 @@ impl CompletionsMenu {
                     let documentation = &completion.documentation;
 
                     let mut len = completion.label.text.chars().count();
-                    if let Some(CompletionDocumentation::SingleLine(text)) = documentation {
-                        if show_completion_documentation {
-                            len += text.chars().count();
-                        }
+                    if let Some(CompletionDocumentation::SingleLine(text)) = documentation
+                        && show_completion_documentation
+                    {
+                        len += text.chars().count();
                     }
 
                     len
@@ -1291,7 +1291,8 @@ impl CompletionsMenu {
                 .retain(|string_match| !completions[string_match.candidate_id].is_snippet_kind());
         }
 
-        matches.sort_unstable_by_key(|string_match| {
+        // The key allocates, so build it once per match.
+        matches.sort_by_cached_key(|string_match| {
             let completion = &completions[string_match.candidate_id];
 
             let sort_text = match &completion.source {
@@ -1706,8 +1707,8 @@ impl CodeActionsItem {
 
     pub fn menu_label(&self) -> String {
         match self {
-            Self::CodeAction { action, .. } => action.lsp_action.title().replace("\n", ""),
-            Self::Task(_, task) => task.resolved_label.replace("\n", ""),
+            Self::CodeAction { action, .. } => action.lsp_action.title().replace('\n', ""),
+            Self::Task(_, task) => task.resolved_label.replace('\n', ""),
             Self::DebugScenario(scenario) => format!("debug: {}", scenario.label),
         }
     }

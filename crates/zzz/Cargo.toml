@@ -87,6 +87,7 @@ ui_component_registry.workspace = true
 component_preview.workspace = true
 crashes.workspace = true
 csv_preview.workspace = true
+office_preview.workspace = true
 dap_adapters.workspace = true
 database_core.workspace = true
 database_ui.workspace = true
@@ -96,6 +97,7 @@ debugger_tools.workspace = true
 debugger_ui.workspace = true
 dev_container.workspace = true
 diagnostics.workspace = true
+docker.workspace = true
 docs.workspace = true
 editor.workspace = true
 encoding_selector.workspace = true
@@ -130,6 +132,7 @@ image_viewer.workspace = true
 audio_viewer = { workspace = true, features = ["accessibility"] }
 video_viewer.workspace = true
 i18n.workspace = true
+idea_import.workspace = true
 input_latency_ui.workspace = true
 inspector_ui.workspace = true
 install_cli.workspace = true
@@ -149,6 +152,7 @@ markdown.workspace = true
 markdown_preview.workspace = true
 menu.workspace = true
 migrator.workspace = true
+mobile_dev.workspace = true
 miniprofiler_ui.workspace = true
 mimalloc = { version = "0.1", optional = true }
 node_runtime.workspace = true
@@ -160,10 +164,12 @@ parking_lot.workspace = true
 paths.workspace = true
 pdf_viewer.workspace = true
 picker.workspace = true
+pr_ui.workspace = true
 profiling.workspace = true
 project.workspace = true
 project_panel.workspace = true
 project_symbols.workspace = true
+project_bookmarks.workspace = true
 prompt_store.workspace = true
 recent_files.workspace = true
 recent_projects.workspace = true
@@ -173,6 +179,7 @@ repl.workspace = true
 reqwest_client.workspace = true
 rope.workspace = true
 search.workspace = true
+search_everywhere.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 session.workspace = true
@@ -194,13 +201,13 @@ terminal_mode.workspace = true
 terminal_view.workspace = true
 theme.workspace = true
 theme_settings.workspace = true
-theme_extension.workspace = true
 theme_selector.workspace = true
 time.workspace = true
 title_bar.workspace = true
 ztracing.workspace = true
 tracing.workspace = true
 toolchain_selector.workspace = true
+toolbox.workspace = true
 typst_preview.workspace = true
 ui.workspace = true
 ui_prompt.workspace = true
@@ -213,8 +220,8 @@ vim_mode_setting.workspace = true
 watch.workspace = true
 which_key.workspace = true
 workspace.workspace = true
+workspace_modes.workspace = true
 zzz_actions.workspace = true
-zzz_env_vars.workspace = true
 zlog.workspace = true
 zlog_settings.workspace = true
 
@@ -284,72 +291,88 @@ icon = ["resources/app-icon-dev@2x.png", "resources/app-icon-dev.png"]
 identifier = "dev.zzz.ZZZ-Dev"
 name = "ZZZ Dev"
 category = "Developer Tool"
-osx_minimum_system_version = "10.15.7"
-osx_info_plist_exts = ["resources/info/*"]
-osx_url_schemes = ["zzz"]
+
+[package.metadata.bundle.osx]
+minimum_system_version = "10.15.7"
+info_plist_exts = ["resources/info/*"]
+url_schemes = ["zzz"]
 
 [package.metadata.bundle.bin.zzz]
 icon = ["resources/app-icon-dev@2x.png", "resources/app-icon-dev.png"]
 identifier = "dev.zzz.ZZZ-Dev"
 name = "ZZZ Dev"
 category = "Developer Tool"
-osx_minimum_system_version = "10.15.7"
-osx_info_plist_exts = ["resources/info/*"]
-osx_url_schemes = ["zzz"]
+
+[package.metadata.bundle.bin.zzz.osx]
+minimum_system_version = "10.15.7"
+info_plist_exts = ["resources/info/*"]
+url_schemes = ["zzz"]
 
 [package.metadata.bundle-nightly]
 icon = ["resources/app-icon-nightly@2x.png", "resources/app-icon-nightly.png"]
 identifier = "dev.zzz.ZZZ-Nightly"
 name = "ZZZ Nightly"
 category = "Developer Tool"
-osx_minimum_system_version = "10.15.7"
-osx_info_plist_exts = ["resources/info/*"]
-osx_url_schemes = ["zzz"]
+
+[package.metadata.bundle-nightly.osx]
+minimum_system_version = "10.15.7"
+info_plist_exts = ["resources/info/*"]
+url_schemes = ["zzz"]
 
 [package.metadata.bundle-nightly.bin.zzz]
 icon = ["resources/app-icon-nightly@2x.png", "resources/app-icon-nightly.png"]
 identifier = "dev.zzz.ZZZ-Nightly"
 name = "ZZZ Nightly"
 category = "Developer Tool"
-osx_minimum_system_version = "10.15.7"
-osx_info_plist_exts = ["resources/info/*"]
-osx_url_schemes = ["zzz"]
+
+[package.metadata.bundle-nightly.bin.zzz.osx]
+minimum_system_version = "10.15.7"
+info_plist_exts = ["resources/info/*"]
+url_schemes = ["zzz"]
 
 [package.metadata.bundle-preview]
 icon = ["resources/app-icon-preview@2x.png", "resources/app-icon-preview.png"]
 identifier = "dev.zzz.ZZZ-Preview"
 name = "ZZZ Preview"
 category = "Developer Tool"
-osx_minimum_system_version = "10.15.7"
-osx_info_plist_exts = ["resources/info/*"]
-osx_url_schemes = ["zzz"]
+
+[package.metadata.bundle-preview.osx]
+minimum_system_version = "10.15.7"
+info_plist_exts = ["resources/info/*"]
+url_schemes = ["zzz"]
 
 [package.metadata.bundle-preview.bin.zzz]
 icon = ["resources/app-icon-preview@2x.png", "resources/app-icon-preview.png"]
 identifier = "dev.zzz.ZZZ-Preview"
 name = "ZZZ Preview"
 category = "Developer Tool"
-osx_minimum_system_version = "10.15.7"
-osx_info_plist_exts = ["resources/info/*"]
-osx_url_schemes = ["zzz"]
+
+[package.metadata.bundle-preview.bin.zzz.osx]
+minimum_system_version = "10.15.7"
+info_plist_exts = ["resources/info/*"]
+url_schemes = ["zzz"]
 
 [package.metadata.bundle-stable]
 icon = ["resources/app-icon@2x.png", "resources/app-icon.png"]
 identifier = "dev.zzz.ZZZ"
 name = "ZZZ"
 category = "Developer Tool"
-osx_minimum_system_version = "10.15.7"
-osx_info_plist_exts = ["resources/info/*"]
-osx_url_schemes = ["zzz"]
+
+[package.metadata.bundle-stable.osx]
+minimum_system_version = "10.15.7"
+info_plist_exts = ["resources/info/*"]
+url_schemes = ["zzz"]
 
 [package.metadata.bundle-stable.bin.zzz]
 icon = ["resources/app-icon@2x.png", "resources/app-icon.png"]
 identifier = "dev.zzz.ZZZ"
 name = "ZZZ"
 category = "Developer Tool"
-osx_minimum_system_version = "10.15.7"
-osx_info_plist_exts = ["resources/info/*"]
-osx_url_schemes = ["zzz"]
+
+[package.metadata.bundle-stable.bin.zzz.osx]
+minimum_system_version = "10.15.7"
+info_plist_exts = ["resources/info/*"]
+url_schemes = ["zzz"]
 
 # Linux distribution package metadata. The bundle script stages generated
 # channel-specific desktop assets in target/release/package-assets and invokes

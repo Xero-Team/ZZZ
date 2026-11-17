@@ -1,5 +1,9 @@
 mod native_kernel;
-use std::{fmt::Debug, future::Future, path::PathBuf};
+use std::{
+    fmt::{self, Debug},
+    future::Future,
+    path::PathBuf,
+};
 
 use futures::{channel::mpsc, future::Shared};
 use gpui::{App, Entity, Task, Window};
@@ -847,17 +851,18 @@ impl KernelStatus {
     }
 }
 
-impl ToString for KernelStatus {
-    fn to_string(&self) -> String {
-        match self {
-            KernelStatus::Idle => "Idle".to_owned(),
-            KernelStatus::Busy => "Busy".to_owned(),
-            KernelStatus::Starting => "Starting".to_owned(),
-            KernelStatus::Error => "Error".to_owned(),
-            KernelStatus::ShuttingDown => "Shutting Down".to_owned(),
-            KernelStatus::Shutdown => "Shutdown".to_owned(),
-            KernelStatus::Restarting => "Restarting".to_owned(),
-        }
+impl fmt::Display for KernelStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let status = match self {
+            KernelStatus::Idle => "Idle",
+            KernelStatus::Busy => "Busy",
+            KernelStatus::Starting => "Starting",
+            KernelStatus::Error => "Error",
+            KernelStatus::ShuttingDown => "Shutting Down",
+            KernelStatus::Shutdown => "Shutdown",
+            KernelStatus::Restarting => "Restarting",
+        };
+        f.write_str(status)
     }
 }
 

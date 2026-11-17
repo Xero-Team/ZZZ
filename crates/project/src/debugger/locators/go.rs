@@ -117,7 +117,7 @@ impl DapLocator for GoLocator {
                         // HACK: tasks assume that they are run in a shell context,
                         // so the -run regex has escaped specials. Delve correctly
                         // handles escaping, so we undo that here.
-                        if let Some((left, right)) = arg.split_once("/")
+                        if let Some((left, right)) = arg.split_once('/')
                             && left.starts_with("\\^")
                             && left.ends_with("\\$")
                             && right.starts_with("\\^")
@@ -203,8 +203,8 @@ impl DapLocator for GoLocator {
                     } else if next_arg_is_build {
                         build_flags.push(arg.clone());
                         next_arg_is_build = false;
-                    } else if arg.starts_with("-") {
-                        if let Some(has_arg) = is_build_flag(arg.trim_start_matches("-")) {
+                    } else if arg.starts_with('-') {
+                        if let Some(has_arg) = is_build_flag(arg.trim_start_matches('-')) {
                             next_arg_is_build = has_arg;
                         }
                         build_flags.push(arg.clone())

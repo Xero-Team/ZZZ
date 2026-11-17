@@ -5,7 +5,7 @@ use crate::{PROJECT, SettingField, SettingItem, SettingsPageItem, SettingsWindow
 
 pub(crate) fn render_mcp_servers_page(
     settings_window: &SettingsWindow,
-    _scroll_handle: &ScrollHandle,
+    scroll_handle: &ScrollHandle,
     window: &mut Window,
     cx: &mut Context<SettingsWindow>,
 ) -> AnyElement {
@@ -34,7 +34,7 @@ pub(crate) fn render_mcp_servers_page(
         .size_full()
         .pt_2p5()
         .pb_16()
-        .track_scroll(_scroll_handle)
+        .track_scroll(scroll_handle)
         .overflow_y_scroll()
         .child(item.render(settings_window, 0, false, false, window, cx))
         .into_any_element()

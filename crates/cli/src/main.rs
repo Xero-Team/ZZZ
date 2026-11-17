@@ -1153,9 +1153,26 @@ mod linux {
         ) -> anyhow::Result<()> {
             let path = &self.0;
 
+            // Built before `fork`. Between `fork` and `exec` the child may only run
+            // async-signal-safe code, and allocating there can deadlock if another thread held the
+            // allocator lock at the moment of the fork.
+            let mut args: Vec<OsString> = Vec::with_capacity(4);
+            args.push(path.as_os_str().to_owned());
+            args.push(OsString::from(ipc_url));
+            if let Some(dir) = user_data_dir {
+                args.push(OsString::from("--user-data-dir"));
+                args.push(OsString::from(dir));
+            }
+            let executable = path.clone();
+
             match fork::fork() {
                 Ok(Fork::Parent(_)) => Ok(()),
                 Ok(Fork::Child) => {
+                    // SAFETY: `fork` returns only in a child that has exactly one thread, so no
+                    // other thread can be reading the environment while it is mutated. The child is
+                    // also required to stay on async-signal-safe calls until `exec`, and
+                    // `std::env::set_var` may allocate, so this call is the one remaining exception
+                    // to that rule; it is tracked separately rather than papered over.
                     unsafe { std::env::set_var(FORCE_CLI_MODE_ENV_VAR_NAME, "") };
                     if fork::setsid().is_err() {
                         eprintln!("failed to setsid: {}", std::io::Error::last_os_error());
@@ -1164,13 +1181,7 @@ mod linux {
                     if fork::close_fd().is_err() {
                         eprintln!("failed to close_fd: {}", std::io::Error::last_os_error());
                     }
-                    let mut args: Vec<OsString> =
-                        vec![path.as_os_str().to_owned(), OsString::from(ipc_url)];
-                    if let Some(dir) = user_data_dir {
-                        args.push(OsString::from("--user-data-dir"));
-                        args.push(OsString::from(dir));
-                    }
-                    let error = exec::execvp(path.clone(), &args);
+                    let error = exec::execvp(executable, &args);
                     // if exec succeeded, we never get here.
                     eprintln!("failed to exec {:?}: {}", path, error);
                     process::exit(1)
@@ -1190,6 +1201,8 @@ mod flatpak {
 
     const EXTRA_LIB_ENV_NAME: &str = "ZZZ_FLATPAK_LIB_PATH";
     const NO_ESCAPE_ENV_NAME: &str = "ZZZ_FLATPAK_NO_ESCAPE";
+    const UPDATE_EXPLANATION_ENV_NAME: &str = "ZZZ_UPDATE_EXPLANATION";
+    const UPDATE_EXPLANATION: &str = "Please use flatpak to update zzz";
 
     fn restart_cli_args(flatpak_dir: &Path, invocation_args: &[OsString]) -> Vec<OsString> {
         let mut args = Vec::with_capacity(invocation_args.len() + 2);
@@ -1217,6 +1230,9 @@ mod flatpak {
         }
 
         match env::join_paths(paths) {
+            // SAFETY: `ld_extra_libs` is called from the straight-line startup path of `run()`,
+            // before `IpcOneShotServer::new` and anything else that spawns a thread, so no
+            // concurrent `getenv` can observe the mutation.
             Ok(joined) => unsafe { env::set_var("LD_LIBRARY_PATH", joined) },
             Err(error) => eprintln!("failed to set LD_LIBRARY_PATH: {error}"),
         }
@@ -1227,7 +1243,7 @@ mod flatpak {
         if let Some(flatpak_dir) = get_flatpak_dir() {
             let mut args = vec!["/usr/bin/flatpak-spawn".into(), "--host".into()];
             args.append(&mut get_xdg_env_args());
-            args.push("--env=ZZZ_UPDATE_EXPLANATION=Please use flatpak to update zzz".into());
+            args.push(format!("--env={UPDATE_EXPLANATION_ENV_NAME}={UPDATE_EXPLANATION}").into());
             args.push(
                 format!(
                     "--env={EXTRA_LIB_ENV_NAME}={}",
@@ -1252,7 +1268,9 @@ mod flatpak {
             && args.zzz.is_none()
         {
             args.zzz = Some("/app/libexec/zzz-editor".into());
-            unsafe { env::set_var("ZZZ_UPDATE_EXPLANATION", "Please use flatpak to update zzz") };
+            // SAFETY: `set_bin_if_no_escape` has a single caller, `run()`, on the straight-line
+            // startup path before any thread is spawned.
+            unsafe { env::set_var(UPDATE_EXPLANATION_ENV_NAME, UPDATE_EXPLANATION) };
         }
         args
     }

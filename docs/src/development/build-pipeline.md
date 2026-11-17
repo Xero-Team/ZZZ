@@ -211,13 +211,13 @@ cargo xtask build --container never      # accept the host's floor
 
 The image is defined by `Dockerfile-toolchain`. Its tag is a hash of the files
 that define the toolchain, so editing the Dockerfile, `script/linux`,
-`script/install-cmake` (or the release helper it sources), or
-`rust-toolchain.toml` produces a new tag instead of silently reusing a stale
-image. The FreeBSD sysroots, clang/lld wrappers, and `rust-std` targets are
-part of that Dockerfile, so a change to the FreeBSD toolchain produces a new
-tag too. `cargo xtask doctor` prints the tag and the exact build command when
-the image is missing; the plan builds it on demand before the first task that
-needs it.
+`script/install-cmake` (or the release helper it sources),
+`script/freebsd-packages.py`, or `rust-toolchain.toml` produces a new tag
+instead of silently reusing a stale image. The FreeBSD sysroots, GUI package
+closure, clang/lld wrappers, and `rust-std` targets are part of that Dockerfile
+and its helper, so a change to the FreeBSD toolchain produces a new tag too.
+`cargo xtask doctor` prints the tag and the exact build command when the image
+is missing; the plan builds it on demand before the first task that needs it.
 
 The base image is pinned by digest, so a rebuild does not pick up a newer Ubuntu
 point release. `ZZZ_BASE_IMAGE=debian:bookworm` swaps the base for a one-off
@@ -248,7 +248,7 @@ writes them as root instead, and removing `target/container` then needs `sudo`.
 Both work; only the file ownership differs.
 
 The image covers the Linux build, the macOS cross build (zig, `cargo-zigbuild`,
-Zed's `cargo-bundle`, `hfsprogs`, libdmg-hfsplus, and a macOS SDK), and PGO
+`cargo-bundle`, `hfsprogs`, libdmg-hfsplus, and a macOS SDK), and PGO
 (llvm-profdata, Xvfb, a software rasterizer). The image pins SDK 14.5 so the
 image tag keeps describing all of its inputs. Cross-building outside the image
 goes through `script/ensure-macos-sdk`, which resolves the newest release
@@ -520,11 +520,11 @@ geometries, and quits with the quit command.
 The script uses `--user-data-dir` and opens the folder rather than the file
 itself, so the session always covers a scanned worktree and the file finder
 instead of a one-file workspace. It also sets `ZZZ_ALLOW_EMULATED_GPU=1`:
-without a GPU ZZZ shows an "Unsupported GPU" prompt, and that prompt eats the
-keystrokes that follow. The trainer does not trust the input either: it saves
-the typed text, greps the file for a marker, and retries or fails when the
-editor dropped a line. A session that types into a start screen still writes a
-profile, just a useless one.
+without a GPU ZZZ shows a notice about the software adapter it renders on, and
+that notice does not belong in a profile of the editor's own work. The trainer
+does not trust the input either: it saves the typed text, greps the file for a
+marker, and retries or fails when the editor dropped a line. A session that
+types into a start screen still writes a profile, just a useless one.
 
 The shutdown is part of the workload. LLVM flushes the profile from an exit
 handler, so the editor has to exit through its own quit action; a killed process

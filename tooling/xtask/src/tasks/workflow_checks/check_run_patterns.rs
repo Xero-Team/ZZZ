@@ -11,7 +11,7 @@ use std::{
 };
 
 static GITHUB_INPUT_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"\$\{\{[[:blank:]]*([[:alnum:]]|[[:punct:]])+?[[:blank:]]*\}\}"#)
+    Regex::new(r#"\$\{\{[[:blank:]]*[[:alnum:][:punct:]]+?[[:blank:]]*\}\}"#)
         .expect("Should compile")
 });
 
@@ -75,8 +75,7 @@ impl WorkflowValidationError {
 
                 let line_start = raw_content[initial_offset..]
                     .find(line.as_str())
-                    .map(|offset| offset + initial_offset)
-                    .unwrap_or_default();
+                    .map_or_default(|offset| offset + initial_offset);
 
                 let pattern_start = line_start + pattern_range.start;
                 let pattern_end = pattern_start + pattern_range.len();

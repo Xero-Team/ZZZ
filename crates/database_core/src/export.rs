@@ -65,8 +65,7 @@ fn export_csv_rows(result_set: &ResultSet, order: &[usize]) -> String {
             .map(|column_index| {
                 result_set
                     .value_at(*row_index, column_index)
-                    .map(|value| csv_escape(&value.to_export_text()))
-                    .unwrap_or_default()
+                    .map_or_default(|value| csv_escape(&value.to_export_text()))
             })
             .collect();
         output.push_str(&cells.join(","));
@@ -222,8 +221,7 @@ fn export_schema_json(schemas: &[TableSchema]) -> String {
                 "primary_key": schema
                     .primary_key
                     .as_ref()
-                    .map(|primary_key| primary_key.columns.clone())
-                    .unwrap_or_default(),
+                    .map_or_default(|primary_key| primary_key.columns.clone()),
                 "foreign_keys": foreign_keys,
             })
         })

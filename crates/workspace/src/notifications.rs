@@ -122,24 +122,24 @@ impl Workspace {
                     .notifications
                     .dismiss_timeout_ms;
 
-                if is_prompt_without_actions {
-                    if let Some(dismiss_duration_ms) = dismiss_timeout_ms.filter(|&ms| ms > 0) {
-                        let task = cx.spawn({
-                            let id = id.clone();
-                            async move |this, cx| {
-                                cx.background_executor()
-                                    .timer(Duration::from_millis(dismiss_duration_ms))
-                                    .await;
-                                this.update(cx, |workspace, cx| {
-                                    workspace.dismiss_notification(&id, cx);
-                                })
-                                .log_err();
-                            }
-                        });
-                        prompt.update(cx, |prompt, _| {
-                            prompt.dismiss_task = Some(task);
-                        });
-                    }
+                if is_prompt_without_actions
+                    && let Some(dismiss_duration_ms) = dismiss_timeout_ms.filter(|&ms| ms > 0)
+                {
+                    let task = cx.spawn({
+                        let id = id.clone();
+                        async move |this, cx| {
+                            cx.background_executor()
+                                .timer(Duration::from_millis(dismiss_duration_ms))
+                                .await;
+                            this.update(cx, |workspace, cx| {
+                                workspace.dismiss_notification(&id, cx);
+                            })
+                            .log_err();
+                        }
+                    });
+                    prompt.update(cx, |prompt, _| {
+                        prompt.dismiss_task = Some(task);
+                    });
                 }
             }
             notification.into()
@@ -983,7 +983,7 @@ pub mod simple_message_notification {
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     if let Some(on_click) = this.primary_on_click.as_ref() {
                                         (on_click)(window, cx)
-                                    };
+                                    }
                                     this.dismiss(cx)
                                 }));
 
@@ -1003,7 +1003,7 @@ pub mod simple_message_notification {
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     if let Some(on_click) = this.secondary_on_click.as_ref() {
                                         (on_click)(window, cx)
-                                    };
+                                    }
                                     this.dismiss(cx)
                                 }));
 

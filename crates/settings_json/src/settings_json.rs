@@ -323,7 +323,7 @@ fn construct_json_value(
             new_value = serde_json::json!({ key.as_ref().to_owned(): new_value });
         }
     }
-    return new_value;
+    new_value
 }
 
 fn parse_index_key(index_key: &str) -> Option<usize> {
@@ -394,7 +394,7 @@ fn handle_possible_array_value(
             replace_value.remove(idx);
         }
     }
-    return Some((replace_range, replace_value));
+    Some((replace_range, replace_value))
 }
 
 const TS_DOCUMENT_KIND: &str = "document";
@@ -515,7 +515,7 @@ pub fn replace_top_level_array_value_in_json_text(
             while let Some(idx) = replace_value.find("\n ") {
                 replace_value.remove(idx + 1);
             }
-            while let Some(idx) = replace_value.find("\n") {
+            while let Some(idx) = replace_value.find('\n') {
                 replace_value.replace_range(idx..=idx, " ");
             }
         }
@@ -773,7 +773,9 @@ pub fn to_pretty_json(
 
 pub fn parse_json_with_comments<T: DeserializeOwned>(content: &str) -> Result<T> {
     let mut deserializer = serde_json_lenient::Deserializer::from_str(content);
-    Ok(serde_path_to_error::deserialize(&mut deserializer)?)
+    let value = serde_path_to_error::deserialize(&mut deserializer)?;
+    deserializer.end()?;
+    Ok(value)
 }
 
 #[cfg(test)]
@@ -2734,5 +2736,20 @@ mod tests {
             find_value_range_in_json_text(r#"{"a": 1}"#, &["a", "b"]),
             None
         );
+    }
+
+    #[test]
+    fn test_parse_json_with_comments_rejects_trailing_content() {
+        let valid = r#"
+            // comment
+            [{"label": "a"}]
+        "#;
+        parse_json_with_comments::<Vec<Value>>(valid).unwrap();
+
+        let trailing = r#"
+            [{"label": "a"}]
+            [{"label": "b"}]
+        "#;
+        parse_json_with_comments::<Vec<Value>>(trailing).unwrap_err();
     }
 }

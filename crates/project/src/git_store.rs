@@ -166,10 +166,15 @@ pub struct GitStore {
     diffs: HashMap<BufferId, Entity<BufferGitState>>,
     shared_diffs: HashMap<proto::PeerId, HashMap<BufferId, SharedDiffs>>,
     blob_read_limiter: Arc<Semaphore>,
-    _subscriptions: Vec<Subscription>,
+    subscriptions: Vec<Subscription>,
 }
 
 pub const MAX_CONCURRENT_BLOB_READS: usize = 16;
+
+/// Git matches every pathspec against every index entry, so the cost of a
+/// scoped `git status`/`git diff` grows with the number of paths. On large
+/// repositories a scan of the whole repository is cheaper than this many paths.
+const MAX_SCOPED_STATUS_PATHS: usize = 64;
 
 #[derive(Default)]
 struct SharedDiffs {
@@ -444,7 +449,7 @@ pub struct Repository {
     // and that should be examined during the next status scan.
     paths_needing_status_update: Vec<Vec<RepoPath>>,
     job_sender: mpsc::UnboundedSender<GitJob>,
-    _worker_task: Task<()>,
+    worker_task: Task<()>,
     active_jobs: HashMap<JobId, JobInfo>,
     job_debug_queue: job_debug_queue::GitJobDebugQueue,
     pending_ops: SumTree<PendingOps>,
@@ -680,7 +685,7 @@ impl GitStore {
         cx: &mut Context<Self>,
     ) -> Self {
         let fs = native_execution_context.file_system().clone();
-        let _fs_watches = if fs.is_fake() {
+        let fs_watches = if fs.is_fake() {
             Box::new([])
         } else {
             [
@@ -746,7 +751,7 @@ impl GitStore {
                 next_repository_id: Arc::new(AtomicU64::new(1)),
                 downstream: None,
                 project_environment: environment,
-                _fs_watches,
+                _fs_watches: fs_watches,
                 native_execution_context,
             },
             cx,
@@ -778,13 +783,13 @@ impl GitStore {
         state: GitStoreState,
         cx: &mut Context<Self>,
     ) -> Self {
-        let mut _subscriptions = vec![
+        let mut subscriptions = vec![
             cx.subscribe(&worktree_store, Self::on_worktree_store_event),
             cx.subscribe(&buffer_store, Self::on_buffer_store_event),
         ];
 
         if let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx) {
-            _subscriptions.push(cx.subscribe(&trusted_worktrees, Self::on_trusted_worktrees_event));
+            subscriptions.push(cx.subscribe(&trusted_worktrees, Self::on_trusted_worktrees_event));
         }
 
         GitStore {
@@ -794,7 +799,7 @@ impl GitStore {
             repositories: HashMap::default(),
             worktree_ids: HashMap::default(),
             active_repo_id: None,
-            _subscriptions,
+            subscriptions,
             loading_diffs: HashMap::default(),
             shared_diffs: HashMap::default(),
             diffs: HashMap::default(),
@@ -1171,10 +1176,10 @@ impl GitStore {
                             .or_insert_with(|| cx.new(|_| BufferGitState::new(git_store)));
 
                         diff_state.update(cx, |state, _| {
-                            if let Some(oid) = oid {
-                                if let Some(content) = content {
-                                    state.oid_texts.insert(oid, content);
-                                }
+                            if let Some(oid) = oid
+                                && let Some(content) = content
+                            {
+                                state.oid_texts.insert(oid, content);
                             }
                             state.oid_diffs.insert(oid, buffer_diff.downgrade());
                         });
@@ -1388,7 +1393,7 @@ impl GitStore {
             .or_insert_with(|| cx.new(|_| BufferGitState::new(git_store)));
         let conflict_set = cx.new(|cx| ConflictSet::new(buffer_id, is_unmerged, cx));
 
-        self._subscriptions
+        self.subscriptions
             .push(cx.subscribe(&conflict_set, |_, _, _, cx| {
                 cx.emit(GitStoreEvent::ConflictsUpdated);
             }));
@@ -1728,31 +1733,39 @@ impl GitStore {
                         }
                     })
                     .collect();
-                let is_active_repo_removed = repos_without_worktree
-                    .iter()
-                    .any(|repo_id| self.active_repo_id == Some(*repo_id));
-
-                for repo_id in repos_without_worktree {
-                    self.repositories.remove(&repo_id);
-                    self.worktree_ids.remove(&repo_id);
+                for repo_id in &repos_without_worktree {
+                    self.repositories.remove(repo_id);
+                    self.worktree_ids.remove(repo_id);
                     if let Some(updates_tx) =
                         downstream.as_ref().map(|downstream| &downstream.updates_tx)
                     {
                         updates_tx
-                            .unbounded_send(DownstreamUpdate::RemoveRepository(repo_id))
+                            .unbounded_send(DownstreamUpdate::RemoveRepository(*repo_id))
                             .ok();
                     }
                 }
 
-                if is_active_repo_removed {
-                    self.select_fallback_active_repository(cx);
+                self.reconcile_active_repository(cx);
+                for repo_id in repos_without_worktree {
+                    cx.emit(GitStoreEvent::RepositoryRemoved(repo_id));
                 }
             }
             _ => {}
         }
     }
 
-    fn select_fallback_active_repository(&mut self, cx: &mut Context<Self>) {
+    /// Keep `active_repo_id` pointing at a repository that still exists. After
+    /// any removal the active repository may be gone; fall back to another
+    /// remaining repository so the Git panel keeps showing a repository instead
+    /// of "No Git Repositories". Emits only when the active selection actually
+    /// became invalid, preserving the current selection in every other case.
+    fn reconcile_active_repository(&mut self, cx: &mut Context<Self>) {
+        let active_is_gone = self
+            .active_repo_id
+            .is_some_and(|id| !self.repositories.contains_key(&id));
+        if !active_is_gone {
+            return;
+        }
         self.active_repo_id = self.repositories.keys().next().copied();
         cx.emit(GitStoreEvent::ActiveRepositoryChanged(self.active_repo_id));
     }
@@ -1922,9 +1935,9 @@ impl GitStore {
                     repo.schedule_scan(updates_tx.clone(), cx);
                     repo
                 });
-                self._subscriptions
+                self.subscriptions
                     .push(cx.subscribe(&repo, Self::on_repository_event));
-                self._subscriptions
+                self.subscriptions
                     .push(cx.subscribe(&repo, Self::on_jobs_updated));
                 self.repositories.insert(id, repo);
                 self.worktree_ids.insert(id, HashSet::from([worktree_id]));
@@ -1937,10 +1950,6 @@ impl GitStore {
         }
 
         for id in removed_ids {
-            if self.active_repo_id == Some(id) {
-                self.active_repo_id = None;
-                cx.emit(GitStoreEvent::ActiveRepositoryChanged(None));
-            }
             self.repositories.remove(&id);
             if let Some(updates_tx) = updates_tx.as_ref() {
                 updates_tx
@@ -1948,6 +1957,7 @@ impl GitStore {
                     .ok();
             }
         }
+        self.reconcile_active_repository(cx);
     }
 
     fn on_trusted_worktrees_event(
@@ -1969,16 +1979,15 @@ impl GitStore {
             if worktree_ids
                 .iter()
                 .any(|worktree_id| event_paths.contains(&PathTrust::Worktree(*worktree_id)))
+                && let Some(repo) = self.repositories.get(repo_id)
             {
-                if let Some(repo) = self.repositories.get(repo_id) {
-                    let repository_state = repo.read(cx).repository_state.clone();
-                    cx.background_spawn(async move {
-                        if let Ok(RepositoryState::Local(state)) = repository_state.await {
-                            state.backend.set_trusted(is_trusted);
-                        }
-                    })
-                    .detach();
-                }
+                let repository_state = repo.read(cx).repository_state.clone();
+                cx.background_spawn(async move {
+                    if let Ok(RepositoryState::Local(state)) = repository_state.await {
+                        state.backend.set_trusted(is_trusted);
+                    }
+                })
+                .detach();
             }
         }
     }
@@ -2154,6 +2163,23 @@ impl GitStore {
 
     pub fn repositories(&self) -> &HashMap<RepositoryId, Entity<Repository>> {
         &self.repositories
+    }
+
+    /// The label to show for each repository, disambiguated against every other
+    /// repository in the workspace. See [`disambiguated_display_names`].
+    pub fn display_names(&self, cx: &App) -> HashMap<RepositoryId, SharedString> {
+        let path_style = self.worktree_store.read(cx).path_style();
+        let (ids, work_directory_abs_paths): (Vec<_>, Vec<_>) = self
+            .repositories
+            .iter()
+            .map(|(id, repository)| (*id, repository.read(cx).work_directory_abs_path.clone()))
+            .unzip();
+        ids.into_iter()
+            .zip(disambiguated_display_names(
+                &work_directory_abs_paths,
+                path_style,
+            ))
+            .collect()
     }
 
     /// Returns the main repository working directory for the given worktree.
@@ -2364,7 +2390,7 @@ impl GitStore {
                 cx.emit(GitStoreEvent::RepositoryAdded);
                 repo
             });
-            this._subscriptions.extend(repo_subscription);
+            this.subscriptions.extend(repo_subscription);
 
             repo.update(cx, {
                 let update = update.clone();
@@ -2397,10 +2423,7 @@ impl GitStore {
                 update.project_id = project_id.to_proto();
                 client.send(update).log_err();
             }
-            if this.active_repo_id == Some(id) {
-                this.active_repo_id = this.repositories.keys().next().copied();
-                cx.emit(GitStoreEvent::ActiveRepositoryChanged(this.active_repo_id));
-            }
+            this.reconcile_active_repository(cx);
             cx.emit(GitStoreEvent::RepositoryRemoved(id));
         });
         Ok(())
@@ -2978,13 +3001,12 @@ impl GitStore {
                 let error = response.error.clone();
                 let is_loading = response.is_loading;
 
-                if is_loading {
-                    if let Some(graph_data) = repository
+                if is_loading
+                    && let Some(graph_data) = repository
                         .initial_graph_data
                         .get_mut(&(log_source.clone(), log_order))
-                    {
-                        graph_data.subscribers.push(subscriber_sender);
-                    }
+                {
+                    graph_data.subscribers.push(subscriber_sender);
                 }
 
                 (cached_commits, error, is_loading)
@@ -3082,16 +3104,15 @@ impl GitStore {
             while let Ok(sha) = request_rx.recv().await {
                 shas.push(sha.to_string());
 
-                if shas.len() >= CHUNK_SIZE {
-                    if response_tx
+                if shas.len() >= CHUNK_SIZE
+                    && response_tx
                         .send(Ok(proto::SearchCommitsResponse {
                             shas: mem::take(&mut shas),
                         }))
                         .await
                         .is_err()
-                    {
-                        return;
-                    }
+                {
+                    return;
                 }
             }
 
@@ -3910,6 +3931,14 @@ impl GitStore {
         coalesced
     }
 
+    fn limit_repo_paths(paths: Vec<RepoPath>) -> Vec<RepoPath> {
+        if paths.len() > MAX_SCOPED_STATUS_PATHS {
+            vec![RepoPath::from_rel_path(RelPath::empty())]
+        } else {
+            paths
+        }
+    }
+
     fn process_updated_entries(
         &self,
         worktree: &Entity<Worktree>,
@@ -3946,7 +3975,7 @@ impl GitStore {
                     let mut ix = entries.partition_point(|path| path < &*repo_path);
                     if ix == entries.len() {
                         return None;
-                    };
+                    }
 
                     let mut paths = Vec::new();
                     // All paths prefixed by a given repo will constitute a continuous range.
@@ -4207,10 +4236,8 @@ impl BufferGitState {
 
         self.oid_diffs.retain(|oid, weak| {
             let alive = weak.upgrade().is_some();
-            if !alive {
-                if let Some(oid) = oid {
-                    self.oid_texts.remove(oid);
-                }
+            if !alive && let Some(oid) = oid {
+                self.oid_texts.remove(oid);
             }
             alive
         });
@@ -4520,12 +4547,11 @@ impl RepositorySnapshot {
                             current_new_entry = new_statuses.next();
                         }
                         Ordering::Equal => {
-                            if new_entry.status != old_entry.status
-                                || new_entry.diff_stat != old_entry.diff_stat
+                            if (new_entry.status != old_entry.status
+                                || new_entry.diff_stat != old_entry.diff_stat)
+                                && let Some(entry) = new_entry.to_proto()
                             {
-                                if let Some(entry) = new_entry.to_proto() {
-                                    updated_statuses.push(entry);
-                                }
+                                updated_statuses.push(entry);
                             }
                             current_old_entry = old_statuses.next();
                             current_new_entry = new_statuses.next();
@@ -4725,6 +4751,67 @@ impl RepositorySnapshot {
     }
 }
 
+/// Computes the label to show for each of the given repositories: the leaf
+/// directory name on its own where that already identifies the repository, and
+/// as many parent components as it takes to tell colliding names apart where it
+/// does not.
+///
+/// A workspace that checks every project out into a directory of the same name
+/// would otherwise render as a list of identical rows — git submodules parked
+/// under `<service>/src`, or worktrees under `<project>/<worktree>`.
+pub fn disambiguated_display_names(
+    work_directory_abs_paths: &[Arc<Path>],
+    path_style: PathStyle,
+) -> Vec<SharedString> {
+    // Leaf first, so a depth counts back from the directory name. `Path` would split
+    // by the host's rules, but a remote project's paths follow the remote's style,
+    // so split on the project's own separators instead.
+    let components: Vec<Vec<String>> = work_directory_abs_paths
+        .iter()
+        .map(|path| {
+            let path = path.to_string_lossy();
+            let mut components: Vec<String> = path
+                .split(path_style.separators_ch())
+                // `.` and `..` are not names a label can be built from, and the
+                // `Path::components` this replaces dropped them too.
+                .filter(|component| !matches!(*component, "" | "." | ".."))
+                .map(str::to_owned)
+                .collect();
+            // A label is a suffix of the path, never the whole of it, which the root
+            // is already excluded from; drop a Windows drive prefix for the same
+            // reason, so a label is never capped at `C:`.
+            if path_style == PathStyle::Windows
+                && components
+                    .first()
+                    .is_some_and(|component| component.ends_with(':'))
+            {
+                components.remove(0);
+            }
+            components.reverse();
+            if components.is_empty() {
+                vec![path.into_owned()]
+            } else {
+                components
+            }
+        })
+        .collect();
+    let label = |components: &Vec<String>, detail: usize| -> String {
+        components
+            .iter()
+            .take(detail + 1)
+            .rev()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(path_style.primary_separator())
+    };
+    let details = util::disambiguate::compute_disambiguation_details(&components, label);
+    components
+        .iter()
+        .zip(details)
+        .map(|(components, detail)| label(components, detail).into())
+        .collect()
+}
+
 pub fn stash_to_proto(entry: &StashEntry) -> proto::StashEntry {
     proto::StashEntry {
         oid: entry.oid.as_bytes().to_vec(),
@@ -4851,7 +4938,7 @@ impl Repository {
             })
             .shared();
         self.job_sender.close_channel();
-        self._worker_task = Task::ready(());
+        self.worker_task = Task::ready(());
         self.active_jobs.clear();
         self.job_debug_queue
             .mark_unfinished_complete(job_debug_queue::CompletedJobStatus::Skipped);
@@ -4859,7 +4946,7 @@ impl Repository {
 
         let (job_sender, worker_task) = Repository::spawn_local_git_worker(state.clone(), cx);
         self.job_sender = job_sender;
-        self._worker_task = worker_task;
+        self.worker_task = worker_task;
         self.repository_state = cx
             .spawn(async move |_, _| {
                 let state = state.await?;
@@ -4933,7 +5020,7 @@ impl Repository {
             snapshot,
             pending_ops: Default::default(),
             repository_state: Task::ready(Err("not yet initialized".into())).shared(),
-            _worker_task: Task::ready(()),
+            worker_task: Task::ready(()),
             commit_message_buffer: None,
             askpass_delegates: Default::default(),
             paths_needing_status_update: Default::default(),
@@ -4992,7 +5079,7 @@ impl Repository {
             pending_ops: Default::default(),
             paths_needing_status_update: Default::default(),
             job_sender,
-            _worker_task: worker_task,
+            worker_task,
             repository_state,
             askpass_delegates: Default::default(),
             latest_askpass_id: 0,
@@ -5483,11 +5570,11 @@ impl Repository {
         &mut self,
         commit: String,
         reset_mode: ResetMode,
-        _cx: &mut App,
+        cx: &mut Context<Self>,
     ) -> oneshot::Receiver<Result<()>> {
         let id = self.id;
 
-        self.send_job("reset", None, move |git_repo, _| async move {
+        let receiver = self.send_job("reset", None, move |git_repo, _| async move {
             match git_repo {
                 RepositoryState::Local(LocalRepositoryState {
                     backend,
@@ -5510,7 +5597,23 @@ impl Repository {
                     Ok(())
                 }
             }
-        })
+        });
+
+        let scan_updates_tx =
+            self.git_store()
+                .and_then(|git_store| match &git_store.read(cx).state {
+                    GitStoreState::Local { downstream, .. } => Some(
+                        downstream
+                            .as_ref()
+                            .map(|downstream| downstream.updates_tx.clone()),
+                    ),
+                    _ => None,
+                });
+        if let Some(updates_tx) = scan_updates_tx {
+            self.schedule_scan(updates_tx, cx);
+        }
+
+        receiver
     }
 
     pub fn show(&mut self, commit: String) -> oneshot::Receiver<Result<CommitDetails>> {
@@ -5606,7 +5709,7 @@ impl Repository {
                 }
                 Ok(RepositoryState::Remote(_)) => {}
                 Err(_) => {}
-            };
+            }
         })
         .detach();
     }
@@ -5969,7 +6072,7 @@ impl Repository {
                     log::error!("failed to get repository state: {error}");
                     return;
                 }
-            };
+            }
         })
         .detach();
 
@@ -8708,14 +8811,15 @@ impl Repository {
 
                 let changed_path_statuses = cx
                     .background_spawn(async move {
-                        let changed_paths = GitStore::coalesce_repo_paths(
-                            changed_paths
-                                .into_iter()
-                                .flatten()
-                                .collect::<BTreeSet<_>>()
-                                .into_iter()
-                                .collect(),
-                        );
+                        let changed_paths =
+                            GitStore::limit_repo_paths(GitStore::coalesce_repo_paths(
+                                changed_paths
+                                    .into_iter()
+                                    .flatten()
+                                    .collect::<BTreeSet<_>>()
+                                    .into_iter()
+                                    .collect(),
+                            ));
                         let changed_paths_vec = changed_paths.iter().cloned().collect::<Vec<_>>();
 
                         let status_task = backend.status(&changed_paths_vec);
@@ -9481,11 +9585,7 @@ fn branch_to_proto(branch: &git::repository::Branch) -> proto::Branch {
 fn worktree_to_proto(worktree: &git::repository::Worktree) -> Result<proto::Worktree> {
     let path_v2 = native_path_to_proto(&worktree.path)?;
     Ok(proto::Worktree {
-        ref_name: worktree
-            .ref_name
-            .as_ref()
-            .map(|s| s.to_string())
-            .unwrap_or_default(),
+        ref_name: worktree.ref_name.as_ref().map_or_default(|s| s.to_string()),
         sha: worktree.sha.to_string(),
         is_main: worktree.is_main,
         is_bare: worktree.is_bare,
@@ -9625,6 +9725,102 @@ mod tests {
 
     fn repo_paths(paths: &[&str]) -> Vec<RepoPath> {
         paths.iter().map(repo_path).collect()
+    }
+
+    #[gpui::test]
+    async fn removing_active_repository_during_worktree_scan_keeps_another_active(
+        cx: &mut TestAppContext,
+    ) {
+        init_test(cx);
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(
+            "/project",
+            json!({
+                "a": { ".git": {}, "file.txt": "a" },
+                "b": { ".git": {}, "file.txt": "b" },
+            }),
+        )
+        .await;
+        let project = Project::test(fs.clone(), [Path::new("/project")], cx).await;
+        project
+            .update(cx, |project, cx| project.git_scans_complete(cx))
+            .await;
+        cx.run_until_parked();
+
+        let git_store = project.read_with(cx, |project, _| project.git_store().clone());
+        let (active_repo, remaining_repo, active_path, worktree_id) =
+            git_store.read_with(cx, |git_store, cx| {
+                let mut repos: Vec<_> = git_store.repositories().values().cloned().collect();
+                repos.sort_by_key(|repo| repo.read(cx).work_directory_abs_path.clone());
+                assert_eq!(repos.len(), 2, "expected one repository per .git directory");
+                let worktree_id = *git_store
+                    .worktree_ids
+                    .values()
+                    .next()
+                    .and_then(|ids| ids.iter().next())
+                    .expect("repositories are attached to a worktree");
+                (
+                    repos[0].clone(),
+                    repos[1].clone(),
+                    repos[0].read(cx).work_directory_abs_path.clone(),
+                    worktree_id,
+                )
+            });
+
+        active_repo.update(cx, |repo, cx| repo.set_as_active_repository(cx));
+        git_store.read_with(cx, |git_store, _| {
+            assert_eq!(git_store.active_repository(), Some(active_repo.clone()));
+        });
+
+        // The worktree scanner reports that the active repository's .git
+        // directory disappeared (a removal update has no new path).
+        git_store.update(cx, |git_store, cx| {
+            let (project_environment, next_repository_id, native_execution_context, downstream) =
+                match &git_store.state {
+                    GitStoreState::Local {
+                        project_environment,
+                        next_repository_id,
+                        native_execution_context,
+                        downstream,
+                        ..
+                    } => (
+                        project_environment.clone(),
+                        next_repository_id.clone(),
+                        native_execution_context.clone(),
+                        downstream
+                            .as_ref()
+                            .map(|downstream| downstream.updates_tx.clone()),
+                    ),
+                    _ => panic!("test uses a local git store"),
+                };
+            let removal = UpdatedGitRepository {
+                work_directory_id: ProjectEntryId::MIN,
+                old_work_directory_abs_path: Some(active_path.clone()),
+                new_work_directory_abs_path: None,
+                dot_git_abs_path: None,
+                repository_dir_abs_path: None,
+                common_dir_abs_path: None,
+            };
+            let updates: UpdatedGitRepositoriesSet = std::sync::Arc::from([removal]);
+            git_store.update_repositories_from_worktree(
+                worktree_id,
+                project_environment,
+                next_repository_id,
+                downstream,
+                updates,
+                native_execution_context,
+                cx,
+            );
+        });
+
+        git_store.read_with(cx, |git_store, _| {
+            assert_eq!(git_store.repositories().len(), 1);
+            assert_eq!(
+                git_store.active_repository(),
+                Some(remaining_repo.clone()),
+                "removing the active repository must fall back to a remaining one"
+            );
+        });
     }
 
     #[gpui::test]
@@ -9867,6 +10063,21 @@ mod tests {
         let coalesced = GitStore::coalesce_repo_paths(repo_paths(&["", "src", "src/lib.rs"]));
 
         assert_eq!(coalesced, repo_paths(&[""]));
+    }
+
+    #[test]
+    fn limit_repo_paths_falls_back_to_root_above_threshold() {
+        let paths = |count: usize| {
+            (0..count)
+                .flat_map(|index| repo_paths(&[format!("dir{index}/file.rs").as_str()]))
+                .collect::<Vec<_>>()
+        };
+
+        let at_limit = paths(MAX_SCOPED_STATUS_PATHS);
+        assert_eq!(GitStore::limit_repo_paths(at_limit.clone()), at_limit);
+
+        let over_limit = paths(MAX_SCOPED_STATUS_PATHS + 1);
+        assert_eq!(GitStore::limit_repo_paths(over_limit), repo_paths(&[""]));
     }
 
     #[test]
@@ -10360,7 +10571,7 @@ mod tests {
         init_test(cx);
         let mut rng = StdRng::seed_from_u64(seed);
 
-        let commit_shas = (0..2000).map(|_| Oid::random(&mut rng)).collect::<Vec<_>>();
+        let commit_shas = Vec::from_fn(2000, |_| Oid::random(&mut rng));
         let failing_shas = failing_commit_indexes
             .into_iter()
             .map(|index| commit_shas[index % commit_shas.len()])
@@ -10492,6 +10703,73 @@ mod tests {
                 unexpected_loaded_shas,
             );
         });
+    }
+
+    #[test]
+    fn test_disambiguated_display_names() {
+        fn names_in(path_style: PathStyle, paths: &[&str]) -> Vec<String> {
+            let paths: Vec<Arc<Path>> = paths
+                .iter()
+                .map(|path| Arc::from(Path::new(path)))
+                .collect();
+            disambiguated_display_names(&paths, path_style)
+                .into_iter()
+                .map(|name| name.to_string())
+                .collect()
+        }
+        fn names(paths: &[&str]) -> Vec<String> {
+            names_in(PathStyle::Posix, paths)
+        }
+
+        // Distinct leaf names are left alone, however deeply they are nested.
+        assert_eq!(
+            names(&["/home/me/foo", "/home/me/nested/bar"]),
+            vec!["foo", "bar"]
+        );
+
+        // Submodules parked under a directory of the same name: only the
+        // colliding entries grow a parent component.
+        assert_eq!(
+            names(&[
+                "/work/platform",
+                "/work/platform/services/gateway/src",
+                "/work/platform/services/panel/src",
+            ]),
+            vec!["platform", "gateway/src", "panel/src"]
+        );
+
+        // One parent is not always enough.
+        assert_eq!(
+            names(&["/work/a/lib/protos", "/work/b/lib/protos"]),
+            vec!["a/lib/protos", "b/lib/protos"]
+        );
+
+        // Paths that stay equal all the way up terminate rather than growing
+        // forever, and a label never reaches past the first path component.
+        assert_eq!(
+            names(&["/work/src", "/work/src"]),
+            vec!["work/src", "work/src"]
+        );
+
+        assert!(names(&[]).is_empty());
+
+        // Windows paths are split and rejoined by the project's own separators,
+        // not the host's, so a Windows remote works from a Unix host. The drive
+        // letter is a prefix rather than a component a label can grow into.
+        assert_eq!(
+            names_in(
+                PathStyle::Windows,
+                &[r"C:\work\a\lib\protos", r"C:\work\b\lib\protos"],
+            ),
+            vec![r"a\lib\protos", r"b\lib\protos"]
+        );
+        assert_eq!(
+            names_in(PathStyle::Windows, &[r"C:\src", r"C:\src"]),
+            vec!["src", "src"]
+        );
+
+        // Relative components are not names a label can be built from.
+        assert_eq!(names(&["/work/./a/../b"]), vec!["b"]);
     }
 }
 

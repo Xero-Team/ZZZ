@@ -180,8 +180,7 @@ fn read_settings(path: &Path) -> Result<Vec<SavedConnection>, String> {
         settings_json::parse_json_with_comments(&content).map_err(|error| error.to_string())?;
     Ok(settings
         .database
-        .map(|database| database.connections)
-        .unwrap_or_default())
+        .map_or_default(|database| database.connections))
 }
 
 fn handle_request(state: &ServerState, request: &Json) -> Option<Json> {
@@ -406,8 +405,7 @@ async fn describe_table(state: &ServerState, arguments: &Json) -> Result<String,
         "primary_key": schema
             .primary_key
             .as_ref()
-            .map(|key| key.columns.clone())
-            .unwrap_or_default(),
+            .map_or_default(|key| key.columns.clone()),
         "foreign_keys": foreign_keys,
     }))
 }

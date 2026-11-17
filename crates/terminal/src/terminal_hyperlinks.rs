@@ -143,9 +143,7 @@ pub(super) fn find_from_grid_point<T: EventListener>(
                     }
                 }
                 // Fallback: strip file:// prefix if URL parsing fails
-                let path = maybe_url_or_path
-                    .strip_prefix("file://")
-                    .unwrap_or(&maybe_url_or_path);
+                let path = maybe_url_or_path.trim_prefix("file://");
                 (path.to_owned(), false, word_match)
             } else {
                 (maybe_url_or_path, true, word_match)
@@ -1142,9 +1140,7 @@ mod tests {
                 }
                 TEST_TERM_AND_POINT.with(|(term, point)| {
                     assert_eq!(
-                        find_from_grid_point_bench(term, *point)
-                            .map(|(path, ..)| path)
-                            .unwrap_or_default(),
+                        find_from_grid_point_bench(term, *point).map_or_default(|(path, ..)| path),
                         "/Hyperlinks/Bench/Source/zzz-hyperlinks/crates/terminal",
                         "Hyperlink should have been found"
                     );
@@ -1161,8 +1157,7 @@ mod tests {
                 TEST_TERM_AND_POINT.with(|(term, point)| {
                     assert_eq!(
                         find_from_grid_point_bench(term, *point)
-                            .map(|(path, ..)| path)
-                            .unwrap_or_default(),
+                            .map_or_default(|(path, ..)| path),
                         "/Hyperlinks/Bench/Source/zzz-hyperlinks/crates/terminal/terminal.rs:1000:42",
                         "Hyperlink should have been found"
                     );
@@ -1178,9 +1173,7 @@ mod tests {
                 }
                 TEST_TERM_AND_POINT.with(|(term, point)| {
                     assert_eq!(
-                        find_from_grid_point_bench(term, *point)
-                            .map(|(path, ..)| path)
-                            .unwrap_or_default(),
+                        find_from_grid_point_bench(term, *point).map_or_default(|(path, ..)| path),
                         "rust-toolchain.toml",
                         "Hyperlink should have been found"
                     );
@@ -1241,9 +1234,7 @@ mod tests {
                 }
                 TEST_TERM_AND_POINT.with(|(term, point)| {
                     assert_eq!(
-                        find_from_grid_point_bench(term, *point)
-                            .map(|(path, ..)| path)
-                            .unwrap_or_default(),
+                        find_from_grid_point_bench(term, *point).map_or_default(|(path, ..)| path),
                         "392",
                         "Hyperlink should have been found"
                     );
@@ -1275,9 +1266,7 @@ mod tests {
                 }
                 TEST_TERM_AND_POINT.with(|(term, point)| {
                     assert_eq!(
-                        find_from_grid_point_bench(term, *point)
-                            .map(|(path, ..)| path)
-                            .unwrap_or_default(),
+                        find_from_grid_point_bench(term, *point).map_or_default(|(path, ..)| path),
                         LINE.trim_end_matches(['.', '\r', '\n']),
                         "Hyperlink should have been found"
                     );

@@ -102,6 +102,21 @@ pub struct MarkdownCodeBlock<'a> {
     pub text: &'a str,
 }
 
+/// Writes the pending unescaped span `[start, end)`, if one is open. Every
+/// escape arm and the final flush share this so span bookkeeping has a single
+/// implementation instead of being repeated at each site.
+fn write_unescaped_span(
+    formatter: &mut Formatter<'_>,
+    text: &str,
+    start_of_unescaped: Option<usize>,
+    end: usize,
+) -> std::fmt::Result {
+    match start_of_unescaped {
+        Some(start) => write!(formatter, "{}", &text[start..end]),
+        None => Ok(()),
+    }
+}
+
 impl Display for MarkdownEscaped<'_> {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         let mut start_of_unescaped = None;
@@ -113,12 +128,7 @@ impl Display for MarkdownEscaped<'_> {
                 // character of the line of a block. There should probably be both an `escape_block`
                 // which does this and an `escape_inline` method which does not escape these.
                 '#' | '+' | '=' | '-' => {
-                    match start_of_unescaped {
-                        None => {}
-                        Some(start_of_unescaped) => {
-                            write!(formatter, "{}", &self.0[start_of_unescaped..ix])?;
-                        }
-                    }
+                    write_unescaped_span(formatter, self.0, start_of_unescaped, ix)?;
                     write!(formatter, "\\")?;
                     // Can include this char in the "unescaped" text since a
                     // backslash was just emitted.
@@ -127,24 +137,14 @@ impl Display for MarkdownEscaped<'_> {
                 // Escaped since `<` is used in opening HTML tags. `&lt;` is used since Markdown
                 // supports HTML entities, and this allows the text to be used directly in HTML.
                 '<' => {
-                    match start_of_unescaped {
-                        None => {}
-                        Some(start_of_unescaped) => {
-                            write!(formatter, "{}", &self.0[start_of_unescaped..ix])?;
-                        }
-                    }
+                    write_unescaped_span(formatter, self.0, start_of_unescaped, ix)?;
                     write!(formatter, "&lt;")?;
                     start_of_unescaped = None;
                 }
                 // Escaped since `>` is used for blockquotes. `&gt;` is used since Markdown supports
                 // HTML entities, and this allows the text to be used directly in HTML.
                 '>' => {
-                    match start_of_unescaped {
-                        None => {}
-                        Some(start_of_unescaped) => {
-                            write!(formatter, "{}", &self.0[start_of_unescaped..ix])?;
-                        }
-                    }
+                    write_unescaped_span(formatter, self.0, start_of_unescaped, ix)?;
                     write!(formatter, "&gt;")?;
                     start_of_unescaped = None;
                 }
@@ -155,10 +155,7 @@ impl Display for MarkdownEscaped<'_> {
                 }
             }
         }
-        if let Some(start_of_unescaped) = start_of_unescaped {
-            write!(formatter, "{}", &self.0[start_of_unescaped..])?;
-        }
-        Ok(())
+        write_unescaped_span(formatter, self.0, start_of_unescaped, self.0.len())
     }
 }
 
@@ -292,6 +289,17 @@ mod tests {
         "#;
 
         assert_eq!(MarkdownEscaped(input).to_string(), expected);
+    }
+
+    #[test]
+    fn test_markdown_escaped_flushes_spans_around_angle_brackets() {
+        // The `<` and `>` arms close the pending unescaped span, so text on
+        // both sides of them must be preserved. The main escape test has no
+        // angle brackets, leaving these two flush sites uncovered.
+        assert_eq!(MarkdownEscaped("a <tag> b").to_string(), "a &lt;tag&gt; b");
+        assert_eq!(MarkdownEscaped("a < b > c").to_string(), "a &lt; b &gt; c");
+        assert_eq!(MarkdownEscaped("<").to_string(), "&lt;");
+        assert_eq!(MarkdownEscaped(">").to_string(), "&gt;");
     }
 
     #[test]

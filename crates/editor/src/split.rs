@@ -369,12 +369,12 @@ fn patch_for_excerpt(
 
     let mut merged_edits: Vec<text::Edit<Point>> = Vec::new();
     for edit in edits {
-        if let Some(last) = merged_edits.last_mut() {
-            if edit.new.start <= last.new.end || edit.old.start <= last.old.end {
-                last.old.end = last.old.end.max(edit.old.end);
-                last.new.end = last.new.end.max(edit.new.end);
-                continue;
-            }
+        if let Some(last) = merged_edits.last_mut()
+            && (edit.new.start <= last.new.end || edit.old.start <= last.old.end)
+        {
+            last.old.end = last.old.end.max(edit.old.end);
+            last.new.end = last.new.end.max(edit.new.end);
+            continue;
         }
         merged_edits.push(edit);
     }
@@ -550,12 +550,12 @@ impl SplittableEditor {
                         });
                     });
                 }
-                if style == DiffViewStyle::Split {
-                    if let Some(this) = this.upgrade() {
-                        this.update(cx, |this, cx| {
-                            this.split(window, cx);
-                        });
-                    }
+                if style == DiffViewStyle::Split
+                    && let Some(this) = this.upgrade()
+                {
+                    this.update(cx, |this, cx| {
+                        this.split(window, cx);
+                    });
                 }
             }
         });
@@ -705,11 +705,11 @@ impl SplittableEditor {
         let lhs_focus_handle = lhs_editor.read(cx).focus_handle(cx);
         subscriptions.push(
             cx.on_focus_in(&lhs_focus_handle, window, |this, _window, cx| {
-                if let Some(lhs) = &mut this.lhs {
-                    if !lhs.was_last_focused {
-                        lhs.was_last_focused = true;
-                        cx.notify();
-                    }
+                if let Some(lhs) = &mut this.lhs
+                    && !lhs.was_last_focused
+                {
+                    lhs.was_last_focused = true;
+                    cx.notify();
                 }
             }),
         );
@@ -717,11 +717,11 @@ impl SplittableEditor {
         let rhs_focus_handle = self.rhs_editor.read(cx).focus_handle(cx);
         subscriptions.push(
             cx.on_focus_in(&rhs_focus_handle, window, |this, _window, cx| {
-                if let Some(lhs) = &mut this.lhs {
-                    if lhs.was_last_focused {
-                        lhs.was_last_focused = false;
-                        cx.notify();
-                    }
+                if let Some(lhs) = &mut this.lhs
+                    && lhs.was_last_focused
+                {
+                    lhs.was_last_focused = false;
+                    cx.notify();
                 }
             }),
         );
@@ -992,7 +992,7 @@ impl SplittableEditor {
         }
     }
 
-    fn toggle_soft_wrap(
+    pub fn toggle_soft_wrap(
         &mut self,
         _: &ToggleSoftWrap,
         window: &mut Window,
@@ -4357,7 +4357,7 @@ mod tests {
         let (editor, cx) = init_test(cx, SoftWrap::None, DiffViewStyle::Split).await;
 
         let long_line = "x".repeat(200);
-        let mut lines: Vec<String> = (0..50).map(|i| format!("line {i}")).collect();
+        let mut lines: Vec<String> = Vec::from_fn(50, |i| format!("line {i}"));
         lines[25] = long_line;
         let content = lines.join("\n");
 

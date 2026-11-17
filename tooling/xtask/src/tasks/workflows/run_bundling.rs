@@ -123,7 +123,7 @@ pub(crate) fn bundle_mac(
     pub fn bundle_mac(arch: Arch, release_channel: Option<ReleaseChannel>) -> Step<Run> {
         named::bash(&format!(
             "cargo xtask bundle --target {arch}-apple-darwin --formats app,dmg{}",
-            release_channel.map(channel_flag).unwrap_or_default()
+            release_channel.map_or_default(channel_flag)
         ))
     }
     let platform = Platform::Mac;
@@ -196,7 +196,7 @@ pub(crate) fn bundle_linux(
             .map(steps::install_linux_dependencies)
             .add_step(named::bash(&format!(
                 "cargo xtask bundle --target {arch}-unknown-linux-gnu --formats tar.gz{}",
-                release_channel.map(channel_flag).unwrap_or_default()
+                release_channel.map_or_default(channel_flag)
             )))
             .add_step(upload_artifact(&format!("target/release/{artifact_name}")))
             .add_step(upload_artifact(&format!(
@@ -214,7 +214,7 @@ pub(crate) fn bundle_windows(
     pub fn bundle_windows(arch: Arch, release_channel: Option<ReleaseChannel>) -> Step<Run> {
         named::pwsh(&format!(
             "cargo xtask bundle --target {arch}-pc-windows-msvc --formats exe,inno{}",
-            release_channel.map(channel_flag).unwrap_or_default()
+            release_channel.map_or_default(channel_flag)
         ))
     }
     let artifact_name = match arch {

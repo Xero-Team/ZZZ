@@ -64,6 +64,21 @@ Hard boundary: local-first, no-account, ACP-only. Telemetry, sign-in,
 billing, native Zed Agent, collaboration, and unused public APIs stay
 out. See `README.md` and the skill `REFERENCE.md`.
 
+## Public API Snapshot
+
+`cargo xtask check gpui-api` compares `crates/gpui/api-snapshot.txt`
+against the current `crates/gpui` public surface. An absorbed commit that
+adds or changes a public item fails the gate until the snapshot records
+it:
+
+```sh
+cargo xtask check gpui-api --bless
+```
+
+Bless only after confirming the signature change is the upstream behavior
+the batch meant to absorb. Leaving the gate red on `main` disables it for
+every later batch, because a failing baseline hides the next regression.
+
 ## Reports
 
 Each run appends or creates

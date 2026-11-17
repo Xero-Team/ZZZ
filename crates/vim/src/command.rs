@@ -97,7 +97,7 @@ pub enum VimOption {
 impl VimOption {
     fn possible_commands(query: &str) -> Vec<CommandInterceptItem> {
         let mut prefix_of_options = Vec::new();
-        let mut options = query.split(" ").collect::<Vec<_>>();
+        let mut options = query.split(' ').collect::<Vec<_>>();
         let prefix = options.pop().unwrap_or_default();
         for option in options {
             if let Some(opt) = Self::from(option) {
@@ -461,7 +461,7 @@ fn register_write_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
                             buffer.update(cx, |buffer, _| buffer.set_conflict());
                         }
                     });
-                };
+                }
 
                 let worktree = match filename_save_target(editor, cx) {
                     Ok(worktree) => worktree,
@@ -760,8 +760,7 @@ fn register_workspace_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
                         .buffer()
                         .read(cx)
                         .as_singleton()
-                        .map(|buffer| buffer.read(cx).text())
-                        .unwrap_or_default(),
+                        .map_or_default(|buffer| buffer.read(cx).text()),
                 );
             } else if let Some(project) = editor.project().cloned() {
                 project.update(cx, |project, cx| {
@@ -778,7 +777,7 @@ fn register_workspace_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
                 });
             } else {
                 return;
-            };
+            }
 
             cx.spawn_in(window, async move |editor, cx| {
                 if let Some(task) = task {
@@ -786,8 +785,7 @@ fn register_workspace_commands(editor: &mut Editor, cx: &mut Context<Vim>) {
                         &task
                             .await
                             .log_err()
-                            .map(|loaded_file| loaded_file.text)
-                            .unwrap_or_default(),
+                            .map_or_default(|loaded_file| loaded_file.text),
                     );
                 }
 
@@ -893,7 +891,7 @@ fn register_range_and_count_commands(editor: &mut Editor, cx: &mut Context<Vim>)
                 log::error!("Error selecting range: {}", err);
                 return;
             }
-        };
+        }
 
         let Some(workspace) = vim.workspace(window, cx) else {
             return;
@@ -1984,7 +1982,7 @@ pub fn command_interceptor(
 
     let (range, query) = VimCommand::parse_range(input);
     let range_prefix = input[0..(input.len() - query.len())].to_string();
-    let has_trailing_space = query.ends_with(" ");
+    let has_trailing_space = query.ends_with(' ');
     let mut query = query.as_str().trim_start();
 
     let on_matching_lines = (query.starts_with('g') || query.starts_with('v'))
@@ -2062,7 +2060,7 @@ pub fn command_interceptor(
             action: WrappedAction(inner.boxed_clone()),
             invert,
         }));
-    };
+    }
 
     if let Some(action) = action {
         let string = input.to_owned();
@@ -2336,7 +2334,7 @@ impl OnMatchingLines {
                     });
                 }
             });
-        };
+        }
 
         vim.update_editor(cx, |_, editor, cx| {
             let snapshot = editor.snapshot(window, cx);
@@ -2647,7 +2645,7 @@ impl ShellExec {
                 .detach();
             });
             return;
-        };
+        }
 
         let mut input_snapshot = None;
         let mut input_range = None;
@@ -2706,7 +2704,7 @@ impl ShellExec {
                 process.stdin(Stdio::piped());
             } else {
                 process.stdin(Stdio::null());
-            };
+            }
 
             let Some(mut running) = process.spawn().log_err() else {
                 vim.update_in(cx, |vim, window, cx| {
@@ -2729,7 +2727,7 @@ impl ShellExec {
                     stdin.flush().await.log_err();
                 })
                 .detach();
-            };
+            }
 
             let output = cx.background_spawn(running.output()).await;
 

@@ -211,7 +211,7 @@ impl CachedMermaidDiagram {
         let render_image = Arc::new(OnceLock::<anyhow::Result<Arc<RenderImage>>>::new());
         let parsed_svg = Arc::new(OnceLock::<Arc<ParsedSvg>>::new());
         let svg_renderer = cx.svg_renderer();
-        let mermaid_theme = build_mermaid_theme(cx);
+        let theme = mermaid_theme(cx);
 
         let task = cx.spawn({
             let render_image = render_image.clone();
@@ -220,8 +220,7 @@ impl CachedMermaidDiagram {
             async move |this, cx| {
                 let value = cx
                     .background_spawn(async move {
-                        let svg_string =
-                            mermaid_render::render_to_svg(&contents.contents, &mermaid_theme)?;
+                        let svg_string = mermaid_render::render_to_svg(&contents.contents, &theme)?;
                         let tree = svg_renderer
                             .parse_svg(svg_string.as_bytes())
                             .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -361,7 +360,10 @@ fn mermaid_font_family(font_family: &str) -> String {
     }
 }
 
-fn build_mermaid_theme(cx: &Context<Markdown>) -> mermaid_render::MermaidTheme {
+/// The ZZZ theme mapped onto a Mermaid theme. Public so other crates that
+/// render Mermaid sources (such as the database ER diagram) draw diagrams that
+/// look exactly like the ones in a markdown preview.
+pub fn mermaid_theme(cx: &App) -> mermaid_render::MermaidTheme {
     let colors = cx.theme().colors();
     let theme_settings = ThemeSettings::get_global(cx);
     let is_dark = !cx.theme().appearance.is_light();

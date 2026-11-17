@@ -61,14 +61,11 @@ mod tests {
     fn test_nested_savepoints() -> Result<()> {
         let connection = Connection::open_memory(Some("nested_savepoints"));
 
-        connection
-            .exec(indoc! {"
+        connection.exec(indoc! {"
             CREATE TABLE text (
                 text TEXT,
                 idx INTEGER
-            );"})
-            .unwrap()()
-        .unwrap();
+            );"})?()?;
 
         let save1_text = "test save1";
         let save2_text = "test save2";

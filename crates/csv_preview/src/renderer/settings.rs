@@ -359,8 +359,7 @@ fn create_dev_only_popover_menu(
                                 let view_entity = view_entity.clone();
                                 move |_w, cx| {
                                     view_entity.update(cx, |view, cx| {
-                                        view.settings.show_perf_metrics_overlay =
-                                            !view.settings.show_perf_metrics_overlay;
+                                        view.settings.show_perf_metrics_overlay.toggle();
                                         cx.notify();
                                     })
                                 }
@@ -379,8 +378,7 @@ fn create_dev_only_popover_menu(
                                 let view_entity = view_entity.clone();
                                 move |_, cx| {
                                     view_entity.update(cx, |view, cx| {
-                                        view.settings.show_debug_info =
-                                            !view.settings.show_debug_info;
+                                        view.settings.show_debug_info.toggle();
                                         cx.notify();
                                     })
                                 }

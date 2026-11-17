@@ -155,7 +155,7 @@ pub struct LocalWorktree {
     path_prefixes_to_scan_tx: async_channel::Sender<PathPrefixScanRequest>,
     is_scanning: (watch::Sender<bool>, watch::Receiver<bool>),
     snapshot_subscriptions: VecDeque<(usize, oneshot::Sender<()>)>,
-    _background_scanner_tasks: Vec<Task<()>>,
+    background_scanner_tasks: Vec<Task<()>>,
     update_observer: Option<UpdateObservationState>,
     fs: Arc<dyn Fs>,
     vfs_snapshot: Option<VfsSnapshot>,
@@ -643,7 +643,7 @@ impl Worktree {
                 update_observer: None,
                 scan_requests_tx,
                 path_prefixes_to_scan_tx,
-                _background_scanner_tasks: Vec::new(),
+                background_scanner_tasks: Vec::new(),
                 fs,
                 vfs_snapshot,
                 fs_case_sensitive,
@@ -1876,7 +1876,7 @@ impl LocalWorktree {
                 });
             }
         });
-        self._background_scanner_tasks = vec![background_scanner, scan_state_updater];
+        self.background_scanner_tasks = vec![background_scanner, scan_state_updater];
         *self.is_scanning.0.borrow_mut() = true;
     }
 
@@ -1972,7 +1972,7 @@ impl LocalWorktree {
                                 repository_dir_abs_path: Some(
                                     new_repo.repository_dir_abs_path.clone(),
                                 ),
-                                common_dir_abs_path: Some(new_repo.common_dir_abs_path.clone()),
+                                common_dir_abs_path: Some(new_repo.common_dir_abs_path),
                             });
                             new_repos.next();
                         }
@@ -1996,7 +1996,7 @@ impl LocalWorktree {
                                 changes.push(UpdatedGitRepository {
                                     work_directory_id: new_entry_id,
                                     old_work_directory_abs_path: Some(
-                                        old_repo.work_directory_abs_path.clone(),
+                                        old_repo.work_directory_abs_path,
                                     ),
                                     new_work_directory_abs_path: Some(
                                         new_repo.work_directory_abs_path.clone(),
@@ -2005,7 +2005,7 @@ impl LocalWorktree {
                                     repository_dir_abs_path: Some(
                                         new_repo.repository_dir_abs_path.clone(),
                                     ),
-                                    common_dir_abs_path: Some(new_repo.common_dir_abs_path.clone()),
+                                    common_dir_abs_path: Some(new_repo.common_dir_abs_path),
                                 });
                             }
                             new_repos.next();
@@ -2014,9 +2014,7 @@ impl LocalWorktree {
                         Ordering::Greater => {
                             changes.push(UpdatedGitRepository {
                                 work_directory_id: old_entry_id,
-                                old_work_directory_abs_path: Some(
-                                    old_repo.work_directory_abs_path.clone(),
-                                ),
+                                old_work_directory_abs_path: Some(old_repo.work_directory_abs_path),
                                 new_work_directory_abs_path: None,
                                 dot_git_abs_path: None,
                                 repository_dir_abs_path: None,
@@ -2033,7 +2031,7 @@ impl LocalWorktree {
                         new_work_directory_abs_path: Some(repo.work_directory_abs_path.clone()),
                         dot_git_abs_path: Some(repo.dot_git_abs_path.clone()),
                         repository_dir_abs_path: Some(repo.repository_dir_abs_path.clone()),
-                        common_dir_abs_path: Some(repo.common_dir_abs_path.clone()),
+                        common_dir_abs_path: Some(repo.common_dir_abs_path),
                     });
                     new_repos.next();
                 }
@@ -2044,7 +2042,7 @@ impl LocalWorktree {
                         new_work_directory_abs_path: None,
                         dot_git_abs_path: Some(repo.dot_git_abs_path.clone()),
                         repository_dir_abs_path: Some(repo.repository_dir_abs_path.clone()),
-                        common_dir_abs_path: Some(repo.common_dir_abs_path.clone()),
+                        common_dir_abs_path: Some(repo.common_dir_abs_path),
                     });
                     old_repos.next();
                 }
@@ -2739,7 +2737,7 @@ impl LocalWorktree {
             .ok();
 
         let worktree_id = self.id.to_proto();
-        let _maintain_remote_snapshot = cx.background_spawn(async move {
+        let maintain_remote_snapshot = cx.background_spawn(async move {
             let mut is_first = true;
             while let Some((snapshot, entry_changes)) = snapshots_rx.next().await {
                 let update = if is_first {
@@ -2769,7 +2767,7 @@ impl LocalWorktree {
         self.update_observer = Some(UpdateObservationState {
             snapshots_tx,
             resume_updates: resume_updates_tx,
-            _maintain_remote_snapshot,
+            _maintain_remote_snapshot: maintain_remote_snapshot,
         });
     }
 
@@ -3963,6 +3961,15 @@ impl BackgroundScannerState {
             return Some(removed_entry.id);
         }
 
+        let existing_entry = self.snapshot.entry_for_path(path);
+
+        // An excluded symlink can share this inode without representing a rename
+        if let Some(entry) = existing_entry
+            && entry.inode == inode
+        {
+            return Some(entry.id);
+        }
+
         // If an entry with the same inode was removed from the worktree during this scan,
         // then it *might* represent the same file or directory. But the OS might also have
         // re-used the inode for a completely different file or directory.
@@ -3974,7 +3981,7 @@ impl BackgroundScannerState {
             (removed_entry.mtime == Some(mtime) || *removed_entry.path == *path)
                 .then_some(removed_entry.id)
         } else {
-            Some(self.snapshot.entry_for_path(path)?.id)
+            Some(existing_entry?.id)
         }
     }
 
@@ -3982,6 +3989,14 @@ impl BackgroundScannerState {
         let entry = self.snapshot.insert_entry(entry, fs).await;
         if entry.path.file_name() == Some(&DOT_GIT) {
             self.insert_git_repository(entry.path.clone(), fs, watcher)
+                .await;
+        } else if git::fossil::fossil_support_enabled()
+            && entry
+                .path
+                .file_name()
+                .is_some_and(|name| git::fossil::FOSSIL_CHECKOUT_DB_NAMES.contains(&name))
+        {
+            self.insert_fossil_repository(entry.path.clone(), fs, watcher)
                 .await;
         }
 
@@ -4163,10 +4178,10 @@ impl BackgroundScannerState {
                 }
             }
 
-            if let Err(ix) = removed_ids.binary_search(&entry.id) {
-                removed_ids.insert(ix, entry.id);
-            }
+            removed_ids.push(entry.id);
         }
+        removed_ids.sort_unstable();
+        removed_ids.dedup();
 
         self.snapshot
             .entries_by_id
@@ -4207,7 +4222,7 @@ impl BackgroundScannerState {
                     "not building git repository for nested `.git` directory, `.git` path in the worktree: {dot_git_path:?}"
                 );
                 return;
-            };
+            }
 
             parent_dir.into()
         } else {
@@ -4226,6 +4241,36 @@ impl BackgroundScannerState {
                 relative_path: work_dir_path,
             },
             dot_git_abs_path,
+            fs,
+            watcher,
+        )
+        .await
+        .log_err();
+    }
+
+    /// Registers a Fossil checkout. Fossil stores its metadata in a SQLite
+    /// database in the checkout root rather than in a `.git` directory, so the
+    /// checkout path doubles as the repository path.
+    async fn insert_fossil_repository(
+        &mut self,
+        checkout_db_path: Arc<RelPath>,
+        fs: &dyn Fs,
+        watcher: &dyn Watcher,
+    ) {
+        let Some(work_dir_path) = checkout_db_path.parent() else {
+            log::debug!(
+                "not building Fossil repository for the checkout itself, checkout database: {checkout_db_path:?}"
+            );
+            return;
+        };
+        let work_dir_path: Arc<RelPath> = work_dir_path.into();
+        let checkout_db_abs_path = Arc::from(self.snapshot.absolutize(&checkout_db_path).as_ref());
+
+        self.insert_git_repository_for_path(
+            WorkDirectory::InProject {
+                relative_path: work_dir_path,
+            },
+            checkout_db_abs_path,
             fs,
             watcher,
         )
@@ -4255,7 +4300,13 @@ impl BackgroundScannerState {
         let work_directory_abs_path = self.snapshot.work_directory_abs_path(&work_directory);
 
         let (repository_dir_abs_path, common_dir_abs_path) =
-            discover_git_paths(&dot_git_abs_path, fs).await;
+            if git::fossil::is_fossil_checkout_db_path(&dot_git_abs_path) {
+                // A Fossil checkout database is a SQLite binary, not a gitfile, and
+                // reading it to look for a `gitdir:` line would be wasted work.
+                (dot_git_abs_path.clone(), dot_git_abs_path.clone())
+            } else {
+                discover_git_paths(&dot_git_abs_path, fs).await
+            };
         watcher
             .add(&common_dir_abs_path)
             .context("failed to add common directory to watcher")
@@ -5573,7 +5624,7 @@ impl BackgroundScanner {
             let keep_original = target_root.starts_with(root_canonical_path.as_path());
 
             for symlink_path in symlink_paths {
-                let mapped_path = if suffix.as_os_str().is_empty() {
+                let mapped_path = if suffix.is_empty() {
                     root_canonical_path
                         .as_path()
                         .join(symlink_path.as_std_path())
@@ -5827,13 +5878,12 @@ impl BackgroundScanner {
                     && abs_path
                         .as_path()
                         .ends_with(Path::new(DOT_GIT).join(REPO_EXCLUDE))
-                {
-                    if let Some(repository) = snapshot.git_repositories.values().find(|repo| {
+                    && let Some(repository) = snapshot.git_repositories.values().find(|repo| {
                         repo.common_dir_abs_path.join(REPO_EXCLUDE) == abs_path.as_path()
-                    }) {
-                        work_dirs_needing_exclude_update
-                            .push(repository.work_directory_abs_path.clone());
-                    }
+                    })
+                {
+                    work_dirs_needing_exclude_update
+                        .push(repository.work_directory_abs_path.clone());
                 }
             }
 
@@ -6145,14 +6195,16 @@ impl BackgroundScanner {
                                 // to ensure that only one of the workers sends a progress update after
                                 // the update interval elapses.
                                 _ = progress_update_timer => {
-                                    match progress_update_count.compare_exchange(
-                                        last_progress_update_count,
-                                        last_progress_update_count + 1,
+                                    match progress_update_count.try_update(
                                         SeqCst,
-                                        SeqCst
+                                        SeqCst,
+                                        |current| {
+                                            (current == last_progress_update_count)
+                                                .then_some(last_progress_update_count + 1)
+                                        },
                                     ) {
-                                        Ok(_) => {
-                                            last_progress_update_count += 1;
+                                        Ok(previous) => {
+                                            last_progress_update_count = previous + 1;
                                             self.send_status_update(true, SmallVec::new(), &[])
                                                 .await;
                                         }
@@ -8142,7 +8194,7 @@ async fn discover_git_paths(dot_git_abs_path: &Arc<Path>, fs: &dyn Fs) -> (Arc<P
                 common_dir_abs_path = commondir_path.as_path().into();
             }
         }
-    };
+    }
     (repository_dir_abs_path, common_dir_abs_path)
 }
 

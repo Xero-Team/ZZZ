@@ -740,7 +740,7 @@ async fn populate_defaults(
                 }
             }
         }
-    };
+    }
     if manifest.snippets.is_none()
         && let snippets_json_path = extension_path.join("snippets.json")
         && fs.is_file(&snippets_json_path).await

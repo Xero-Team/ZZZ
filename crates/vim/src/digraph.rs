@@ -94,7 +94,7 @@ impl Vim {
         // handled by handle_literal_input
         if keystroke_event.keystroke.key_char.is_some() {
             return;
-        };
+        }
 
         if prefix.is_empty() {
             self.pop_operator(window, cx);
@@ -187,7 +187,7 @@ impl Vim {
             _ => {
                 return self.insert_literal(None, text, window, cx);
             }
-        };
+        }
 
         self.pop_operator(window, cx);
         self.push_operator(

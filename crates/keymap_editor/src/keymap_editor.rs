@@ -335,7 +335,7 @@ impl ConflictState {
                 .context
                 .and_then(|ctx| gpui::KeyBindingContextPredicate::parse(&ctx).ok());
             let entry = action_keybind_mapping
-                .entry(mapping.keystrokes.clone())
+                .entry(mapping.keystrokes)
                 .or_default();
             let origin = ConflictOrigin::new(binding.source, index);
             if let Some((_, origins)) =
@@ -567,7 +567,7 @@ fn binding_is_unbound_by_unbind(
 
 impl KeymapEditor {
     fn new(workspace: WeakEntity<Workspace>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let _keymap_subscription =
+        let keymap_subscription =
             cx.observe_global_in::<KeymapEventChannel>(window, Self::on_keymap_changed);
         let table_interaction_state = cx.new(|cx| {
             TableInteractionState::new(cx).with_custom_scrollbar(ui::Scrollbars::for_settings::<
@@ -646,7 +646,7 @@ impl KeymapEditor {
             string_match_candidates: Arc::new(vec![]),
             matches: vec![],
             focus_handle: cx.focus_handle(),
-            _keymap_subscription,
+            _keymap_subscription: keymap_subscription,
             table_interaction_state,
             filter_editor,
             keystroke_editor,
@@ -1089,33 +1089,33 @@ impl KeymapEditor {
             let selected_binding_is_non_interactable =
                 selected_binding_is_unmapped || selected_binding_is_suppressed;
 
-            let context_menu = ContextMenu::build(window, cx, |menu, _window, _cx| {
+            let context_menu = ContextMenu::build(window, cx, |menu, _window, cx| {
                 menu.context(self.focus_handle.clone())
                     .when(selected_binding_is_unmapped, |this| {
                         this.action(
-                            tr(_cx, "keymap_editor.context_menu.create", "Create"),
+                            tr(cx, "keymap_editor.context_menu.create", "Create"),
                             Box::new(CreateBinding),
                         )
                     })
                     .action_disabled_when(
                         selected_binding_is_non_interactable,
-                        tr(_cx, "keymap_editor.context_menu.edit", "Edit"),
+                        tr(cx, "keymap_editor.context_menu.edit", "Edit"),
                         Box::new(EditBinding),
                     )
                     .action_disabled_when(
                         selected_binding_is_non_interactable,
-                        tr(_cx, "keymap_editor.context_menu.delete", "Delete"),
+                        tr(cx, "keymap_editor.context_menu.delete", "Delete"),
                         Box::new(DeleteBinding),
                     )
                     .separator()
                     .action(
-                        tr(_cx, "keymap_editor.context_menu.copy_action", "Copy Action"),
+                        tr(cx, "keymap_editor.context_menu.copy_action", "Copy Action"),
                         Box::new(CopyAction),
                     )
                     .action_disabled_when(
                         selected_binding_has_no_context,
                         tr(
-                            _cx,
+                            cx,
                             "keymap_editor.context_menu.copy_context",
                             "Copy Context",
                         ),
@@ -1125,7 +1125,7 @@ impl KeymapEditor {
                     .action_disabled_when(
                         selected_binding_has_no_context,
                         tr(
-                            _cx,
+                            cx,
                             "keymap_editor.context_menu.show_matching_keybindings",
                             "Show Matching Keybindings",
                         ),
@@ -1287,19 +1287,33 @@ impl KeymapEditor {
         }
     }
 
-    fn render_no_matches_hint(&self, _window: &mut Window, _cx: &App) -> AnyElement {
+    fn render_no_matches_hint(&self, _window: &mut Window, cx: &App) -> AnyElement {
         let hint = match (self.filter_state, &self.search_mode) {
             (FilterState::Conflicts, _) => {
                 if self.keybinding_conflict_state.any_user_binding_conflicts() {
-                    "No conflicting keybinds found that match the provided query"
+                    tr(
+                        cx,
+                        "keymap_editor.no_matches.conflicts_filtered",
+                        "No conflicting keybinds found that match the provided query",
+                    )
                 } else {
-                    "No conflicting keybinds found"
+                    tr(
+                        cx,
+                        "keymap_editor.no_matches.conflicts",
+                        "No conflicting keybinds found",
+                    )
                 }
             }
-            (FilterState::All, SearchMode::KeyStroke { .. }) => {
-                "No keybinds found matching the entered keystrokes"
-            }
-            (FilterState::All, SearchMode::Normal) => "No matches found for the provided query",
+            (FilterState::All, SearchMode::KeyStroke { .. }) => tr(
+                cx,
+                "keymap_editor.no_matches.keystrokes",
+                "No keybinds found matching the entered keystrokes",
+            ),
+            (FilterState::All, SearchMode::Normal) => tr(
+                cx,
+                "keymap_editor.no_matches.normal",
+                "No matches found for the provided query",
+            ),
         };
 
         Label::new(hint).color(Color::Muted).into_any_element()
@@ -1530,22 +1544,22 @@ impl KeymapEditor {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.show_no_action_bindings = !self.show_no_action_bindings;
+        self.show_no_action_bindings.toggle();
         self.on_query_changed(cx);
     }
 
     fn toggle_user_bindings_filter(&mut self, cx: &mut Context<Self>) {
-        self.source_filters.user = !self.source_filters.user;
+        self.source_filters.user.toggle();
         self.on_query_changed(cx);
     }
 
     fn toggle_zzz_defaults_filter(&mut self, cx: &mut Context<Self>) {
-        self.source_filters.zzz_defaults = !self.source_filters.zzz_defaults;
+        self.source_filters.zzz_defaults.toggle();
         self.on_query_changed(cx);
     }
 
     fn toggle_vim_defaults_filter(&mut self, cx: &mut Context<Self>) {
-        self.source_filters.vim_defaults = !self.source_filters.vim_defaults;
+        self.source_filters.vim_defaults.toggle();
         self.on_query_changed(cx);
     }
 
@@ -1605,10 +1619,7 @@ impl KeymapEditor {
             return;
         };
 
-        let keystrokes = selected_binding
-            .keystrokes()
-            .map(Vec::from)
-            .unwrap_or_default();
+        let keystrokes = selected_binding.keystrokes().map_or_default(Vec::from);
 
         self.filter_state = FilterState::All;
         self.search_mode = SearchMode::KeyStroke { exact_match: true };
@@ -1727,7 +1738,7 @@ impl KeymapEditor {
         ) -> impl FnOnce(ContextMenu) -> ContextMenu {
             let focus_handle = focus_handle.clone();
             let keymap_editor = keymap_editor.clone();
-            return move |menu: ContextMenu| {
+            move |menu: ContextMenu| {
                 menu.toggleable_entry(
                     name,
                     toggled,
@@ -1742,7 +1753,7 @@ impl KeymapEditor {
                         }
                     },
                 )
-            };
+            }
         }
     }
 }
@@ -1979,8 +1990,8 @@ fn muted_styled_text(text: SharedString, cx: &App) -> StyledText {
 impl Item for KeymapEditor {
     type Event = ();
 
-    fn tab_content_text(&self, _detail: usize, _cx: &App) -> ui::SharedString {
-        "Keymap Editor".into()
+    fn tab_content_text(&self, _detail: usize, cx: &App) -> ui::SharedString {
+        tr(cx, "keymap_editor.tab_title", "Keymap Editor").into()
     }
 }
 
@@ -1989,11 +2000,12 @@ impl Render for KeymapEditor {
         if let SearchMode::KeyStroke { exact_match } = self.search_mode {
             let button = IconButton::new("keystrokes-exact-match", IconName::CaseSensitive)
                 .tooltip(move |_window, cx| {
-                    Tooltip::for_action(
-                        "Toggle Exact Match Mode",
-                        &ToggleExactKeystrokeMatching,
+                    let title = tr(
                         cx,
-                    )
+                        "keymap_editor.tooltip.toggle_exact_match",
+                        "Toggle Exact Match Mode",
+                    );
+                    Tooltip::for_action(title, &ToggleExactKeystrokeMatching, cx)
                 })
                 .shape(IconButtonShape::Square)
                 .toggle_state(exact_match)
@@ -2294,8 +2306,7 @@ impl Render for KeymapEditor {
 
                                     let source = binding
                                         .keybind_source()
-                                        .map(|source| source.name())
-                                        .unwrap_or_default()
+                                        .map_or_default(|source| source.name())
                                         .into_any_element();
 
                                     Some(vec![

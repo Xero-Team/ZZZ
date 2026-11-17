@@ -105,7 +105,7 @@ fn parse_tabstop<'a>(
         tabstop_index = index;
         source = rest;
 
-        if source.starts_with("|") {
+        if source.starts_with('|') {
             (source, choices) = parse_choices(&source[1..], text)?;
         }
 

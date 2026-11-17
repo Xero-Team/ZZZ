@@ -247,12 +247,11 @@ fn update_profile_override_in_doc(
         .and_then(|p| p.get_mut("dev"))
         .and_then(|d| d.get_mut("package"))
         .and_then(|p| p.as_table_like_mut())
+        && let Some(old_entry) = profile_dev_package.get(package_name)
     {
-        if let Some(old_entry) = profile_dev_package.get(package_name) {
-            let old_entry_clone = old_entry.clone();
-            profile_dev_package.remove(package_name);
-            profile_dev_package.insert(crate_name, old_entry_clone);
-        }
+        let old_entry_clone = old_entry.clone();
+        profile_dev_package.remove(package_name);
+        profile_dev_package.insert(crate_name, old_entry_clone);
     }
 
     Ok(())

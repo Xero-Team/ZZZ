@@ -109,22 +109,7 @@ impl CommandPalette {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let filter = CommandPaletteFilter::try_global(cx);
-
-        let commands = window
-            .available_actions(cx)
-            .into_iter()
-            .filter_map(|action| {
-                if filter.is_some_and(|filter| filter.is_hidden(&*action)) {
-                    return None;
-                }
-
-                Some(Command {
-                    name: humanize_action_name(action.name()),
-                    action,
-                })
-            })
-            .collect();
+        let commands = available_commands(window, cx);
 
         let delegate = CommandPaletteDelegate::new(
             cx.entity().downgrade(),
@@ -223,11 +208,11 @@ impl QueryHistory {
     }
 
     fn validate_cursor(&mut self, current_query: &str, cx: &App) -> Option<usize> {
-        if let Some(pos) = self.cursor {
-            if self.history(cx).get(pos).map(|s| s.as_str()) != Some(current_query) {
-                self.cursor = None;
-                self.prefix = None;
-            }
+        if let Some(pos) = self.cursor
+            && self.history(cx).get(pos).map(|s| s.as_str()) != Some(current_query)
+        {
+            self.cursor = None;
+            self.prefix = None;
         }
         self.cursor
     }
@@ -290,6 +275,22 @@ impl Clone for Command {
 }
 
 impl CommandPaletteDelegate {
+    /// Builds a delegate that owns no `CommandPalette` modal, for embedders such
+    /// as search-everywhere that render its matches themselves.
+    pub fn for_focused(
+        workspace: WeakEntity<Workspace>,
+        previous_focus_handle: FocusHandle,
+        window: &Window,
+        cx: &App,
+    ) -> Self {
+        Self::new(
+            WeakEntity::new_invalid(),
+            workspace,
+            available_commands(window, cx),
+            previous_focus_handle,
+        )
+    }
+
     fn new(
         command_palette: WeakEntity<CommandPalette>,
         workspace: WeakEntity<Workspace>,
@@ -421,12 +422,11 @@ impl PickerDelegate for CommandPaletteDelegate {
             Direction::Up => {
                 let should_use_history =
                     self.selected_ix == 0 || self.query_history.is_navigating();
-                if should_use_history {
-                    if let Some(query) =
+                if should_use_history
+                    && let Some(query) =
                         self.query_history.previous(query, cx).map(|s| s.to_owned())
-                    {
-                        return Some(query);
-                    }
+                {
+                    return Some(query);
                 }
             }
             Direction::Down => {
@@ -743,6 +743,24 @@ impl PickerDelegate for CommandPaletteDelegate {
                 .into_any(),
         )
     }
+}
+
+fn available_commands(window: &Window, cx: &App) -> Vec<Command> {
+    let filter = CommandPaletteFilter::try_global(cx);
+    window
+        .available_actions(cx)
+        .into_iter()
+        .filter_map(|action| {
+            if filter.is_some_and(|filter| filter.is_hidden(&*action)) {
+                return None;
+            }
+
+            Some(Command {
+                name: humanize_action_name(action.name()),
+                action,
+            })
+        })
+        .collect()
 }
 
 pub fn humanize_action_name(name: &str) -> String {

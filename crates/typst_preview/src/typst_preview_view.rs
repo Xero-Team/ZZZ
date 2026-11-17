@@ -653,8 +653,7 @@ impl TypstPreviewView {
         let mut editors = self
             .active_editor
             .as_ref()
-            .map(|active| vec![active.editor.clone()])
-            .unwrap_or_default();
+            .map_or_default(|active| vec![active.editor.clone()]);
         if let Some(workspace) = self.workspace.upgrade() {
             editors.extend(
                 workspace

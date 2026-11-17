@@ -199,7 +199,7 @@ impl gpui::WindowHost for HeadlessWindow {
 
     fn toggle_fullscreen(&self) {
         let mut state = self.0.borrow_mut();
-        state.is_fullscreen = !state.is_fullscreen;
+        state.is_fullscreen.toggle();
     }
 
     fn is_fullscreen(&self) -> bool {

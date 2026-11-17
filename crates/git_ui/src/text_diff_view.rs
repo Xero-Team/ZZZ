@@ -106,7 +106,7 @@ impl TextDiffView {
         let source_buffer_snapshot = source_buffer.read(cx).snapshot();
         let mut clipboard_text = diff_data.clipboard_text.clone();
 
-        if !clipboard_text.ends_with("\n") {
+        if !clipboard_text.ends_with('\n') {
             clipboard_text.push_str("\n");
         }
 

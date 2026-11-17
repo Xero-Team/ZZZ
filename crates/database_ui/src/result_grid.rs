@@ -114,9 +114,9 @@ impl ResultGridState {
         };
         let columns = result.columns.len();
         if columns > 0 && columns != self.columns {
-            let widths = (0..columns)
-                .map(|index| AbsoluteLength::Pixels(px(estimate_column_width(result, index))))
-                .collect::<Vec<_>>();
+            let widths = Vec::from_fn(columns, |index| {
+                AbsoluteLength::Pixels(px(estimate_column_width(result, index)))
+            });
             self.column_widths = cx.new(|_| {
                 ResizableColumnsState::new(
                     columns,

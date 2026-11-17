@@ -130,10 +130,10 @@ impl AgentConnectionStore {
         server: Rc<dyn AgentServer>,
         cx: &mut Context<Self>,
     ) -> Entity<AgentConnectionEntry> {
-        if let Some(entry) = self.entries.get(&key) {
-            if matches!(entry.read(cx), AgentConnectionEntry::Connecting { .. }) {
-                return entry.clone();
-            }
+        if let Some(entry) = self.entries.get(&key)
+            && matches!(entry.read(cx), AgentConnectionEntry::Connecting { .. })
+        {
+            return entry.clone();
         }
 
         self.entries.remove(&key);

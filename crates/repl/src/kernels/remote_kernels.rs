@@ -147,7 +147,9 @@ fn should_report_connection_failure(
 ) -> bool {
     !shutdown_requested.load(Ordering::Relaxed)
         && connection_error_reported
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |reported| {
+                (!reported).then_some(true)
+            })
             .is_ok()
 }
 

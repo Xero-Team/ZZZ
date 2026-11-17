@@ -7,6 +7,8 @@ impl WgpuRenderer {
         instance_offset: &mut u64,
         pass: &mut wgpu::RenderPass<'_>,
     ) -> bool {
+        // SAFETY: `Quad` has no padding bytes, as `instance_types_contain_no_padding` asserts, so
+        // every byte of the slice is initialized.
         let data = unsafe { Self::instance_bytes(quads) };
         self.draw_instances(
             data,
@@ -23,6 +25,8 @@ impl WgpuRenderer {
         instance_offset: &mut u64,
         pass: &mut wgpu::RenderPass<'_>,
     ) -> bool {
+        // SAFETY: `Shadow` has no padding bytes, as `instance_types_contain_no_padding` asserts, so
+        // every byte of the slice is initialized.
         let data = unsafe { Self::instance_bytes(shadows) };
         self.draw_instances(
             data,
@@ -39,6 +43,8 @@ impl WgpuRenderer {
         instance_offset: &mut u64,
         pass: &mut wgpu::RenderPass<'_>,
     ) -> bool {
+        // SAFETY: `Underline` has no padding bytes, as `instance_types_contain_no_padding` asserts,
+        // so every byte of the slice is initialized.
         let data = unsafe { Self::instance_bytes(underlines) };
         self.draw_instances(
             data,
@@ -59,6 +65,8 @@ impl WgpuRenderer {
         let Some(tex_info) = self.atlas.get_texture_info(texture_id) else {
             return true;
         };
+        // SAFETY: `MonochromeSprite` has no padding bytes, as
+        // `instance_types_contain_no_padding` asserts, so every byte of the slice is initialized.
         let data = unsafe { Self::instance_bytes(sprites) };
         self.draw_instances_with_texture(
             data,
@@ -80,6 +88,8 @@ impl WgpuRenderer {
         let Some(tex_info) = self.atlas.get_texture_info(texture_id) else {
             return true;
         };
+        // SAFETY: `SubpixelSprite` has no padding bytes, as `instance_types_contain_no_padding`
+        // asserts, so every byte of the slice is initialized.
         let data = unsafe { Self::instance_bytes(sprites) };
         let resources = self.resources();
         let pipeline = resources
@@ -107,6 +117,8 @@ impl WgpuRenderer {
         let Some(tex_info) = self.atlas.get_texture_info(texture_id) else {
             return true;
         };
+        // SAFETY: `PolychromeSprite` has no padding bytes, as `instance_types_contain_no_padding`
+        // asserts, so every byte of the slice is initialized.
         let data = unsafe { Self::instance_bytes(sprites) };
         self.draw_instances_with_texture(
             data,
@@ -221,6 +233,8 @@ impl WgpuRenderer {
             return true;
         };
 
+        // SAFETY: `PathSprite` has no padding bytes, as `instance_types_contain_no_padding`
+        // asserts, so every byte of the slice is initialized.
         let sprite_data = unsafe { Self::instance_bytes(&sprites) };
         self.draw_instances_with_texture(
             sprite_data,
@@ -253,6 +267,8 @@ impl WgpuRenderer {
             return true;
         }
 
+        // SAFETY: `PathRasterizationVertex` has no padding bytes, as
+        // `instance_types_contain_no_padding` asserts, so every byte of the slice is initialized.
         let vertex_data = unsafe { Self::instance_bytes(&vertices) };
         let Some((vertex_offset, vertex_size)) =
             self.write_to_instance_buffer(instance_offset, vertex_data)
@@ -305,5 +321,160 @@ impl WgpuRenderer {
         }
 
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::mem::size_of;
+
+    /// Every instance type below reaches `WgpuRenderer::instance_bytes`, which reinterprets a
+    /// `&[T]` as a `&[u8]`. That is only sound while all of the bytes of `T` are initialized, so a
+    /// single byte of compiler-inserted padding would make the reinterpretation undefined
+    /// behavior. A `#[repr(C)]` struct is padding free exactly when its size equals the sum of its
+    /// fields' sizes, which is what this macro asserts.
+    ///
+    /// The fix for a failure is an explicit pad field (as `PaddedBool32` and the `pad: u32` fields
+    /// in `gpui::scene` do), not an adjusted expectation.
+    macro_rules! assert_no_padding {
+        ($t:ty, $($field:ty),+ $(,)?) => {{
+            let field_bytes = 0 $(+ size_of::<$field>())+;
+            assert_eq!(
+                size_of::<$t>(),
+                field_bytes,
+                concat!(
+                    stringify!($t),
+                    " has compiler-inserted padding, so reinterpreting it as &[u8] is undefined \
+                     behavior. Add an explicit pad field instead.",
+                ),
+            );
+        }};
+    }
+
+    #[test]
+    fn instance_types_contain_no_padding() {
+        // Leaked to the instance buffer by `drawing.rs`.
+        assert_no_padding!(
+            gpui::Quad,
+            u32,
+            gpui::BorderStyle,
+            gpui::Bounds<gpui::ScaledPixels>,
+            gpui::ContentMask<gpui::ScaledPixels>,
+            gpui::Background,
+            gpui::Hsla,
+            gpui::Corners<gpui::ScaledPixels>,
+            gpui::Edges<gpui::ScaledPixels>,
+        );
+        assert_no_padding!(
+            gpui::Shadow,
+            u32,
+            gpui::ScaledPixels,
+            gpui::Bounds<gpui::ScaledPixels>,
+            gpui::Corners<gpui::ScaledPixels>,
+            gpui::ContentMask<gpui::ScaledPixels>,
+            gpui::Hsla,
+        );
+        assert_no_padding!(
+            gpui::Underline,
+            u32,
+            u32,
+            gpui::Bounds<gpui::ScaledPixels>,
+            gpui::ContentMask<gpui::ScaledPixels>,
+            gpui::Hsla,
+            gpui::ScaledPixels,
+            gpui::PaddedBool32,
+        );
+        assert_no_padding!(
+            gpui::MonochromeSprite,
+            u32,
+            u32,
+            gpui::AtlasTile,
+            gpui::Bounds<gpui::ScaledPixels>,
+            gpui::ContentMask<gpui::ScaledPixels>,
+            gpui::Hsla,
+            gpui::TransformationMatrix,
+        );
+        assert_no_padding!(
+            gpui::SubpixelSprite,
+            u32,
+            u32,
+            gpui::AtlasTile,
+            gpui::Bounds<gpui::ScaledPixels>,
+            gpui::ContentMask<gpui::ScaledPixels>,
+            gpui::Hsla,
+            gpui::TransformationMatrix,
+        );
+        assert_no_padding!(
+            gpui::PolychromeSprite,
+            u32,
+            u32,
+            gpui::AtlasTile,
+            gpui::PaddedBool32,
+            f32,
+            gpui::Bounds<gpui::ScaledPixels>,
+            gpui::ContentMask<gpui::ScaledPixels>,
+            gpui::Corners<gpui::ScaledPixels>,
+        );
+        assert_no_padding!(
+            gpui::PathVertex<gpui::ScaledPixels>,
+            gpui::Point<gpui::ScaledPixels>,
+            gpui::Point<f32>,
+            gpui::ContentMask<gpui::ScaledPixels>,
+        );
+        assert_no_padding!(PathSprite, gpui::Bounds<gpui::ScaledPixels>);
+        assert_no_padding!(
+            PathRasterizationVertex,
+            gpui::Point<gpui::ScaledPixels>,
+            gpui::Point<f32>,
+            gpui::Background,
+            gpui::Bounds<gpui::ScaledPixels>,
+        );
+
+        // Nested types: their padding would be invisible to the assertions above, because those
+        // sum `size_of` per field rather than the sizes of the fields' own fields.
+        assert_no_padding!(
+            gpui::Bounds<gpui::ScaledPixels>,
+            gpui::Point<gpui::ScaledPixels>,
+            gpui::Size<gpui::ScaledPixels>,
+        );
+        assert_no_padding!(
+            gpui::ContentMask<gpui::ScaledPixels>,
+            gpui::Bounds<gpui::ScaledPixels>,
+        );
+        assert_no_padding!(gpui::Hsla, f32, f32, f32, f32);
+        assert_no_padding!(
+            gpui::Corners<gpui::ScaledPixels>,
+            gpui::ScaledPixels,
+            gpui::ScaledPixels,
+            gpui::ScaledPixels,
+            gpui::ScaledPixels,
+        );
+        assert_no_padding!(
+            gpui::Edges<gpui::ScaledPixels>,
+            gpui::ScaledPixels,
+            gpui::ScaledPixels,
+            gpui::ScaledPixels,
+            gpui::ScaledPixels,
+        );
+        assert_no_padding!(
+            gpui::AtlasTile,
+            gpui::AtlasTextureId,
+            gpui::TileId,
+            u32,
+            gpui::Bounds<gpui::DevicePixels>,
+        );
+        assert_no_padding!(gpui::TransformationMatrix, [[f32; 2]; 2], [f32; 2],);
+        assert_no_padding!(
+            gpui::Background,
+            u32,
+            u32,
+            gpui::Hsla,
+            f32,
+            gpui::LinearColorStop,
+            gpui::LinearColorStop,
+            u32,
+        );
+        assert_no_padding!(gpui::LinearColorStop, gpui::Hsla, f32);
     }
 }

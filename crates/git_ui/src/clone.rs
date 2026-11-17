@@ -64,9 +64,7 @@ pub fn clone_and_open(
             let repo_name = repo_url
                 .split('/')
                 .next_back()
-                .map_or("repository", |name| {
-                    name.strip_suffix(".git").unwrap_or(name)
-                })
+                .map_or("repository", |name| name.trim_suffix(".git"))
                 .to_owned();
 
             let clone_task = workspace

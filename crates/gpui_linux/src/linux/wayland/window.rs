@@ -60,9 +60,12 @@ struct RawWindow {
     display: *mut c_void,
 }
 
-// Safety: The raw pointers in RawWindow point to Wayland surface/display
-// which are valid for the window's lifetime. These are used only for
-// passing to wgpu which needs Send+Sync for surface creation.
+// SAFETY: `RawWindow` is a plain pair of addresses that owns nothing and dereferences
+// nothing; it exists so wgpu can name a Wayland surface and display. `Send`/`Sync` are
+// sound because the addresses stay valid for as long as the window state that produced
+// them, and every consumer only forwards them to wgpu or to the windowing API on the
+// protocol thread. This impl permits moving the handle wrapper, not the protocol objects:
+// nothing here makes concurrent Wayland calls safe.
 unsafe impl Send for RawWindow {}
 unsafe impl Sync for RawWindow {}
 
@@ -70,6 +73,8 @@ impl rwh::HasWindowHandle for RawWindow {
     fn window_handle(&self) -> Result<rwh::WindowHandle<'_>, rwh::HandleError> {
         let window = NonNull::new(self.window).ok_or(rwh::HandleError::Unavailable)?;
         let handle = rwh::WaylandWindowHandle::new(window);
+        // SAFETY: the handle borrows the surface owned by `self`, and the `'_` in the return
+        // type ties the borrow to `&self`, so the surface cannot be destroyed while it is in use.
         Ok(unsafe { rwh::WindowHandle::borrow_raw(handle.into()) })
     }
 }
@@ -77,6 +82,8 @@ impl rwh::HasDisplayHandle for RawWindow {
     fn display_handle(&self) -> Result<rwh::DisplayHandle<'_>, rwh::HandleError> {
         let display = NonNull::new(self.display).ok_or(rwh::HandleError::Unavailable)?;
         let handle = rwh::WaylandDisplayHandle::new(display);
+        // SAFETY: the handle borrows the display owned by `self`, and the `'_` in the return type
+        // ties the borrow to `&self`.
         Ok(unsafe { rwh::DisplayHandle::borrow_raw(handle.into()) })
     }
 }
@@ -662,6 +669,8 @@ impl WaylandWindowStatePtr {
 
                 if let Some(mut configure) = state.in_progress_configure.take() {
                     let got_unmaximized = state.maximized && !configure.maximized;
+                    let mode_changed = state.fullscreen != configure.fullscreen
+                        || state.maximized != configure.maximized;
                     state.fullscreen = configure.fullscreen;
                     state.maximized = configure.maximized;
                     state.tiling = configure.tiling;
@@ -685,9 +694,20 @@ impl WaylandWindowStatePtr {
                             };
                         }
                     }
+                    let resized = configure
+                        .size
+                        .is_some_and(|size| size != state.window_bounds.size);
                     drop(state);
                     if let Some(size) = configure.size {
                         self.resize(size);
+                    }
+                    // Same-size mode changes skip the resize callback, so report them as a move.
+                    if mode_changed && !resized {
+                        let callback = self.callbacks.borrow_mut().moved.take();
+                        if let Some(mut fun) = callback {
+                            fun();
+                            self.callbacks.borrow_mut().moved = Some(fun);
+                        }
                     }
                 }
             }
@@ -1144,6 +1164,8 @@ impl rwh::HasWindowHandle for WaylandWindow {
         let c_ptr = NonNull::new(surface).ok_or(rwh::HandleError::Unavailable)?;
         let handle = rwh::WaylandWindowHandle::new(c_ptr);
         let raw_handle = rwh::RawWindowHandle::Wayland(handle);
+        // SAFETY: the surface belongs to `self`, and the `'_` in the return type ties the borrow
+        // to `&self`, so the surface outlives the handle.
         Ok(unsafe { rwh::WindowHandle::borrow_raw(raw_handle) })
     }
 }
@@ -1162,6 +1184,8 @@ impl rwh::HasDisplayHandle for WaylandWindow {
         let c_ptr = NonNull::new(display).ok_or(rwh::HandleError::Unavailable)?;
         let handle = rwh::WaylandDisplayHandle::new(c_ptr);
         let raw_handle = rwh::RawDisplayHandle::Wayland(handle);
+        // SAFETY: the display is reached through `self`'s surface backend, and the `'_` in the
+        // return type ties the borrow to `&self`.
         Ok(unsafe { rwh::DisplayHandle::borrow_raw(raw_handle) })
     }
 }
@@ -1599,7 +1623,7 @@ impl PlatformWindow for WaylandWindow {
         if let Some(toplevel) = state.surface_state.toplevel() {
             toplevel.show_window_menu(
                 &state.globals.seat,
-                serial,
+                serial.as_raw(),
                 f32::from(position.x) as i32,
                 f32::from(position.y) as i32,
             );
@@ -1610,7 +1634,7 @@ impl PlatformWindow for WaylandWindow {
         let state = self.borrow();
         let serial = state.client.get_serial(SerialKind::MousePress);
         if let Some(toplevel) = state.surface_state.toplevel() {
-            toplevel._move(&state.globals.seat, serial);
+            toplevel._move(&state.globals.seat, serial.as_raw());
         }
     }
 
@@ -1619,7 +1643,7 @@ impl PlatformWindow for WaylandWindow {
         if let Some(toplevel) = state.surface_state.toplevel() {
             toplevel.resize(
                 &state.globals.seat,
-                state.client.get_serial(SerialKind::MousePress),
+                state.client.get_serial(SerialKind::MousePress).as_raw(),
                 edge.to_xdg(),
             )
         }

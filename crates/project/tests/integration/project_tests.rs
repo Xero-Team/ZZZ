@@ -832,7 +832,10 @@ async fn test_editorconfig_support(cx: &mut gpui::TestAppContext) {
             max_line_length = 120
         [*.js]
             tab_width = 10
+            trim_trailing_whitespace = false
             max_line_length = off
+        [*.json]
+            trim_trailing_whitespace = true
         "#,
         ".ZZZ": {
             "settings.json": r#"{
@@ -842,6 +845,17 @@ async fn test_editorconfig_support(cx: &mut gpui::TestAppContext) {
                 "remove_trailing_whitespace_on_save": false,
                 "preferred_line_length": 64,
                 "soft_wrap": "editor_width",
+                "languages": {
+                    "JavaScript": {
+                        "remove_trailing_whitespace_on_save": true,
+                    },
+                    "JSON": {
+                        "remove_trailing_whitespace_on_save": true,
+                    },
+                    "Markdown": {
+                        "remove_trailing_whitespace_on_save": true,
+                    },
+                },
             }"#,
         },
         "a.rs": "fn a() {\n    A\n}",
@@ -871,6 +885,7 @@ async fn test_editorconfig_support(cx: &mut gpui::TestAppContext) {
             "e.rs": "fn e() {\n    E\n}",
         },
         "README.json": "tabs are better\n",
+        "README.md": "spaces are meaningful  \n",
     }));
 
     let path = dir.path();
@@ -881,6 +896,7 @@ async fn test_editorconfig_support(cx: &mut gpui::TestAppContext) {
     let language_registry = project.read_with(cx, |project, _| project.languages().clone());
     language_registry.add(js_lang());
     language_registry.add(json_lang());
+    language_registry.add(markdown_lang());
     language_registry.add(rust_lang());
 
     let worktree = project.update(cx, |project, cx| project.worktrees(cx).next().unwrap());
@@ -903,11 +919,14 @@ async fn test_editorconfig_support(cx: &mut gpui::TestAppContext) {
     let settings_d = settings_for("d/d.rs", cx).await;
     let settings_e = settings_for("e/e.rs", cx).await;
     let settings_readme = settings_for("README.json", cx).await;
+    let settings_markdown = settings_for("README.md", cx).await;
     // .editorconfig overrides .ZZZ/settings
     assert_eq!(Some(settings_a.tab_size), NonZeroU32::new(3));
     assert_eq!(settings_a.hard_tabs, true);
     assert_eq!(settings_a.ensure_final_newline_on_save, true);
-    assert_eq!(settings_a.remove_trailing_whitespace_on_save, true);
+    // .editorconfig can disable trailing whitespace removal, but must not
+    // re-enable it when ZZZ settings have disabled it.
+    assert_eq!(settings_a.remove_trailing_whitespace_on_save, false);
     assert_eq!(settings_a.line_ending, LineEndingSetting::EnforceLf);
     assert_eq!(settings_a.preferred_line_length, 120);
 
@@ -926,6 +945,9 @@ async fn test_editorconfig_support(cx: &mut gpui::TestAppContext) {
 
     // "indent_size" is not set, so "tab_width" is used
     assert_eq!(Some(settings_c.tab_size), NonZeroU32::new(10));
+    assert_eq!(settings_c.remove_trailing_whitespace_on_save, false);
+    assert_eq!(settings_readme.remove_trailing_whitespace_on_save, true);
+    assert_eq!(settings_markdown.remove_trailing_whitespace_on_save, true);
 
     // When max_line_length is "off", default to .ZZZ/settings.json
     assert_eq!(settings_b.preferred_line_length, 64);
@@ -2413,7 +2435,7 @@ async fn test_managing_language_servers(cx: &mut gpui::TestAppContext) {
     );
 
     // Open a third buffer with a different associated language server.
-    let (json_buffer, _json_handle) = project
+    let (json_buffer, json_handle) = project
         .update(cx, |project, cx| {
             project.open_local_buffer_with_lsp(path!("/dir/package.json"), cx)
         })
@@ -2670,7 +2692,7 @@ async fn test_managing_language_servers(cx: &mut gpui::TestAppContext) {
     );
 
     // Close notifications are reported only to servers matching the buffer's language.
-    cx.update(|_| drop(_json_handle));
+    cx.update(|_| drop(json_handle));
     let close_message = lsp::DidCloseTextDocumentParams {
         text_document: lsp::TextDocumentIdentifier::new(
             lsp::Uri::from_file_path(path!("/dir/package.json")).unwrap(),
@@ -8686,7 +8708,7 @@ async fn test_terminal_toolchain_lookup_is_scoped_to_terminal_worktree(
     assert!(active_toolchain_for_b.is_none());
 
     let detect_venv = cx.update(|cx| TerminalSettings::get_global(cx).detect_venv.clone());
-    assert!(matches!(detect_venv, settings::VenvSettings::On { .. }));
+    assert_matches!(detect_venv, settings::VenvSettings::On { .. });
 }
 
 #[gpui::test]
@@ -12109,10 +12131,10 @@ async fn test_staging_hunks(cx: &mut gpui::TestAppContext) {
     });
 
     // The diff emits a change event for the range of the staged hunk.
-    assert!(matches!(
+    assert_matches!(
         diff_events.next().await.unwrap(),
         BufferDiffEvent::HunksStagedOrUnstaged(_)
-    ));
+    );
     let event = diff_events.next().await.unwrap();
     if let BufferDiffEvent::DiffChanged(DiffChanged {
         changed_range: Some(changed_range),
@@ -12212,10 +12234,10 @@ async fn test_staging_hunks(cx: &mut gpui::TestAppContext) {
             ],
         );
     });
-    assert!(matches!(
+    assert_matches!(
         diff_events.next().await.unwrap(),
         BufferDiffEvent::HunksStagedOrUnstaged(_)
-    ));
+    );
     let event = diff_events.next().await.unwrap();
     if let BufferDiffEvent::DiffChanged(DiffChanged {
         changed_range: Some(changed_range),
@@ -12373,10 +12395,10 @@ async fn test_uncommitted_diff_opened_before_unstaged_diff(cx: &mut gpui::TestAp
     let unstaged_diff_task = project.update(cx, |project, cx| {
         project.open_unstaged_diff(buffer.clone(), cx)
     });
-    let (uncommitted_diff, _unstaged_diff) =
+    let (uncommitted_diff, unstaged_diff) =
         futures::future::join(uncommitted_diff_task, unstaged_diff_task).await;
     let uncommitted_diff = uncommitted_diff.unwrap();
-    let _unstaged_diff = _unstaged_diff.unwrap();
+    let _ = unstaged_diff.unwrap();
 
     cx.run_until_parked();
 
@@ -16993,5 +17015,67 @@ async fn test_set_worktrees_from_proto_keeps_store_on_bad_metadata(cx: &mut Test
         ids,
         vec![1],
         "a failed update must not drop or corrupt existing worktrees"
+    );
+}
+
+#[gpui::test]
+async fn test_worktree_released_when_creation_caller_is_cancelled(cx: &mut TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(path!("/project"), json!({ "a.rs": "" }))
+        .await;
+    fs.insert_tree(path!("/other"), json!({ "b.rs": "" })).await;
+    let project = Project::test(fs, [path!("/project").as_ref()], cx).await;
+    cx.run_until_parked();
+
+    // Drop the returned task immediately, as a cancelled caller would; creation
+    // still completes through the clone held by `loading_worktrees`.
+    let task = project.update(cx, |project, cx| {
+        project.find_or_create_worktree(path!("/other"), true, cx)
+    });
+    drop(task);
+    cx.run_until_parked();
+
+    let created = project.read_with(cx, |project, cx| {
+        project
+            .find_worktree(Path::new("/other"), cx)
+            .map(|(worktree, _)| (worktree.read(cx).id(), worktree.downgrade()))
+    });
+
+    let Some((worktree_id, weak_worktree)) = created else {
+        panic!("worktree creation should complete even when the caller is cancelled");
+    };
+
+    project.update(cx, |project, cx| project.remove_worktree(worktree_id, cx));
+    cx.run_until_parked();
+
+    assert!(
+        weak_worktree.upgrade().is_none(),
+        "removed worktree should be released even when its creation task's caller was cancelled"
+    );
+}
+
+#[gpui::test]
+async fn test_initial_scan_completes_when_creation_caller_is_cancelled(cx: &mut TestAppContext) {
+    init_test(cx);
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(path!("/project"), json!({ "a.rs": "" }))
+        .await;
+    fs.insert_tree(path!("/other"), json!({ "b.rs": "" })).await;
+    let project = Project::test(fs, [path!("/project").as_ref()], cx).await;
+    cx.run_until_parked();
+
+    let task = project.update(cx, |project, cx| {
+        project.find_or_create_worktree(path!("/other"), true, cx)
+    });
+    drop(task);
+    cx.run_until_parked();
+
+    let initial_scan_completed = project.read_with(cx, |project, cx| {
+        project.worktree_store().read(cx).initial_scan_completed()
+    });
+    assert!(
+        initial_scan_completed,
+        "initial scan should complete even when the creation task's caller was cancelled"
     );
 }

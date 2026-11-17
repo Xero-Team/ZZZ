@@ -39,6 +39,9 @@ pub enum EngineError {
     MarkUnreadFailed,
     ClearHistoryFailed,
     LeaveFailed,
+    /// Telegram kept rejecting the media's file reference, so the file can no
+    /// longer be downloaded from its message.
+    MediaUnavailable,
     /// Telegram asked the client to wait before retrying.
     FloodWait {
         seconds: u64,

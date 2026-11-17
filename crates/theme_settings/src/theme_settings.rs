@@ -352,8 +352,7 @@ pub fn refine_theme(theme: &ThemeContent) -> Theme {
     let window_background_appearance = theme
         .style
         .window_background_appearance
-        .map(|w| w.into_gpui())
-        .unwrap_or_default();
+        .map_or_default(|w| w.into_gpui());
 
     Theme {
         id: uuid::Uuid::new_v4().to_string(),

@@ -175,6 +175,7 @@ fn open_performance_profiler(
     let default_bounds = size(px(1280.), px(720.));
 
     cx.defer(move |cx| {
+        let display_id = cx.active_display().map(|display| display.id());
         cx.open_window(
             WindowOptions {
                 titlebar: Some(TitlebarOptions {
@@ -189,7 +190,8 @@ fn open_performance_profiler(
                 window_background,
                 window_decorations: None,
                 window_min_size: Some(default_bounds),
-                window_bounds: Some(WindowBounds::centered(default_bounds, cx)),
+                window_bounds: Some(WindowBounds::centered(display_id, default_bounds, cx)),
+                display_id,
                 ..Default::default()
             },
             |_window, cx| ProfilerWindow::new(startup_time, Some(workspace_handle), cx),
@@ -218,7 +220,7 @@ pub struct ProfilerWindow {
     has_remote: bool,
     remote_now_nanos: u128,
     remote_received_at: Option<Instant>,
-    _remote_poll_task: Option<Task<()>>,
+    remote_poll_task: Option<Task<()>>,
 }
 
 impl ProfilerWindow {
@@ -240,7 +242,7 @@ impl ProfilerWindow {
             has_remote: false,
             remote_now_nanos: 0,
             remote_received_at: None,
-            _remote_poll_task: None,
+            remote_poll_task: None,
         })
     }
 
@@ -311,7 +313,7 @@ impl ProfilerWindow {
         if source.is_remote() {
             self.start_remote_polling(cx);
         } else {
-            self._remote_poll_task = None;
+            self.remote_poll_task = None;
         }
     }
 
@@ -334,7 +336,7 @@ impl ProfilerWindow {
 
         let source_foreground_only = self.source.foreground_only();
         let weak = cx.weak_entity();
-        self._remote_poll_task = Some(cx.spawn(async move |_this, cx| {
+        self.remote_poll_task = Some(cx.spawn(async move |_this, cx| {
             loop {
                 let response = proto_client
                     .request(proto::GetRemoteProfilingData {
@@ -473,8 +475,8 @@ impl ProfilerWindow {
         let bar_width = (end_fraction - start_fraction).max(0.0);
 
         let file_str: &str = &item.location.file;
-        let basename = file_str.rsplit_once("/").unwrap_or(("", file_str)).1;
-        let basename = basename.rsplit_once("\\").unwrap_or(("", basename)).1;
+        let basename = file_str.rsplit_once('/').unwrap_or(("", file_str)).1;
+        let basename = basename.rsplit_once('\\').unwrap_or(("", basename)).1;
 
         let label = SharedString::from(format!(
             "{}:{}:{}",
@@ -575,11 +577,11 @@ impl Render for ProfilerWindow {
                                 .style(ButtonStyle::Filled)
                                 .on_click(cx.listener(
                                     |this, _, _window, cx| {
-                                        this.paused = !this.paused;
+                                        this.paused.toggle();
                                         if !this.paused && this.source.is_remote() {
                                             this.start_remote_polling(cx);
                                         } else if this.paused && this.source.is_remote() {
-                                            this._remote_poll_task = None;
+                                            this.remote_poll_task = None;
                                         }
                                         cx.notify();
                                     },

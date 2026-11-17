@@ -983,8 +983,7 @@ impl Frame {
 
     pub(crate) fn focus_path(&self) -> SmallVec<[FocusId; 8]> {
         self.focus
-            .map(|focus_id| self.dispatch_tree.focus_path(focus_id))
-            .unwrap_or_default()
+            .map_or_default(|focus_id| self.dispatch_tree.focus_path(focus_id))
     }
 
     pub(crate) fn finish(&mut self, prev_frame: &mut Self) {

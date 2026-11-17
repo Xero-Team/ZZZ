@@ -1263,7 +1263,7 @@ impl Terminal {
             }
             InternalEvent::ToggleViMode => {
                 trace!("Toggling vi mode");
-                self.vi_mode_enabled = !self.vi_mode_enabled;
+                self.vi_mode_enabled.toggle();
                 term.toggle_vi_mode();
             }
             InternalEvent::ViMotion(motion) => {
@@ -1830,7 +1830,7 @@ impl Terminal {
             match esc {
                 Cow::Borrowed(string) => self.input(string.as_bytes()),
                 Cow::Owned(string) => self.input(string.into_bytes()),
-            };
+            }
             true
         } else {
             false
@@ -2192,8 +2192,19 @@ impl Terminal {
                     };
 
                     if selection_type == Some(SelectionType::Simple) && e.modifiers.shift {
-                        self.events
-                            .push_back(InternalEvent::UpdateSelection(position));
+                        if self.last_content.selection.is_some() {
+                            // Shift+click extends the existing selection to this point.
+                            self.events
+                                .push_back(InternalEvent::UpdateSelection(position));
+                        } else {
+                            // With no selection yet, Shift is the escape hatch for
+                            // selecting text while an app has mouse tracking enabled,
+                            // so anchor a selection here for the drag to extend.
+                            self.events.push_back(InternalEvent::SetSelection(Some((
+                                Selection::new(SelectionType::Simple, point, side),
+                                point,
+                            ))));
+                        }
                         return;
                     }
 
@@ -2306,7 +2317,7 @@ impl Terminal {
                     for scroll in scrolls {
                         self.write_to_pty(scroll);
                     }
-                };
+                }
             } else if self
                 .last_content
                 .mode
@@ -2417,8 +2428,7 @@ impl Terminal {
                             let process_file = fpi
                                 .cwd
                                 .file_name()
-                                .map(|name| name.to_string_lossy().into_owned())
-                                .unwrap_or_default();
+                                .map_or_default(|name| name.to_string_lossy().into_owned());
 
                             let argv = fpi.argv.as_slice();
                             let process_name = format!(
@@ -2449,14 +2459,13 @@ impl Terminal {
     pub fn kill_active_task(&mut self) {
         if let Some(task) = self.task()
             && task.status == TaskStatus::Running
+            && let TerminalType::Pty { info, .. } = &self.terminal_type
         {
-            if let TerminalType::Pty { info, .. } = &self.terminal_type {
-                // First kill the foreground process group (the command running in the shell)
-                info.kill_current_process();
-                // Then kill the shell itself so that the terminal exits properly
-                // and wait_for_completed_task can complete
-                info.kill_child_process();
-            }
+            // First kill the foreground process group (the command running in the shell)
+            info.kill_current_process();
+            // Then kill the shell itself so that the terminal exits properly
+            // and wait_for_completed_task can complete
+            info.kill_child_process();
         }
     }
 
@@ -2535,7 +2544,7 @@ impl Terminal {
             None => {
                 task.status.register_terminal_exit();
             }
-        };
+        }
 
         let (finished_successfully, task_line, command_line) = task_summary(task, exit_status);
         let mut lines_to_show = Vec::new();
@@ -2801,6 +2810,7 @@ pub fn rgba_color(r: u8, g: u8, b: u8) -> Hsla {
 
 #[cfg(test)]
 mod tests {
+
     use std::time::Duration;
 
     use super::*;
@@ -3050,6 +3060,114 @@ mod tests {
             click_count: 1,
         };
         terminal.mouse_up(&mouse_up, cx);
+    }
+
+    /// With mouse tracking active (e.g. htop), Shift is the escape hatch to
+    /// select terminal text. Shift+drag must start a selection rather than being
+    /// swallowed as an "extend existing selection" no-op.
+    #[gpui::test]
+    async fn test_terminal_shift_drag_selects_while_mouse_tracking(cx: &mut TestAppContext) {
+        // `?1002h` enables button-event mouse tracking, `?1006h` selects SGR encoding.
+        let terminal = init_ctrl_click_hyperlink_test(cx, b"\x1b[?1002h\x1b[?1006hhello world\r\n");
+
+        terminal.update(cx, |terminal, cx| {
+            assert!(
+                terminal.last_content.mode.intersects(TermMode::MOUSE_MODE),
+                "mouse tracking should be active"
+            );
+
+            let shift = Modifiers {
+                shift: true,
+                ..Modifiers::none()
+            };
+            terminal.mouse_down(
+                &MouseDownEvent {
+                    button: MouseButton::Left,
+                    position: point(px(50.0), px(10.0)),
+                    modifiers: shift,
+                    click_count: 1,
+                    first_mouse: true,
+                },
+                cx,
+            );
+
+            // With no selection yet, the shift press must anchor a new selection
+            // so the following drag has something to extend.
+            assert!(
+                terminal
+                    .events
+                    .iter()
+                    .any(|event| matches!(event, InternalEvent::SetSelection(Some(_)))),
+                "shift+click with no existing selection should anchor a selection"
+            );
+            terminal.events.clear();
+
+            let region = terminal.last_content.terminal_bounds.bounds;
+            terminal.mouse_drag(
+                &MouseMoveEvent {
+                    position: point(px(90.0), px(10.0)),
+                    pressed_button: Some(MouseButton::Left),
+                    modifiers: shift,
+                },
+                region,
+                cx,
+            );
+
+            assert!(
+                terminal
+                    .events
+                    .iter()
+                    .any(|event| matches!(event, InternalEvent::UpdateSelection(_))),
+                "shift+drag should extend the selection while mouse tracking is active"
+            );
+            assert!(terminal.selection_phase == SelectionPhase::Selecting);
+        });
+    }
+
+    /// Shift+click with a selection already on screen must keep extending it,
+    /// not re-anchor a fresh one.
+    #[gpui::test]
+    async fn test_terminal_shift_click_extends_existing_selection(cx: &mut TestAppContext) {
+        let terminal = init_ctrl_click_hyperlink_test(cx, b"hello world\r\n");
+
+        terminal.update(cx, |terminal, cx| {
+            // A visible selection, as a sync would have populated in production.
+            terminal.last_content.selection = Some(SelectionRange {
+                start: AlacPoint::new(Line(0), Column(0)),
+                end: AlacPoint::new(Line(0), Column(5)),
+                is_block: false,
+            });
+            terminal.events.clear();
+
+            terminal.mouse_down(
+                &MouseDownEvent {
+                    button: MouseButton::Left,
+                    position: point(px(90.0), px(10.0)),
+                    modifiers: Modifiers {
+                        shift: true,
+                        ..Modifiers::none()
+                    },
+                    click_count: 1,
+                    first_mouse: true,
+                },
+                cx,
+            );
+
+            assert!(
+                terminal
+                    .events
+                    .iter()
+                    .any(|event| matches!(event, InternalEvent::UpdateSelection(_))),
+                "shift+click with an existing selection should extend it"
+            );
+            assert!(
+                !terminal
+                    .events
+                    .iter()
+                    .any(|event| matches!(event, InternalEvent::SetSelection(Some(_)))),
+                "shift+click should extend, not re-anchor, an existing selection"
+            );
+        });
     }
 
     #[gpui::test]

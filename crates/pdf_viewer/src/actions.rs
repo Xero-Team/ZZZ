@@ -1,14 +1,17 @@
 use std::time::Duration;
 
 use gpui::{Bounds, Context, Focusable as _, IsZero, Pixels, Window, point, px};
+use i18n::tr;
 
 use crate::{
-    BASE_DPI, CACHE_MEMORY_BUDGET, FitPage, FitWidth, MAX_ZOOM, MIN_ZOOM, NextMatch, NextPage,
-    PAGE_HORIZONTAL_MARGIN, PAGE_VERTICAL_MARGIN, PreviousMatch, PreviousPage, ResetZoom,
-    ToggleSearch, ToggleSidebar, ZOOM_STEP, ZoomIn, ZoomOut,
+    BASE_DPI, CACHE_MEMORY_BUDGET, CopyPageText, FitPage, FitWidth, MAX_ZOOM, MIN_ZOOM, NextMatch,
+    NextPage, PAGE_HORIZONTAL_MARGIN, PAGE_VERTICAL_MARGIN, PreviousMatch, PreviousPage, ResetZoom,
+    RotatePageLeft, RotatePageRight, ToggleAnnotate, ToggleSearch, ToggleSidebar, ZOOM_STEP,
+    ZoomIn, ZoomOut,
+    edit::PdfEdit,
     view::{
         PdfView, PdfViewEvent, ZoomMode, estimate_page_bytes, idle_prefetch_order,
-        pages_to_keep_within_budget, prefetch_admits,
+        pages_to_keep_within_budget, prefetch_admits, render_dpi,
     },
     worker::Priority,
 };
@@ -63,7 +66,7 @@ impl PdfView {
 
         if (new_zoom - self.zoom).abs() > f32::EPSILON {
             self.zoom = new_zoom;
-            self.invalidate_cache();
+            self.supersede_renders();
             self.update_page_layouts();
             self.ensure_pages_rendered(window, cx);
             cx.on_next_frame(window, |view, _window, cx| {
@@ -92,13 +95,11 @@ impl PdfView {
         }
     }
 
-    /// Drop cached bitmaps so the next render uses the current zoom. Renders in
-    /// flight are cancelled by clearing their tasks, and idle prefetch is halted
-    /// so it cannot insert pages rendered at the stale scale; `ensure_pages_rendered`
-    /// re-arms it at the new zoom.
-    fn invalidate_cache(&mut self) {
+    /// Drop in-flight renders so the next pass re-renders at the current scale, but
+    /// keep the bitmaps already on screen: a page whose cached scale is stale still
+    /// paints (GPUI stretches it), so zooming never blanks the document.
+    fn supersede_renders(&mut self) {
         if let Some(state) = self.loaded_mut() {
-            state.page_cache.clear();
             state.rendering.clear();
             state.idle_prefetch = None;
         }
@@ -123,7 +124,7 @@ impl PdfView {
         for index in start..=end {
             self.render_page(
                 index,
-                self.page_dpi(index),
+                self.page_dpi(index, window.scale_factor()),
                 Priority::Foreground,
                 window,
                 cx,
@@ -161,21 +162,18 @@ impl PdfView {
         state.page_cache.retain(|index, _| keep.contains(index));
     }
 
-    fn page_dpi(&self, index: usize) -> f32 {
+    fn page_dpi(&self, index: usize, device_scale: f32) -> f32 {
+        let fallback = BASE_DPI * self.zoom * device_scale.max(1.0);
         let Some(layout) = self.page_layouts.get(index) else {
-            return BASE_DPI * self.zoom;
+            return fallback;
         };
         let Some(state) = self.loaded() else {
-            return BASE_DPI * self.zoom;
+            return fallback;
         };
         let Some(summary_page) = state.summary.pages.get(index) else {
-            return BASE_DPI * self.zoom;
+            return fallback;
         };
-        let page_width = summary_page.width as f32;
-        if page_width <= 0.0 {
-            return BASE_DPI * self.zoom;
-        }
-        BASE_DPI * (layout.width / page_width)
+        render_dpi(layout.width, summary_page.width as f32, device_scale)
     }
 
     /// Render a single page at the given DPI unless an up-to-date bitmap is
@@ -244,6 +242,7 @@ impl PdfView {
         if page_count <= 1 {
             return;
         }
+        let device_scale = window.scale_factor();
         let task = cx.spawn_in(window, async move |this, cx| {
             cx.background_executor().timer(IDLE_PREFETCH_DELAY).await;
             // The anchor page can move between expansion steps; capture it once
@@ -261,7 +260,7 @@ impl PdfView {
                         if view.current_page != center {
                             return PrefetchStep::Stop;
                         }
-                        match view.prefetch_idle_page(index) {
+                        match view.prefetch_idle_page(index, device_scale) {
                             PrefetchStep::Render(dpi) => {
                                 view.render_page(index, dpi, Priority::Background, window, cx);
                                 PrefetchStep::Render(dpi)
@@ -298,8 +297,8 @@ impl PdfView {
     /// submits faster than renders complete and every submission sees a nearly
     /// empty cache, so it would queue the whole document before the first
     /// bitmaps land — blowing far past the budget.
-    fn prefetch_idle_page(&self, index: usize) -> PrefetchStep {
-        let scale = self.page_dpi(index) / 72.0;
+    fn prefetch_idle_page(&self, index: usize, device_scale: f32) -> PrefetchStep {
+        let scale = self.page_dpi(index, device_scale) / 72.0;
         let Some(state) = self.loaded() else {
             return PrefetchStep::Stop;
         };
@@ -315,18 +314,18 @@ impl PdfView {
         };
         let page_bytes = estimate_page_bytes(layout.width, layout.height, scale);
         if !prefetch_admits(
-            self.committed_cache_bytes(),
+            self.committed_cache_bytes(device_scale),
             page_bytes,
             CACHE_MEMORY_BUDGET,
         ) {
             return PrefetchStep::Stop;
         }
-        PrefetchStep::Render(self.page_dpi(index))
+        PrefetchStep::Render(self.page_dpi(index, device_scale))
     }
 
     /// Bytes already committed to the cache: resident bitmaps plus the estimated
     /// size of every in-flight render (which will land in the cache soon).
-    fn committed_cache_bytes(&self) -> u64 {
+    fn committed_cache_bytes(&self, device_scale: f32) -> u64 {
         let Some(state) = self.loaded() else {
             return 0;
         };
@@ -341,7 +340,7 @@ impl PdfView {
             .filter(|index| !state.page_cache.contains_key(index))
             .filter_map(|&index| {
                 let layout = self.page_layouts.get(index)?;
-                let scale = self.page_dpi(index) / 72.0;
+                let scale = self.page_dpi(index, device_scale) / 72.0;
                 Some(estimate_page_bytes(layout.width, layout.height, scale))
             })
             .sum();
@@ -389,7 +388,7 @@ impl PdfView {
         self.zoom_mode = ZoomMode::Custom;
         self.zoom = zoom.clamp(MIN_ZOOM, MAX_ZOOM);
         let relative_offset = self.relative_scroll_offset();
-        self.invalidate_cache();
+        self.supersede_renders();
         self.update_page_layouts();
         self.ensure_pages_rendered(window, cx);
         self.restore_relative_scroll_offset(relative_offset);
@@ -434,7 +433,7 @@ impl PdfView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.show_sidebar = !self.show_sidebar;
+        self.show_sidebar.toggle();
         cx.notify();
     }
 
@@ -444,7 +443,7 @@ impl PdfView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.search_open = !self.search_open;
+        self.search_open.toggle();
         if self.search_open {
             let handle = self.search_editor.focus_handle(cx);
             window.focus(&handle, cx);
@@ -478,7 +477,9 @@ impl PdfView {
         }
         let current = state.search.active_match.unwrap_or(0) as isize;
         let next = (current + delta).rem_euclid(count as isize) as usize;
-        let target_page = state.search.matches[next];
+        let Some(target_page) = state.search.matches.get(next).map(|found| found.page) else {
+            return;
+        };
         if let Some(state) = self.loaded_mut() {
             state.search.active_match = Some(next);
         }
@@ -515,5 +516,287 @@ impl PdfView {
         let target_top = layout.top + layout.height * ratio.clamp(0.0, 1.0);
         self.scroll_handle
             .set_offset(point(px(0.0), px(-target_top)));
+    }
+
+    /// Write `edits` back to the file, then adopt the result.
+    ///
+    /// One write runs at a time: two incremental updates built from the same base
+    /// bytes would lose one of them. The bytes go to disk before the edit is
+    /// published to the worker pool, so a failed write leaves every thread on the
+    /// old document.
+    pub(crate) fn commit_edits(
+        &mut self,
+        edits: Vec<PdfEdit>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if edits.is_empty() {
+            return;
+        }
+        let Some(state) = self.loaded() else {
+            return;
+        };
+        if state.pending_edit.is_some() {
+            return;
+        }
+        let Some(path) = self.abs_path(cx) else {
+            self.fail_edit(
+                tr(
+                    cx,
+                    "pdf_viewer.edit.error_path",
+                    "Could not resolve the PDF's path.",
+                )
+                .into(),
+                cx,
+            );
+            return;
+        };
+        let worker = state.worker.clone();
+        let fs = self.project.read(cx).fs().clone();
+        let canceled_message: gpui::SharedString = tr(
+            cx,
+            "pdf_viewer.edit.error_canceled",
+            "The edit was canceled.",
+        )
+        .into();
+
+        let task = cx.spawn_in(window, async move |this, cx| {
+            let outcome = match worker.apply_edits(edits).await {
+                Ok(Ok(outcome)) => outcome,
+                Ok(Err(error)) => {
+                    Self::report_edit_error(&this, format!("{error:#}"), cx);
+                    return;
+                }
+                Err(_canceled) => {
+                    Self::report_edit_error(&this, canceled_message, cx);
+                    return;
+                }
+            };
+            if let Err(error) = fs.write(&path, &outcome.bytes).await {
+                Self::report_edit_error(&this, format!("{error:#}"), cx);
+                return;
+            }
+            worker.publish(&outcome);
+            this.update_in(cx, |view, window, cx| view.on_document_edited(window, cx))
+                .ok();
+        });
+
+        if let Some(state) = self.loaded_mut() {
+            state.pending_edit = Some(task);
+        }
+        cx.notify();
+    }
+
+    /// Record an edit failure on the view. Also used from the sync path, where
+    /// the error is known before any task is spawned.
+    fn fail_edit(&mut self, message: gpui::SharedString, cx: &mut Context<Self>) {
+        if let Some(state) = self.loaded_mut() {
+            state.pending_edit = None;
+            state.edit_error = Some(message);
+        }
+        cx.notify();
+    }
+
+    fn report_edit_error(
+        this: &gpui::WeakEntity<Self>,
+        message: impl Into<gpui::SharedString>,
+        cx: &mut gpui::AsyncWindowContext,
+    ) {
+        let message = message.into();
+        this.update(cx, |view, cx| {
+            if let Some(state) = view.loaded_mut() {
+                state.pending_edit = None;
+                state.edit_error = Some(message);
+            }
+            cx.notify();
+        })
+        .ok();
+    }
+
+    /// Adopt a document after an edit landed on disk: new summary, empty caches
+    /// (annotations are baked into the bitmaps), and re-laid-out pages.
+    pub(crate) fn on_document_edited(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let summary = self.loaded().map(|state| state.worker.summary());
+        if let Some(summary) = summary
+            && let Some(state) = self.loaded_mut()
+        {
+            state.summary = summary;
+            state.page_cache.clear();
+            state.rendering.clear();
+            state.annotations.clear();
+            state.loading_annotations.clear();
+            state.pending_edit = None;
+            state.edit_error = None;
+            state.selected_annotation = None;
+            state.search.matches.clear();
+        }
+        self.annotate.drag = None;
+        self.form.active = None;
+        self.current_page = self.current_page.min(self.page_count().saturating_sub(1));
+        self.recompute_fit(window, cx);
+        self.update_page_layouts();
+        self.ensure_pages_rendered(window, cx);
+        cx.notify();
+    }
+
+    /// Fetch the annotations of the pages on screen, so the overlays can draw
+    /// link targets, selectable annotations, and form widgets.
+    pub(crate) fn ensure_page_annotations(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(state) = self.loaded() else {
+            return;
+        };
+        let page_count = state.summary.page_count;
+        if page_count == 0 {
+            return;
+        }
+        let (first, last) = self
+            .visible_page_range()
+            .unwrap_or((self.current_page, self.current_page));
+        let worker = state.worker.clone();
+        let wanted: Vec<usize> = (first..=last.min(page_count - 1))
+            .filter(|index| {
+                !state.annotations.contains_key(index)
+                    && !state.loading_annotations.contains_key(index)
+            })
+            .collect();
+
+        for index in wanted {
+            let receiver = worker.page_annotations(index, Priority::Background);
+            let task = cx.spawn_in(window, async move |this, cx| {
+                let result = receiver.await;
+                this.update(cx, |view, cx| {
+                    if let Some(state) = view.loaded_mut() {
+                        state.loading_annotations.remove(&index);
+                        if let Ok(Ok(annotations)) = result {
+                            state.annotations.insert(index, annotations);
+                            cx.notify();
+                        }
+                    }
+                })
+                .ok();
+            });
+            if let Some(state) = self.loaded_mut() {
+                state.loading_annotations.insert(index, task);
+            }
+        }
+    }
+
+    /// Fetch the metadata, signatures, and attachment list the properties
+    /// section shows. Requested once per document revision.
+    pub(crate) fn ensure_document_details(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(state) = self.loaded() else {
+            return;
+        };
+        if state.details.is_some() || state.details_task.is_some() {
+            return;
+        }
+        let worker = state.worker.clone();
+        let task = cx.spawn_in(window, async move |this, cx| {
+            let details = match worker.document_details().await {
+                Ok(Ok(details)) => Some(details),
+                Ok(Err(error)) => {
+                    log::warn!("reading PDF details: {error:#}");
+                    None
+                }
+                Err(_canceled) => None,
+            };
+            this.update(cx, |view, cx| {
+                if let Some(state) = view.loaded_mut() {
+                    state.details_task = None;
+                    state.details = details;
+                    cx.notify();
+                }
+            })
+            .ok();
+        });
+        if let Some(state) = self.loaded_mut() {
+            state.details_task = Some(task);
+        }
+    }
+
+    /// Rotate the current page by `degrees` (a multiple of 90) and write it back.
+    pub(crate) fn rotate_current_page(
+        &mut self,
+        degrees: i32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(state) = self.loaded() else {
+            return;
+        };
+        let current = state
+            .summary
+            .pages
+            .get(self.current_page)
+            .map_or(0, |page| page.rotate);
+        let target = (current + degrees).rem_euclid(360);
+        self.commit_edits(
+            vec![PdfEdit::RotatePage {
+                page: self.current_page,
+                degrees: target,
+            }],
+            window,
+            cx,
+        );
+    }
+
+    /// Copy the current page's text to the clipboard.
+    pub(crate) fn copy_current_page_text(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(state) = self.loaded() else {
+            return;
+        };
+        let worker = state.worker.clone();
+        let page = self.current_page;
+        cx.spawn_in(window, async move |_this, cx| {
+            if let Ok(Ok(text)) = worker.page_text(page, Priority::Foreground).await {
+                cx.update(|_window, cx| {
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+                })
+                .ok();
+            }
+        })
+        .detach();
+    }
+
+    pub(crate) fn toggle_annotate(
+        &mut self,
+        _: &ToggleAnnotate,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.annotate.open = !self.annotate.open;
+        self.annotate.drag = None;
+        if !self.annotate.open {
+            self.annotate.tool = crate::view::AnnotationTool::Select;
+        }
+        self.ensure_page_annotations(window, cx);
+        cx.notify();
+    }
+
+    pub(crate) fn copy_page_text(
+        &mut self,
+        _: &CopyPageText,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.copy_current_page_text(window, cx);
+    }
+
+    pub(crate) fn rotate_page_left(
+        &mut self,
+        _: &RotatePageLeft,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.rotate_current_page(-90, window, cx);
+    }
+
+    pub(crate) fn rotate_page_right(
+        &mut self,
+        _: &RotatePageRight,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.rotate_current_page(90, window, cx);
     }
 }

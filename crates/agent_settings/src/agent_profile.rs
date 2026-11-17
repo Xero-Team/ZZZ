@@ -56,15 +56,13 @@ impl AgentProfile {
         // Copy toggles from the base profile so the new profile starts with familiar defaults.
         let tools = base_profile
             .as_ref()
-            .map(|profile| profile.tools.clone())
-            .unwrap_or_default();
+            .map_or_default(|profile| profile.tools.clone());
         let enable_all_context_servers = base_profile
             .as_ref()
             .is_some_and(|profile| profile.enable_all_context_servers);
         let context_servers = base_profile
             .as_ref()
-            .map(|profile| profile.context_servers.clone())
-            .unwrap_or_default();
+            .map_or_default(|profile| profile.context_servers.clone());
 
         let profile_settings = AgentProfileSettings {
             name: name.into(),

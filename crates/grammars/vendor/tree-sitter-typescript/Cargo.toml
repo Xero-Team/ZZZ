@@ -38,3 +38,6 @@ cc = "1.11"
 
 [dev-dependencies]
 tree-sitter = { workspace = true }
+
+# Vendored upstream grammar crate: deliberately outside the ZZZ `[workspace.lints]` deny set.
+[lints]

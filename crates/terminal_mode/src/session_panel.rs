@@ -28,11 +28,12 @@ use workspace::{
     notifications::NotificationId,
 };
 
-use crate::session::{SessionId, SessionStatus, SessionStore, is_connection_cancelled};
+use crate::session::{connect, for_workspace, restore, run_quick_command};
 use crate::{
     ConfirmConnection, DisconnectSession, ReconnectSession, SelectNextConnection,
     SelectPreviousConnection, ToggleSessionPanel,
 };
+use terminal_mode_core::{SessionId, SessionStatus, SessionStore, is_connection_cancelled};
 
 pub(crate) const SSH_SESSION_PANEL_KEY: &str = "SshSessionPanel";
 
@@ -71,7 +72,7 @@ impl SshSessionPanel {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) -> Entity<Self> {
-        let store = SessionStore::for_workspace(workspace, cx);
+        let store = for_workspace(workspace, cx);
         let workspace_handle = workspace.weak_handle();
         let fs = workspace.app_state().fs.clone();
         let filter_editor = cx.new(|cx| {
@@ -129,9 +130,9 @@ impl SshSessionPanel {
         });
 
         let store_handle = store.downgrade();
-        cx.defer_in(window, move |_workspace, window, cx| {
+        cx.defer_in(window, move |workspace, window, cx| {
             if let Some(store) = store_handle.upgrade() {
-                store.update(cx, |store, cx| store.restore(window, cx));
+                restore(workspace, &store, window, cx);
             }
         });
 
@@ -154,7 +155,7 @@ impl SshSessionPanel {
             let name = options.display_name();
             entries.push(ConnectionEntry {
                 name: name.into(),
-                detail: connection.host.clone().into(),
+                detail: connection.host.into(),
                 options,
             });
         }
@@ -255,9 +256,10 @@ impl SshSessionPanel {
         let Some(workspace) = self.workspace.upgrade() else {
             return;
         };
+        let workspace_handle = workspace.downgrade();
         workspace.update(cx, |workspace, cx| {
             workspace.toggle_modal(window, cx, |window, cx| {
-                crate::BroadcastModal::new(store, window, cx)
+                crate::BroadcastModal::new(store, workspace_handle, window, cx)
             });
         });
     }
@@ -274,7 +276,7 @@ impl SshSessionPanel {
         let Some(workspace) = self.workspace.upgrade() else {
             return;
         };
-        let task = store.update(cx, |store, cx| store.connect(options, window, cx));
+        let task = workspace.update(cx, |_workspace, cx| connect(&store, options, window, cx));
         cx.spawn_in(window, async move |_panel, cx| {
             if let Err(error) = task.await
                 && !is_connection_cancelled(&error)
@@ -612,6 +614,7 @@ impl Render for SshSessionPanel {
                     )
                     .when(!quick_commands.is_empty(), |row| {
                         let store = self.store.clone();
+                        let workspace_handle = self.workspace.clone();
                         let commands = quick_commands.clone();
                         row.child(
                             PopoverMenu::new("terminal-mode-quick-commands")
@@ -621,6 +624,7 @@ impl Render for SshSessionPanel {
                                 ))
                                 .menu(move |window, cx| {
                                     let store = store.clone();
+                                    let workspace_handle = workspace_handle.clone();
                                     let commands = commands.clone();
                                     Some(ContextMenu::build(
                                         window,
@@ -629,16 +633,25 @@ impl Render for SshSessionPanel {
                                             let mut menu = menu;
                                             for command in &commands {
                                                 let store = store.clone();
+                                                let workspace_handle = workspace_handle.clone();
                                                 let command = command.clone();
                                                 menu = menu.entry(
                                                     command.clone(),
                                                     None,
                                                     move |_window, cx| {
-                                                        if let Some(store) = store.upgrade() {
-                                                            store.update(cx, |store, cx| {
-                                                                store
-                                                                    .run_quick_command(&command, cx)
-                                                            });
+                                                        if let Some(store) = store.upgrade()
+                                                            && let Some(workspace) =
+                                                                workspace_handle.upgrade()
+                                                        {
+                                                            workspace.update(
+                                                                cx,
+                                                                |workspace, cx| {
+                                                                    run_quick_command(
+                                                                        workspace, &store,
+                                                                        &command, cx,
+                                                                    );
+                                                                },
+                                                            );
                                                         }
                                                     },
                                                 );

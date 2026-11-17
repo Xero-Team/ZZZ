@@ -128,7 +128,7 @@ fn group_matches_by_server(
     matches: Vec<StringMatch>,
     filter_data: &FilterData,
 ) -> Vec<Vec<(StringMatch, &CandidateMeta)>> {
-    let mut buckets: Vec<Vec<_>> = (0..filter_data.server_count).map(|_| Vec::new()).collect();
+    let mut buckets: Vec<Vec<_>> = Vec::from_fn(filter_data.server_count, |_| Vec::new());
     for m in matches {
         let Some(meta) = filter_data.meta.get(m.candidate_id) else {
             continue;

@@ -407,10 +407,10 @@ fn read_responses(stdout: smol::process::ChildStdout, pending: Pending) {
                     continue;
                 }
             };
-            if let Some(sender) = pending.lock().remove(&response.id) {
-                if let Err(error) = sender.try_send(Ok(response)) {
-                    log::warn!("failed to deliver extension driver response: {error}");
-                }
+            if let Some(sender) = pending.lock().remove(&response.id)
+                && let Err(error) = sender.try_send(Ok(response))
+            {
+                log::warn!("failed to deliver extension driver response: {error}");
             }
         }
     });
@@ -515,9 +515,12 @@ impl DriverConnection for ExtensionConnection {
                     break;
                 }
                 if sender.send(Ok(row)).await.is_err() {
-                    return;
+                    // The consumer closed the stream and there is nobody left to report to;
+                    // `finish` below still runs so the stream ends deliberately.
+                    break;
                 }
             }
+            sender.finish();
         })
         .detach();
         Ok(ExecutedQuery {

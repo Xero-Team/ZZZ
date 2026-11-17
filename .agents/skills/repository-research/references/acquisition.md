@@ -36,17 +36,19 @@ Recommended layout:
 
 ```text
 .tmp/skill_ref/
-  SOURCES.tsv
-  VERIFIED_SOURCES.tsv
-  CLONE_RESULTS.tsv
-  INVENTORY.tsv
-  EVIDENCE.tsv
-  REPORT.md
+  sources.tsv
+  verified-sources.tsv
+  clone-results.tsv
+  inventory.tsv
+  lineage.tsv
+  evidence.tsv
+  experiments.tsv
+  report.md
   surveys/
   <stable-repository-slug>/
 ```
 
-`SOURCES.tsv` fields:
+`sources.tsv` fields:
 
 ```text
 id, requested_name, requested_url, resolved_url, clone_path, status, notes, checked_at
@@ -62,14 +64,14 @@ Preferred sequence:
 ```bash
 python .agents/skills/repository-research/scripts/init_workspace.py --workspace .tmp/skill_ref
 python .agents/skills/repository-research/scripts/verify_sources.py \
-  --sources .tmp/skill_ref/SOURCES.tsv \
-  --output .tmp/skill_ref/VERIFIED_SOURCES.tsv --strict
+  --sources .tmp/skill_ref/sources.tsv \
+  --output .tmp/skill_ref/verified-sources.tsv --strict
 python .agents/skills/repository-research/scripts/clone_sources.py \
-  --sources .tmp/skill_ref/VERIFIED_SOURCES.tsv \
-  --output .tmp/skill_ref/CLONE_RESULTS.tsv
+  --sources .tmp/skill_ref/verified-sources.tsv \
+  --output .tmp/skill_ref/clone-results.tsv
 python .agents/skills/repository-research/scripts/inventory_repositories.py \
-  --sources .tmp/skill_ref/SOURCES.tsv \
-  --output .tmp/skill_ref/INVENTORY.tsv
+  --sources .tmp/skill_ref/sources.tsv \
+  --output .tmp/skill_ref/inventory.tsv
 ```
 
 Verification uses `git ls-remote --symref <url> HEAD` with terminal prompting
@@ -83,6 +85,12 @@ Use shallow, single-branch, no-tag, blob-filtered clones for current-state
 architecture work. Record that the checkout is shallow. Reading a filtered blob
 may trigger a network fetch; offline reproducibility therefore requires either
 fully materializing the cited files or archiving the final evidence set.
+
+Materializing a working tree is the expensive part of a large clone. When the
+task only needs the tree, blob hashes, or single cited files — lineage
+comparison and evidence validation both qualify — clone with `--no-checkout`
+and let `git show <commit>:<path>` fetch individual blobs. Surveys read files
+from disk and still need a checked-out clone.
 
 ## Choosing history depth
 

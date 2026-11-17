@@ -95,7 +95,7 @@ must avoid mandatory hosted accounts
 
 A candidate failing a hard gate should not win through unrelated points.
 
-Record proposed and completed runtime checks in `EXPERIMENTS.tsv` using the
+Record proposed and completed runtime checks in `experiments.tsv` using the
 same workload, revision, dataset, metric, and success threshold for every
 candidate. Set thresholds before running the experiment, and keep failed or
 inconclusive results rather than replacing them with a cleaner rerun.

@@ -85,6 +85,8 @@ impl<T: ReceiveData> DataOffer<T> {
                 return None;
             }
         };
+        // SAFETY: `pipe.write` stays open and owned by `pipe` for the duration of the call; the
+        // borrow does not take ownership, and the caller only passes it to `receive_data`.
         self.inner.receive_data(mime_type.to_owned(), unsafe {
             BorrowedFd::borrow_raw(pipe.write.as_raw_fd())
         });
@@ -96,6 +98,8 @@ impl<T: ReceiveData> DataOffer<T> {
             return None;
         }
 
+        // SAFETY: `fd` is the read end moved out of `pipe` above, so this call takes over the only
+        // owner and closes it once the bytes have been read.
         match unsafe { read_fd(fd) } {
             Ok(bytes) => Some(bytes),
             Err(err) => {
@@ -258,6 +262,8 @@ impl Clipboard {
                     calloop::Mode::Level,
                 ),
                 move |_, file, _| {
+                    // SAFETY: calloop hands this callback exclusive access to the source for the
+                    // duration of the dispatch, so no other borrow of the file is live here.
                     let file = unsafe { file.get_mut() };
                     loop {
                         match file.write(&bytes[written..]) {

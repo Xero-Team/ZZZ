@@ -17,9 +17,9 @@ impl AnimationDuration {
     }
 }
 
-impl Into<std::time::Duration> for AnimationDuration {
-    fn into(self) -> Duration {
-        self.duration()
+impl From<AnimationDuration> for std::time::Duration {
+    fn from(value: AnimationDuration) -> Duration {
+        value.duration()
     }
 }
 

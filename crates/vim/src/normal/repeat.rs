@@ -27,10 +27,7 @@ actions!(
 
 fn should_replay(action: &dyn Action) -> bool {
     // skip so that we don't leave the character palette open
-    if editor::actions::ShowCharacterPalette.partial_eq(action) {
-        return false;
-    }
-    true
+    !editor::actions::ShowCharacterPalette.partial_eq(action)
 }
 
 fn repeatable_insert(action: &ReplayableAction) -> Option<Box<dyn Action>> {
@@ -307,7 +304,7 @@ impl Vim {
             Vim::update_globals(cx, |globals, _| {
                 globals.recorded_register_for_dot = Some(next_register)
             })
-        };
+        }
 
         if mode != Some(self.mode) {
             if let Some(mode) = mode {

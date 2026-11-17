@@ -114,6 +114,9 @@ impl ShapedLine {
         window: &mut Window,
         cx: &mut App,
     ) -> Result<()> {
+        if !has_background(&self.decoration_runs) {
+            return Ok(());
+        }
         paint_line_background(
             origin,
             &self.layout,
@@ -319,6 +322,9 @@ impl WrappedLine {
             None => self.layout.wrap_width,
         };
 
+        if !has_background(&self.decoration_runs) {
+            return Ok(());
+        }
         paint_line_background(
             origin,
             &self.layout.unwrapped_layout,
@@ -392,7 +398,7 @@ fn paint_line(
                     if let Some((underline_origin, underline_style)) = current_underline.as_mut() {
                         if glyph_origin.x == underline_origin.x {
                             underline_origin.x -= max_glyph_size.width.half();
-                        };
+                        }
                         window.paint_underline(
                             *underline_origin,
                             glyph_origin.x - underline_origin.x,
@@ -410,7 +416,7 @@ fn paint_line(
                     {
                         if glyph_origin.x == strikethrough_origin.x {
                             strikethrough_origin.x -= max_glyph_size.width.half();
-                        };
+                        }
                         window.paint_strikethrough(
                             *strikethrough_origin,
                             glyph_origin.x - strikethrough_origin.x,
@@ -500,7 +506,7 @@ fn paint_line(
                 if let Some((mut underline_origin, underline_style)) = finished_underline {
                     if underline_origin.x == glyph_origin.x {
                         underline_origin.x -= max_glyph_size.width.half();
-                    };
+                    }
                     window.paint_underline(
                         underline_origin,
                         glyph_origin.x - underline_origin.x,
@@ -513,7 +519,7 @@ fn paint_line(
                 {
                     if strikethrough_origin.x == glyph_origin.x {
                         strikethrough_origin.x -= max_glyph_size.width.half();
-                    };
+                    }
                     window.paint_strikethrough(
                         strikethrough_origin,
                         glyph_origin.x - strikethrough_origin.x,
@@ -562,7 +568,7 @@ fn paint_line(
         if let Some((mut underline_start, underline_style)) = current_underline.take() {
             if last_line_end_x == underline_start.x {
                 underline_start.x -= max_glyph_size.width.half()
-            };
+            }
             window.paint_underline(
                 underline_start,
                 last_line_end_x - underline_start.x,
@@ -573,7 +579,7 @@ fn paint_line(
         if let Some((mut strikethrough_start, strikethrough_style)) = current_strikethrough.take() {
             if last_line_end_x == strikethrough_start.x {
                 strikethrough_start.x -= max_glyph_size.width.half()
-            };
+            }
             window.paint_strikethrough(
                 strikethrough_start,
                 last_line_end_x - strikethrough_start.x,
@@ -583,6 +589,14 @@ fn paint_line(
 
         Ok(())
     })
+}
+
+/// Painting backgrounds walks every glyph and opens a layer, so callers skip it when there's
+/// nothing to paint.
+fn has_background(decoration_runs: &[DecorationRun]) -> bool {
+    decoration_runs
+        .iter()
+        .any(|run| run.background_color.is_some())
 }
 
 fn paint_line_background(
@@ -699,7 +713,7 @@ fn paint_line_background(
                     let mut width = glyph_origin.x - background_origin.x;
                     if background_origin.x == glyph_origin.x {
                         background_origin.x -= max_glyph_size.width.half();
-                    };
+                    }
                     window.paint_quad(fill(
                         Bounds {
                             origin: background_origin,
@@ -721,7 +735,7 @@ fn paint_line_background(
         if let Some((mut background_origin, background_color)) = current_background.take() {
             if last_line_end_x == background_origin.x {
                 background_origin.x -= max_glyph_size.width.half()
-            };
+            }
             window.paint_quad(fill(
                 Bounds {
                     origin: background_origin,

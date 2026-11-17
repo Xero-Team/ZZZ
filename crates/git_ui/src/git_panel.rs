@@ -47,7 +47,6 @@ use language::{Buffer, BufferEvent, File};
 use menu;
 use multi_buffer::ExcerptBoundaryInfo;
 use notifications::status_toast::StatusToast;
-use panel::PanelHeader;
 use project::git_store::GitAccess;
 use project::{
     Fs, Project, ProjectPath,
@@ -456,6 +455,11 @@ fn commit_message_placeholder(placeholder: Option<SharedString>, cx: &App) -> Sh
 pub fn register(workspace: &mut Workspace) {
     workspace.register_action(|workspace, _: &ToggleFocus, window, cx| {
         workspace.toggle_panel_focus::<GitPanel>(window, cx);
+    });
+    workspace.register_action(|workspace, _: &FocusEditor, window, cx| {
+        if let Some(panel) = workspace.focus_panel::<GitPanel>(window, cx) {
+            panel.update(cx, |panel, cx| panel.focus_editor(&FocusEditor, window, cx));
+        }
     });
     workspace.register_action(|workspace, _: &Toggle, window, cx| {
         if !workspace.toggle_panel_focus::<GitPanel>(window, cx) {
@@ -890,6 +894,26 @@ impl GitStatusEntry {
     }
 }
 
+/// The label for `repository`, disambiguated against every other repository in
+/// the project.
+fn repository_display_name(
+    repository: Option<&Entity<Repository>>,
+    project: &Entity<Project>,
+    cx: &App,
+) -> SharedString {
+    let Some(repository) = repository else {
+        return SharedString::default();
+    };
+    let id = repository.read(cx).id;
+    project
+        .read(cx)
+        .git_store()
+        .read(cx)
+        .display_names(cx)
+        .remove(&id)
+        .unwrap_or_else(|| repository.read(cx).display_name())
+}
+
 pub struct GitPanel {
     pub(crate) active_repository: Option<Entity<Repository>>,
     pub(crate) commit_editor: Entity<Editor>,
@@ -946,8 +970,8 @@ pub struct GitPanel {
     focused_history_entry: Option<usize>,
     active_history_sha: Option<Oid>,
     history_keyboard_nav: bool,
-    _commit_message_buffer_subscription: Option<Subscription>,
-    _repo_subscriptions: Vec<Subscription>,
+    commit_message_buffer_subscription: Option<Subscription>,
+    repo_subscriptions: Vec<Subscription>,
     git_access: Option<GitAccess>,
 }
 
@@ -1078,9 +1102,8 @@ impl GitPanel {
         let initial_commit_message = active_draft
             .and_then(|draft| draft.message.clone())
             .unwrap_or_default();
-        let pending_commit_message_restores = serialized_panel
-            .map(|panel| panel.commit_messages)
-            .unwrap_or_default();
+        let pending_commit_message_restores =
+            serialized_panel.map_or_default(|panel| panel.commit_messages);
         let workspace_entity = cx.entity();
 
         cx.new(|cx| {
@@ -1241,8 +1264,8 @@ impl GitPanel {
                 focused_history_entry: None,
                 active_history_sha: None,
                 history_keyboard_nav: false,
-                _commit_message_buffer_subscription: None,
-                _repo_subscriptions: Vec::new(),
+                commit_message_buffer_subscription: None,
+                repo_subscriptions: Vec::new(),
                 git_access: None,
             };
 
@@ -1796,6 +1819,10 @@ impl GitPanel {
     }
 
     fn focus_editor(&mut self, _: &FocusEditor, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_active_tab(GitPanelTab::Changes, window, cx);
+        if self.commit_editor_collapsed {
+            self.toggle_commit_editor(&ToggleCommitEditor, window, cx);
+        }
         self.commit_editor.update(cx, |editor, cx| {
             window.focus(&editor.focus_handle(cx), cx);
         });
@@ -1867,7 +1894,7 @@ impl GitPanel {
                 project_diff.focus_handle(cx).focus(window, cx);
                 project_diff.update(cx, |project_diff, cx| project_diff.autoscroll(cx));
                 return None;
-            };
+            }
 
             self.workspace
                 .update(cx, |workspace, cx| {
@@ -2047,12 +2074,12 @@ impl GitPanel {
                 .update(cx, |repo, _| repo.add_path_to_gitignore(&repo_path, false));
 
             cx.spawn(async move |_, cx| {
-                if let Err(e) = receiver.await? {
-                    if let Some(workspace) = workspace.upgrade() {
-                        cx.update(|cx| {
-                            show_error_toast(workspace, "add to .gitignore", e, cx);
-                        });
-                    }
+                if let Err(e) = receiver.await?
+                    && let Some(workspace) = workspace.upgrade()
+                {
+                    cx.update(|cx| {
+                        show_error_toast(workspace, "add to .gitignore", e, cx);
+                    });
                 }
                 anyhow::Ok(())
             })
@@ -2085,12 +2112,12 @@ impl GitPanel {
             });
 
             cx.spawn(async move |_, cx| {
-                if let Err(e) = receiver.await? {
-                    if let Some(workspace) = workspace.upgrade() {
-                        cx.update(|cx| {
-                            show_error_toast(workspace, "add to .git/info/exclude", e, cx);
-                        });
-                    }
+                if let Err(e) = receiver.await?
+                    && let Some(workspace) = workspace.upgrade()
+                {
+                    cx.update(|cx| {
+                        show_error_toast(workspace, "add to .git/info/exclude", e, cx);
+                    });
                 }
                 anyhow::Ok(())
             })
@@ -2310,7 +2337,7 @@ impl GitPanel {
             0 => return,
             1 => return self.revert_entry(&to_delete[0], window, cx),
             _ => {}
-        };
+        }
 
         let details = truncated_file_list(
             to_delete.iter().map(|entry| {
@@ -2318,8 +2345,7 @@ impl GitPanel {
                     .repo_path
                     .as_ref()
                     .file_name()
-                    .map(|filename| filename.to_owned())
-                    .unwrap_or_default()
+                    .map_or_default(|filename| filename.to_owned())
             }),
             to_delete.len(),
             cx,
@@ -2591,12 +2617,11 @@ impl GitPanel {
                 }
             }
         };
-        if let Some(anchor) = clear_anchor {
-            if let Some(op) = self.bulk_staging.clone()
-                && op.anchor == anchor
-            {
-                self.bulk_staging = None;
-            }
+        if let Some(anchor) = clear_anchor
+            && let Some(op) = self.bulk_staging.clone()
+            && op.anchor == anchor
+        {
+            self.bulk_staging = None;
         }
         if let Some(anchor) = set_anchor {
             self.set_bulk_staging_anchor(anchor, cx);
@@ -3764,7 +3789,7 @@ impl GitPanel {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.add_coauthors = !self.add_coauthors;
+        self.add_coauthors.toggle();
         cx.notify();
     }
 
@@ -3922,7 +3947,7 @@ impl GitPanel {
                 self.set_amend_pending(false, cx);
             }
             self.git_access = None;
-            self._repo_subscriptions.clear();
+            self.repo_subscriptions.clear();
             if self.active_tab == GitPanelTab::History {
                 self.set_commit_history(CommitHistory::Loading, cx);
             }
@@ -3997,8 +4022,7 @@ impl GitPanel {
                         let template_text = git_panel
                             .commit_template
                             .as_ref()
-                            .map(|t| t.template.clone())
-                            .unwrap_or_default();
+                            .map_or_default(|t| t.template.clone());
                         if !template_text.is_empty() {
                             buffer.update(cx, |buffer, cx| {
                                 let start = buffer.anchor_before(0);
@@ -4029,7 +4053,7 @@ impl GitPanel {
                         });
                     }
 
-                    git_panel._commit_message_buffer_subscription =
+                    git_panel.commit_message_buffer_subscription =
                         Some(cx.subscribe(&buffer, |this, _, event, cx| {
                             if matches!(event, BufferEvent::Edited { .. }) {
                                 this.serialize(cx);
@@ -4187,11 +4211,10 @@ impl GitPanel {
              logical_indices: Option<&mut Vec<usize>>| {
                 if let Some(estimate) =
                     this.width_estimate_for_list_entry(is_tree_view, &entry, path_style)
+                    && estimate > max_width_estimate
                 {
-                    if estimate > max_width_estimate {
-                        max_width_estimate = estimate;
-                        max_width_item_index = Some(this.entries.len());
-                    }
+                    max_width_estimate = estimate;
+                    max_width_item_index = Some(this.entries.len());
                 }
 
                 if let Some(repo_path) = entry.status_entry().map(|status| status.repo_path.clone())
@@ -4710,7 +4733,7 @@ impl GitPanel {
                         Tooltip::simple(title, cx)
                     })
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.add_coauthors = !this.add_coauthors;
+                        this.add_coauthors.toggle();
                         cx.notify();
                     }))
                     .into_any_element(),
@@ -4857,7 +4880,7 @@ impl GitPanel {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.commit_editor_expanded = !self.commit_editor_expanded;
+        self.commit_editor_expanded.toggle();
         self.commit_editor.update(cx, |editor, _cx| {
             if self.commit_editor_expanded {
                 editor.set_mode(EditorMode::Full {
@@ -4882,7 +4905,7 @@ impl GitPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.commit_editor_collapsed = !self.commit_editor_collapsed;
+        self.commit_editor_collapsed.toggle();
         self.commit_editor_toggled = true;
         if self.commit_editor_collapsed && self.commit_editor_expanded {
             self.toggle_fill_commit_editor(&Default::default(), window, cx);
@@ -5111,12 +5134,7 @@ impl GitPanel {
         let head_commit = active_repository.read(cx).head_commit.clone();
 
         let git_panel = cx.entity();
-        let display_name = SharedString::from(Arc::from(
-            active_repository
-                .read(cx)
-                .display_name()
-                .trim_end_matches("/"),
-        ));
+        let display_name = repository_display_name(Some(&active_repository), &self.project, cx);
         let editor_is_long = self.commit_editor.update(cx, |editor, cx| {
             editor.max_point(cx).row().0 >= MAX_PANEL_EDITOR_LINES as u32
         });
@@ -5790,13 +5808,17 @@ impl GitPanel {
             }
             GitPanelTab::Changes => {
                 self.set_commit_history(CommitHistory::Loading, cx);
-                self._repo_subscriptions.clear();
+                self.repo_subscriptions.clear();
             }
         }
         cx.notify();
     }
 
     fn preload_commit_history(&mut self, cx: &mut Context<Self>) {
+        if !self.project.read(cx).is_local() {
+            return;
+        }
+
         let Some(active_repository) = self.active_repository.as_ref() else {
             return;
         };
@@ -5818,21 +5840,20 @@ impl GitPanel {
             return;
         };
 
-        if self._repo_subscriptions.is_empty() {
-            self._repo_subscriptions.push(cx.subscribe(
+        if self.repo_subscriptions.is_empty() {
+            self.repo_subscriptions.push(cx.subscribe(
                 &active_repository,
                 |this, _repo, event, cx| {
                     if matches!(
                         event,
                         RepositoryEvent::GraphEvent(_, _) | RepositoryEvent::TagsChanged
-                    ) {
-                        if this.active_tab == GitPanelTab::History {
-                            this.fetch_commit_history_entries(cx);
-                        }
+                    ) && this.active_tab == GitPanelTab::History
+                    {
+                        this.fetch_commit_history_entries(cx);
                     }
                 },
             ));
-            self._repo_subscriptions
+            self.repo_subscriptions
                 .push(cx.observe(&active_repository, |_this, _repo, cx| {
                     cx.notify();
                 }));
@@ -6794,7 +6815,10 @@ impl GitPanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        window.focus(&context_menu.focus_handle(cx), cx);
+        let focus_handle = context_menu.focus_handle(cx);
+        window.defer(cx, move |window, cx| {
+            window.focus(&focus_handle, cx);
+        });
 
         let subscription = cx.subscribe_in(
             &context_menu,
@@ -7019,7 +7043,13 @@ impl GitPanel {
             .bg(base_bg)
             .hover(|s| s.bg(hover_bg))
             .active(|s| s.bg(active_bg))
-            .child(name_row)
+            .child(
+                h_flex()
+                    .min_w_0()
+                    .flex_1()
+                    .overflow_hidden()
+                    .child(name_row),
+            )
             .when(GitPanelSettings::get_global(cx).diff_stats, |el| {
                 el.when_some(entry.diff_stat, move |this, stat| {
                     let id = format!("diff-stat-{}", id_for_diff_stat);
@@ -7703,8 +7733,6 @@ impl Panel for GitPanel {
         }))
     }
 }
-
-impl PanelHeader for GitPanel {}
 
 pub fn panel_editor_container(_window: &mut Window, cx: &mut App) -> Div {
     v_flex()
@@ -8452,6 +8480,8 @@ pub(crate) fn commit_title_exceeds_limit(title: &str, max_length: usize) -> bool
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use git::{
         repository::repo_path,
         status::{StatusCode, UnmergedStatus, UnmergedStatusCode},
@@ -9130,7 +9160,7 @@ mod tests {
 
         wait_for_commit_history_to_settle(&panel, cx).await;
         panel.read_with(cx, |panel, _| {
-            assert!(matches!(panel.commit_history, CommitHistory::Error(_)));
+            assert_matches!(panel.commit_history, CommitHistory::Error(_));
         });
     }
 
@@ -10598,6 +10628,71 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn test_solo_diff_exposes_editor_to_buffer_search(cx: &mut TestAppContext) {
+        use editor::SplittableEditor;
+        use std::any::TypeId;
+        use workspace::item::Item as _;
+
+        init_test(cx);
+
+        let fs = FakeFs::new(cx.background_executor.clone());
+        fs.insert_tree(
+            path!("/project"),
+            json!({
+                ".git": {},
+                "tracked": "tracked\n",
+            }),
+        )
+        .await;
+
+        fs.set_head_and_index_for_repo(
+            path!("/project/.git").as_ref(),
+            &[("tracked", "old tracked\n".into())],
+        );
+
+        let project = Project::test(fs.clone(), [Path::new(path!("/project"))], cx).await;
+        let window_handle =
+            cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
+        let workspace = window_handle
+            .read_with(cx, |mw, _| mw.workspace().clone())
+            .unwrap();
+        let cx = &mut VisualTestContext::from_window(window_handle.into(), cx);
+        let panel = workspace.update_in(cx, GitPanel::new);
+        await_git_panel_entries(&panel, cx).await;
+
+        let entry_index = panel.read_with(cx, |panel, _| {
+            panel
+                .entries
+                .iter()
+                .position(|entry| entry.status_entry().is_some())
+                .expect("the git panel should list the tracked file")
+        });
+        panel.update_in(cx, |panel, window, cx| {
+            panel.selected_entry = Some(entry_index);
+            panel.open_solo_diff(&menu::SecondaryConfirm, window, cx);
+        });
+        cx.run_until_parked();
+
+        workspace.read_with(cx, |workspace, cx| {
+            let solo_diff = workspace
+                .items_of_type::<SoloDiffView>(cx)
+                .next()
+                .expect("the solo diff should be open");
+
+            let searchable = solo_diff
+                .read(cx)
+                .as_searchable(&solo_diff, cx)
+                .expect("SoloDiffView should expose its editor to buffer search");
+            assert!(
+                searchable
+                    .act_as_type(TypeId::of::<SplittableEditor>(), cx)
+                    .is_some(),
+                "the searchable item should be the solo diff's split editor"
+            );
+        });
+    }
+
+    #[gpui::test]
     async fn test_tree_view_reveals_collapsed_parent_on_select_entry_by_path(
         cx: &mut TestAppContext,
     ) {
@@ -10835,12 +10930,12 @@ mod tests {
                 .position(|&index| index == foo_idx)
                 .expect("foo directory should be visible");
             let next_logical_idx = state.logical_indices[foo_logical_idx + 1];
-            assert!(matches!(
+            assert_matches!(
                 panel.entries.get(next_logical_idx),
                 Some(GitListEntry::Header(GitHeaderEntry {
                     header: Section::New
                 }))
-            ));
+            );
 
             foo_idx
         });
@@ -11349,24 +11444,24 @@ mod tests {
 
         panel.update_in(cx, |panel, window, cx| {
             assert!(!panel.commit_editor_expanded);
-            assert!(matches!(
+            assert_matches!(
                 panel.commit_editor.read(cx).mode().clone(),
                 EditorMode::AutoHeight { .. }
-            ));
+            );
 
             panel.toggle_fill_commit_editor(&ToggleFillCommitEditor, window, cx);
             assert!(panel.commit_editor_expanded);
-            assert!(matches!(
+            assert_matches!(
                 panel.commit_editor.read(cx).mode().clone(),
                 EditorMode::Full { .. }
-            ));
+            );
 
             panel.toggle_fill_commit_editor(&ToggleFillCommitEditor, window, cx);
             assert!(!panel.commit_editor_expanded);
-            assert!(matches!(
+            assert_matches!(
                 panel.commit_editor.read(cx).mode().clone(),
                 EditorMode::AutoHeight { .. }
-            ));
+            );
         });
     }
 
@@ -11406,10 +11501,10 @@ mod tests {
             panel.toggle_commit_editor(&ToggleCommitEditor, window, cx);
             assert!(panel.commit_editor_collapsed);
             assert!(!panel.commit_editor_expanded);
-            assert!(matches!(
+            assert_matches!(
                 panel.commit_editor.read(cx).mode().clone(),
                 EditorMode::AutoHeight { .. }
-            ));
+            );
         });
     }
 

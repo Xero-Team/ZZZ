@@ -298,11 +298,11 @@ fn convert_null_in_types_to_nullable(obj: &mut Map<String, Value>) {
                     obj.remove("type");
                 }
             }
-        } else if let Some(type_str) = type_entry.as_str() {
-            if type_str == "null" {
-                nullable_found_in_type = true;
-                obj.remove("type");
-            }
+        } else if let Some(type_str) = type_entry.as_str()
+            && type_str == "null"
+        {
+            nullable_found_in_type = true;
+            obj.remove("type");
         }
     }
     if nullable_found_in_type {

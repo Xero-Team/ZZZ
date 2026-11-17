@@ -186,7 +186,7 @@ pub struct ThreadsArchiveView {
     restoring: HashSet<ThreadId>,
     archived_thread_ids: HashSet<ThreadId>,
     archived_branch_names: HashMap<ThreadId, HashMap<PathBuf, String>>,
-    _load_branch_names_task: Task<()>,
+    load_branch_names_task: Task<()>,
     thread_filter: ThreadFilter,
 }
 
@@ -268,7 +268,7 @@ impl ThreadsArchiveView {
             restoring: HashSet::default(),
             archived_thread_ids: HashSet::default(),
             archived_branch_names: HashMap::default(),
-            _load_branch_names_task: Task::ready(()),
+            load_branch_names_task: Task::ready(()),
             thread_filter: ThreadFilter::All,
         };
 
@@ -370,10 +370,10 @@ impl ThreadsArchiveView {
         self.list_state.reset(items.len());
         self.items = items;
 
-        if let Some(ix) = self.hovered_index {
-            if ix >= self.items.len() || !self.is_selectable_item(ix) {
-                self.hovered_index = None;
-            }
+        if let Some(ix) = self.hovered_index
+            && (ix >= self.items.len() || !self.is_selectable_item(ix))
+        {
+            self.hovered_index = None;
         }
 
         self.list_state.scroll_to(saved_scroll);
@@ -416,7 +416,7 @@ impl ThreadsArchiveView {
         let task = ThreadMetadataStore::global(cx)
             .read(cx)
             .get_all_archived_branch_names(cx);
-        self._load_branch_names_task = cx.spawn(async move |this, cx| {
+        self.load_branch_names_task = cx.spawn(async move |this, cx| {
             if let Some(branch_names) = task.await.log_err() {
                 this.update(cx, |this, cx| {
                     this.archived_branch_names = branch_names;
@@ -494,13 +494,12 @@ impl ThreadsArchiveView {
             .read(cx)
             .multi_workspace()
             .and_then(|mw| mw.upgrade())
-            .map(|mw| {
+            .map_or_default(|mw| {
                 mw.read(cx)
                     .workspaces()
                     .filter_map(|ws| ws.read(cx).database_id())
                     .collect()
-            })
-            .unwrap_or_default();
+            });
 
         workspace.update(cx, |workspace, cx| {
             workspace.toggle_modal(window, cx, |window, cx| {
@@ -660,12 +659,11 @@ impl ThreadsArchiveView {
                 let branch_names_for_thread: HashMap<PathBuf, SharedString> = self
                     .archived_branch_names
                     .get(&thread.thread_id)
-                    .map(|map| {
+                    .map_or_default(|map| {
                         map.iter()
                             .map(|(k, v)| (k.clone(), SharedString::from(v.clone())))
                             .collect()
-                    })
-                    .unwrap_or_default();
+                    });
 
                 let worktrees = worktree_info_from_thread_paths(
                     &thread.worktree_paths,
@@ -1221,7 +1219,7 @@ impl ProjectPickerModal {
             picker.delegate.focus_handle = picker_focus_handle;
         });
 
-        let _subscription =
+        let subscription =
             cx.subscribe(&picker, |_this: &mut Self, _, _event: &DismissEvent, cx| {
                 cx.emit(DismissEvent);
             });
@@ -1250,7 +1248,7 @@ impl ProjectPickerModal {
         Self {
             picker,
             _load_workspaces_task: load_workspaces_task,
-            _subscription,
+            _subscription: subscription,
         }
     }
 }

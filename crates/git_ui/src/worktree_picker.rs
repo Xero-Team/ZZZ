@@ -1622,6 +1622,7 @@ pub async fn open_remote_worktree(
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use fs::FakeFs;
     use gpui::{AppContext, TestAppContext, UpdateGlobal, VisualTestContext};

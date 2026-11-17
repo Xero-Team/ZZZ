@@ -186,10 +186,7 @@ impl SearchState {
             matches: new_matches
                 .into_iter()
                 .map(|range| {
-                    let search_data = previous_matches
-                        .get(&range)
-                        .map(Arc::clone)
-                        .unwrap_or_default();
+                    let search_data = previous_matches.get(&range).map_or_default(Arc::clone);
                     (range, search_data)
                 })
                 .collect(),
@@ -278,7 +275,7 @@ impl SearchState {
                     match notify_rx.recv().await {
                         Ok(()) => {}
                         Err(_) => break,
-                    };
+                    }
                     while notify_rx.try_recv() == Ok(()) {
                         //
                     }
@@ -1599,7 +1596,7 @@ impl OutlinePanel {
                 if let Some(task) = task {
                     task.detach_and_log_err(cx);
                 }
-            };
+            }
 
             active_editor.update(cx, |editor, cx| {
                 buffers_to_unfold.retain(|buffer_id| editor.is_buffer_folded(*buffer_id, cx));
@@ -1771,10 +1768,9 @@ impl OutlinePanel {
                 entries,
                 ..
             }) = &cached.entry
+                && let Some(last) = entries.last()
             {
-                if let Some(last) = entries.last() {
-                    to_uncollapse.insert(CollapsedEntry::Dir(*worktree_id, last.id));
-                }
+                to_uncollapse.insert(CollapsedEntry::Dir(*worktree_id, last.id));
             }
         }
 
@@ -2313,9 +2309,7 @@ impl OutlinePanel {
 
         let label_element = outline::render_item(
             &outline,
-            string_match
-                .map(|string_match| string_match.ranges().collect::<Vec<_>>())
-                .unwrap_or_default(),
+            string_match.map_or_default(|string_match| string_match.ranges().collect::<Vec<_>>()),
             cx,
         )
         .into_any_element();
@@ -2390,9 +2384,7 @@ impl OutlinePanel {
                     ElementId::from(entry.id.to_proto() as usize),
                     HighlightedLabel::new(
                         name,
-                        string_match
-                            .map(|string_match| string_match.positions.clone())
-                            .unwrap_or_default(),
+                        string_match.map_or_default(|string_match| string_match.positions.clone()),
                     )
                     .color(color)
                     .into_any_element(),
@@ -2422,9 +2414,7 @@ impl OutlinePanel {
                     ElementId::from(directory.entry.id.to_proto() as usize),
                     HighlightedLabel::new(
                         name,
-                        string_match
-                            .map(|string_match| string_match.positions.clone())
-                            .unwrap_or_default(),
+                        string_match.map_or_default(|string_match| string_match.positions.clone()),
                     )
                     .color(color)
                     .into_any_element(),
@@ -2464,9 +2454,7 @@ impl OutlinePanel {
                     ElementId::from(external_file.buffer_id.to_proto() as usize),
                     HighlightedLabel::new(
                         name,
-                        string_match
-                            .map(|string_match| string_match.positions.clone())
-                            .unwrap_or_default(),
+                        string_match.map_or_default(|string_match| string_match.positions.clone()),
                     )
                     .color(color)
                     .into_any_element(),
@@ -2515,8 +2503,7 @@ impl OutlinePanel {
             let git_status = folded_dir
                 .entries
                 .first()
-                .map(|entry| entry.git_summary)
-                .unwrap_or_default();
+                .map_or_default(|entry| entry.git_summary);
             let color = entry_git_aware_label_color(git_status, is_ignored, is_active);
             let icon = if settings.folder_icons {
                 FileIcons::get_folder_icon(is_expanded, &Path::new(&name), cx)
@@ -2532,9 +2519,7 @@ impl OutlinePanel {
                 ) as usize),
                 HighlightedLabel::new(
                     name,
-                    string_match
-                        .map(|string_match| string_match.positions.clone())
-                        .unwrap_or_default(),
+                    string_match.map_or_default(|string_match| string_match.positions.clone()),
                 )
                 .color(color)
                 .into_any_element(),
@@ -2890,8 +2875,7 @@ impl OutlinePanel {
                                 Some(entry) => {
                                     let entry = GitEntry {
                                         git_summary: status
-                                            .map(|status| status.summary())
-                                            .unwrap_or_default(),
+                                            .map_or_default(|status| status.summary()),
                                         entry,
                                     };
                                     let mut traversal = GitTraversal::new(
@@ -3074,7 +3058,7 @@ impl OutlinePanel {
                                             })
                                             .unwrap_or(0)
                                             + 1;
-                                    };
+                                    }
                                     visited_dirs
                                         .push((directory.entry.id, directory.entry.path.clone()));
                                     new_depth_map
@@ -4265,8 +4249,7 @@ impl OutlinePanel {
             .and_then(|item| item.downcast::<ProjectSearchView>());
         let project_search_matches = project_search
             .as_ref()
-            .map(|project_search| project_search.read(cx).get_matches(cx))
-            .unwrap_or_default();
+            .map_or_default(|project_search| project_search.read(cx).get_matches(cx));
 
         let buffer_search = self
             .active_item()
@@ -4282,12 +4265,9 @@ impl OutlinePanel {
                     .read(cx)
                     .item_of_type::<BufferSearchBar>()
             });
-        let buffer_search_matches = self
-            .active_editor()
-            .map(|active_editor| {
-                active_editor.update(cx, |editor, cx| editor.get_matches(window, cx).0)
-            })
-            .unwrap_or_default();
+        let buffer_search_matches = self.active_editor().map_or_default(|active_editor| {
+            active_editor.update(cx, |editor, cx| editor.get_matches(window, cx).0)
+        });
 
         let mut update_cached_entries = false;
         if buffer_search_matches.is_empty() && project_search_matches.is_empty() {
@@ -4300,17 +4280,15 @@ impl OutlinePanel {
                 (
                     SearchKind::Project,
                     project_search_matches,
-                    project_search
-                        .map(|project_search| project_search.read(cx).search_query_text(cx))
-                        .unwrap_or_default(),
+                    project_search.map_or_default(|project_search| {
+                        project_search.read(cx).search_query_text(cx)
+                    }),
                 )
             } else {
                 (
                     SearchKind::Buffer,
                     buffer_search_matches,
-                    buffer_search
-                        .map(|buffer_search| buffer_search.read(cx).query(cx))
-                        .unwrap_or_default(),
+                    buffer_search.map_or_default(|buffer_search| buffer_search.read(cx).query(cx)),
                 )
             };
 
@@ -4545,7 +4523,7 @@ impl OutlinePanel {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.pinned = !self.pinned;
+        self.pinned.toggle();
         if !self.pinned
             && let Some((active_item, active_editor)) = self
                 .workspace
@@ -4582,8 +4560,7 @@ impl OutlinePanel {
             .iter()
             .enumerate()
             .find(|(_, cached_entry)| &cached_entry.entry == &entry)
-            .map(|(i, _)| i)
-            .unwrap_or_default();
+            .map_or_default(|(i, _)| i);
 
         self.selected_entry = SelectedEntry::Valid(entry, ix);
 
@@ -4601,37 +4578,28 @@ impl OutlinePanel {
                 .entry
                 .path
                 .file_name()
-                .map(|name| name.len())
-                .unwrap_or_default(),
+                .map_or_default(|name| name.len()),
             PanelEntry::Fs(FsEntry::File(file)) => file
                 .entry
                 .path
                 .file_name()
-                .map(|name| name.len())
-                .unwrap_or_default(),
+                .map_or_default(|name| name.len()),
             PanelEntry::FoldedDirs(folded_dirs) => {
                 folded_dirs
                     .entries
                     .iter()
-                    .map(|dir| {
-                        dir.path
-                            .file_name()
-                            .map(|name| name.len())
-                            .unwrap_or_default()
-                    })
+                    .map(|dir| dir.path.file_name().map_or_default(|name| name.len()))
                     .sum::<usize>()
                     + folded_dirs.entries.len().saturating_sub(1) * "/".len()
             }
             PanelEntry::Outline(OutlineEntry::Excerpt(excerpt)) => self
                 .excerpt_label(&excerpt, cx)
-                .map(|label| label.len())
-                .unwrap_or_default(),
+                .map_or_default(|label| label.len()),
             PanelEntry::Outline(OutlineEntry::Outline(entry)) => entry.text.len(),
             PanelEntry::Search(search) => search
                 .render_data
                 .get()
-                .map(|data| data.context_text.len())
-                .unwrap_or_default(),
+                .map_or_default(|data| data.context_text.len()),
         };
 
         (item_text_chars + depth) as u64
@@ -4716,8 +4684,7 @@ impl OutlinePanel {
                         outline_panel.rendered_entries_len = range.end - range.start;
                         let entries = outline_panel.cached_entries.get(range);
                         entries
-                            .map(|entries| entries.to_vec())
-                            .unwrap_or_default()
+                            .map_or_default(|entries| entries.to_vec())
                             .into_iter()
                             .filter_map(|cached_entry| match cached_entry.entry {
                                 PanelEntry::Fs(entry) => Some(outline_panel.render_entry(
@@ -6879,8 +6846,7 @@ outline: struct OutlineEntryExcerpt
                         .entry
                         .path
                         .file_name()
-                        .map(|name| name.to_string())
-                        .unwrap_or_default(),
+                        .map_or_default(|name| name.to_string()),
                 },
                 PanelEntry::FoldedDirs(folded_dirs) => folded_dirs
                     .entries

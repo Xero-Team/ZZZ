@@ -154,7 +154,7 @@ pub struct HighlightsTreeView {
 
 pub struct HighlightsTreeToolbarItemView {
     tree_view: Option<Entity<HighlightsTreeView>>,
-    _subscription: Option<gpui::Subscription>,
+    subscription: Option<gpui::Subscription>,
     toggle_settings_handle: PopoverMenuHandle<ContextMenu>,
 }
 
@@ -968,7 +968,7 @@ impl HighlightsTreeToolbarItemView {
     pub fn new() -> Self {
         Self {
             tree_view: None,
-            _subscription: None,
+            subscription: None,
             toggle_settings_handle: PopoverMenuHandle::default(),
         }
     }
@@ -1048,7 +1048,7 @@ impl HighlightsTreeToolbarItemView {
                                     tree_view.as_ref().and_then(|view| view.upgrade())
                                 {
                                     view.update(cx, |view, cx| {
-                                        view.show_text_highlights = !view.show_text_highlights;
+                                        view.show_text_highlights.toggle();
                                         let snapshot = view.editor.as_ref().map(|s| {
                                             s.editor.read(cx).buffer().read(cx).snapshot(cx)
                                         });
@@ -1077,7 +1077,7 @@ impl HighlightsTreeToolbarItemView {
                                     tree_view.as_ref().and_then(|view| view.upgrade())
                                 {
                                     view.update(cx, |view, cx| {
-                                        view.show_syntax_tokens = !view.show_syntax_tokens;
+                                        view.show_syntax_tokens.toggle();
                                         let snapshot = view.editor.as_ref().map(|s| {
                                             s.editor.read(cx).buffer().read(cx).snapshot(cx)
                                         });
@@ -1106,7 +1106,7 @@ impl HighlightsTreeToolbarItemView {
                                     .and_then(|view| view.upgrade())
                                 {
                                     view.update(cx, |view, cx| {
-                                        view.show_semantic_tokens = !view.show_semantic_tokens;
+                                        view.show_semantic_tokens.toggle();
                                         let snapshot = view.editor.as_ref().map(|s| {
                                             s.editor.read(cx).buffer().read(cx).snapshot(cx)
                                         });
@@ -1148,11 +1148,11 @@ impl ToolbarItemView for HighlightsTreeToolbarItemView {
             && let Some(view) = item.downcast::<HighlightsTreeView>()
         {
             self.tree_view = Some(view.clone());
-            self._subscription = Some(cx.observe_in(&view, window, |_, _, _, cx| cx.notify()));
+            self.subscription = Some(cx.observe_in(&view, window, |_, _, _, cx| cx.notify()));
             return ToolbarItemLocation::PrimaryLeft;
         }
         self.tree_view = None;
-        self._subscription = None;
+        self.subscription = None;
         ToolbarItemLocation::Hidden
     }
 }

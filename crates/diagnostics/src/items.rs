@@ -21,7 +21,7 @@ pub struct DiagnosticIndicator {
     workspace: WeakEntity<Workspace>,
     current_diagnostic: Option<Diagnostic>,
     active_editor: Option<WeakEntity<Editor>>,
-    _observe_active_editor: Option<Subscription>,
+    observe_active_editor: Option<Subscription>,
 
     diagnostics_update: Task<()>,
     diagnostic_summary_update: Task<()>,
@@ -159,7 +159,7 @@ impl DiagnosticIndicator {
             active_editor: None,
             workspace: workspace.weak_handle(),
             current_diagnostic: None,
-            _observe_active_editor: None,
+            observe_active_editor: None,
             diagnostics_update: Task::ready(()),
             diagnostic_summary_update: Task::ready(()),
         }
@@ -234,12 +234,12 @@ impl StatusItemView for DiagnosticIndicator {
     ) {
         if let Some(editor) = active_pane_item.and_then(|item| item.downcast::<Editor>()) {
             self.active_editor = Some(editor.downgrade());
-            self._observe_active_editor = Some(cx.observe_in(&editor, window, Self::update));
+            self.observe_active_editor = Some(cx.observe_in(&editor, window, Self::update));
             self.update(editor, window, cx);
         } else {
             self.active_editor = None;
             self.current_diagnostic = None;
-            self._observe_active_editor = None;
+            self.observe_active_editor = None;
         }
         cx.notify();
     }

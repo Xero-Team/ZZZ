@@ -12,12 +12,12 @@ use ui::{
     Divider, DividerColor, DynamicSpacing, LabelSize, WithScrollbar, prelude::*,
     text_for_keybinding_keystrokes, text_for_keystrokes,
 };
-use workspace::{ModalView, Workspace};
+use workspace::Workspace;
 
 use crate::FILTERED_KEYSTROKES;
 
 pub struct WhichKeyModal {
-    _workspace: WeakEntity<Workspace>,
+    workspace: WeakEntity<Workspace>,
     focus_handle: FocusHandle,
     scroll_handle: ScrollHandle,
     bindings: Vec<(SharedString, SharedString)>,
@@ -44,7 +44,7 @@ impl WhichKeyModal {
 
         let handle = cx.weak_entity();
         let mut this = Self {
-            _workspace: workspace,
+            workspace,
             focus_handle: focus_handle.clone(),
             scroll_handle: ScrollHandle::new(),
             bindings: Vec::new(),
@@ -63,10 +63,6 @@ impl WhichKeyModal {
         };
         this.update_pending_keys(window, cx);
         this
-    }
-
-    pub fn dismiss(&self, cx: &mut Context<Self>) {
-        cx.emit(DismissEvent)
     }
 
     fn update_pending_keys(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -131,7 +127,7 @@ impl Render for WhichKeyModal {
 
         // Push above status bar when visible
         let status_height = self
-            ._workspace
+            .workspace
             .upgrade()
             .and_then(|workspace| {
                 workspace.read_with(cx, |workspace, cx| {
@@ -247,12 +243,6 @@ impl EventEmitter<DismissEvent> for WhichKeyModal {}
 impl Focusable for WhichKeyModal {
     fn focus_handle(&self, _cx: &App) -> gpui::FocusHandle {
         self.focus_handle.clone()
-    }
-}
-
-impl ModalView for WhichKeyModal {
-    fn render_bare(&self) -> bool {
-        true
     }
 }
 

@@ -505,10 +505,10 @@ fn resolve_outcome_from_selection(
     };
 
     // When in per-command pattern mode, use the checked patterns.
-    if let Some(thread_view::PermissionSelection::SelectedPatterns(checked)) = selection {
-        if let Some(outcome) = options.build_outcome_for_checked_patterns(checked, is_allow) {
-            return Some(outcome);
-        }
+    if let Some(thread_view::PermissionSelection::SelectedPatterns(checked)) = selection
+        && let Some(outcome) = options.build_outcome_for_checked_patterns(checked, is_allow)
+    {
+        return Some(outcome);
     }
 
     // Use the selected granularity choice ("Always for terminal" or "Only this time").
@@ -606,17 +606,28 @@ impl ConversationView {
             .pending_tool_call(&session_id, cx)
     }
 
-    pub fn root_thread_has_pending_tool_call(&self, cx: &App) -> bool {
+    pub fn root_thread_is_waiting_for_input(&self, cx: &App) -> bool {
         let Some(root_thread) = self.root_thread_view() else {
             return false;
         };
         let root_session_id = root_thread.read(cx).thread.read(cx).session_id().clone();
         self.as_connected().is_some_and(|connected| {
-            connected
-                .conversation
-                .read(cx)
+            let conversation = connected.conversation.read(cx);
+            conversation
                 .pending_tool_call(&root_session_id, cx)
                 .is_some()
+                || self.has_unanswered_elicitation(cx)
+        })
+    }
+
+    /// Whether any elicitation form is still waiting for the user to answer it.
+    fn has_unanswered_elicitation(&self, cx: &App) -> bool {
+        self.request_elicitation_store().is_some_and(|store| {
+            store
+                .read(cx)
+                .elicitations()
+                .iter()
+                .any(|elicitation| matches!(elicitation.status, ElicitationStatus::Pending { .. }))
         })
     }
 
@@ -1028,65 +1039,59 @@ impl ConversationView {
                 Ok(thread) => Ok(thread),
             };
 
-            this.update_in(cx, |this, window, cx| {
-                match result {
-                    Ok(thread) => {
-                        let root_session_id = thread.read(cx).session_id().clone();
+            this.update_in(cx, |this, window, cx| match result {
+                Ok(thread) => {
+                    let root_session_id = thread.read(cx).session_id().clone();
 
-                        let conversation = cx.new(|cx| {
-                            let mut conversation = Conversation::default();
-                            conversation.register_thread(thread.clone(), cx);
-                            conversation
-                        });
+                    let conversation = cx.new(|cx| {
+                        let mut conversation = Conversation::default();
+                        conversation.register_thread(thread.clone(), cx);
+                        conversation
+                    });
 
-                        let current = this.new_thread_view(
-                            thread,
-                            conversation.clone(),
-                            resumed_without_history,
-                            initial_content,
-                            window,
-                            cx,
-                        );
+                    let current = this.new_thread_view(
+                        thread,
+                        conversation.clone(),
+                        resumed_without_history,
+                        initial_content,
+                        window,
+                        cx,
+                    );
 
-                        if this.has_pending_selections() {
-                            current.update(cx, |thread, cx| {
-                                thread.message_editor.update(cx, |editor, cx| {
-                                    for selection in std::mem::take(&mut this.pending_selections) {
-                                        editor.insert_selections(selection, window, cx);
-                                    }
-                                });
+                    if this.has_pending_selections() {
+                        current.update(cx, |thread, cx| {
+                            thread.message_editor.update(cx, |editor, cx| {
+                                for selection in std::mem::take(&mut this.pending_selections) {
+                                    editor.insert_selections(selection, window, cx);
+                                }
                             });
-                        }
-
-                        if this.focus_handle.contains_focused(window, cx) {
-                            current
-                                .read(cx)
-                                .message_editor
-                                .focus_handle(cx)
-                                .focus(window, cx);
-                        }
-
-                        this.root_session_id = Some(root_session_id.clone());
-                        this.set_server_state(
-                            ServerState::Connected(ConnectedServerState {
-                                connection,
-                                auth_state: AuthState::Ok,
-                                active_id: Some(root_session_id.clone()),
-                                threads: HashMap::from_iter([(root_session_id, current)]),
-                                conversation,
-                                _connection_entry_subscription: connection_entry_subscription,
-                            }),
-                            cx,
-                        );
+                        });
                     }
-                    Err(err) => {
-                        this.handle_load_error(
-                            LoadError::Other(err.to_string().into()),
-                            window,
-                            cx,
-                        );
+
+                    if this.focus_handle.contains_focused(window, cx) {
+                        current
+                            .read(cx)
+                            .message_editor
+                            .focus_handle(cx)
+                            .focus(window, cx);
                     }
-                };
+
+                    this.root_session_id = Some(root_session_id.clone());
+                    this.set_server_state(
+                        ServerState::Connected(ConnectedServerState {
+                            connection,
+                            auth_state: AuthState::Ok,
+                            active_id: Some(root_session_id.clone()),
+                            threads: HashMap::from_iter([(root_session_id, current)]),
+                            conversation,
+                            _connection_entry_subscription: connection_entry_subscription,
+                        }),
+                        cx,
+                    );
+                }
+                Err(err) => {
+                    this.handle_load_error(LoadError::Other(err.to_string().into()), window, cx);
+                }
             })
             .log_err();
         });
@@ -1334,15 +1339,14 @@ impl ConversationView {
     }
 
     fn handle_load_error(&mut self, err: LoadError, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(view) = self.root_thread_view() {
-            if view
+        if let Some(view) = self.root_thread_view()
+            && view
                 .read(cx)
                 .message_editor
                 .focus_handle(cx)
                 .is_focused(window)
-            {
-                self.focus_handle.focus(window, cx)
-            }
+        {
+            self.focus_handle.focus(window, cx)
         }
         self.set_server_state(ServerState::LoadError { error: err }, cx);
     }
@@ -1539,7 +1543,7 @@ impl ConversationView {
         });
         if !is_current_owner {
             return;
-        };
+        }
         let is_subagent = thread.read(cx).parent_session_id().is_some();
         if !is_subagent && affects_thread_metadata(event) {
             cx.emit(RootThreadUpdated);
@@ -1723,15 +1727,14 @@ impl ConversationView {
                 }
             }
             AcpThreadEvent::LoadError(error) => {
-                if let Some(view) = self.root_thread_view() {
-                    if view
+                if let Some(view) = self.root_thread_view()
+                    && view
                         .read(cx)
                         .message_editor
                         .focus_handle(cx)
                         .is_focused(window)
-                    {
-                        self.focus_handle.focus(window, cx)
-                    }
+                {
+                    self.focus_handle.focus(window, cx)
                 }
                 self.set_server_state(
                     ServerState::LoadError {
@@ -1755,11 +1758,11 @@ impl ConversationView {
             }
             AcpThreadEvent::PromptCapabilitiesUpdated => {
                 if let Some(active) = self.thread_view(&session_id) {
-                    active.update(cx, |active, _cx| {
+                    active.update(cx, |active, cx| {
                         active
                             .session_capabilities
                             .write()
-                            .set_prompt_capabilities(thread.read(_cx).prompt_capabilities());
+                            .set_prompt_capabilities(thread.read(cx).prompt_capabilities());
                     });
                 }
             }
@@ -2310,7 +2313,7 @@ impl ConversationView {
                 if let Some(stderr) = stderr {
                     message.push_str("\n");
                     message.push_str(stderr);
-                };
+                }
                 let action_slot = stderr.is_some().then(|| {
                     self.create_copy_button(message.clone(), cx)
                         .into_any_element()
@@ -2422,8 +2425,7 @@ impl ConversationView {
 
     fn queued_messages_len(&self, cx: &App) -> usize {
         self.root_thread_view()
-            .map(|thread| thread.read(cx).local_queued_messages.len())
-            .unwrap_or_default()
+            .map_or_default(|thread| thread.read(cx).local_queued_messages.len())
     }
 
     fn update_queued_message(
@@ -3541,17 +3543,13 @@ impl AgentCodeSpanResolver {
     /// Absolute paths of every current worktree.
     /// Used by the markdown image resolver, which needs the same set of roots.
     fn worktree_roots(&self, cx: &App) -> Vec<PathBuf> {
-        self.inner
-            .project
-            .upgrade()
-            .map(|project| {
-                project
-                    .read(cx)
-                    .visible_worktrees(cx)
-                    .map(|worktree| worktree.read(cx).abs_path().to_path_buf())
-                    .collect()
-            })
-            .unwrap_or_default()
+        self.inner.project.upgrade().map_or_default(|project| {
+            project
+                .read(cx)
+                .visible_worktrees(cx)
+                .map(|worktree| worktree.read(cx).abs_path().to_path_buf())
+                .collect()
+        })
     }
 
     fn try_resolve(&self, text: &str, cx: &App) -> Option<SharedString> {
@@ -3575,7 +3573,7 @@ impl AgentCodeSpanResolver {
     fn resolve_uncached(&self, trimmed: &str, cx: &App) -> Option<SharedString> {
         let path_with_position = PathWithPosition::parse_str(trimmed);
         let candidate_path = &path_with_position.path;
-        if candidate_path.as_os_str().is_empty() {
+        if candidate_path.is_empty() {
             return None;
         }
 
@@ -3700,6 +3698,8 @@ fn plan_label_markdown_style(
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use std::assert_matches;
+
     use acp_thread::StubAgentConnection;
     use action_log::ActionLog;
     use agent::{TerminalTool, ToolPermissionContext};
@@ -3936,10 +3936,10 @@ pub(crate) mod tests {
                     assert_eq!(view.thread.read(cx).status(), ThreadStatus::Idle);
                 } else {
                     assert_eq!(view.thread.read(cx).status(), ThreadStatus::Generating);
-                    assert!(matches!(
+                    assert_matches!(
                         view.in_flight_prompt.as_deref(),
                         Some([acp::ContentBlock::Text(text)]) if text.text == "second"
-                    ));
+                    );
                 }
                 assert!(view.thread_error.is_none());
             });
@@ -3963,10 +3963,10 @@ pub(crate) mod tests {
             thread_view.read_with(cx, |view, cx| {
                 assert_eq!(view.thread.read(cx).status(), ThreadStatus::Generating);
                 assert!(view.turn_fields.turn_started_at.is_some());
-                assert!(matches!(
+                assert_matches!(
                     view.in_flight_prompt.as_deref(),
                     Some([acp::ContentBlock::Text(text)]) if text.text == "second"
-                ));
+                );
                 assert!(view.thread_error.is_none());
             });
 
@@ -3983,14 +3983,14 @@ pub(crate) mod tests {
                 assert_eq!(view.thread.read(cx).status(), ThreadStatus::Idle);
                 assert!(view.turn_fields.turn_started_at.is_none());
                 if responses_are_errors {
-                    assert!(matches!(
+                    assert_matches!(
                         &view.thread_error,
                         Some(ThreadError::Other { message, .. }) if message.as_ref() == "current prompt failed"
-                    ));
-                    assert!(matches!(
+                    );
+                    assert_matches!(
                         view.in_flight_prompt.as_deref(),
                         Some([acp::ContentBlock::Text(text)]) if text.text == "second"
-                    ));
+                    );
                 } else {
                     assert!(view.thread_error.is_none());
                     assert!(view.in_flight_prompt.is_none());
@@ -4403,8 +4403,9 @@ pub(crate) mod tests {
         // Check that the refusal error is set
         conversation_view.read_with(cx, |thread_view, cx| {
             let state = thread_view.active_thread().unwrap();
-            assert!(
-                matches!(state.read(cx).thread_error, Some(ThreadError::Refusal)),
+            assert_matches!(
+                state.read(cx).thread_error,
+                Some(ThreadError::Refusal),
                 "Expected refusal error to be set"
             );
         });
@@ -7326,11 +7327,9 @@ pub(crate) mod tests {
             let tool_call = tool_call.unwrap();
 
             // Verify it's waiting for confirmation
-            assert!(
-                matches!(
-                    tool_call.status,
-                    acp_thread::ToolCallStatus::WaitingForConfirmation { .. }
-                ),
+            assert_matches!(
+                tool_call.status,
+                acp_thread::ToolCallStatus::WaitingForConfirmation { .. },
                 "Expected WaitingForConfirmation status, got {:?}",
                 tool_call.status
             );
@@ -8302,10 +8301,7 @@ pub(crate) mod tests {
             vec!["cargo test 2>&1 | tail".to_string()],
         )
         .build_permission_options();
-        assert!(matches!(
-            options,
-            PermissionOptions::DropdownWithPatterns { .. }
-        ));
+        assert_matches!(options, PermissionOptions::DropdownWithPatterns { .. });
         // Pattern mode with zero checked patterns: `build_outcome_for_checked_patterns`
         // returns None, so we fall through to `choice_index()` (which is None for
         // `SelectedPatterns`) and default to `choices.last()`.
@@ -8325,10 +8321,7 @@ pub(crate) mod tests {
             vec!["cargo test 2>&1 | tail".to_string()],
         )
         .build_permission_options();
-        assert!(matches!(
-            options,
-            PermissionOptions::DropdownWithPatterns { .. }
-        ));
+        assert_matches!(options, PermissionOptions::DropdownWithPatterns { .. });
         let selection = thread_view::PermissionSelection::SelectedPatterns(vec![0]);
 
         let outcome =
@@ -8428,8 +8421,9 @@ pub(crate) mod tests {
         conversation_view.read_with(cx, |conversation_view, cx| {
             let state = conversation_view.active_thread().unwrap();
             let error = &state.read(cx).thread_error;
-            assert!(
-                matches!(error, Some(ThreadError::MaxOutputTokens)),
+            assert_matches!(
+                error,
+                Some(ThreadError::MaxOutputTokens),
                 "Expected ThreadError::MaxOutputTokens, got: {:?}",
                 error.is_some()
             );

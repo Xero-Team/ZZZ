@@ -897,12 +897,12 @@ impl BlockMap {
             companion_edits_in_my_space.sort_by_key(|edit| edit.old.start);
             let mut merged_edits: Vec<WrapEdit> = Vec::new();
             for edit in companion_edits_in_my_space {
-                if let Some(last) = merged_edits.last_mut() {
-                    if edit.old.start <= last.old.end {
-                        last.old.end = last.old.end.max(edit.old.end);
-                        last.new.end = last.new.end.max(edit.new.end);
-                        continue;
-                    }
+                if let Some(last) = merged_edits.last_mut()
+                    && edit.old.start <= last.old.end
+                {
+                    last.old.end = last.old.end.max(edit.old.end);
+                    last.new.end = last.new.end.max(edit.new.end);
+                    continue;
                 }
                 merged_edits.push(edit);
             }
@@ -2124,16 +2124,14 @@ impl BlockMapWriter<'_> {
             ranges.extend(multi_buffer_snapshot.range_for_buffer(buffer_id));
             if let Some(companion) = &self.companion
                 && companion.inverse.is_some()
+                && let Some(diff) = multi_buffer_snapshot.diff_for_buffer_id(buffer_id)
             {
-                if let Some(diff) = multi_buffer_snapshot.diff_for_buffer_id(buffer_id) {
-                    let companion_buffer_id =
-                        if companion.companion.is_rhs(companion.display_map_id) {
-                            diff.base_text().remote_id()
-                        } else {
-                            diff.buffer_id()
-                        };
-                    companion_buffer_ids.insert(companion_buffer_id);
-                }
+                let companion_buffer_id = if companion.companion.is_rhs(companion.display_map_id) {
+                    diff.base_text().remote_id()
+                } else {
+                    diff.buffer_id()
+                };
+                companion_buffer_ids.insert(companion_buffer_id);
             }
         }
         ranges.sort_unstable_by_key(|range| range.start);
@@ -2554,7 +2552,7 @@ impl BlockSnapshot {
                 return self.max_point();
             } else {
                 reversed = true;
-                search_left = !search_left;
+                search_left.toggle();
                 cursor.seek(&BlockRow(point.row), Bias::Right);
             }
         }
@@ -4850,7 +4848,7 @@ mod tests {
         let (mut rhs_fold_map, rhs_fold_snapshot) = FoldMap::new(rhs_inlay_snapshot);
         let (mut rhs_tab_map, rhs_tab_snapshot) =
             TabMap::new(rhs_fold_snapshot, 4.try_into().unwrap());
-        let (_rhs_wrap_map, rhs_wrap_snapshot) =
+        let (rhs_wrap_map, rhs_wrap_snapshot) =
             cx.update(|cx| WrapMap::new(rhs_tab_snapshot, font("Helvetica"), px(14.0), None, cx));
         let rhs_block_map = BlockMap::new(rhs_wrap_snapshot.clone(), 0, 0);
 
@@ -4972,7 +4970,7 @@ mod tests {
             rhs_fold_map.read(rhs_inlay_snapshot, rhs_inlay_edits);
         let (rhs_tab_snapshot, rhs_tab_edits) =
             rhs_tab_map.sync(rhs_fold_snapshot, rhs_fold_edits, 4.try_into().unwrap());
-        let (rhs_wrap_snapshot, rhs_wrap_edits) = _rhs_wrap_map.update(cx, |wrap_map, cx| {
+        let (rhs_wrap_snapshot, rhs_wrap_edits) = rhs_wrap_map.update(cx, |wrap_map, cx| {
             wrap_map.sync(rhs_tab_snapshot, rhs_tab_edits, cx)
         });
 

@@ -1126,17 +1126,12 @@ impl Delegate {
             ),
             Entry::Header { identity, path } => {
                 let path_style = self.project(cx).read(cx).path_style(cx);
-                let file_name = path
-                    .path
-                    .file_name()
-                    .map(|name| name.to_owned())
-                    .unwrap_or_default();
+                let file_name = path.path.file_name().map_or_default(|name| name.to_owned());
                 let directory = path
                     .path
                     .parent()
                     .map(|parent| parent.display(path_style))
-                    .map(SharedString::new)
-                    .unwrap_or_default();
+                    .map_or_default(SharedString::new);
                 let file_icon = ItemSettings::get_global(cx)
                     .file_icons
                     .then(|| FileIcons::get_icon(path.path.as_std_path(), cx))

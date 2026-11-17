@@ -26,7 +26,7 @@ pub struct Terminal {
     started_at: Instant,
     output: Option<TerminalOutput>,
     output_byte_limit: Option<usize>,
-    _output_task: Shared<Task<acp::TerminalExitStatus>>,
+    output_task: Shared<Task<acp::TerminalExitStatus>>,
     /// Flag indicating whether this terminal was stopped by explicit user action
     /// (e.g., clicking the Stop button). This is set before kill() is called
     /// so that code awaiting wait_for_exit() can check it deterministically.
@@ -68,7 +68,7 @@ impl Terminal {
             output: None,
             output_byte_limit,
             user_stopped: Arc::new(AtomicBool::new(false)),
-            _output_task: cx
+            output_task: cx
                 .spawn(async move |this, cx| {
                     let exit_status = command_task.await;
 
@@ -106,7 +106,7 @@ impl Terminal {
     }
 
     pub fn wait_for_exit(&self) -> Shared<Task<acp::TerminalExitStatus>> {
-        self._output_task.clone()
+        self.output_task.clone()
     }
 
     pub fn kill(&mut self, cx: &mut App) {

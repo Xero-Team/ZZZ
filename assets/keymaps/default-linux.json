@@ -646,6 +646,14 @@
       // "alt-ctrl-shift-o": ["projects::OpenRemote", { "from_existing_connection": true }],
       "alt-ctrl-shift-o": ["projects::OpenRemote", { "from_existing_connection": false }],
       "alt-ctrl-shift-b": "branches::OpenRecent",
+      "ctrl-alt-shift-i": "idea_import::ImportIdeaProject",
+      "shift shift": "search_everywhere::Toggle",
+      "ctrl-alt-shift-j": "toolbox::OpenJsonPrettier",
+      "ctrl-alt-shift-k": "project_bookmarks::ToggleProjectBookmarks",
+      "ctrl-alt-shift-m": "workspace_modes::CycleMode",
+      "ctrl-alt-shift-p": "pr_ui::TogglePullRequestsPanel",
+      "ctrl-alt-shift-e": "mobile_dev::ToggleMobileDevices",
+      "ctrl-alt-shift-d": "docker::ToggleDockerPanel",
       "alt-ctrl-shift-w": "git::Worktree",
       "alt-shift-enter": "toast::RunAction",
       "ctrl-~": "workspace::NewTerminal",
@@ -704,6 +712,7 @@
       "ctrl-shift-g": "git_panel::ToggleFocus",
       "ctrl-shift-d": "debug_panel::ToggleFocus",
       "ctrl-shift-8": "telegram_panel::ToggleFocus",
+      "ctrl-shift-9": "database::ToggleDatabasePanel",
       "ctrl-?": "agent::ToggleFocus",
       "alt-save": "workspace::SaveAll",
       "ctrl-alt-s": "workspace::SaveAll",
@@ -991,6 +1000,25 @@
     "context": "ProjectPanel && not_editing",
     "bindings": {
       "space": "project_panel::Open",
+    },
+  },
+  {
+    "context": "DatabasePanel",
+    "bindings": {
+      "enter": "database::OpenSelectedConnection",
+    },
+  },
+  {
+    "context": "DatabaseConnectionDialog > Editor",
+    "bindings": {
+      "enter": "menu::Confirm",
+      "escape": "menu::Cancel",
+    },
+  },
+  {
+    "context": "DatabaseConnectionDialog",
+    "bindings": {
+      "escape": "menu::Cancel",
     },
   },
   {

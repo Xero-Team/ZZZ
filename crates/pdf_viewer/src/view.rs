@@ -3,16 +3,19 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use anyhow::Context as _;
 use gpui::{
     App, AppContext, Bounds, Context, Entity, EventEmitter, FocusHandle, Focusable, IsZero, Pixels,
-    ScrollHandle, Task, Window,
+    Point, ScrollHandle, Task, Window, point,
 };
 use i18n::tr;
 use project::{Project, ProjectPath};
 use ui_input::InputField;
 use util::rel_path::RelPath;
+use zpdf::{MarkupKind, ObjectId, Rect, TextSpan};
 
 use crate::{
     FALLBACK_PAGE_HEIGHT, FALLBACK_PAGE_WIDTH, PAGE_GAP, PAGE_VERTICAL_MARGIN, PdfItem,
-    document::{PagePreview, PdfDocumentSummary},
+    document::{
+        PageAnnotation, PagePreview, PdfDocumentDetails, PdfDocumentSummary, PdfPageSummary,
+    },
     worker::PdfWorker,
 };
 
@@ -90,17 +93,212 @@ pub(crate) struct LoadedState {
     /// Low-priority task that fills the cache outward from the current page
     /// while the user is idle, bounded by [`crate::CACHE_MEMORY_BUDGET`].
     pub idle_prefetch: Option<Task<()>>,
+    /// Annotations per page, fetched on demand for pages the overlays cover.
+    pub annotations: HashMap<usize, Vec<PageAnnotation>>,
+    /// Pages with an annotation request in flight, so scrolling does not queue
+    /// the same page repeatedly.
+    pub loading_annotations: HashMap<usize, Task<()>>,
+    /// Metadata, signatures, and attachments for the properties panel.
+    pub details: Option<PdfDocumentDetails>,
+    pub details_task: Option<Task<()>>,
+    /// The edit currently being written back. Further edits wait for it so two
+    /// incremental updates are never built from the same base bytes.
+    pub pending_edit: Option<Task<()>>,
+    /// The last write-back failure, shown as a banner until the next edit.
+    pub edit_error: Option<gpui::SharedString>,
+    /// The annotation the user last clicked or created.
+    pub selected_annotation: Option<ObjectId>,
+}
+
+/// The drawing tool the annotation palette has active.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub(crate) enum AnnotationTool {
+    /// Selection: clicking an annotation selects it instead of drawing.
+    #[default]
+    Select,
+    Highlight,
+    Underline,
+    StrikeOut,
+    Squiggly,
+    Note,
+    FreeText,
+    Rectangle,
+    Ellipse,
+    Line,
+}
+
+impl AnnotationTool {
+    /// Every tool, in palette order.
+    pub(crate) const ALL: [AnnotationTool; 10] = [
+        AnnotationTool::Select,
+        AnnotationTool::Highlight,
+        AnnotationTool::Underline,
+        AnnotationTool::StrikeOut,
+        AnnotationTool::Squiggly,
+        AnnotationTool::Note,
+        AnnotationTool::FreeText,
+        AnnotationTool::Rectangle,
+        AnnotationTool::Ellipse,
+        AnnotationTool::Line,
+    ];
+
+    /// The markup subtype this tool authors, when it is a text-markup tool.
+    pub(crate) fn markup_kind(self) -> Option<MarkupKind> {
+        match self {
+            AnnotationTool::Highlight => Some(MarkupKind::Highlight),
+            AnnotationTool::Underline => Some(MarkupKind::Underline),
+            AnnotationTool::StrikeOut => Some(MarkupKind::StrikeOut),
+            AnnotationTool::Squiggly => Some(MarkupKind::Squiggly),
+            _ => None,
+        }
+    }
+
+    /// Whether the tool draws by dragging a rectangle.
+    pub(crate) fn is_drag_tool(self) -> bool {
+        !matches!(self, AnnotationTool::Select | AnnotationTool::Note)
+    }
+
+    /// The i18n key for the tool's palette label.
+    pub(crate) fn label_key(self) -> &'static str {
+        match self {
+            AnnotationTool::Select => "pdf_viewer.annotate.tool.select",
+            AnnotationTool::Highlight => "pdf_viewer.annotate.tool.highlight",
+            AnnotationTool::Underline => "pdf_viewer.annotate.tool.underline",
+            AnnotationTool::StrikeOut => "pdf_viewer.annotate.tool.strike_out",
+            AnnotationTool::Squiggly => "pdf_viewer.annotate.tool.squiggly",
+            AnnotationTool::Note => "pdf_viewer.annotate.tool.note",
+            AnnotationTool::FreeText => "pdf_viewer.annotate.tool.free_text",
+            AnnotationTool::Rectangle => "pdf_viewer.annotate.tool.rectangle",
+            AnnotationTool::Ellipse => "pdf_viewer.annotate.tool.ellipse",
+            AnnotationTool::Line => "pdf_viewer.annotate.tool.line",
+        }
+    }
+
+    /// The English fallback for [`Self::label_key`].
+    pub(crate) fn label_fallback(self) -> &'static str {
+        match self {
+            AnnotationTool::Select => "Select",
+            AnnotationTool::Highlight => "Highlight",
+            AnnotationTool::Underline => "Underline",
+            AnnotationTool::StrikeOut => "Strike out",
+            AnnotationTool::Squiggly => "Squiggly",
+            AnnotationTool::Note => "Note",
+            AnnotationTool::FreeText => "Text box",
+            AnnotationTool::Rectangle => "Rectangle",
+            AnnotationTool::Ellipse => "Ellipse",
+            AnnotationTool::Line => "Line",
+        }
+    }
+}
+
+/// A drag in progress on a page, kept in display space (PDF points with the
+/// page rotation applied) so it survives a zoom change mid-drag.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct AnnotationDrag {
+    pub page: usize,
+    pub start: (f64, f64),
+    pub current: (f64, f64),
+}
+
+impl AnnotationDrag {
+    /// The drag rectangle, normalized so `x0 <= x1` and `y0 <= y1`.
+    pub(crate) fn rect(&self) -> Rect {
+        Rect {
+            x0: self.start.0.min(self.current.0),
+            y0: self.start.1.min(self.current.1),
+            x1: self.start.0.max(self.current.0),
+            y1: self.start.1.max(self.current.1),
+        }
+    }
+
+    /// True when the drag is large enough to be a deliberate gesture rather than
+    /// a click.
+    pub(crate) fn is_significant(&self) -> bool {
+        let rect = self.rect();
+        rect.width() >= 2.0 && rect.height() >= 2.0
+    }
+}
+
+/// Annotation authoring state: the active drag, the tool, and the comment box.
+pub(crate) struct AnnotateState {
+    pub open: bool,
+    pub tool: AnnotationTool,
+    pub drag: Option<AnnotationDrag>,
+    /// Comment/contents typed into the palette, applied to the next annotation.
+    pub contents: Entity<InputField>,
+}
+
+/// The form field whose inline editor is open.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ActiveField {
+    pub page: usize,
+    pub name: String,
+    pub multiline: bool,
+}
+
+/// Interactive-form editing state: which field is being edited and the editor
+/// that edits it. One editor is reused for every field, positioned over the
+/// widget, so a form with hundreds of widgets still has one input entity.
+pub(crate) struct FormState {
+    pub active: Option<ActiveField>,
+    pub input: Entity<InputField>,
 }
 
 #[derive(Default)]
 pub(crate) struct SearchState {
     pub query: gpui::SharedString,
-    /// (page_index) of each match, in document order.
-    pub matches: Vec<usize>,
+    /// Every match in document order, each with the boxes it covers.
+    pub matches: Vec<SearchMatch>,
     pub active_match: Option<usize>,
-    /// Cached per-page extracted text, populated lazily during search.
-    pub page_text: HashMap<usize, String>,
+    /// Page spans extracted on the worker, so a later search over the same
+    /// document only pays the matching cost.
+    pub page_spans: HashMap<usize, Vec<TextSpan>>,
     pub task: Option<Task<()>>,
+}
+
+/// One find-in-document match: the page it lands on plus one box per line it
+/// spans, in page fractions, so the view can draw it over the page bitmap.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SearchMatch {
+    pub page: usize,
+    pub rects: Vec<NormalizedRect>,
+}
+
+/// A box in page fractions (0..1) with a top-left origin. Normalizing is what
+/// makes a highlight independent of zoom, device scale, and render quality.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct NormalizedRect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+/// Convert a page-space rectangle (PDF user space: y-up, origin bottom-left)
+/// into page fractions with a top-left origin, clamped to the page.
+pub(crate) fn normalize_page_rect(
+    (x0, y0, x1, y1): (f64, f64, f64, f64),
+    page_width: f32,
+    page_height: f32,
+) -> NormalizedRect {
+    if page_width <= 0.0 || page_height <= 0.0 {
+        return NormalizedRect {
+            x: 0.0,
+            y: 0.0,
+            width: 0.0,
+            height: 0.0,
+        };
+    }
+    let left = (x0.min(x1) as f32 / page_width).clamp(0.0, 1.0);
+    let right = (x0.max(x1) as f32 / page_width).clamp(0.0, 1.0);
+    let bottom = (y0.min(y1) as f32 / page_height).clamp(0.0, 1.0);
+    let top = (y0.max(y1) as f32 / page_height).clamp(0.0, 1.0);
+    NormalizedRect {
+        x: left,
+        y: 1.0 - top,
+        width: right - left,
+        height: top - bottom,
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -171,6 +369,32 @@ pub(crate) fn compute_visible_pages(
         last,
         focused,
     })
+}
+
+/// Device pixels per PDF point for a page laid out at `layout_width`: the base
+/// resolution the reader aims for (crisper than 1:1 device pixels), scaled by
+/// the zoom that layout implies and by the display's scale factor.
+///
+/// A page rendered at this DPI is already in device pixels at the current zoom,
+/// so GPUI never has to upscale it. That matters on a HiDPI display, where
+/// ignoring the scale factor leaves every page visibly soft.
+pub(crate) fn render_dpi(layout_width: f32, page_width: f32, device_scale: f32) -> f32 {
+    let device_scale = device_scale.max(1.0);
+    if layout_width <= 0.0 || page_width <= 0.0 {
+        return crate::BASE_DPI * device_scale;
+    }
+    crate::BASE_DPI * (layout_width / page_width) * device_scale
+}
+
+/// Map a pointer position expressed in page fractions back into display space
+/// (PDF points with the page rotation applied, y up). Fractions are measured
+/// from the bitmap's top-left, which is why `y` is flipped here.
+pub(crate) fn fractions_to_display_point(
+    (x, y): (f64, f64),
+    page_width: f32,
+    page_height: f32,
+) -> (f64, f64) {
+    (x * page_width as f64, (1.0 - y) * page_height as f64)
 }
 
 /// Bytes a rendered page bitmap occupies at the given layout size and scale.
@@ -260,6 +484,8 @@ pub struct PdfView {
     pub(crate) document_height: f32,
     pub(crate) pending_scroll_to_page: Option<usize>,
     pub(crate) search_editor: Entity<editor::Editor>,
+    pub(crate) annotate: AnnotateState,
+    pub(crate) form: FormState,
     _load_task: Task<()>,
     _search_subscription: gpui::Subscription,
 }
@@ -302,6 +528,15 @@ impl PdfView {
         let search_subscription =
             cx.subscribe_in(&search_editor, window, Self::on_search_editor_event);
 
+        let contents = cx.new(|cx| {
+            let placeholder = tr(cx, "pdf_viewer.annotate.comment_placeholder", "Comment");
+            InputField::new(window, cx, &placeholder)
+        });
+        let form_input = cx.new(|cx| {
+            let placeholder = tr(cx, "pdf_viewer.form.value_placeholder", "Field value");
+            InputField::new(window, cx, &placeholder)
+        });
+
         let load_task = Self::start_load(&pdf_item, &project, window, cx);
 
         Self {
@@ -320,6 +555,16 @@ impl PdfView {
             document_height: 0.0,
             pending_scroll_to_page: None,
             search_editor,
+            annotate: AnnotateState {
+                open: false,
+                tool: AnnotationTool::Select,
+                drag: None,
+                contents,
+            },
+            form: FormState {
+                active: None,
+                input: form_input,
+            },
             _load_task: load_task,
             _search_subscription: search_subscription,
         }
@@ -438,7 +683,7 @@ impl PdfView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let summary = worker.summary().clone();
+        let summary = worker.summary();
         self.load_state = LoadState::Loaded(Box::new(LoadedState {
             worker,
             summary,
@@ -448,7 +693,16 @@ impl PdfView {
             encryption_warning: false,
             opened_with_password,
             idle_prefetch: None,
+            annotations: HashMap::default(),
+            loading_annotations: HashMap::default(),
+            details: None,
+            details_task: None,
+            pending_edit: None,
+            edit_error: None,
+            selected_annotation: None,
         }));
+        self.annotate.drag = None;
+        self.form.active = None;
         self.current_page = self.current_page.min(self.page_count().saturating_sub(1));
         self.update_page_layouts();
         self.ensure_pages_rendered(window, cx);
@@ -582,6 +836,89 @@ impl PdfView {
 
     pub(crate) fn current_page_layout(&self) -> Option<PageLayout> {
         self.page_layouts.get(self.current_page).copied()
+    }
+
+    /// Page geometry for index-based overlay math.
+    pub(crate) fn page_summary(&self, index: usize) -> Option<&PdfPageSummary> {
+        self.loaded()?.summary.pages.get(index)
+    }
+
+    /// The page's display label from its page-label tree, falling back to the
+    /// 1-based number.
+    pub(crate) fn page_label(&self, index: usize) -> String {
+        let Some(state) = self.loaded() else {
+            return (index + 1).to_string();
+        };
+        state
+            .summary
+            .page_labels
+            .get(index)
+            .cloned()
+            .unwrap_or_else(|| (index + 1).to_string())
+    }
+
+    /// Where a page's bitmap sits in window coordinates: centered in the scroll
+    /// container and shifted by the current scroll offset.
+    pub(crate) fn page_window_bounds(&self, index: usize) -> Option<Bounds<Pixels>> {
+        let container = self.container_bounds?;
+        let layout = self.page_layouts.get(index)?;
+        let offset = self.scroll_handle.offset();
+        let container_width = f32::from(container.size.width);
+        let origin_x =
+            f32::from(container.origin.x) + (container_width - layout.width).max(0.0) / 2.0;
+        let origin_y = f32::from(container.origin.y) - f32::from(offset.y) + layout.top;
+        Some(Bounds {
+            origin: point(gpui::px(origin_x), gpui::px(origin_y)),
+            size: gpui::size(gpui::px(layout.width), gpui::px(layout.height)),
+        })
+    }
+
+    /// A pointer position in page fractions (`0..1`, top-left origin), clamped to
+    /// the page so a drag that leaves the page still produces sane geometry.
+    pub(crate) fn pointer_page_fractions(
+        &self,
+        index: usize,
+        position: Point<Pixels>,
+    ) -> Option<(f64, f64)> {
+        let bounds = self.page_window_bounds(index)?;
+        let width = f32::from(bounds.size.width);
+        let height = f32::from(bounds.size.height);
+        if width <= 0.0 || height <= 0.0 {
+            return None;
+        }
+        let x = (f32::from(position.x) - f32::from(bounds.origin.x)) / width;
+        let y = (f32::from(position.y) - f32::from(bounds.origin.y)) / height;
+        Some((x.clamp(0.0, 1.0) as f64, y.clamp(0.0, 1.0) as f64))
+    }
+
+    /// A rectangle in absolute default page user space as page fractions, which
+    /// is what the overlays position against.
+    pub(crate) fn user_rect_to_fractions(
+        &self,
+        index: usize,
+        rect: (f64, f64, f64, f64),
+    ) -> Option<NormalizedRect> {
+        let page = self.page_summary(index)?;
+        let display = page.to_display_rect(rect);
+        Some(normalize_page_rect(
+            (display.x0, display.y0, display.x1, display.y1),
+            page.width as f32,
+            page.height as f32,
+        ))
+    }
+
+    /// A display-space rectangle as page fractions.
+    pub(crate) fn display_rect_to_fractions(
+        &self,
+        index: usize,
+        rect: Rect,
+    ) -> Option<NormalizedRect> {
+        let page = self.page_summary(index)?;
+        Some(normalize_page_rect(
+            (rect.x0, rect.y0, rect.x1, rect.y1),
+            page.width as f32,
+            page.height as f32,
+        ))
     }
 
     /// Resolve which pages overlap the viewport and which one holds the reading
@@ -792,7 +1129,7 @@ impl PdfView {
 mod tests {
     use super::{
         compute_visible_pages, estimate_page_bytes, idle_prefetch_order, is_wrong_password,
-        page_spans, pages_to_keep_within_budget, prefetch_admits,
+        normalize_page_rect, page_spans, pages_to_keep_within_budget, prefetch_admits, render_dpi,
     };
     use crate::{PAGE_GAP, PAGE_VERTICAL_MARGIN};
 
@@ -915,6 +1252,63 @@ mod tests {
         assert_eq!(seen.len(), order.len(), "no page is prefetched twice");
         assert_eq!(order.len(), 19, "every page except the center is covered");
         assert!(!order.contains(&5), "the center page is excluded");
+    }
+
+    #[test]
+    fn normalize_page_rect_flips_to_top_left_origin() {
+        // A 200x300pt page. PDF user space puts the origin at the bottom-left.
+        let rect = normalize_page_rect((50.0, 240.0, 150.0, 270.0), 200.0, 300.0);
+
+        // Left 50/200, right 150/200 -> x span [0.25, 0.75].
+        assert!((rect.x - 0.25).abs() < 1e-6);
+        assert!((rect.width - 0.5).abs() < 1e-6);
+        // y 240..270 from the bottom becomes 0.1..0.2 from the top.
+        assert!((rect.y - 0.1).abs() < 1e-6);
+        assert!((rect.height - 0.1).abs() < 1e-6);
+    }
+
+    #[test]
+    fn normalize_page_rect_orders_and_clamps_edges() {
+        // Reversed corners still produce a positive box.
+        let rect = normalize_page_rect((150.0, 270.0, 50.0, 240.0), 200.0, 300.0);
+        assert!((rect.x - 0.25).abs() < 1e-6);
+        assert!((rect.width - 0.5).abs() < 1e-6);
+        assert!((rect.y - 0.1).abs() < 1e-6);
+        assert!((rect.height - 0.1).abs() < 1e-6);
+
+        // Geometry beyond the page is clamped into it instead of overflowing.
+        let rect = normalize_page_rect((-100.0, -100.0, 400.0, 400.0), 200.0, 300.0);
+        assert_eq!(rect.x, 0.0);
+        assert_eq!(rect.y, 0.0);
+        assert_eq!(rect.width, 1.0);
+        assert_eq!(rect.height, 1.0);
+
+        // A degenerate page yields an empty box rather than a division by zero.
+        let rect = normalize_page_rect((0.0, 0.0, 10.0, 10.0), 0.0, 0.0);
+        assert_eq!(
+            rect,
+            super::NormalizedRect {
+                x: 0.0,
+                y: 0.0,
+                width: 0.0,
+                height: 0.0,
+            }
+        );
+    }
+
+    #[test]
+    fn render_dpi_scales_with_zoom_and_device_scale() {
+        // 612pt page at 612px layout width is 1:1 zoom, so the base DPI applies.
+        assert!((render_dpi(612.0, 612.0, 1.0) - crate::BASE_DPI).abs() < 1e-6);
+        // Twice the layout width doubles the DPI: a crisper render for the zoom.
+        assert!((render_dpi(1224.0, 612.0, 1.0) - crate::BASE_DPI * 2.0).abs() < 1e-6);
+        // A 2.0 device scale doubles again so the bitmap lands on device pixels.
+        assert!((render_dpi(612.0, 612.0, 2.0) - crate::BASE_DPI * 2.0).abs() < 1e-6);
+        // Nonsensical inputs fall back to the unscaled base instead of zero.
+        assert!((render_dpi(0.0, 612.0, 1.0) - crate::BASE_DPI).abs() < 1e-6);
+        assert!((render_dpi(612.0, 0.0, 1.0) - crate::BASE_DPI).abs() < 1e-6);
+        // A device scale below 1.0 is treated as 1.0; negative DPI is never asked for.
+        assert!((render_dpi(612.0, 612.0, 0.5) - crate::BASE_DPI).abs() < 1e-6);
     }
 
     #[test]

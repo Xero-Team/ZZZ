@@ -1,15 +1,16 @@
 use gpui::{
-    AnyElement, Context, EventEmitter, Focusable, InteractiveElement, IntoElement, ParentElement,
-    Render, ScrollDelta, ScrollWheelEvent, SharedString, StatefulInteractiveElement, Styled,
-    WeakEntity, Window, div, px,
+    AnyElement, Context, EventEmitter, Focusable, InteractiveElement, IntoElement, MouseButton,
+    ParentElement, Render, ScrollDelta, ScrollWheelEvent, SharedString, StatefulInteractiveElement,
+    Styled, WeakEntity, Window, div, px,
 };
 use i18n::tr;
 use ui::{Banner, ListItem, Severity, Toggleable as _, Tooltip, prelude::*};
 use workspace::{ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView, item::ItemHandle};
 
 use crate::{
-    FitPage, FitWidth, NextMatch, NextPage, PAGE_HORIZONTAL_MARGIN, PAGE_VERTICAL_MARGIN,
-    PreviousMatch, PreviousPage, ResetZoom, ToggleSearch, ToggleSidebar, ZoomIn, ZoomOut,
+    CopyPageText, FitPage, FitWidth, NextMatch, NextPage, PAGE_HORIZONTAL_MARGIN,
+    PAGE_VERTICAL_MARGIN, PreviousMatch, PreviousPage, ResetZoom, RotatePageLeft, RotatePageRight,
+    ToggleAnnotate, ToggleSearch, ToggleSidebar, ZoomIn, ZoomOut,
     view::{LoadState, PdfView},
 };
 
@@ -40,6 +41,9 @@ impl PdfView {
                                 ))),
                         ),
                     )
+                })
+                .when_some(self.render_annotation_palette(cx), |this, palette| {
+                    this.child(palette)
                 })
                 .child(self.render_pages(window, cx))
                 .into_any_element(),
@@ -132,7 +136,10 @@ impl PdfView {
             return div().into_any_element();
         };
         let border_color = cx.theme().colors().border;
+        let match_fill = cx.theme().colors().search_match_background;
         let current_page = self.current_page;
+        let matches = &state.search.matches;
+        let active_match = state.search.active_match;
         let render_failed_text = tr(cx, "pdf_viewer.render_failed", "Failed to render page");
         let rendering_text = tr(cx, "pdf_viewer.rendering", "Rendering...");
         let pages = self
@@ -144,6 +151,35 @@ impl PdfView {
                 let width = px(layout.width);
                 let height = px(layout.height);
                 let selected = index == current_page;
+
+                // Search matches are drawn over the page bitmap in page
+                // fractions, so they stay aligned at any zoom or device scale.
+                let mut overlays = matches
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, found)| found.page == index)
+                    .flat_map(|(match_index, found)| {
+                        let is_active = active_match == Some(match_index);
+                        found.rects.iter().map(move |rect| {
+                            div()
+                                .absolute()
+                                .left(px(rect.x * layout.width))
+                                .top(px(rect.y * layout.height))
+                                .w(px(rect.width * layout.width))
+                                .h(px(rect.height * layout.height))
+                                .bg(gpui::Hsla {
+                                    a: if is_active { 0.55 } else { 0.3 },
+                                    ..match_fill
+                                })
+                                .into_any_element()
+                        })
+                    })
+                    .collect::<Vec<_>>();
+
+                // Links, selectable annotations, form widgets, and the drag
+                // preview are drawn above the bitmap in the same fraction space.
+                overlays.extend(self.render_page_overlays(index, layout, cx));
+
                 div()
                     .id(("pdf-page-preview", index))
                     .flex()
@@ -153,6 +189,28 @@ impl PdfView {
                     .w_full()
                     .child(
                         div()
+                            .relative()
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(move |view, event, window, cx| {
+                                    view.start_annotation_drag(index, event, window, cx);
+                                }),
+                            )
+                            .on_mouse_move(cx.listener(move |view, event, _window, cx| {
+                                view.update_annotation_drag(index, event, cx);
+                            }))
+                            .on_mouse_up(
+                                MouseButton::Left,
+                                cx.listener(move |view, event, window, cx| {
+                                    view.finish_annotation_drag(index, event, window, cx);
+                                }),
+                            )
+                            .on_mouse_up_out(
+                                MouseButton::Left,
+                                cx.listener(move |view, event, window, cx| {
+                                    view.finish_annotation_drag(index, event, window, cx);
+                                }),
+                            )
                             .border_1()
                             .border_color(if selected {
                                 cx.theme().colors().border_focused
@@ -180,7 +238,8 @@ impl PdfView {
                                 None => {
                                     centered(Label::new(rendering_text.clone()).color(Color::Muted))
                                 }
-                            }),
+                            })
+                            .children(overlays),
                     )
                     .into_any_element()
             })
@@ -320,6 +379,12 @@ impl PdfView {
                         .overflow_scroll()
                         .children(entries),
                 )
+                .when_some(self.render_annotations_section(cx), |this, section| {
+                    this.child(div().p_2().child(section))
+                })
+                .when_some(self.render_properties_section(cx), |this, section| {
+                    this.child(div().p_2().child(section))
+                })
                 .into_any_element(),
         )
     }
@@ -386,6 +451,8 @@ impl PdfView {
 
 impl Render for PdfView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.ensure_page_annotations(window, cx);
+        self.ensure_document_details(window, cx);
         let content = self.render_content(window, cx);
         let sidebar = self.render_sidebar(cx);
         let search_bar = self.render_search_bar(cx);
@@ -406,6 +473,10 @@ impl Render for PdfView {
             .on_action(cx.listener(Self::next_match))
             .on_action(cx.listener(Self::previous_match))
             .on_action(cx.listener(Self::submit_password))
+            .on_action(cx.listener(Self::toggle_annotate))
+            .on_action(cx.listener(Self::copy_page_text))
+            .on_action(cx.listener(Self::rotate_page_left))
+            .on_action(cx.listener(Self::rotate_page_right))
             .size_full()
             .flex()
             .bg(cx.theme().colors().editor_background)
@@ -446,14 +517,14 @@ impl Render for PdfView {
 
 pub struct PdfToolbarControls {
     pdf_view: Option<WeakEntity<PdfView>>,
-    _subscription: Option<gpui::Subscription>,
+    subscription: Option<gpui::Subscription>,
 }
 
 impl PdfToolbarControls {
     pub fn new() -> Self {
         Self {
             pdf_view: None,
-            _subscription: None,
+            subscription: None,
         }
     }
 }
@@ -499,7 +570,7 @@ impl Render for PdfToolbarControls {
         let page_text: SharedString = if page_count == 0 {
             "—".into()
         } else {
-            format!("{} / {}", current_page + 1, page_count).into()
+            format!("{} / {}", view.page_label(current_page), page_count).into()
         };
 
         h_flex()
@@ -519,6 +590,22 @@ impl Render for PdfToolbarControls {
                 ToggleSearch,
                 &weak,
                 |view, window, cx| view.toggle_search(&ToggleSearch, window, cx),
+            ))
+            .child(toolbar_action_button(
+                "pdf-annotate",
+                IconName::Pencil,
+                tr(cx, "pdf_viewer.toolbar.annotate", "Annotate").into(),
+                ToggleAnnotate,
+                &weak,
+                |view, window, cx| view.toggle_annotate(&ToggleAnnotate, window, cx),
+            ))
+            .child(toolbar_action_button(
+                "pdf-copy-text",
+                IconName::Copy,
+                tr(cx, "pdf_viewer.toolbar.copy_text", "Copy Page Text").into(),
+                CopyPageText,
+                &weak,
+                |view, window, cx| view.copy_page_text(&CopyPageText, window, cx),
             ))
             .child(div().w(px(8.0)))
             .child(toolbar_action_button(
@@ -591,6 +678,23 @@ impl Render for PdfToolbarControls {
                 &weak,
                 |view, window, cx| view.fit_page(&FitPage, window, cx),
             ))
+            .child(div().w(px(8.0)))
+            .child(toolbar_action_button(
+                "pdf-rotate-left",
+                IconName::RotateCcw,
+                tr(cx, "pdf_viewer.toolbar.rotate_left", "Rotate Page Left").into(),
+                RotatePageLeft,
+                &weak,
+                |view, window, cx| view.rotate_page_left(&RotatePageLeft, window, cx),
+            ))
+            .child(toolbar_action_button(
+                "pdf-rotate-right",
+                IconName::RotateCw,
+                tr(cx, "pdf_viewer.toolbar.rotate_right", "Rotate Page Right").into(),
+                RotatePageRight,
+                &weak,
+                |view, window, cx| view.rotate_page_right(&RotatePageRight, window, cx),
+            ))
             .into_any_element()
     }
 }
@@ -605,10 +709,10 @@ impl ToolbarItemView for PdfToolbarControls {
         cx: &mut Context<Self>,
     ) -> ToolbarItemLocation {
         self.pdf_view = None;
-        self._subscription = None;
+        self.subscription = None;
 
         if let Some(item) = active_pane_item.and_then(|item| item.downcast::<PdfView>()) {
-            self._subscription = Some(cx.observe(&item, |_, _, cx| cx.notify()));
+            self.subscription = Some(cx.observe(&item, |_, _, cx| cx.notify()));
             self.pdf_view = Some(item.downgrade());
             cx.notify();
             return ToolbarItemLocation::PrimaryRight;

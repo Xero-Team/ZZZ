@@ -120,9 +120,9 @@ where
     let num_cpus = executor.num_cpus().min(candidates.len());
     let base_size = candidates.len() / num_cpus;
     let remainder = candidates.len() % num_cpus;
-    let mut segment_results = (0..num_cpus)
-        .map(|_| Vec::with_capacity(max_results.min(candidates.len())))
-        .collect::<Vec<_>>();
+    let mut segment_results = Vec::from_fn(num_cpus, |_| {
+        Vec::with_capacity(max_results.min(candidates.len()))
+    });
 
     let config = nucleo::Config::DEFAULT;
     let mut matchers = matcher::get_matchers(num_cpus, config);
@@ -160,7 +160,7 @@ where
         return Vec::new();
     }
 
-    let mut results = segment_results.concat();
+    let mut results = segment_results.into_iter().flatten().collect::<Vec<_>>();
     util::truncate_to_bottom_n_sorted_by(&mut results, max_results, &|a, b| b.cmp(a));
     results
 }

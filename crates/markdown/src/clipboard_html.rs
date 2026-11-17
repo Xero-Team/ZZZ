@@ -30,11 +30,7 @@ pub(crate) fn plain_text_for_selection(parsed: &ParsedMarkdown, selection: Range
         Ok(text) => text,
         Err(error) => {
             log::debug!("Falling back to source-based clipboard plain text: {error:?}");
-            parsed
-                .source
-                .get(selection)
-                .map(str::to_owned)
-                .unwrap_or_default()
+            parsed.source.get(selection).map_or_default(str::to_owned)
         }
     }
 }

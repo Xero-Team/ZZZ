@@ -284,7 +284,7 @@ impl Element for SplitBufferHeadersElement {
         _id: Option<&GlobalElementId>,
         _inspector_id: Option<&InspectorElementId>,
         window: &mut Window,
-        _cx: &mut App,
+        cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
         let mut style = gpui::Style::default();
         style.position = gpui::Position::Absolute;
@@ -292,7 +292,7 @@ impl Element for SplitBufferHeadersElement {
         style.inset.left = DefiniteLength::Fraction(0.0).into();
         style.size.width = Length::Definite(DefiniteLength::Fraction(1.0));
         style.size.height = Length::Definite(DefiniteLength::Fraction(1.0));
-        let layout_id = window.request_layout(style, [], _cx);
+        let layout_id = window.request_layout(style, [], cx);
         (layout_id, ())
     }
 

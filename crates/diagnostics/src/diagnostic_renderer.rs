@@ -90,7 +90,7 @@ impl DiagnosticRenderer {
             markdown.push_str(md);
         } else {
             markdown.push_str(&Markdown::escape(&diagnostic.message));
-        };
+        }
         markdown
     }
 }
@@ -318,7 +318,7 @@ impl DiagnosticBlock {
             .nth(diagnostic_index)
         {
             Self::jump_to(editor, diagnostic.range, window, cx)
-        };
+        }
     }
 
     fn jump_to<I: ToOffset>(

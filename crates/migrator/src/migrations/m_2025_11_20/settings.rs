@@ -45,18 +45,18 @@ fn migrate_custom_agent_settings(
     // Parse the server settings to check what keys it contains
     let mut cursor = server_settings.walk();
     for child in server_settings.children(&mut cursor) {
-        if child.kind() == "pair" {
-            if let Some(key_node) = child.child_by_field_name("key") {
-                if let (None, Some(quote_content)) = (column, key_node.child(0)) {
-                    column = Some(quote_content.start_position().column);
-                }
-                if let Some(string_content) = key_node.child(1) {
-                    let key = &contents[string_content.byte_range()];
-                    match key {
-                        // If it already has a type key, don't modify it
-                        "type" => return None,
-                        _ => {}
-                    }
+        if child.kind() == "pair"
+            && let Some(key_node) = child.child_by_field_name("key")
+        {
+            if let (None, Some(quote_content)) = (column, key_node.child(0)) {
+                column = Some(quote_content.start_position().column);
+            }
+            if let Some(string_content) = key_node.child(1) {
+                let key = &contents[string_content.byte_range()];
+                match key {
+                    // If it already has a type key, don't modify it
+                    "type" => return None,
+                    _ => {}
                 }
             }
         }

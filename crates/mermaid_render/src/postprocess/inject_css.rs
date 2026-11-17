@@ -308,21 +308,21 @@ fn scope_css(raw_css: &str, svg_id: &str) -> String {
     for line in raw_css.lines() {
         let trimmed = line.trim();
 
-        if should_scope_css_line(trimmed) {
-            if let Some(brace) = trimmed.find('{') {
-                let (selectors, rest) = trimmed.split_at(brace);
-                let mut first = true;
-                for selector in selectors.split(',') {
-                    if !first {
-                        result.push_str(", ");
-                    }
-                    first = false;
-                    write!(result, "#{svg_id} {}", selector.trim())
-                        .expect("invariant: writing to a String cannot fail");
+        if should_scope_css_line(trimmed)
+            && let Some(brace) = trimmed.find('{')
+        {
+            let (selectors, rest) = trimmed.split_at(brace);
+            let mut first = true;
+            for selector in selectors.split(',') {
+                if !first {
+                    result.push_str(", ");
                 }
-                writeln!(result, "{rest}").expect("invariant: writing to a String cannot fail");
-                continue;
+                first = false;
+                write!(result, "#{svg_id} {}", selector.trim())
+                    .expect("invariant: writing to a String cannot fail");
             }
+            writeln!(result, "{rest}").expect("invariant: writing to a String cannot fail");
+            continue;
         }
         writeln!(result, "{line}").expect("invariant: writing to a String cannot fail");
     }

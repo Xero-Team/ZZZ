@@ -357,7 +357,7 @@ impl crate::WindowHost for TestWindow {
 
     fn toggle_fullscreen(&self) {
         let mut lock = self.0.lock();
-        lock.is_fullscreen = !lock.is_fullscreen;
+        lock.is_fullscreen.toggle();
     }
 
     fn is_fullscreen(&self) -> bool {

@@ -173,7 +173,7 @@ async fn test_remote_auto_fetch(cx: &mut TestAppContext, server_cx: &mut TestApp
         });
     });
     cx.run_until_parked();
-    server_cx.executor().advance_clock(Duration::from_secs(60));
+    server_cx.executor().advance_clock(Duration::from_mins(1));
     cx.run_until_parked();
     assert_eq!(fetches.lock().len(), 1);
 
@@ -200,7 +200,7 @@ async fn test_remote_auto_fetch(cx: &mut TestAppContext, server_cx: &mut TestApp
         });
     });
     cx.run_until_parked();
-    server_cx.executor().advance_clock(Duration::from_secs(60));
+    server_cx.executor().advance_clock(Duration::from_mins(1));
     cx.run_until_parked();
     assert_eq!(
         fetches.lock().len(),

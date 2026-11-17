@@ -19,6 +19,11 @@ ZZZ requires AI assistance for every contribution.
 - The author remains responsible for understanding the change and defending
   it in review, however it was produced.
 
+How much review a change gets depends on the paths it touches, not on who
+wrote it. See [Code Review Policy](./docs/src/development/review-policy.md) for
+the tiers, the required fields, and the review-round cap. `script/check-pr-metadata`
+enforces the fields and `script/check-review-tier` reports the tier.
+
 If you disagree with mandatory AI participation, you are free to fork this
 repository.
 
@@ -45,7 +50,7 @@ If you're thinking about proposing or building a larger feature, read the [ZZZ F
 
 ## Rust toolchain
 
-ZZZ pins Rust 1.99.1 in `rust-toolchain.toml`; that is the minimum supported
+ZZZ pins Rust 1.100.0 in `rust-toolchain.toml`; that is the minimum supported
 Rust version (MSRV) recorded in `Cargo.toml` and `clippy.toml`. Run
 `rustc --version` to confirm the active toolchain matches the pin.
 

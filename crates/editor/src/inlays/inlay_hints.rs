@@ -135,6 +135,16 @@ impl LspInlayHintData {
         self.hovered_command = None;
     }
 
+    /// Invalidates cached hints for a refresh that only concerns a single server.
+    ///
+    /// Unlike `clear`, fetches already in flight are kept: they may still be querying
+    /// the other servers, whose hints this refresh does not invalidate.
+    pub fn clear_for_server_refresh(&mut self) {
+        self.hint_chunk_fetching.clear();
+        self.added_hints.clear();
+        self.hovered_command = None;
+    }
+
     /// Like `clear`, but only wipes tracking state for the given buffer IDs.
     /// Hints belonging to other buffers are left intact so they are neither
     /// re-fetched nor duplicated on the next `NewLinesShown`.
@@ -156,10 +166,10 @@ impl LspInlayHintData {
             self.hint_chunk_fetching.remove(buffer_id);
         }
         for hint in current_hints {
-            if let Some((text_anchor, _)) = snapshot.anchor_to_buffer_anchor(hint.position) {
-                if buffer_ids.contains(&text_anchor.buffer_id) {
-                    self.added_hints.remove(&hint.id);
-                }
+            if let Some((text_anchor, _)) = snapshot.anchor_to_buffer_anchor(hint.position)
+                && buffer_ids.contains(&text_anchor.buffer_id)
+            {
+                self.added_hints.remove(&hint.id);
             }
         }
     }
@@ -183,7 +193,7 @@ impl LspInlayHintData {
             self.enabled = new_hint_settings.enabled;
             self.enabled_in_settings = new_hint_settings.enabled;
             self.modifiers_override = false;
-        };
+        }
         self.invalidate_debounce = debounce_value(new_hint_settings.edit_debounce_ms);
         self.append_debounce = debounce_value(new_hint_settings.scroll_debounce_ms);
         let new_allowed_hint_kinds = new_hint_settings.enabled_inlay_hint_kinds();
@@ -321,10 +331,7 @@ impl LspInlayHintData {
         let has_fetched_chunks = self.has_fetched_chunks(buffer_id);
         let joined_existing_server = self.register_server(buffer_id, server_id);
         if has_fetched_chunks && joined_existing_server {
-            InlayHintRefreshReason::RefreshRequested {
-                server_id,
-                request_id: None,
-            }
+            InlayHintRefreshReason::ServerRegistered { server_id }
         } else {
             InlayHintRefreshReason::NewLinesShown
         }
@@ -342,6 +349,13 @@ pub enum InlayHintRefreshReason {
     RefreshRequested {
         server_id: LanguageServerId,
         request_id: Option<usize>,
+    },
+    /// Another language server started serving a buffer whose chunks were already fetched.
+    ///
+    /// Only the new server has to be queried: unlike [`Self::RefreshRequested`], nothing
+    /// it asked for changed, so fetches already in flight for the other servers stay valid.
+    ServerRegistered {
+        server_id: LanguageServerId,
     },
     BuffersRemoved(Vec<BufferId>),
 }
@@ -368,7 +382,7 @@ impl Editor {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.inline_value_cache.enabled = !self.inline_value_cache.enabled;
+        self.inline_value_cache.enabled.toggle();
 
         self.refresh_inline_values(cx);
     }
@@ -432,7 +446,8 @@ impl Editor {
             InlayHintRefreshReason::NewLinesShown | InlayHintRefreshReason::BuffersRemoved(_) => {
                 false
             }
-            InlayHintRefreshReason::RefreshRequested { .. } => true,
+            InlayHintRefreshReason::RefreshRequested { .. }
+            | InlayHintRefreshReason::ServerRegistered { .. } => true,
             InlayHintRefreshReason::BufferEdited(buffer_id) => {
                 let Some(affected_language) = self
                     .buffer()
@@ -474,7 +489,11 @@ impl Editor {
 
         if invalidate_cache.should_invalidate() {
             if invalidate_hints_for_buffers.is_empty() {
-                inlay_hints.clear();
+                if matches!(reason, InlayHintRefreshReason::ServerRegistered { .. }) {
+                    inlay_hints.clear_for_server_refresh();
+                } else {
+                    inlay_hints.clear();
+                }
             } else {
                 inlay_hints.clear_for_buffers(
                     &invalidate_hints_for_buffers,
@@ -530,7 +549,11 @@ impl Editor {
             {
                 *fetched_for_version = visible_excerpts.buffer_version.clone();
                 fetched_chunks.clear();
-                inlay_hints.hint_refresh_tasks.remove(&buffer_id);
+                // A server that just joined wipes the chunk tracking above without the
+                // buffer changing, so the fetches already in flight are still current.
+                if !matches!(reason, InlayHintRefreshReason::ServerRegistered { .. }) {
+                    inlay_hints.hint_refresh_tasks.remove(&buffer_id);
+                }
             }
 
             let known_chunks = if ignore_previous_fetches {
@@ -654,6 +677,12 @@ impl Editor {
                 server_id: *server_id,
                 request_id: *request_id,
             },
+            InlayHintRefreshReason::ServerRegistered { server_id } => {
+                InvalidationStrategy::RefreshRequested {
+                    server_id: *server_id,
+                    request_id: None,
+                }
+            }
         };
 
         if !self
@@ -721,145 +750,140 @@ impl Editor {
                         .is_le()
                 })
                 .max_by_key(|hint| hint.id)
-            {
-                if let Some((buffer_anchor, _)) =
+                && let Some((buffer_anchor, _)) =
                     buffer_snapshot.anchor_to_buffer_anchor(hovered_hint.position)
-                    && let Some(ResolvedHint::Resolved(cached_hint)) =
-                        lsp_store.update(cx, |lsp_store, cx| {
-                            lsp_store.resolved_hint(buffer_anchor.buffer_id, hovered_hint.id, cx)
-                        })
-                {
-                    match cached_hint.resolve_state {
-                        ResolveState::Resolved => {
-                            let original_text = cached_hint.text();
-                            let actual_left_padding = usize::from(
-                                cached_hint.padding_left && !original_text.starts_with(" "),
-                            );
-                            let actual_right_padding = usize::from(
-                                cached_hint.padding_right && !original_text.ends_with(" "),
-                            );
-                            match cached_hint.label {
-                                InlayHintLabel::String(_) => {
-                                    if let Some(tooltip) = cached_hint.tooltip {
+                && let Some(ResolvedHint::Resolved(cached_hint)) =
+                    lsp_store.update(cx, |lsp_store, cx| {
+                        lsp_store.resolved_hint(buffer_anchor.buffer_id, hovered_hint.id, cx)
+                    })
+            {
+                match cached_hint.resolve_state {
+                    ResolveState::Resolved => {
+                        let original_text = cached_hint.text();
+                        let actual_left_padding = usize::from(
+                            cached_hint.padding_left && !original_text.starts_with(" "),
+                        );
+                        let actual_right_padding =
+                            usize::from(cached_hint.padding_right && !original_text.ends_with(" "));
+                        match cached_hint.label {
+                            InlayHintLabel::String(_) => {
+                                if let Some(tooltip) = cached_hint.tooltip {
+                                    hover_popover::hover_at_inlay(
+                                        self,
+                                        InlayHover {
+                                            tooltip: match tooltip {
+                                                InlayHintTooltip::String(text) => HoverBlock {
+                                                    text,
+                                                    kind: HoverBlockKind::PlainText,
+                                                },
+                                                InlayHintTooltip::MarkupContent(content) => {
+                                                    HoverBlock {
+                                                        text: content.value,
+                                                        kind: content.kind,
+                                                    }
+                                                }
+                                            },
+                                            range: InlayHighlight {
+                                                inlay: hovered_hint.id,
+                                                inlay_position: hovered_hint.position,
+                                                range: actual_left_padding
+                                                    ..hovered_hint.text().len()
+                                                        - actual_right_padding,
+                                            },
+                                        },
+                                        window,
+                                        cx,
+                                    );
+                                    hover_updated = true;
+                                }
+                            }
+                            InlayHintLabel::LabelParts(label_parts) => {
+                                let hint_start =
+                                    snapshot.anchor_to_inlay_offset(hovered_hint.position);
+                                let content_start = InlayOffset(hint_start.0 + actual_left_padding);
+                                if let Some((hovered_hint_part, part_range)) =
+                                    hover_popover::find_hovered_hint_part(
+                                        label_parts,
+                                        content_start,
+                                        hovered_offset,
+                                    )
+                                {
+                                    let highlight_start = part_range.start - hint_start;
+                                    let highlight_end = part_range.end - hint_start;
+                                    let highlight = InlayHighlight {
+                                        inlay: hovered_hint.id,
+                                        inlay_position: hovered_hint.position,
+                                        range: highlight_start..highlight_end,
+                                    };
+                                    if let Some((server_id, command)) = hovered_hint_part.command
+                                        && let Some(inlay_hints) = self.inlay_hints.as_mut()
+                                    {
+                                        inlay_command_updated = true;
+                                        inlay_hints.hovered_command =
+                                            Some(HoveredInlayHintCommand {
+                                                highlight: highlight.clone(),
+                                                buffer_id: buffer_anchor.buffer_id,
+                                                action: CodeAction {
+                                                    server_id,
+                                                    range: cached_hint.position
+                                                        ..cached_hint.position,
+                                                    lsp_action: LspAction::Command(command),
+                                                    resolved: true,
+                                                },
+                                            });
+                                    }
+                                    if let Some(tooltip) = hovered_hint_part.tooltip {
                                         hover_popover::hover_at_inlay(
                                             self,
                                             InlayHover {
                                                 tooltip: match tooltip {
-                                                    InlayHintTooltip::String(text) => HoverBlock {
-                                                        text,
-                                                        kind: HoverBlockKind::PlainText,
-                                                    },
-                                                    InlayHintTooltip::MarkupContent(content) => {
+                                                    InlayHintLabelPartTooltip::String(text) => {
                                                         HoverBlock {
-                                                            text: content.value,
-                                                            kind: content.kind,
+                                                            text,
+                                                            kind: HoverBlockKind::PlainText,
                                                         }
                                                     }
+                                                    InlayHintLabelPartTooltip::MarkupContent(
+                                                        content,
+                                                    ) => HoverBlock {
+                                                        text: content.value,
+                                                        kind: content.kind,
+                                                    },
                                                 },
-                                                range: InlayHighlight {
-                                                    inlay: hovered_hint.id,
-                                                    inlay_position: hovered_hint.position,
-                                                    range: actual_left_padding
-                                                        ..hovered_hint.text().len()
-                                                            - actual_right_padding,
-                                                },
+                                                range: highlight.clone(),
                                             },
                                             window,
                                             cx,
                                         );
                                         hover_updated = true;
                                     }
-                                }
-                                InlayHintLabel::LabelParts(label_parts) => {
-                                    let hint_start =
-                                        snapshot.anchor_to_inlay_offset(hovered_hint.position);
-                                    let content_start =
-                                        InlayOffset(hint_start.0 + actual_left_padding);
-                                    if let Some((hovered_hint_part, part_range)) =
-                                        hover_popover::find_hovered_hint_part(
-                                            label_parts,
-                                            content_start,
-                                            hovered_offset,
-                                        )
+                                    if let Some((language_server_id, location)) =
+                                        hovered_hint_part.location
+                                        && secondary_held
+                                        && !self.has_pending_nonempty_selection()
                                     {
-                                        let highlight_start = part_range.start - hint_start;
-                                        let highlight_end = part_range.end - hint_start;
-                                        let highlight = InlayHighlight {
-                                            inlay: hovered_hint.id,
-                                            inlay_position: hovered_hint.position,
-                                            range: highlight_start..highlight_end,
-                                        };
-                                        if let Some((server_id, command)) =
-                                            hovered_hint_part.command
-                                            && let Some(inlay_hints) = self.inlay_hints.as_mut()
-                                        {
-                                            inlay_command_updated = true;
-                                            inlay_hints.hovered_command =
-                                                Some(HoveredInlayHintCommand {
-                                                    highlight: highlight.clone(),
-                                                    buffer_id: buffer_anchor.buffer_id,
-                                                    action: CodeAction {
-                                                        server_id,
-                                                        range: cached_hint.position
-                                                            ..cached_hint.position,
-                                                        lsp_action: LspAction::Command(command),
-                                                        resolved: true,
-                                                    },
-                                                });
-                                        }
-                                        if let Some(tooltip) = hovered_hint_part.tooltip {
-                                            hover_popover::hover_at_inlay(
-                                                self,
-                                                InlayHover {
-                                                    tooltip: match tooltip {
-                                                        InlayHintLabelPartTooltip::String(text) => {
-                                                            HoverBlock {
-                                                                text,
-                                                                kind: HoverBlockKind::PlainText,
-                                                            }
-                                                        }
-                                                        InlayHintLabelPartTooltip::MarkupContent(
-                                                            content,
-                                                        ) => HoverBlock {
-                                                            text: content.value,
-                                                            kind: content.kind,
-                                                        },
-                                                    },
-                                                    range: highlight.clone(),
-                                                },
-                                                window,
-                                                cx,
-                                            );
-                                            hover_updated = true;
-                                        }
-                                        if let Some((language_server_id, location)) =
-                                            hovered_hint_part.location
-                                            && secondary_held
-                                            && !self.has_pending_nonempty_selection()
-                                        {
-                                            go_to_definition_updated = true;
-                                            show_link_definition(
-                                                shift_held,
-                                                self,
-                                                TriggerPoint::InlayHint(
-                                                    highlight,
-                                                    location,
-                                                    language_server_id,
-                                                ),
-                                                snapshot,
-                                                window,
-                                                cx,
-                                            );
-                                        }
+                                        go_to_definition_updated = true;
+                                        show_link_definition(
+                                            shift_held,
+                                            self,
+                                            TriggerPoint::InlayHint(
+                                                highlight,
+                                                location,
+                                                language_server_id,
+                                            ),
+                                            snapshot,
+                                            window,
+                                            cx,
+                                        );
                                     }
                                 }
-                            };
+                            }
                         }
-                        ResolveState::CanResolve(_, _) => debug_panic!(
-                            "Expected resolved_hint retrieval to return a resolved hint"
-                        ),
-                        ResolveState::Resolving => {}
                     }
+                    ResolveState::CanResolve(_, _) => {
+                        debug_panic!("Expected resolved_hint retrieval to return a resolved hint")
+                    }
+                    ResolveState::Resolving => {}
                 }
             }
         }
@@ -1014,10 +1038,10 @@ impl Editor {
                 let chunks_fetched = inlay_hints.hint_chunk_fetching.get_mut(&buffer_id);
                 match hints_result {
                     Ok(new_hints) => {
-                        if new_hints.is_empty() {
-                            if let Some((_, chunks_fetched)) = chunks_fetched {
-                                chunks_fetched.remove(&chunk_range);
-                            }
+                        if new_hints.is_empty()
+                            && let Some((_, chunks_fetched)) = chunks_fetched
+                        {
+                            chunks_fetched.remove(&chunk_range);
                         }
                         Some(new_hints)
                     }
@@ -1025,10 +1049,10 @@ impl Editor {
                         log::error!(
                             "Failed to query inlays for buffer row range {chunk_range:?}, {e:#}"
                         );
-                        if let Some((for_version, chunks_fetched)) = chunks_fetched {
-                            if for_version == &query_version {
-                                chunks_fetched.remove(&chunk_range);
-                            }
+                        if let Some((for_version, chunks_fetched)) = chunks_fetched
+                            && for_version == &query_version
+                        {
+                            chunks_fetched.remove(&chunk_range);
                         }
                         None
                     }
@@ -1260,6 +1284,8 @@ fn spawn_editor_hints_refresh(
 
 #[cfg(test)]
 pub mod tests {
+    use std::assert_matches;
+
     use super::{
         HoveredInlayHintCommand, InlayHintRefreshReason, LspInlayHintData, normalize_hint_biases,
     };
@@ -1428,14 +1454,14 @@ pub mod tests {
             toggle_on_modifiers_press: None,
         });
 
-        assert!(matches!(
+        assert_matches!(
             inlay_hints.refresh_reason_for_server_registration(buffer_id, server_a),
             InlayHintRefreshReason::NewLinesShown
-        ));
-        assert!(matches!(
+        );
+        assert_matches!(
             inlay_hints.refresh_reason_for_server_registration(buffer_id, server_a),
             InlayHintRefreshReason::NewLinesShown
-        ));
+        );
 
         inlay_hints
             .hint_chunk_fetching
@@ -1446,13 +1472,10 @@ pub mod tests {
 
         let refresh_reason =
             inlay_hints.refresh_reason_for_server_registration(buffer_id, server_b);
-        assert!(matches!(
+        assert_matches!(
             refresh_reason,
-            InlayHintRefreshReason::RefreshRequested {
-                server_id,
-                request_id: None,
-            } if server_id == server_b
-        ));
+            InlayHintRefreshReason::ServerRegistered { server_id } if server_id == server_b
+        );
 
         inlay_hints.clear_for_buffers(
             &HashSet::from_iter([buffer_id]),
@@ -1467,32 +1490,25 @@ pub mod tests {
             .insert(0..50);
         let refresh_reason =
             inlay_hints.refresh_reason_for_server_registration(buffer_id, LanguageServerId(3));
-        assert!(matches!(
+        assert_matches!(
             refresh_reason,
-            InlayHintRefreshReason::RefreshRequested {
-                server_id: LanguageServerId(3),
-                ..
+            InlayHintRefreshReason::ServerRegistered {
+                server_id: LanguageServerId(3)
             }
-        ));
+        );
 
         inlay_hints.remove_server(server_b);
         let refresh_reason =
             inlay_hints.refresh_reason_for_server_registration(buffer_id, server_b);
-        assert!(matches!(
+        assert_matches!(
             refresh_reason,
-            InlayHintRefreshReason::RefreshRequested {
-                server_id,
-                request_id: None,
-            } if server_id == server_b
-        ));
+            InlayHintRefreshReason::ServerRegistered { server_id } if server_id == server_b
+        );
 
         inlay_hints.clear_registered_servers(buffer_id);
         let refresh_reason =
             inlay_hints.refresh_reason_for_server_registration(buffer_id, server_a);
-        assert!(matches!(
-            refresh_reason,
-            InlayHintRefreshReason::NewLinesShown
-        ));
+        assert_matches!(refresh_reason, InlayHintRefreshReason::NewLinesShown);
     }
 
     #[gpui::test]

@@ -177,7 +177,7 @@ impl RelPath {
         false
     }
 
-    pub fn strip_prefix<'a>(&'a self, other: &Self) -> Result<&'a Self, StripPrefixError> {
+    pub fn strip_prefix(&self, other: &Self) -> Result<&Self, StripPrefixError> {
         if other.is_empty() {
             return Ok(self);
         }
@@ -370,9 +370,9 @@ impl<'de> Deserialize<'de> for RelPathBuf {
     }
 }
 
-impl Into<Arc<RelPath>> for RelPathBuf {
-    fn into(self) -> Arc<RelPath> {
-        Arc::from(self.as_rel_path())
+impl From<RelPathBuf> for Arc<RelPath> {
+    fn from(value: RelPathBuf) -> Arc<RelPath> {
+        Arc::from(value.as_rel_path())
     }
 }
 

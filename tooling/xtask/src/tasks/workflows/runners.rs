@@ -16,9 +16,9 @@ pub const WINDOWS_DEFAULT: Runner = Runner("windows-latest");
 
 pub struct Runner(&'static str);
 
-impl Into<gh_workflow::RunsOn> for Runner {
-    fn into(self) -> gh_workflow::RunsOn {
-        self.0.into()
+impl From<Runner> for gh_workflow::RunsOn {
+    fn from(value: Runner) -> gh_workflow::RunsOn {
+        value.0.into()
     }
 }
 

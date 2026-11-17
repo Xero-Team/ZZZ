@@ -113,7 +113,8 @@ impl VisibleOnHover for Disclosure {
 }
 
 impl RenderOnce for Disclosure {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    #[cfg_attr(not(feature = "accessibility"), allow(unused_variables))]
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let disclosure = IconButton::new(
             self.id,
             if self.is_open {
@@ -133,11 +134,11 @@ impl RenderOnce for Disclosure {
         } else {
             disclosure
                 .aria_label(self.accessibility_label.unwrap_or_else(|| {
-                    if i18n::is_initialized(_cx) {
+                    if i18n::is_initialized(cx) {
                         if self.is_open {
-                            tr(_cx, "ui.disclosure.collapse", "Collapse").into()
+                            tr(cx, "ui.disclosure.collapse", "Collapse").into()
                         } else {
-                            tr(_cx, "ui.disclosure.expand", "Expand").into()
+                            tr(cx, "ui.disclosure.expand", "Expand").into()
                         }
                     } else if self.is_open {
                         "Collapse".into()

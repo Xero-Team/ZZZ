@@ -24,12 +24,12 @@ use workspace::{
 use worktree::Worktree;
 
 use crate::ToggleFilePanel;
-use crate::local_transfer::{download_from_session, upload_to_session};
 use crate::monitor::render_monitor;
-use crate::session::{Event as SessionEvent, SessionId, SessionRoot, SessionStore};
-use crate::transfer::{
+use terminal_mode_core::{Event as SessionEvent, SessionId, SessionRoot, SessionStore};
+use terminal_mode_core::{
     copy_between_sessions, mount_id_for_session, mount_id_for_session_root, move_between_sessions,
 };
+use terminal_mode_core::{download_from_session, upload_to_session};
 
 pub(crate) const SESSION_FILE_PANEL_KEY: &str = "SessionFilePanel";
 
@@ -127,12 +127,11 @@ fn transfer_progress_channel() -> (
             .saturating_mul(100)
             .checked_div(progress.total_bytes)
             .unwrap_or(0);
-        if last_percent.swap(percent, Ordering::Relaxed) != percent {
-            if let Err(error) = progress_sender.unbounded_send(progress)
-                && !error.is_disconnected()
-            {
-                log::warn!("failed to report transfer progress: {error}");
-            }
+        if last_percent.swap(percent, Ordering::Relaxed) != percent
+            && let Err(error) = progress_sender.unbounded_send(progress)
+            && !error.is_disconnected()
+        {
+            log::warn!("failed to report transfer progress: {error}");
         }
     });
     (progress_callback, progress_receiver)
@@ -165,7 +164,7 @@ impl SessionFilePanel {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) -> Entity<Self> {
-        let store = SessionStore::for_workspace(workspace, cx);
+        let store = crate::session::for_workspace(workspace, cx);
         let workspace_handle = workspace.weak_handle();
         let panel = cx.new(|cx| Self {
             store: store.downgrade(),
@@ -673,10 +672,8 @@ impl Render for SessionFilePanel {
         });
         let monitor_enabled = crate::TerminalModeSettings::get_global(cx).monitor_enabled;
 
-        let other_sessions: Vec<(SessionId, SharedString)> = self
-            .store
-            .upgrade()
-            .map(|store| {
+        let other_sessions: Vec<(SessionId, SharedString)> =
+            self.store.upgrade().map_or_default(|store| {
                 let store = store.read(cx);
                 store
                     .sessions
@@ -689,8 +686,7 @@ impl Render for SessionFilePanel {
                         )
                     })
                     .collect()
-            })
-            .unwrap_or_default();
+            });
 
         let mut toolbar = h_flex().flex_wrap().p_1().gap_1();
         let mut has_toolbar = false;

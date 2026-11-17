@@ -153,7 +153,7 @@ pub struct SettingsStore {
     local_settings_vfs_paths: HashMap<(WorktreeId, Arc<RelPath>), vfs::VfsPath>,
     pub editorconfig_store: Entity<EditorconfigStore>,
 
-    _settings_files_watcher: Option<Task<()>>,
+    settings_files_watcher: Option<Task<()>>,
     _setting_file_updates: Task<()>,
     setting_file_updates_tx:
         mpsc::UnboundedSender<Box<dyn FnOnce(AsyncApp) -> LocalBoxFuture<'static, Result<()>>>>,
@@ -278,8 +278,7 @@ impl SettingsStore {
                 crate::parse_json_with_comments::<SemanticTokenRules>(
                     &crate::default_semantic_token_rules(),
                 )
-                .map(DefaultSemanticTokenRules)
-                .unwrap_or_default(),
+                .map_or_default(DefaultSemanticTokenRules),
             );
         }
         let default_settings: Rc<SettingsContent> = default_settings.into();
@@ -298,7 +297,7 @@ impl SettingsStore {
             local_settings: BTreeMap::default(),
             local_settings_vfs_paths: HashMap::default(),
             editorconfig_store: cx.new(|_| EditorconfigStore::default()),
-            _settings_files_watcher: None,
+            settings_files_watcher: None,
             setting_file_updates_tx,
             _setting_file_updates: cx.spawn(async move |cx| {
                 while let Some(setting_file_update) = setting_file_updates_rx.next().await {
@@ -359,7 +358,7 @@ impl SettingsStore {
         let result = self.set_global_settings(&global_content, cx);
         settings_changed(SettingsFile::Global, result, cx);
 
-        self._settings_files_watcher = Some(cx.spawn(async move |cx| {
+        self.settings_files_watcher = Some(cx.spawn(async move |cx| {
             let _user_settings_watcher = user_settings_watcher;
             let _global_settings_watcher = global_settings_watcher;
             let mut settings_streams = futures::stream::select(
@@ -586,7 +585,7 @@ impl SettingsStore {
             }))
             .map_err(|err| anyhow::format_err!("Failed to update settings file: {}", err))
             .log_with_level(log::Level::Warn);
-        return rx;
+        rx
     }
 
     pub fn update_settings_file(
@@ -799,7 +798,7 @@ impl SettingsStore {
             migration_status,
         };
         self.file_errors.insert(file, result.clone());
-        return (settings, result);
+        (settings, result)
     }
 
     pub fn error_for_file(&self, file: SettingsFile) -> Option<SettingsParseResult> {
@@ -956,7 +955,7 @@ impl SettingsStore {
             self.user_settings = Some(settings);
             self.recompute_values(None, cx);
         }
-        return parse_result;
+        parse_result
     }
 
     /// Sets the global settings via a JSON string.
@@ -983,7 +982,7 @@ impl SettingsStore {
             self.global_settings = Some(Box::new(settings));
             self.recompute_values(None, cx);
         }
-        return parse_result;
+        parse_result
     }
 
     pub fn set_server_settings(
@@ -1159,10 +1158,10 @@ impl SettingsStore {
                 return Ok(());
             }
         }
-        if let LocalSettingsPath::InWorktree(directory_path) = &path {
-            if zzz_settings_changed {
-                self.recompute_values(Some((root_id, &directory_path)), cx);
-            }
+        if let LocalSettingsPath::InWorktree(directory_path) = &path
+            && zzz_settings_changed
+        {
+            self.recompute_values(Some((root_id, &directory_path)), cx);
         }
         Ok(())
     }
@@ -1256,21 +1255,21 @@ impl SettingsStore {
                         .expect("LspSettings should be an object")
                         .clone();
 
-                    if let Some(properties) = base_lsp_settings.get_mut("properties") {
-                        if let Some(properties_object) = properties.as_object_mut() {
-                            properties_object.insert(
+                    if let Some(properties) = base_lsp_settings.get_mut("properties")
+                        && let Some(properties_object) = properties.as_object_mut()
+                    {
+                        properties_object.insert(
                             "initialization_options".to_owned(),
                             serde_json::json!({
                                 "$ref": format!("{LSP_SETTINGS_SCHEMA_URL_PREFIX}{adapter_name}/initialization_options")
                             }),
                         );
-                            properties_object.insert(
+                        properties_object.insert(
                             "settings".to_owned(),
                             serde_json::json!({
                                 "$ref": format!("{LSP_SETTINGS_SCHEMA_URL_PREFIX}{adapter_name}/settings")
                             }),
                         );
-                        }
                     }
 
                     lsp_properties.insert(
@@ -1659,8 +1658,8 @@ impl<T: Settings> AnySettingValue for SettingValue<T> {
             vfs_path,
         }) = path
         {
-            if let Some(vfs_path) = vfs_path.as_ref() {
-                if let Some((_, _, _, value)) = self
+            if let Some(vfs_path) = vfs_path.as_ref()
+                && let Some((_, _, _, value)) = self
                     .local_values
                     .iter()
                     .filter(|(_, _, settings_vfs_path, _)| {
@@ -1676,9 +1675,8 @@ impl<T: Settings> AnySettingValue for SettingValue<T> {
                             .as_ref()
                             .map_or(0, |path| path.provider_path().component_count())
                     })
-                {
-                    return value;
-                }
+            {
+                return value;
             }
             for (settings_root_id, settings_path, settings_vfs_path, value) in
                 self.local_values.iter().rev()

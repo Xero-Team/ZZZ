@@ -463,7 +463,8 @@ impl X11Client {
             None
         };
 
-        // Safety: Safe if xcb::Connection always returns a valid fd
+        // SAFETY: `xcb::Connection` keeps its fd open for as long as the connection is alive, and
+        // the cloned `Rc` held by the wrapper makes sure it outlives the calloop source.
         let fd = unsafe { FdWrapper::new(Rc::clone(&xcb_connection)) };
 
         handle
@@ -1272,7 +1273,7 @@ impl X11Client {
                         )
                         .log_err();
                         state.xcb_connection.flush().log_err();
-                    };
+                    }
                 }
                 let pressed_button = pressed_button_from_mask(event.button_mask[0]);
                 let position = point(
@@ -1415,7 +1416,7 @@ impl X11Client {
                 }));
             }
             _ => {}
-        };
+        }
 
         Some(())
     }
@@ -1431,7 +1432,7 @@ impl X11Client {
             XimCallbackEvent::XimPreeditEvent(window, text) => {
                 self.xim_handle_preedit(window, text);
             }
-        };
+        }
     }
 
     fn xim_handle_event(&self, event: Event) -> Option<()> {
@@ -2823,6 +2824,7 @@ fn xkb_state_for_key_event(xkb: &xkbc::State, event_state: xproto::KeyButMask) -
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]

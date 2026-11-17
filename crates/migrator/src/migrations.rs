@@ -20,25 +20,25 @@ pub(crate) fn migrate_settings(
         .chain(PlatformOverrides::OVERRIDE_KEYS.iter().copied());
 
     for key in override_keys {
-        if let Some(sub_object) = root_object.get_mut(key) {
-            if let Some(sub_map) = sub_object.as_object_mut() {
-                migrate_one(sub_map)?;
-            }
+        if let Some(sub_object) = root_object.get_mut(key)
+            && let Some(sub_map) = sub_object.as_object_mut()
+        {
+            migrate_one(sub_map)?;
         }
     }
 
-    if let Some(profiles) = root_object.get_mut("profiles") {
-        if let Some(profiles_object) = profiles.as_object_mut() {
-            for profile_value in profiles_object.values_mut() {
-                if let Some(profile_map) = profile_value.as_object_mut() {
-                    if let Some(inner) = profile_map
-                        .get_mut("settings")
-                        .and_then(|v| v.as_object_mut())
-                    {
-                        migrate_one(inner)?;
-                    } else {
-                        migrate_one(profile_map)?;
-                    }
+    if let Some(profiles) = root_object.get_mut("profiles")
+        && let Some(profiles_object) = profiles.as_object_mut()
+    {
+        for profile_value in profiles_object.values_mut() {
+            if let Some(profile_map) = profile_value.as_object_mut() {
+                if let Some(inner) = profile_map
+                    .get_mut("settings")
+                    .and_then(|v| v.as_object_mut())
+                {
+                    migrate_one(inner)?;
+                } else {
+                    migrate_one(profile_map)?;
                 }
             }
         }
@@ -96,27 +96,27 @@ pub(crate) fn migrate_language_setting(
         }
     }
 
-    if let Some(profiles) = root_object.get_mut("profiles") {
-        if let Some(profiles_object) = profiles.as_object_mut() {
-            let profile_names: Vec<String> = profiles_object.keys().cloned().collect();
-            for profile_name in &profile_names {
-                if let Some(profile_value) = profiles_object.get_mut(profile_name.as_str()) {
-                    if let Some(settings_value) = profile_value
-                        .as_object_mut()
-                        .and_then(|m| m.get_mut("settings"))
-                    {
-                        apply_to_value_and_languages(
-                            settings_value,
-                            &["profiles", profile_name],
-                            migrate_fn,
-                        )?;
-                    } else {
-                        apply_to_value_and_languages(
-                            profile_value,
-                            &["profiles", profile_name],
-                            migrate_fn,
-                        )?;
-                    }
+    if let Some(profiles) = root_object.get_mut("profiles")
+        && let Some(profiles_object) = profiles.as_object_mut()
+    {
+        let profile_names: Vec<String> = profiles_object.keys().cloned().collect();
+        for profile_name in &profile_names {
+            if let Some(profile_value) = profiles_object.get_mut(profile_name.as_str()) {
+                if let Some(settings_value) = profile_value
+                    .as_object_mut()
+                    .and_then(|m| m.get_mut("settings"))
+                {
+                    apply_to_value_and_languages(
+                        settings_value,
+                        &["profiles", profile_name],
+                        migrate_fn,
+                    )?;
+                } else {
+                    apply_to_value_and_languages(
+                        profile_value,
+                        &["profiles", profile_name],
+                        migrate_fn,
+                    )?;
                 }
             }
         }

@@ -7,9 +7,9 @@ Normative rules for the `absorbing-upstream` skill.
 Override only when the user supplies a value.
 
 ```text
-LAST_REVIEWED_UPSTREAM=c7bea343838f42b4c14151393e41f0bbe033c95e
+LAST_REVIEWED_UPSTREAM=aff99ecc3249cfa95e720c4d6c1eb4a72105a3ee
 LOCAL_BASE_BRANCH=main
-LOCAL_BASE_COMMIT=d1518d139ff6b509d08955579f5f22fd70595a63
+LOCAL_BASE_COMMIT=be1bfe60fe43c3e031a2742ecdc7776f606fe6a8
 UPSTREAM_URL=https://github.com/zed-industries/zed.git
 UPSTREAM_REF=refs/heads/main
 WORK_BRANCH=sync/upstream-YYYY-MM-DD
@@ -20,15 +20,19 @@ CREATE_PR=no
 PUSH=no
 ```
 
-As of 2026-11-05, local `main` is `d1518d139f`. The last completed
-sync is `docs/src/development/upstream/upstream-sync-2026-11-04.md` on
-`sync/upstream-2026-11-04`; its addendum advances the reviewed baseline
-to `c7bea343838f` (the live upstream head at the second 2026-11-04
-query). The most recent full re-audit is
-`docs/src/development/upstream/upstream-sync-audit-2026-11-03.md` (38
-non-audit reports, 1453 decision rows). Query live upstream again at
-run start; never trust these recorded values as the live head. The next
-range starts after `LAST_REVIEWED_UPSTREAM`.
+As of 2026-11-15, local `main` is `da3887d10e`. The last new upstream
+window is `docs/src/development/upstream/upstream-sync-2026-11-13.md` on
+`sync/upstream-2026-11-13`; it reviews `6ceb6fee87..aff99ecc32`, the
+first 20 of 22 commits, and advances the reviewed baseline to
+`aff99ecc32`. The live head at query time was `dc93abce2f`, so the next
+range starts with `83df5df635` and `dc93abce2f`. The preceding chain
+ends at `2026-11-12`, which closed on `6ceb6fee87`.
+`upstream-sync-2026-11-14.md` re-checks 40 earlier `C` rows and does not
+move the baseline. The most recent full re-audit is
+`docs/src/development/upstream/upstream-sync-audit-2026-11-03.md`; the
+tree holds 48 sync reports and 5 audit reports. Query live upstream
+again at run start; never trust these recorded values as the live head.
+The next range starts after `LAST_REVIEWED_UPSTREAM`.
 
 ## Philosophy
 
@@ -212,10 +216,8 @@ if you lint, never `cargo clippy`.
 This host is Linux. Inspect macOS and Windows hunks, but record those
 runtime tests as `NOT RUN`.
 
-Do not fix unrelated baseline failures. Known 2026-08-07 examples:
-duplicate `hover_links.rs` test names, and Prettier drift in
-`installation.md`, `migrate/vs-code.md`, and
-`reference/all-settings.md`.
+Do not fix unrelated baseline failures. Confirm a failure predates the
+change, on a clean checkout, before calling it baseline.
 
 If Prettier or `cargo fmt` rewrites an unrelated region, restore it.
 
@@ -233,12 +235,16 @@ Create or append `REPORT` using the 2026-08-07 shape:
    `CONFLICT`.
 
 ```sh
-cd docs && npx prettier --write src/development/upstream/<report>.md
-cd docs && npx prettier --check src/development/upstream/<report>.md
+cd docs && npx --yes prettier@3.9.10 --write src/development/upstream/<report>.md
+cd docs && npx --yes prettier@3.9.10 --check src/development/upstream/<report>.md
 ```
 
-Do not run Prettier across all of `docs/src/`. Advance the reviewed
-baseline only through commits you classified.
+`3.9.10` is the version pinned in `script/prettier`, which
+`cargo xtask check docs` runs over all of `docs/`; a scoped write must use
+the same version or the check will disagree. Read `PRETTIER_VERSION` from
+`script/prettier` if the pin moves. Do not run Prettier across all of
+`docs/src/`. Advance the reviewed baseline only through commits you
+classified.
 
 ## Rejection Ledger
 

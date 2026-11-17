@@ -323,12 +323,12 @@ impl Anchor {
 
     pub fn cmp(&self, other: &Anchor, snapshot: &MultiBufferSnapshot) -> Ordering {
         match (self, other) {
-            (Anchor::Min, Anchor::Min) => return Ordering::Equal,
-            (Anchor::Max, Anchor::Max) => return Ordering::Equal,
-            (Anchor::Min, _) => return Ordering::Less,
-            (Anchor::Max, _) => return Ordering::Greater,
-            (_, Anchor::Max) => return Ordering::Less,
-            (_, Anchor::Min) => return Ordering::Greater,
+            (Anchor::Min, Anchor::Min) => Ordering::Equal,
+            (Anchor::Max, Anchor::Max) => Ordering::Equal,
+            (Anchor::Min, _) => Ordering::Less,
+            (Anchor::Max, _) => Ordering::Greater,
+            (_, Anchor::Max) => Ordering::Less,
+            (_, Anchor::Min) => Ordering::Greater,
             (Anchor::Excerpt(self_excerpt_anchor), Anchor::Excerpt(other_excerpt_anchor)) => {
                 self_excerpt_anchor.cmp(other_excerpt_anchor, snapshot)
             }

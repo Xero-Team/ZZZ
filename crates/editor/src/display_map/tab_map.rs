@@ -163,7 +163,7 @@ impl TabMap {
             version: new_version,
         };
 
-        let _old_alloc_ptr = fold_edits.as_ptr();
+        let old_alloc_ptr = fold_edits.as_ptr();
         // Combine any edits that overlap due to the expansion.
         let mut fold_edits = fold_edits.into_iter();
         let mut first_edit = fold_edits.next().expect("iterator should yield an item");
@@ -185,7 +185,7 @@ impl TabMap {
             .filter_map(|x| x)
             .collect();
         v.push(first_edit);
-        debug_assert_eq!(v.as_ptr(), _old_alloc_ptr, "Fold edits were reallocated");
+        debug_assert_eq!(v.as_ptr(), old_alloc_ptr, "Fold edits were reallocated");
         let tab_edits = {
             let mut old_cursor = old_snapshot.tab_point_cursor();
             let mut new_cursor = new_snapshot.tab_point_cursor();

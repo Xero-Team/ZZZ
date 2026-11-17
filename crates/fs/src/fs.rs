@@ -18,13 +18,13 @@ use gpui::BackgroundExecutor;
 use gpui::Global;
 use gpui::ReadGlobal as _;
 use gpui::SharedString;
-#[cfg(unix)]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 use std::ffi::CString;
 use util::command::{Stdio, new_command};
 
 #[cfg(unix)]
 use std::os::fd::{AsFd, AsRawFd};
-#[cfg(unix)]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 use std::os::unix::ffi::OsStrExt;
 
 #[cfg(unix)]
@@ -486,7 +486,7 @@ impl FileHandle for std::fs::File {
             .is_some_and(|f| f.to_string_lossy().ends_with(" (deleted)"))
         {
             anyhow::bail!("file was deleted")
-        };
+        }
 
         Ok(new_path)
     }
@@ -502,8 +502,13 @@ impl FileHandle for std::fs::File {
         // `kinfo_file` is a plain C struct made of integers, so an all-zero value is valid
         // and only the size field has to be populated before the call.
         let mut kif = MaybeUninit::<libc::kinfo_file>::zeroed();
+        // `kf_structsize` is the byte size of the struct. libc defines the
+        // `KINFO_FILE_SIZE` constant only on the x86 FreeBSD architectures, so
+        // derive it from the type itself to keep every architecture building.
+        let structsize = libc::c_int::try_from(std::mem::size_of::<libc::kinfo_file>())
+            .map_err(|_| anyhow::anyhow!("kinfo_file does not fit in kf_structsize"))?;
         // SAFETY: `MaybeUninit::zeroed` produced a valid `kinfo_file`.
-        unsafe { kif.assume_init_mut().kf_structsize = libc::KINFO_FILE_SIZE };
+        unsafe { kif.assume_init_mut().kf_structsize = structsize };
 
         let result = unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_KINFO, kif.as_mut_ptr()) };
         anyhow::ensure!(result != -1, "fcntl returned -1");
@@ -613,6 +618,10 @@ fn rename_without_replace(source: &Path, target: &Path) -> io::Result<()> {
     #[cfg(target_os = "macos")]
     let result = unsafe { libc::renamex_np(source.as_ptr(), target.as_ptr(), libc::RENAME_EXCL) };
 
+    // SAFETY: `SYS_renameat2` takes `(int olddirfd, const char *oldpath, int newdirfd,
+    // const char *newpath, unsigned int flags)`, which is exactly the argument list below; getting
+    // a variadic syscall's argument types wrong is silently accepted, so the match matters. Both
+    // `CString`s are alive for the whole call, so `as_ptr()` yields valid NUL-terminated paths.
     #[cfg(target_os = "linux")]
     let result = unsafe {
         libc::syscall(
@@ -787,10 +796,10 @@ impl Fs for RealFs {
     }
 
     async fn rename(&self, source: &Path, target: &Path, options: RenameOptions) -> Result<()> {
-        if options.create_parents {
-            if let Some(parent) = target.parent() {
-                self.create_dir(parent).await?;
-            }
+        if options.create_parents
+            && let Some(parent) = target.parent()
+        {
+            self.create_dir(parent).await?;
         }
 
         if options.overwrite {
@@ -1386,6 +1395,19 @@ impl GitService for RealFs {
         dotgit_path: &Path,
         system_git_binary_path: Option<&Path>,
     ) -> Result<Arc<dyn GitRepository>> {
+        if git::fossil::is_fossil_checkout_db_path(dotgit_path) {
+            anyhow::ensure!(
+                git::fossil::fossil_support_enabled(),
+                "Fossil support is disabled; set {}=1 to open this checkout",
+                git::fossil::FOSSIL_SUPPORT_ENV_VAR
+            );
+            return Ok(Arc::new(git::fossil::FossilRepository::new(
+                dotgit_path,
+                None,
+                self.executor.clone(),
+            )?));
+        }
+
         Ok(Arc::new(RealGitRepository::new(
             dotgit_path,
             self.bundled_git_binary_path.clone(),
@@ -2302,9 +2324,7 @@ impl FakeFs {
             .ref_name
             .as_ref()
             .expect("linked worktree must have a ref_name");
-        let branch_name = ref_name
-            .strip_prefix("refs/heads/")
-            .unwrap_or(ref_name.as_ref());
+        let branch_name = ref_name.trim_prefix("refs/heads/");
 
         // Create ref in git state.
         self.with_git_state(dot_git, false, |state| {
@@ -2366,7 +2386,7 @@ impl FakeFs {
         emit_git_event: bool,
         ref_name: &str,
     ) {
-        let branch_name = ref_name.strip_prefix("refs/heads/").unwrap_or(ref_name);
+        let branch_name = ref_name.trim_prefix("refs/heads/");
         let worktrees_entry_dir = dot_git.join("worktrees").join(branch_name);
 
         // Read gitdir to find the worktree checkout path.
@@ -2377,8 +2397,7 @@ impl FakeFs {
         let gitdir_str = String::from_utf8(gitdir_content).expect("from_utf8 should be present");
         let worktree_path = PathBuf::from(gitdir_str.trim())
             .parent()
-            .map(PathBuf::from)
-            .unwrap_or_default();
+            .map_or_default(PathBuf::from);
 
         // Remove the worktree checkout directory.
         self.remove_dir(
@@ -2586,7 +2605,7 @@ impl FakeFs {
                             StatusCode::Deleted | StatusCode::Renamed | StatusCode::Copied => {
                                 panic!("cannot create these statuses for an existing file");
                             }
-                        };
+                        }
                         match index_status {
                             StatusCode::Modified => {
                                 let mut content = index_content.clone().expect(
@@ -2605,9 +2624,9 @@ impl FakeFs {
                             StatusCode::Renamed | StatusCode::Copied => {
                                 panic!("cannot create these statuses for an existing file");
                             }
-                        };
+                        }
                     }
-                };
+                }
 
                 if let Some(content) = index_content {
                     state.index_contents.insert(repo_path.clone(), content);
@@ -3083,10 +3102,10 @@ impl Fs for FakeFs {
         let old_path = normalize_path(old_path);
         let new_path = normalize_path(new_path);
 
-        if options.create_parents {
-            if let Some(parent) = new_path.parent() {
-                self.create_dir(parent).await?;
-            }
+        if options.create_parents
+            && let Some(parent) = new_path.parent()
+        {
+            self.create_dir(parent).await?;
         }
 
         let mut state = self.state.lock();

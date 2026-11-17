@@ -133,15 +133,17 @@ pub fn replace_control_characters_remapping_offsets(
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
 
     #[test]
     fn test_printable_text_is_not_reallocated() {
-        assert!(matches!(
+        assert_matches!(
             replace_control_characters("main.rs"),
             Cow::Borrowed("main.rs")
-        ));
-        assert!(matches!(replace_control_characters(""), Cow::Borrowed("")));
+        );
+        assert_matches!(replace_control_characters(""), Cow::Borrowed(""));
     }
 
     #[test]
@@ -260,7 +262,7 @@ mod tests {
             let borrowed = replace_control_characters(text);
             match remapped {
                 Some(replaced) => assert_eq!(replaced, borrowed.as_ref()),
-                None => assert!(matches!(borrowed, Cow::Borrowed(_))),
+                None => assert_matches!(borrowed, Cow::Borrowed(_)),
             }
         }
     }

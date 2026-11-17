@@ -1,6 +1,7 @@
 mod capability_granter;
 pub mod extension_settings;
 pub mod headless_host;
+pub mod theme_proxy;
 pub mod wasm_host;
 
 #[cfg(test)]
@@ -389,12 +390,10 @@ impl ExtensionStore {
                         if let Some(path::Component::Normal(extension_dir_name)) =
                             event_path.components().next()
                             && let Some(extension_id) = extension_dir_name.to_str()
+                            && let Err(error) = reload_tx.unbounded_send(Some(extension_id.into()))
+                            && !error.is_disconnected()
                         {
-                            if let Err(error) = reload_tx.unbounded_send(Some(extension_id.into()))
-                                && !error.is_disconnected()
-                            {
-                                log::warn!("failed to schedule extension reload: {error}");
-                            }
+                            log::warn!("failed to schedule extension reload: {error}");
                         }
                     }
                 }
@@ -423,10 +422,8 @@ impl ExtensionStore {
         };
 
         async move {
-            if reload_scheduled {
-                if let Err(error) = rx.await {
-                    log::error!("extension reload was canceled before completion: {error}");
-                }
+            if reload_scheduled && let Err(error) = rx.await {
+                log::error!("extension reload was canceled before completion: {error}");
             }
         }
     }
@@ -1393,7 +1390,7 @@ impl ExtensionStore {
         if !semantic_token_rules_to_add.is_empty() {
             SettingsStore::update_global(cx, |store, cx| {
                 for (language_name, rules) in semantic_token_rules_to_add {
-                    store.set_language_semantic_token_rules(language_name.0.clone(), rules, cx);
+                    store.set_language_semantic_token_rules(language_name.0, rules, cx);
                 }
             });
         }
@@ -1453,7 +1450,7 @@ impl ExtensionStore {
             for extension in extension_entries {
                 if extension.manifest.lib.kind.is_none() {
                     continue;
-                };
+                }
 
                 let extension_path = root_dir.join(extension.manifest.id.as_ref());
                 let wasm_extension = WasmExtension::load(
@@ -1494,7 +1491,7 @@ impl ExtensionStore {
                             this.proxy.register_language_server(
                                 extension.clone(),
                                 language_server_id.clone(),
-                                language.clone(),
+                                language,
                             );
                         }
                     }

@@ -33,6 +33,8 @@ pub struct PaneGroup {
 pub struct PaneRenderResult {
     pub element: gpui::AnyElement,
     pub contains_active_pane: bool,
+    #[cfg(any(test, feature = "test-support"))]
+    pub decorated_pane_ix: Option<usize>,
 }
 
 impl PaneGroup {
@@ -201,7 +203,7 @@ impl PaneGroup {
                     log::error!("failed to resize pane: pane was not present in the pane group");
                 }
             }
-        };
+        }
         self.mark_positions(cx);
     }
 
@@ -211,7 +213,7 @@ impl PaneGroup {
             Member::Axis(axis) => {
                 axis.reset_pane_sizes();
             }
-        };
+        }
         self.mark_positions(cx);
     }
 
@@ -219,7 +221,7 @@ impl PaneGroup {
         match &mut self.root {
             Member::Pane(_) => {}
             Member::Axis(axis) => axis.swap(from, to),
-        };
+        }
         self.mark_positions(cx);
     }
 
@@ -466,16 +468,20 @@ impl Member {
                     return PaneRenderResult {
                         element: div().into_any(),
                         contains_active_pane: false,
+                        #[cfg(any(test, feature = "test-support"))]
+                        decorated_pane_ix: None,
                     };
                 }
 
-                if let Some(maximized) = maximized {
-                    if maximized.upgrade().as_ref() != Some(pane) {
-                        return PaneRenderResult {
-                            element: div().into_any(),
-                            contains_active_pane: false,
-                        };
-                    }
+                if let Some(maximized) = maximized
+                    && maximized.upgrade().as_ref() != Some(pane)
+                {
+                    return PaneRenderResult {
+                        element: div().into_any(),
+                        contains_active_pane: false,
+                        #[cfg(any(test, feature = "test-support"))]
+                        decorated_pane_ix: None,
+                    };
                 }
 
                 let decoration = render_cx.decorate(pane, cx);
@@ -504,6 +510,8 @@ impl Member {
                         .children(decoration.status_box)
                         .into_any(),
                     contains_active_pane: is_active,
+                    #[cfg(any(test, feature = "test-support"))]
+                    decorated_pane_ix: None,
                 }
             }
             Member::Axis(axis) => axis.render(basis + 1, zoomed, maximized, render_cx, window, cx),
@@ -873,19 +881,12 @@ impl PaneAxis {
         window: &mut Window,
         cx: &mut App,
     ) -> PaneRenderResult {
-        if let Some(maximized) = maximized {
-            if let Some(maximized_pane) = maximized.upgrade() {
-                for member in &self.members {
-                    if member.contains_pane(&maximized_pane) {
-                        return member.render(
-                            basis,
-                            zoomed,
-                            Some(maximized),
-                            render_cx,
-                            window,
-                            cx,
-                        );
-                    }
+        if let Some(maximized) = maximized
+            && let Some(maximized_pane) = maximized.upgrade()
+        {
+            for member in &self.members {
+                if member.contains_pane(&maximized_pane) {
+                    return member.render(basis, zoomed, Some(maximized), render_cx, window, cx);
                 }
             }
         }
@@ -904,7 +905,7 @@ impl PaneAxis {
                     Member::Pane(pane) => {
                         is_leaf_pane[ix] = true;
                         if pane == render_cx.active_pane() {
-                            active_pane_ix = Some(ix);
+                            active_pane_ix = pane.read(cx).has_focus(window, cx).then_some(ix);
                             contains_active_pane = true;
                         }
                     }
@@ -936,6 +937,8 @@ impl PaneAxis {
         PaneRenderResult {
             element,
             contains_active_pane,
+            #[cfg(any(test, feature = "test-support"))]
+            decorated_pane_ix: active_pane_ix,
         }
     }
 }

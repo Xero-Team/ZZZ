@@ -6,17 +6,25 @@ use i18n::tr;
 use ui::{Button, Label, prelude::*};
 use ui_input::InputField;
 
-use crate::session::SessionStore;
+use crate::session::send_to_all_sessions;
+use terminal_mode_core::SessionStore;
+use workspace::Workspace;
 
 /// A small form that sends one command to every session terminal at once.
 pub struct BroadcastModal {
     store: WeakEntity<SessionStore>,
+    workspace: WeakEntity<Workspace>,
     input: Entity<InputField>,
     focus_handle: FocusHandle,
 }
 
 impl BroadcastModal {
-    pub fn new(store: Entity<SessionStore>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        store: Entity<SessionStore>,
+        workspace: WeakEntity<Workspace>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let placeholder = tr(
             cx,
             "terminal_mode.broadcast.placeholder",
@@ -34,6 +42,7 @@ impl BroadcastModal {
 
         Self {
             store: store.downgrade(),
+            workspace,
             input,
             focus_handle,
         }
@@ -45,10 +54,12 @@ impl BroadcastModal {
             cx.emit(DismissEvent);
             return;
         }
-        if let Some(store) = self.store.upgrade() {
+        if let Some(store) = self.store.upgrade()
+            && let Some(workspace) = self.workspace.upgrade()
+        {
             let command = format!("{text}\n");
-            store.update(cx, |store, cx| {
-                store.send_to_all_sessions(&command, cx);
+            workspace.update(cx, |workspace, cx| {
+                send_to_all_sessions(workspace, &store, &command, cx);
             });
         }
         cx.emit(DismissEvent);

@@ -388,29 +388,35 @@ impl Channel {
             return Channel::Dev;
         };
 
-        match contents.trim() {
-            "stable" => Channel::Stable,
-            "preview" => Channel::Preview,
-            "nightly" => Channel::Nightly,
-            _ => Channel::Dev,
-        }
+        Self::from_str_value(&contents).unwrap_or(Channel::Dev)
+    }
+
+    /// Parses a channel name. Unknown values return `None` so each caller can
+    /// apply its own default instead of silently baking in a wrong channel.
+    /// Names come from `as_str` so the forward and reverse mappings cannot
+    /// drift apart when a channel is added or renamed.
+    fn from_str_value(value: &str) -> Option<Self> {
+        let value = value.trim();
+        Self::value_variants()
+            .iter()
+            .copied()
+            .find(|channel| channel.as_str() == value)
     }
 
     /// The channel a shipping artifact uses. `crates/zzz/RELEASE_CHANNEL`
     /// describes development builds, so packaging defaults to `stable` unless
-    /// the caller names a channel or explicitly exports `ZZZ_RELEASE_CHANNEL`.
-    pub fn detect_shipping(workspace: &std::path::Path) -> Self {
-        if let Ok(value) = std::env::var("ZZZ_RELEASE_CHANNEL") {
-            match value.trim() {
-                "stable" => return Channel::Stable,
-                "preview" => return Channel::Preview,
-                "nightly" => return Channel::Nightly,
-                "dev" => return Channel::Dev,
-                _ => {}
-            }
-        }
-        let _ = workspace;
-        Channel::SHIPPING
+    /// the caller names a channel or exports `ZZZ_RELEASE_CHANNEL`.
+    pub fn detect_shipping() -> Self {
+        Self::shipping_from_env(std::env::var("ZZZ_RELEASE_CHANNEL").ok().as_deref())
+    }
+
+    /// Kept separate from `detect_shipping` so the override is testable without
+    /// mutating the process environment. Unknown values fall back to the
+    /// shipping channel rather than baking a broken identity into an artifact.
+    fn shipping_from_env(value: Option<&str>) -> Self {
+        value
+            .and_then(Self::from_str_value)
+            .unwrap_or(Self::SHIPPING)
     }
 }
 
@@ -467,5 +473,44 @@ mod tests {
         let host = Target::host_default();
         assert_eq!(host.platform(), Platform::host());
         assert!(!host.is_cross());
+    }
+
+    #[test]
+    fn shipping_channel_honors_the_environment_override() {
+        assert_eq!(Channel::shipping_from_env(None), Channel::Stable);
+        assert_eq!(
+            Channel::shipping_from_env(Some("preview")),
+            Channel::Preview
+        );
+        assert_eq!(
+            Channel::shipping_from_env(Some(" nightly ")),
+            Channel::Nightly
+        );
+        assert_eq!(Channel::shipping_from_env(Some("dev")), Channel::Dev);
+        // An unknown value must fall back to the shipping channel rather than
+        // baking a broken identity into an artifact.
+        assert_eq!(Channel::shipping_from_env(Some("garbage")), Channel::Stable);
+        assert_eq!(Channel::shipping_from_env(Some("")), Channel::Stable);
+    }
+
+    #[test]
+    fn channel_names_round_trip_for_every_variant() {
+        // `as_str` is the single source of names written into manifests and read
+        // back from the RELEASE_CHANNEL file and ZZZ_RELEASE_CHANNEL. Every name
+        // must parse back to its channel, or an override silently falls back to
+        // the shipping default instead of the channel the caller asked for.
+        // Iterate the derived variants so a newly added channel is covered
+        // without maintaining a second list in the test.
+        let channels = Channel::value_variants();
+        let names: Vec<_> = channels.iter().map(|channel| channel.as_str()).collect();
+        assert_eq!(
+            names,
+            ["dev", "stable", "preview", "nightly"],
+            "channel names are part of the CLI and build-override contract"
+        );
+        for channel in channels {
+            assert_eq!(Channel::from_str_value(channel.as_str()), Some(*channel));
+        }
+        assert_eq!(Channel::from_str_value(" unknown "), None);
     }
 }

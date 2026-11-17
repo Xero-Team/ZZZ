@@ -48,6 +48,7 @@ include = [
 patches = [
     "vendor/patches/font-kit/0001-zzz-integration.patch",
     "vendor/patches/font-kit/0002-zzz-clippy-and-import-fixes.patch",
+    "vendor/patches/font-kit/0003-cargo-machete-ignores.patch",
 ]
 
 [[package]]
@@ -56,7 +57,10 @@ repository = "https://github.com/tailcallhq/gh-workflow.git"
 source_ref = "refs/tags/v0.9.0"
 revision = "4073ed328d759ecc6c47c56fa794c16dde8f5573"
 include = ["CHANGELOG.md", "Cargo.toml", "LICENSE", "README.md", "crates"]
-patches = ["vendor/patches/gh-workflow/0001-zzz-integration.patch"]
+patches = [
+    "vendor/patches/gh-workflow/0001-zzz-integration.patch",
+    "vendor/patches/gh-workflow/0002-cargo-machete-ignores.patch",
+]
 
 [[package]]
 name = "lsp-types"
@@ -69,8 +73,8 @@ patches = ["vendor/patches/lsp-types/0001-zzz-integration.patch"]
 [[package]]
 name = "notify"
 repository = "https://github.com/notify-rs/notify.git"
-source_ref = "refs/tags/notify-8.2.1"
-revision = "7f6995de25f07bf28ab513c64375d94b4ccd08a1"
+source_ref = "refs/tags/notify-8.2.2"
+revision = "603674a8c7b7dfa396b2cc9925f75606a18bf295"
 include = [
     "Cargo.toml",
     "README.md",
@@ -111,7 +115,7 @@ patches = ["vendor/patches/nvim-rs/0001-rustfmt.patch"]
 name = "stacker"
 repository = "https://github.com/rust-lang/stacker.git"
 source_ref = "refs/heads/master"
-revision = "d3ac2df79a409c681329006e9b31c96ab9c5fcae"
+revision = "6ae722ada24abfbf1c085a4335424a68b4064336"
 include = [
     "psm/Cargo.toml",
     "psm/LICENSE-APACHE",
@@ -148,8 +152,8 @@ patches = ["vendor/patches/scap/0001-zzz-platform-integration.patch"]
 [[package]]
 name = "trash"
 repository = "https://github.com/ArturKovacs/trash.git"
-source_ref = "refs/tags/v5.2.9"
-revision = "54e0a2d69fdc058cc2efa19a497ec8f44631d61f"
+source_ref = "refs/tags/v5.3.0"
+revision = "0fdaf8dfea62d0d5270a918d160dfb58cb76eb3f"
 include = ["CHANGELOG.md", "Cargo.toml", "LICENSE.txt", "README.md", "src"]
 patches = ["vendor/patches/trash/0001-restore-and-delete-metadata.patch"]
 
@@ -182,13 +186,17 @@ include = [
     "wgpu-types",
     "wgpu",
 ]
-patches = ["vendor/patches/wgpu/0001-zzz-integration.patch"]
+patches = [
+    "vendor/patches/wgpu/0001-zzz-integration.patch",
+    "vendor/patches/wgpu/0002-cargo-machete-ignores.patch",
+    "vendor/patches/wgpu/0003-wasm-unused-allows.patch",
+]
 
 [[package]]
 name = "windows-capture"
 repository = "https://github.com/NiiightmareXD/windows-capture.git"
 source_ref = "refs/heads/main"
-revision = "c7d106448eb9d9b251345c39047711e1cd408ae2"
+revision = "6ab0086703e83fde0685c07becd7ff04ab004dbb"
 include = ["Cargo.toml", "LICENCE", "README.md", "src"]
 patches = ["vendor/patches/windows-capture/0001-prune-workspace.patch"]
 

@@ -77,14 +77,13 @@ pub(crate) struct MountDefinition {
 impl Display for MountDefinition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mount_type = self.mount_type.clone().unwrap_or_else(|| {
-            if let Some(source) = &self.source {
-                if source.starts_with('/')
+            if let Some(source) = &self.source
+                && (source.starts_with('/')
                     || source.starts_with("\\\\")
                     || source.get(1..3) == Some(":\\")
-                    || source.get(1..3) == Some(":/")
-                {
-                    return "bind".to_owned();
-                }
+                    || source.get(1..3) == Some(":/"))
+            {
+                return "bind".to_owned();
             }
             "volume".to_owned()
         });

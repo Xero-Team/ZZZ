@@ -48,7 +48,7 @@ pub(crate) fn read_lyrics(path: &Path) -> Option<Arc<Lyrics>> {
 }
 
 pub(crate) fn parse_lrc(contents: &str) -> Vec<LyricLine> {
-    let contents = contents.strip_prefix('\u{feff}').unwrap_or(contents);
+    let contents = contents.trim_prefix('\u{feff}');
     let mut lines = Vec::new();
 
     for raw_line in contents.lines() {
@@ -237,7 +237,7 @@ mod tests {
         assert_eq!(current_line_index(Duration::from_secs(5), &lines), Some(0));
         assert_eq!(current_line_index(Duration::from_secs(9), &lines), Some(0));
         assert_eq!(current_line_index(Duration::from_secs(10), &lines), Some(1));
-        assert_eq!(current_line_index(Duration::from_secs(60), &lines), Some(1));
+        assert_eq!(current_line_index(Duration::from_mins(1), &lines), Some(1));
         assert_eq!(current_line_index(Duration::ZERO, &[]), None);
     }
 

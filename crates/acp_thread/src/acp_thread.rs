@@ -13,7 +13,7 @@ pub use diff::*;
 use feature_flags::{AcpBetaFeatureFlag, FeatureFlagAppExt as _};
 use futures::{FutureExt, channel::oneshot, future::BoxFuture};
 use gpui::{
-    AppContext, AsyncApp, Context, Entity, EventEmitter, SharedString, Subscription, Task,
+    App, AppContext, AsyncApp, Context, Entity, EventEmitter, SharedString, Subscription, Task,
     WeakEntity,
 };
 use itertools::Itertools;
@@ -39,7 +39,6 @@ use std::{fmt::Display, mem, path::PathBuf, sync::Arc};
 use task::{Shell, ShellBuilder};
 pub use terminal::*;
 use text::Bias;
-use ui::App;
 use util::markdown::MarkdownEscaped;
 use util::path_list::PathList;
 use util::{
@@ -717,7 +716,7 @@ impl ToolCall {
             tool_call.title
         } else if tool_call.kind == acp::ToolKind::Edit {
             MarkdownEscaped(tool_call.title.as_str()).to_string()
-        } else if let Some((first_line, _)) = tool_call.title.split_once("\n") {
+        } else if let Some((first_line, _)) = tool_call.title.split_once('\n') {
             first_line.to_owned() + "..."
         } else {
             tool_call.title
@@ -819,7 +818,7 @@ impl ToolCall {
                     label.replace(title, cx);
                 } else if self.kind == acp::ToolKind::Edit {
                     label.replace(MarkdownEscaped(&title).to_string(), cx)
-                } else if let Some((first_line, _)) = title.split_once("\n") {
+                } else if let Some((first_line, _)) = title.split_once('\n') {
                     label.replace(first_line.to_owned() + "...", cx);
                 } else {
                     label.replace(title, cx);
@@ -2091,7 +2090,7 @@ impl AcpThread {
         });
 
         let git_store = project.read(cx).git_store().clone();
-        let _git_store_subscription = cx.subscribe(&git_store, |this, _, event, cx| {
+        let git_store_subscription = cx.subscribe(&git_store, |this, _, event, cx| {
             if matches!(
                 event,
                 GitStoreEvent::RepositoryUpdated(
@@ -2109,7 +2108,7 @@ impl AcpThread {
             parent_session_id,
             work_dirs,
             action_log,
-            _git_store_subscription,
+            _git_store_subscription: git_store_subscription,
             update_last_checkpoint_if_changed_task: None,
             shared_buffers: Default::default(),
             entries: Default::default(),
@@ -2554,15 +2553,14 @@ impl AcpThread {
 
         // For text chunks going to an existing Markdown block, buffer for smooth
         // streaming instead of appending all at once which may feel more choppy.
-        if let acp::ContentBlock::Text(text_content) = &chunk {
-            if let Some(markdown) =
+        if let acp::ContentBlock::Text(text_content) = &chunk
+            && let Some(markdown) =
                 self.streaming_markdown_target(message_id.as_deref(), is_thought, indented)
-            {
-                let entries_len = self.entries.len();
-                cx.emit(AcpThreadEvent::EntryUpdated(entries_len - 1));
-                self.buffer_streaming_text(&markdown, text_content.text.clone(), cx);
-                return;
-            }
+        {
+            let entries_len = self.entries.len();
+            cx.emit(AcpThreadEvent::EntryUpdated(entries_len - 1));
+            self.buffer_streaming_text(&markdown, text_content.text.clone(), cx);
+            return;
         }
 
         let language_registry = self.project.read(cx).languages().clone();
@@ -2702,7 +2700,7 @@ impl AcpThread {
         }
 
         let target = markdown.clone();
-        let _reveal_task = self.start_streaming_reveal(cx);
+        let reveal_task = self.start_streaming_reveal(cx);
         let pending_len = text.len();
         let bytes_to_reveal = (pending_len as f32 / StreamingTextBuffer::REVEAL_TARGET
             * StreamingTextBuffer::TASK_UPDATE_MS as f32)
@@ -2711,7 +2709,7 @@ impl AcpThread {
             pending: text,
             bytes_to_reveal_per_tick: bytes_to_reveal,
             target,
-            _reveal_task,
+            _reveal_task: reveal_task,
         });
     }
 
@@ -2720,12 +2718,12 @@ impl AcpThread {
         streaming_text_buffer: &mut Option<StreamingTextBuffer>,
         cx: &mut Context<Self>,
     ) {
-        if let Some(buffer) = streaming_text_buffer.take() {
-            if !buffer.pending.is_empty() {
-                buffer
-                    .target
-                    .update(cx, |markdown, cx| markdown.append(&buffer.pending, cx));
-            }
+        if let Some(buffer) = streaming_text_buffer.take()
+            && !buffer.pending.is_empty()
+        {
+            buffer
+                .target
+                .update(cx, |markdown, cx| markdown.append(&buffer.pending, cx));
         }
     }
 
@@ -2938,7 +2936,7 @@ impl AcpThread {
                 cx,
             )?;
             self.push_entry(AgentThreadEntry::ToolCall(call), cx);
-        };
+        }
 
         self.resolve_locations(id, cx);
         Ok(())
@@ -3869,11 +3867,11 @@ impl AcpThread {
             };
 
             this.update(cx, |this, cx| {
-                if let Some((ix, message)) = this.user_message_mut(&user_message_id) {
-                    if let Some(checkpoint) = message.checkpoint.as_mut() {
-                        checkpoint.show = !equal;
-                        cx.emit(AcpThreadEvent::EntryUpdated(ix));
-                    }
+                if let Some((ix, message)) = this.user_message_mut(&user_message_id)
+                    && let Some(checkpoint) = message.checkpoint.as_mut()
+                {
+                    checkpoint.show = !equal;
+                    cx.emit(AcpThreadEvent::EntryUpdated(ix));
                 }
             })?;
 
@@ -4377,6 +4375,8 @@ fn markdown_for_raw_output(
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use anyhow::anyhow;
     use futures::stream::StreamExt as _;
@@ -5580,25 +5580,25 @@ mod tests {
         run_until_first_tool_call(&thread, cx).await;
 
         thread.read_with(cx, |thread, _| {
-            assert!(matches!(
+            assert_matches!(
                 thread.entries[1],
                 AgentThreadEntry::ToolCall(ToolCall {
                     status: ToolCallStatus::InProgress,
                     ..
                 })
-            ));
+            );
         });
 
         thread.update(cx, |thread, cx| thread.cancel(cx)).await;
 
         thread.read_with(cx, |thread, _| {
-            assert!(matches!(
+            assert_matches!(
                 &thread.entries[1],
                 AgentThreadEntry::ToolCall(ToolCall {
                     status: ToolCallStatus::Canceled,
                     ..
                 })
-            ));
+            );
         });
 
         thread
@@ -5616,13 +5616,13 @@ mod tests {
         request.await.unwrap();
 
         thread.read_with(cx, |thread, _| {
-            assert!(matches!(
+            assert_matches!(
                 thread.entries[1],
                 AgentThreadEntry::ToolCall(ToolCall {
                     status: ToolCallStatus::Completed,
                     ..
                 })
-            ));
+            );
         });
     }
 
@@ -6374,8 +6374,9 @@ mod tests {
             assert!(entries.len() >= 2, "Should have user message and tool call");
 
             // Verify user message is still there
-            assert!(
-                matches!(entries[0], AgentThreadEntry::UserMessage(_)),
+            assert_matches!(
+                entries[0],
+                AgentThreadEntry::UserMessage(_),
                 "User message should not be truncated"
             );
 
@@ -6775,7 +6776,7 @@ mod tests {
             // The entry should be a failed tool call
             if let AgentThreadEntry::ToolCall(tool_call) = &thread.entries[0] {
                 assert_eq!(tool_call.id, nonexistent_id);
-                assert!(matches!(tool_call.status, ToolCallStatus::Failed));
+                assert_matches!(tool_call.status, ToolCallStatus::Failed);
                 assert_eq!(tool_call.kind, acp::ToolKind::Fetch);
 
                 // Check that the content contains the error message
@@ -6861,10 +6862,10 @@ mod tests {
                 .tool_call(&tool_call_id)
                 .expect("tool call should exist");
             assert_eq!(tool_call.label.read(cx).source(), "Updated title");
-            assert!(matches!(
+            assert_matches!(
                 tool_call.status,
                 ToolCallStatus::WaitingForConfirmation { .. }
-            ));
+            );
             assert_eq!(tool_call.content.len(), 1);
             assert_eq!(tool_call.content[0].to_markdown(cx), "updated content");
         });
@@ -6889,10 +6890,10 @@ mod tests {
                 .tool_call(&tool_call_id)
                 .expect("tool call should exist");
             assert_eq!(tool_call.label.read(cx).source(), "Updated again");
-            assert!(matches!(
+            assert_matches!(
                 tool_call.status,
                 ToolCallStatus::WaitingForConfirmation { .. }
-            ));
+            );
             assert_eq!(tool_call.content.len(), 1);
             assert_eq!(tool_call.content[0].to_markdown(cx), "updated again");
         });
@@ -6912,7 +6913,7 @@ mod tests {
             let (_, tool_call) = thread
                 .tool_call(&tool_call_id)
                 .expect("tool call should exist");
-            assert!(matches!(tool_call.status, ToolCallStatus::InProgress));
+            assert_matches!(tool_call.status, ToolCallStatus::InProgress);
         });
 
         match permission_task.await {
@@ -6968,10 +6969,7 @@ mod tests {
             })
             .unwrap();
 
-        assert!(matches!(
-            old_task.await,
-            RequestPermissionOutcome::Cancelled
-        ));
+        assert_matches!(old_task.await, RequestPermissionOutcome::Cancelled);
 
         thread.update(cx, |thread, cx| {
             thread.cancel_permission_request(old_id, cx);
@@ -7056,13 +7054,13 @@ mod tests {
             let (_, tool_call) = thread
                 .tool_call(&tool_call_id)
                 .expect("tool call should exist");
-            assert!(matches!(
+            assert_matches!(
                 tool_call.status,
                 ToolCallStatus::WaitingForConfirmation {
                     current_status: acp::ToolCallStatus::InProgress,
                     ..
                 }
-            ));
+            );
         });
 
         thread.update(cx, |thread, cx| {
@@ -7080,7 +7078,7 @@ mod tests {
             let (_, tool_call) = thread
                 .tool_call(&tool_call_id)
                 .expect("tool call should exist");
-            assert!(matches!(tool_call.status, ToolCallStatus::InProgress));
+            assert_matches!(tool_call.status, ToolCallStatus::InProgress);
         });
 
         match permission_task.await {
@@ -7739,8 +7737,9 @@ mod tests {
                 })
                 .expect("should have tool call entry");
 
-            assert!(
-                matches!(tool_entry.status, ToolCallStatus::Canceled),
+            assert_matches!(
+                tool_entry.status,
+                ToolCallStatus::Canceled,
                 "tool should be marked as Canceled when response is Cancelled, got {:?}",
                 tool_entry.status
             );
@@ -8097,8 +8096,9 @@ mod tests {
         });
 
         let result = request.await;
-        assert!(
-            matches!(result, Ok(None)),
+        assert_matches!(
+            result,
+            Ok(None),
             "outer task should resolve to Ok(None) on dropped tx, got {result:?}"
         );
 

@@ -77,7 +77,7 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         let mut editor_settings = EditorSettings::get_global(cx).clone();
-        editor_settings.gutter.line_numbers = !editor_settings.gutter.line_numbers;
+        editor_settings.gutter.line_numbers.toggle();
         EditorSettings::override_global(editor_settings, cx);
     }
 
@@ -250,7 +250,7 @@ impl Editor {
         self.buffer.read(cx).language_settings(cx).soft_wrap_indent
     }
 
-    pub(super) fn soft_wrap_mode(&self, cx: &App) -> SoftWrap {
+    pub fn soft_wrap_mode(&self, cx: &App) -> SoftWrap {
         let settings = self.buffer.read(cx).language_settings(cx);
         let mode = self.soft_wrap_mode_override.unwrap_or(settings.soft_wrap);
         match mode {
@@ -287,12 +287,7 @@ impl Editor {
         }
     }
 
-    pub(super) fn toggle_soft_wrap(
-        &mut self,
-        _: &ToggleSoftWrap,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn toggle_soft_wrap(&mut self, _: &ToggleSoftWrap, _: &mut Window, cx: &mut Context<Self>) {
         if self.soft_wrap_mode_override.is_some() {
             self.soft_wrap_mode_override.take();
         } else {

@@ -55,6 +55,7 @@ use paths::{
     local_debug_file_relative_path, local_settings_file_relative_path,
     local_tasks_file_relative_path,
 };
+use project::project_settings::{SettingsObserver, SettingsObserverEvent};
 use project::{DirectoryLister, DisableAiSettings, ProjectItem};
 use project_panel::ProjectPanel;
 use quick_action_bar::QuickActionBar;
@@ -396,63 +397,68 @@ pub fn build_window_options(display_uuid: Option<Uuid>, cx: &mut App) -> WindowO
 }
 
 pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
-    let mut _on_close_subscription = bind_on_window_closed(cx);
+    let mut on_close_subscription = bind_on_window_closed(cx);
     cx.observe_global::<SettingsStore>(move |cx| {
         // A 1.92 regression causes unused-assignment to trigger on this variable.
-        _ = _on_close_subscription.is_some();
-        _on_close_subscription = bind_on_window_closed(cx);
+        _ = on_close_subscription.is_some();
+        on_close_subscription = bind_on_window_closed(cx);
     })
     .detach();
 
     init_cursor_hide_mode(cx);
     init_app_appearance(cx);
+    init_global_config_error_notifications(cx);
 
-    cx.observe_new(|_multi_workspace: &mut MultiWorkspace, window, cx| {
-        let Some(window) = window else {
-            return;
-        };
+    cx.observe_new(
+        |#[cfg_attr(not(feature = "track-project-leak"), allow(unused_variables))]
+         multi_workspace: &mut MultiWorkspace,
+         window,
+         cx| {
+            let Some(window) = window else {
+                return;
+            };
 
-        #[cfg(feature = "track-project-leak")]
-        {
-            let multi_workspace_handle = cx.weak_entity();
-            let workspace_handle = _multi_workspace.workspace().downgrade();
-            let project_handle = _multi_workspace.workspace().read(cx).project().downgrade();
-            let window_id_2 = window.window_handle().window_id();
-            cx.on_window_closed(move |cx, window_id| {
-                let multi_workspace_handle = multi_workspace_handle.clone();
-                let workspace_handle = workspace_handle.clone();
-                let project_handle = project_handle.clone();
-                if window_id != window_id_2 {
-                    return;
-                }
-                cx.spawn(async move |cx| {
-                    cx.background_executor()
-                        .timer(std::time::Duration::from_millis(1500))
-                        .await;
+            #[cfg(feature = "track-project-leak")]
+            {
+                let multi_workspace_handle = cx.weak_entity();
+                let workspace_handle = multi_workspace.workspace().downgrade();
+                let project_handle = multi_workspace.workspace().read(cx).project().downgrade();
+                let window_id_2 = window.window_handle().window_id();
+                cx.on_window_closed(move |cx, window_id| {
+                    let multi_workspace_handle = multi_workspace_handle.clone();
+                    let workspace_handle = workspace_handle.clone();
+                    let project_handle = project_handle.clone();
+                    if window_id != window_id_2 {
+                        return;
+                    }
+                    cx.spawn(async move |cx| {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(1500))
+                            .await;
 
-                    multi_workspace_handle.assert_released();
-                    workspace_handle.assert_released();
-                    project_handle.assert_released();
+                        multi_workspace_handle.assert_released();
+                        workspace_handle.assert_released();
+                        project_handle.assert_released();
+                    })
+                    .detach();
                 })
                 .detach();
-            })
-            .detach();
-        }
+            }
 
-        let multi_workspace_handle = cx.entity().downgrade();
-        window.on_window_should_close(cx, move |window, cx| {
-            multi_workspace_handle
-                .update(cx, |multi_workspace, cx| {
-                    // We'll handle closing asynchronously
-                    multi_workspace.close_window(&CloseWindow, window, cx);
-                    false
-                })
-                .unwrap_or(true)
-        });
+            let multi_workspace_handle = cx.entity().downgrade();
+            window.on_window_should_close(cx, move |window, cx| {
+                multi_workspace_handle
+                    .update(cx, |multi_workspace, cx| {
+                        // We'll handle closing asynchronously
+                        multi_workspace.close_window(&CloseWindow, window, cx);
+                        false
+                    })
+                    .unwrap_or(true)
+            });
 
-        let window_handle = window.window_handle();
-        let multi_workspace_handle = cx.entity();
-        cx.subscribe_in(
+            let window_handle = window.window_handle();
+            let multi_workspace_handle = cx.entity();
+            cx.subscribe_in(
             &multi_workspace_handle,
             window,
             |this, _multi_workspace, event: &workspace::MultiWorkspaceEvent, window, cx| {
@@ -465,16 +471,16 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
                 let active_workspace = this.workspace().clone();
                 let source_workspace = source_workspace.clone();
                 active_workspace.update(cx, |workspace, cx| {
-                    if let Some(ref source) = source_workspace {
-                        if let Some(panel) = workspace.panel::<agent_ui::AgentPanel>(cx) {
-                            panel.update(cx, |panel, cx| {
-                                panel.initialize_from_source_workspace_if_needed(
-                                    source.clone(),
-                                    window,
-                                    cx,
-                                );
-                            });
-                        }
+                    if let Some(ref source) = source_workspace
+                        && let Some(panel) = workspace.panel::<agent_ui::AgentPanel>(cx)
+                    {
+                        panel.update(cx, |panel, cx| {
+                            panel.initialize_from_source_workspace_if_needed(
+                                source.clone(),
+                                window,
+                                cx,
+                            );
+                        });
                     }
 
                     ensure_agent_panel_for_workspace(workspace, source_workspace, window, cx)
@@ -484,18 +490,19 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
         )
         .detach();
 
-        cx.defer(move |cx| {
-            window_handle
-                .update(cx, |_, window, cx| {
-                    let sidebar =
-                        cx.new(|cx| Sidebar::new(multi_workspace_handle.clone(), window, cx));
-                    multi_workspace_handle.update(cx, |multi_workspace, cx| {
-                        multi_workspace.register_sidebar(sidebar, cx);
-                    });
-                })
-                .log_err();
-        });
-    })
+            cx.defer(move |cx| {
+                window_handle
+                    .update(cx, |_, window, cx| {
+                        let sidebar =
+                            cx.new(|cx| Sidebar::new(multi_workspace_handle.clone(), window, cx));
+                        multi_workspace_handle.update(cx, |multi_workspace, cx| {
+                            multi_workspace.register_sidebar(sidebar, cx);
+                        });
+                    })
+                    .log_err();
+            });
+        },
+    )
     .detach();
 
     cx.observe_new(move |workspace: &mut Workspace, window, cx| {
@@ -529,7 +536,9 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
 
         if let Some(specs) = window.gpu_specs() {
             log::info!("Using GPU: {:?}", specs);
-            show_software_emulation_warning_if_needed(specs.clone(), window, cx);
+            // Rendering decisions made later in this frame read the specs from the app.
+            cx.set_gpu_specs(specs.clone());
+            apply_software_rendering_profile(&specs, window, workspace, cx);
             crashes::set_gpu_info(specs);
         }
 
@@ -670,55 +679,52 @@ fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
     }
 }
 
-fn show_software_emulation_warning_if_needed(
-    specs: gpui::GpuSpecs,
+/// Applies the rendering profile for a CPU adapter and tells the user about it.
+///
+/// Windows opened after this point inherit the opaque background through [`Window::new`];
+/// the window that reported these specs gets it applied directly.
+fn apply_software_rendering_profile(
+    specs: &gpui::GpuSpecs,
     window: &mut Window,
+    workspace: &mut Workspace,
     cx: &mut Context<Workspace>,
 ) {
-    if specs.is_software_emulated && std::env::var("ZZZ_ALLOW_EMULATED_GPU").is_err() {
-        let (graphics_api, docs_url) = if cfg!(target_os = "windows") {
-            (
-                tr(cx, "zzz.gpu.graphics_api.directx", "DirectX"),
-                "local Windows troubleshooting documentation",
-            )
-        } else {
-            (
-                tr(cx, "zzz.gpu.graphics_api.vulkan", "Vulkan"),
-                "local Linux troubleshooting documentation",
-            )
-        };
-        let message = tr(
-            cx,
-            "zzz.gpu.unsupported_detail",
-            "ZZZ uses {} for rendering and requires a compatible GPU.\n\nCurrently you are using a software emulated GPU ({}) which\nwill result in awful performance.\n\nFor troubleshooting see: {}\nSet ZZZ_ALLOW_EMULATED_GPU=1 env var to permanently override.",
-        )
-        .replacen("{}", &graphics_api, 1)
-        .replacen("{}", &specs.device_name, 1)
-        .replacen("{}", docs_url, 1);
-        let prompt = window.prompt(
-            PromptLevel::Critical,
-            &tr(cx, "zzz.gpu.unsupported", "Unsupported GPU"),
-            Some(&message),
-            &[
-                tr(cx, "zzz.gpu.skip", "Skip").as_str(),
-                tr(
-                    cx,
-                    "zzz.file_watcher.troubleshoot_and_quit",
-                    "Troubleshoot and Quit",
-                )
-                .as_str(),
-            ],
-            cx,
-        );
-        cx.spawn(async move |_, cx| {
-            if prompt.await == Ok(1) {
-                cx.update(|cx| {
-                    cx.quit().log_err();
-                });
-            }
-        })
-        .detach()
+    if !specs.is_software_emulated {
+        return;
     }
+
+    window.set_background_appearance(gpui::WindowBackgroundAppearance::Opaque);
+
+    if std::env::var_os("ZZZ_ALLOW_EMULATED_GPU").is_some() {
+        return;
+    }
+
+    let (graphics_api, docs_url) = if cfg!(target_os = "windows") {
+        (
+            tr(cx, "zzz.gpu.graphics_api.directx", "DirectX"),
+            "local Windows troubleshooting documentation",
+        )
+    } else {
+        (
+            tr(cx, "zzz.gpu.graphics_api.vulkan", "Vulkan"),
+            "local Linux troubleshooting documentation",
+        )
+    };
+    let message = tr(
+        cx,
+        "zzz.gpu.unsupported_detail",
+        "ZZZ is rendering with a software emulated GPU ({}) because it renders through {} and found no compatible GPU.\n\nExpect reduced performance. For troubleshooting see: {}\nSet ZZZ_ALLOW_EMULATED_GPU=1 to hide this notice.",
+    )
+    .replacen("{}", &specs.device_name, 1)
+    .replacen("{}", &graphics_api, 1)
+    .replacen("{}", docs_url, 1);
+
+    // A notification rather than a prompt: a startup dialog that swallows the first
+    // keystrokes is worse than a slow window, and this stays readable while the user works.
+    workspace.show_toast(
+        Toast::new(NotificationId::named("software-adapter".into()), message),
+        cx,
+    );
 }
 
 fn initialize_panels(window: &mut Window, cx: &mut Context<Workspace>) -> Task<anyhow::Result<()>> {
@@ -1496,6 +1502,7 @@ fn open_about_window(cx: &mut App) {
         height: px(300.),
     };
     let about_title = tr(cx, "menu.about", "About ZZZ");
+    let display_id = cx.active_display().map(|display| display.id());
 
     cx.open_window(
         WindowOptions {
@@ -1504,7 +1511,8 @@ fn open_about_window(cx: &mut App) {
                 appears_transparent: true,
                 traffic_light_position: Some(point(px(12.), px(12.))),
             }),
-            window_bounds: Some(WindowBounds::centered(window_size, cx)),
+            window_bounds: Some(WindowBounds::centered(display_id, window_size, cx)),
+            display_id,
             is_resizable: false,
             is_minimizable: false,
             kind: WindowKind::Floating,
@@ -1609,20 +1617,14 @@ fn quit(_: &Quit, cx: &mut App) {
                         })
                     })
                     .log_err()
+                    && !should_close.await?
                 {
-                    if !should_close.await? {
-                        window
-                            .update(cx, |multi_workspace, window, cx| {
-                                multi_workspace.activate(
-                                    originally_active.clone(),
-                                    None,
-                                    window,
-                                    cx,
-                                );
-                            })
-                            .log_err();
-                        return Ok(());
-                    }
+                    window
+                        .update(cx, |multi_workspace, window, cx| {
+                            multi_workspace.activate(originally_active.clone(), None, window, cx);
+                        })
+                        .log_err();
+                    return Ok(());
                 }
             }
 
@@ -1855,7 +1857,67 @@ fn notify_settings_errors(result: settings::SettingsParseResult, is_user: bool, 
                 });
             }
         }
-    };
+    }
+}
+
+/// Shows an app notification when the global `tasks.json` or `debug.json`
+/// cannot be parsed, and dismisses it once the file is valid again.
+fn init_global_config_error_notifications(cx: &mut App) {
+    cx.observe_new(|_: &mut SettingsObserver, _, cx| {
+        cx.subscribe_self(
+            |_: &mut SettingsObserver, event: &SettingsObserverEvent, cx| {
+                let (file_kind, message_key, message_fallback) = match event {
+                    SettingsObserverEvent::GlobalTasksUpdated(_) => (
+                        "tasks",
+                        "zzz.settings.invalid_global_tasks_file",
+                        "Invalid global tasks file\n{}",
+                    ),
+                    SettingsObserverEvent::GlobalDebugScenariosUpdated(_) => (
+                        "debug-scenarios",
+                        "zzz.settings.invalid_global_debug_scenarios_file",
+                        "Invalid global debug scenarios file\n{}",
+                    ),
+                    _ => return,
+                };
+                let id = NotificationId::Named(format!("invalid-global-{file_kind}-file").into());
+                let (SettingsObserverEvent::GlobalTasksUpdated(result)
+                | SettingsObserverEvent::GlobalDebugScenariosUpdated(result)) = event
+                else {
+                    return;
+                };
+                match result {
+                    Ok(_) => dismiss_app_notification(&id, cx),
+                    Err(error) => {
+                        let message = tr(cx, message_key, message_fallback).replacen(
+                            "{}",
+                            &error.to_string(),
+                            1,
+                        );
+                        let open_file = tr(cx, "zzz.settings.open_config_file", "Open File");
+                        let open_tasks = file_kind == "tasks";
+                        show_app_notification(id, cx, move |cx| {
+                            cx.new(|cx| {
+                                MessageNotification::new(message.clone(), cx)
+                                    .primary_message(open_file.clone())
+                                    .primary_icon(IconName::Settings)
+                                    .primary_on_click(move |window, cx| {
+                                        if open_tasks {
+                                            window.dispatch_action(OpenTasks.boxed_clone(), cx);
+                                        } else {
+                                            window
+                                                .dispatch_action(OpenDebugTasks.boxed_clone(), cx);
+                                        }
+                                        cx.emit(DismissEvent);
+                                    })
+                            })
+                        });
+                    }
+                }
+            },
+        )
+        .detach();
+    })
+    .detach();
 }
 
 #[derive(Copy, Clone, Debug, settings::RegisterSetting)]
@@ -2602,7 +2664,7 @@ pub(crate) fn eager_load_active_theme_and_icon_theme(fs: Arc<dyn Fs>, cx: &mut A
         match reload_target {
             ReloadTarget::Theme => theme_settings::reload_theme(cx),
             ReloadTarget::IconTheme => theme_settings::reload_icon_theme(cx),
-        };
+        }
     }
 }
 
@@ -5713,6 +5775,7 @@ mod tests {
                 "debugger",
                 "dev",
                 "diagnostics",
+                "docker",
                 "docs",
                 "editor",
                 "encoding_selector",
@@ -5726,6 +5789,7 @@ mod tests {
                 "go_to_line",
                 "highlights_tree_view",
                 "icon_theme_selector",
+                "idea_import",
                 "image_viewer",
                 "journal",
                 "keymap_editor",
@@ -5737,15 +5801,19 @@ mod tests {
                 "lsp_tool",
                 "markdown",
                 "menu",
+                "mobile_dev",
                 "multi_workspace",
                 "new_process_modal",
                 "notebook",
+                "office_preview",
                 "onboarding",
                 "outline",
                 "outline_panel",
                 "pane",
                 "pdf_viewer",
                 "picker",
+                "pr_ui",
+                "project_bookmarks",
                 "project_panel",
                 "project_search",
                 "project_symbols",
@@ -5756,6 +5824,7 @@ mod tests {
                 "repl",
                 "rules_library",
                 "search",
+                "search_everywhere",
                 "settings_editor",
                 "settings_profile_selector",
                 "snippets",
@@ -5772,6 +5841,7 @@ mod tests {
                 "theme",
                 "theme_selector",
                 "toast",
+                "toolbox",
                 "toolchain",
                 "typst",
                 "variable_list",
@@ -5779,6 +5849,7 @@ mod tests {
                 "vim",
                 "window",
                 "workspace",
+                "workspace_modes",
                 "worktree_picker",
                 "zzz",
                 "zzz_actions",
@@ -6164,6 +6235,73 @@ mod tests {
         cx.run_until_parked();
 
         // If this panics, the test has failed
+    }
+
+    #[gpui::test]
+    #[cfg_attr(miri, ignore)]
+    async fn test_invalid_global_tasks_file_shows_notification_on_startup(
+        cx: &mut gpui::TestAppContext,
+    ) {
+        let app_state = init_test(cx);
+        project::task_store::TaskStore::init(None);
+        let tasks_file_path = paths::tasks_file().as_path();
+        app_state
+            .fs
+            .create_dir(tasks_file_path.parent().unwrap())
+            .await
+            .unwrap();
+        app_state
+            .fs
+            .save(
+                tasks_file_path,
+                &r#"[{ "label": "first" }] [{ "label": "trailing garbage" }]"#.into(),
+                Default::default(),
+            )
+            .await
+            .unwrap();
+
+        let project = Project::test(app_state.fs.clone(), [], cx).await;
+        let window = cx.add_window(|window, cx| MultiWorkspace::test_new(project, window, cx));
+        cx.run_until_parked();
+
+        let workspace = window
+            .read_with(cx, |multi_workspace, _| multi_workspace.workspace().clone())
+            .unwrap();
+        let notification_id = NotificationId::Named("invalid-global-tasks-file".into());
+        let shown_notifications = workspace.read_with(cx, |workspace, _| {
+            workspace
+                .notification_ids()
+                .into_iter()
+                .filter(|id| *id == notification_id)
+                .count()
+        });
+        assert_eq!(
+            shown_notifications, 1,
+            "invalid global tasks file at startup should show an app notification"
+        );
+
+        app_state
+            .fs
+            .save(
+                tasks_file_path,
+                &r#"[{ "label": "first", "command": "echo" }]"#.into(),
+                Default::default(),
+            )
+            .await
+            .unwrap();
+        cx.run_until_parked();
+
+        let shown_notifications = workspace.read_with(cx, |workspace, _| {
+            workspace
+                .notification_ids()
+                .into_iter()
+                .filter(|id| *id == notification_id)
+                .count()
+        });
+        assert_eq!(
+            shown_notifications, 0,
+            "fixing the global tasks file should dismiss the notification"
+        );
     }
 
     #[gpui::test]

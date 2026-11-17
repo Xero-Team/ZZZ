@@ -73,6 +73,8 @@ pub(crate) fn commit_tag_chips(tag_names: &[SharedString]) -> Option<impl IntoEl
     )
 }
 
+const COMMIT_AVATAR_BORDER_WIDTH: Pixels = px(1.);
+
 pub struct CommitAvatar<'a> {
     sha: &'a SharedString,
     author_email: Option<SharedString>,
@@ -111,26 +113,26 @@ impl<'a> CommitAvatar<'a> {
         self
     }
 
+    pub fn rendered_size(size: impl Into<AbsoluteLength>, window: &Window) -> Pixels {
+        size.into().to_pixels(window.rem_size()) + COMMIT_AVATAR_BORDER_WIDTH * 2.
+    }
+
     pub fn render(&'a self, window: &mut Window, cx: &mut App) -> AnyElement {
         let border_color = cx.theme().colors().border_variant;
-        let border_width = px(1.);
         let avatar_style = self
             .author_email
             .as_deref()
-            .map(AvatarStyle::new)
-            .unwrap_or_default();
+            .map_or_default(AvatarStyle::new);
 
         match self.avatar(window, cx) {
             None => {
-                let container_size = self
-                    .size
-                    .map(|s| s.to_pixels(window.rem_size()) + border_width * 2.);
+                let container_size = self.size.map(|size| Self::rendered_size(size, window));
 
                 h_flex()
                     .when_some(container_size, |this, size| this.size(size))
                     .justify_center()
                     .rounded_full()
-                    .border(border_width)
+                    .border(COMMIT_AVATAR_BORDER_WIDTH)
                     .border_color(border_color)
                     .bg(avatar_style.background(cx.theme().colors().element_disabled))
                     .child(
@@ -269,8 +271,7 @@ impl CommitTooltip {
                 commit
                     .message
                     .as_ref()
-                    .map(|message| message.message.clone())
-                    .unwrap_or_default(),
+                    .map_or_default(|message| message.message.clone()),
                 None,
                 None,
                 cx,
@@ -343,8 +344,7 @@ impl Render for CommitTooltip {
                 .message
                 .as_ref()
                 .and_then(|message| message.message.lines().next())
-                .map(str::trim_end)
-                .unwrap_or_default()
+                .map_or_default(str::trim_end)
                 .into(),
             commit_timestamp: self.commit.commit_time.unix_timestamp(),
             author_name: self.commit.author_name.clone(),

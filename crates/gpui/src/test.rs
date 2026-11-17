@@ -212,12 +212,15 @@ impl<T: 'static> futures::Stream for Observation<T> {
 /// observe returns a stream of the change events from the given `Entity`
 pub fn observe<T: 'static>(entity: &Entity<T>, cx: &mut TestAppContext) -> Observation<()> {
     let (tx, rx) = async_channel::unbounded();
-    let _subscription = cx.update(|cx| {
+    let subscription = cx.update(|cx| {
         cx.observe(entity, move |_, _| {
             let _ = gpui::block_on(tx.send(()));
         })
     });
     let rx = Box::pin(rx);
 
-    Observation { rx, _subscription }
+    Observation {
+        rx,
+        _subscription: subscription,
+    }
 }

@@ -1153,8 +1153,7 @@ impl BufferStore {
             .collect();
         let incomplete_buffer_ids = self
             .as_remote()
-            .map(|remote| remote.incomplete_buffer_ids())
-            .unwrap_or_default();
+            .map_or_default(|remote| remote.incomplete_buffer_ids());
         (buffers, incomplete_buffer_ids)
     }
 
@@ -1219,7 +1218,7 @@ impl BufferStore {
                 },
                 remote_id,
             );
-        };
+        }
 
         Some(())
     }
@@ -1851,8 +1850,8 @@ impl BufferStore {
     ) -> (u64, async_channel::Receiver<BufferId>) {
         let (tx, rx) = async_channel::unbounded();
         let handle = util::post_inc(&mut self.project_search.next_id);
-        let _old_entry = self.project_search.chunks.insert(handle, tx);
-        debug_assert!(_old_entry.is_none());
+        let old_entry = self.project_search.chunks.insert(handle, tx);
+        debug_assert!(old_entry.is_none());
         (handle, rx)
     }
 
@@ -1861,8 +1860,8 @@ impl BufferStore {
         id: (PeerId, u64),
         search: Task<anyhow::Result<()>>,
     ) {
-        let _old = self.project_search.searches_in_progress.insert(id, search);
-        debug_assert!(_old.is_none());
+        let old = self.project_search.searches_in_progress.insert(id, search);
+        debug_assert!(old.is_none());
     }
 
     pub async fn handle_find_search_candidates_cancel(

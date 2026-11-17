@@ -162,8 +162,7 @@ impl FakeGitRepository {
             if let Ok(gitdir_content) = self.fs.load(&entry_path.join("gitdir")).await {
                 let worktree_path = PathBuf::from(gitdir_content.trim())
                     .parent()
-                    .map(PathBuf::from)
-                    .unwrap_or_default();
+                    .map_or_default(PathBuf::from);
                 if worktree_path == path {
                     return Some(entry_path);
                 }
@@ -594,8 +593,7 @@ impl GitRepository for FakeGitRepository {
 
                     let worktree_path = PathBuf::from(gitdir_content.trim())
                         .parent()
-                        .map(PathBuf::from)
-                        .unwrap_or_default();
+                        .map_or_default(PathBuf::from);
 
                     all.push(Worktree {
                         path: worktree_path,
@@ -1482,7 +1480,7 @@ impl GitRepository for FakeGitRepository {
                         name.split_once('/').map_or(name, |(_, name)| name)
                     }
                 } else {
-                    branch.strip_prefix("refs/heads/").unwrap_or(branch)
+                    branch.trim_prefix("refs/heads/")
                 };
                 name.to_owned().into()
             }))

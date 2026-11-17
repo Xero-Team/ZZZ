@@ -263,15 +263,15 @@ impl Vim {
         }
 
         let subscription = cx.subscribe_in(&search_bar, window, |vim, _, event, window, cx| {
-            if matches!(event, buffer_search::Event::Dismissed) {
-                if !vim.search.prior_selections.is_empty() {
-                    let prior_selections: Vec<_> = std::mem::take(&mut vim.search.prior_selections);
-                    vim.update_editor(cx, |_, editor, cx| {
-                        editor.change_selections(Default::default(), window, cx, |s| {
-                            s.select_ranges(prior_selections);
-                        });
+            if matches!(event, buffer_search::Event::Dismissed)
+                && !vim.search.prior_selections.is_empty()
+            {
+                let prior_selections: Vec<_> = std::mem::take(&mut vim.search.prior_selections);
+                vim.update_editor(cx, |_, editor, cx| {
+                    editor.change_selections(Default::default(), window, cx, |s| {
+                        s.select_ranges(prior_selections);
                     });
-                }
+                });
             }
         });
 
@@ -367,7 +367,7 @@ impl Vim {
         }
         if let Some(operator) = prior_operator {
             self.push_operator(operator, window, cx);
-        };
+        }
         self.search_motion(
             Motion::ZZZSearchResult {
                 prior_selections,
@@ -535,7 +535,7 @@ impl Vim {
                     let mut query = action.query.clone();
                     if query.is_empty() {
                         query = search_bar.query(cx);
-                    };
+                    }
 
                     let mut options = SearchOptions::REGEX | SearchOptions::CASE_SENSITIVE;
                     if search_bar.should_use_smartcase_search(cx) {
@@ -691,7 +691,8 @@ impl Replacement {
     // convert a vim query into something more usable by zzz.
     // we don't attempt to fully convert between the two regex syntaxes,
     // but we do flip \( and \) to ( and ) (and vice-versa) in the pattern,
-    // convert \+, \{ and \} to +, { and } in the pattern,
+    // strip the backslash from Vim's escaped quantifiers and alternation
+    // (\+ \? \{ \} \|) so they keep their meaning in Rust's regex syntax,
     // convert \0..\9 to $0..$9 in the replacement so that common idioms work,
     // and escape literal `$` to `$$` in the replacement so vim's literal `$`
     // is not interpreted as a Rust regex capture-group reference.
@@ -706,23 +707,30 @@ impl Replacement {
 
         let mut buffer = &mut search;
 
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        enum Section {
+            Search,
+            Replacement,
+            Flags,
+        }
+
         let mut escaped = false;
-        // 0 - parsing search
-        // 1 - parsing replacement
-        // 2 - parsing flags
-        let mut phase = 0;
+        let mut section = Section::Search;
+
+        // Vim's default (magic) syntax needs a backslash for these
+        // metacharacters; Zed's regex uses the bare form. Bare `(`/`)` are
+        // escaped below; other bare metacharacters are intentionally left.
+        const VIM_ESCAPED_METACHARACTERS: &[char] = &['(', ')', '+', '?', '{', '}', '|'];
 
         for c in chars {
             if escaped {
                 escaped = false;
-                if phase == 1 && c.is_ascii_digit() {
+                if section == Section::Replacement && c.is_ascii_digit() {
                     buffer.push('$')
-                } else if phase == 1 && c == '$' {
+                } else if section == Section::Replacement && c == '$' {
                     // Second '$' escapes by fallthrough
                     buffer.push('$')
-                // Vim's default regex syntax escapes grouping and repetition operators,
-                // while Zed's regex syntax uses them unescaped.
-                } else if phase == 0 && matches!(c, '(' | ')' | '+' | '{' | '}') {
+                } else if section == Section::Search && VIM_ESCAPED_METACHARACTERS.contains(&c) {
                 } else if c != delimiter {
                     buffer.push('\\')
                 }
@@ -730,20 +738,22 @@ impl Replacement {
             } else if c == '\\' {
                 escaped = true;
             } else if c == delimiter {
-                if phase == 0 {
-                    buffer = &mut replacement;
-                    phase = 1;
-                } else if phase == 1 {
-                    buffer = &mut flags;
-                    phase = 2;
-                } else {
-                    break;
+                match section {
+                    Section::Search => {
+                        buffer = &mut replacement;
+                        section = Section::Replacement;
+                    }
+                    Section::Replacement => {
+                        buffer = &mut flags;
+                        section = Section::Flags;
+                    }
+                    Section::Flags => break,
                 }
             } else {
                 // escape unescaped parens
-                if phase == 0 && (c == '(' || c == ')') {
+                if section == Section::Search && (c == '(' || c == ')') {
                     buffer.push('\\')
-                } else if phase == 1 && c == '$' {
+                } else if section == Section::Replacement && c == '$' {
                     // '$' is not special in the replacement clause,
                     // so we also escape here.
                     buffer.push('$')
@@ -799,6 +809,30 @@ mod test {
         assert_eq!(parsed.search, r"\$test");
         assert_eq!(parsed.replacement, "$$rest");
         assert!(parsed.flag_g);
+    }
+
+    #[test]
+    fn test_replacement_parse_repetition_operators() {
+        let parsed = super::Replacement::parse(r"/a\([0-9]\+\)b\{2\}/\1/g".chars().peekable())
+            .expect("parse should succeed");
+
+        assert_eq!(parsed.search, r"a([0-9]+)b{2}");
+        assert_eq!(parsed.replacement, "$1");
+        assert!(parsed.flag_g);
+    }
+
+    #[test]
+    fn test_replacement_parse_optional_quantifier_and_alternation() {
+        // In Vim's default (magic) syntax the zero-or-one quantifier and the
+        // alternation operator also carry a backslash, exactly like `\+` and
+        // `\{`. They must reach Zed's regex as the bare `?` and `|`
+        // metacharacters; keeping the backslash makes the engine read them as
+        // literals, so the substitute matches nothing.
+        let parsed = super::Replacement::parse(r"/colou\?r\|colour/\1/g".chars().peekable())
+            .expect("parse should succeed");
+
+        assert_eq!(parsed.search, r"colou?r|colour");
+        assert_eq!(parsed.replacement, "$1");
     }
 
     #[gpui::test]

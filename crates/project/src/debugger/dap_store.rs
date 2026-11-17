@@ -675,17 +675,13 @@ impl DapStore {
         fn format_value(mut value: String) -> String {
             const LIMIT: usize = 100;
 
-            if let Some(index) = value.find("\n") {
+            if let Some(index) = value.find('\n') {
                 value.truncate(index);
                 value.push_str("...");
             }
 
             if value.len() > LIMIT {
-                let mut index = LIMIT;
-                // If index isn't a char boundary truncate will cause a panic
-                while !value.is_char_boundary(index) {
-                    index -= 1;
-                }
+                let index = value.floor_char_boundary(LIMIT);
                 value.truncate(index);
                 value.push_str("...");
             }
@@ -751,9 +747,9 @@ impl DapStore {
                                 tooltip: None,
                                 resolve_state: ResolveState::Resolved,
                             });
-                        };
+                        }
                     }
-                };
+                }
             }
 
             Ok(inlay_hints)

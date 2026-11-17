@@ -12,7 +12,7 @@ use editor::{Editor, EditorElement};
 use fs::Fs;
 use gpui::{
     App, AppContext as _, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
-    Render, SharedString, Task, Window,
+    Render, SharedString, Task, Window, rems,
 };
 use i18n::tr;
 use menu;
@@ -32,7 +32,6 @@ enum MessageKind {
 }
 
 pub struct ConnectionDialog {
-    focus_handle: FocusHandle,
     original: Option<ConnectionConfig>,
     driver_id: String,
     capabilities: Capabilities,
@@ -45,7 +44,7 @@ pub struct ConnectionDialog {
     password_editor: Entity<Editor>,
     message: Option<(SharedString, MessageKind)>,
     busy: bool,
-    _task: Option<Task<()>>,
+    task: Option<Task<()>>,
 }
 
 /// Localized, classified error text. The driver's diagnostic is appended, but
@@ -91,13 +90,11 @@ impl ConnectionDialog {
         let capabilities = DatabaseState::manager(cx)
             .capabilities_for(&driver_id)
             .unwrap_or_else(Capabilities::read_only);
-        let focus_handle = cx.focus_handle();
 
         let name_editor = single_line_editor(
             original
                 .as_ref()
-                .map(|config| config.display_name.as_str())
-                .unwrap_or_default(),
+                .map_or_default(|config| config.display_name.as_str()),
             false,
             window,
             cx,
@@ -125,8 +122,7 @@ impl ConnectionDialog {
             &original
                 .as_ref()
                 .and_then(|config| config.port)
-                .map(|port| port.to_string())
-                .unwrap_or_default(),
+                .map_or_default(|port| port.to_string()),
             false,
             window,
             cx,
@@ -152,7 +148,6 @@ impl ConnectionDialog {
         let password_editor = single_line_editor("", true, window, cx);
 
         Self {
-            focus_handle,
             original,
             driver_id,
             capabilities,
@@ -165,7 +160,7 @@ impl ConnectionDialog {
             password_editor,
             message: None,
             busy: false,
-            _task: None,
+            task: None,
         }
     }
 
@@ -300,7 +295,7 @@ impl ConnectionDialog {
             })
             .ok();
         });
-        self._task = Some(task);
+        self.task = Some(task);
     }
 
     fn save(&mut self, cx: &mut Context<Self>) {
@@ -322,16 +317,16 @@ impl ConnectionDialog {
         self.message = None;
         cx.notify();
         let task = cx.spawn(async move |this, cx| {
-            if !typed_password.is_empty() {
-                if let Err(error) = credentials.write(&key, typed_password.as_bytes(), cx).await {
-                    this.update(cx, |this, cx| {
-                        this.busy = false;
-                        this.message = Some((error.to_string().into(), MessageKind::Error));
-                        cx.notify();
-                    })
-                    .ok();
-                    return;
-                }
+            if !typed_password.is_empty()
+                && let Err(error) = credentials.write(&key, typed_password.as_bytes(), cx).await
+            {
+                this.update(cx, |this, cx| {
+                    this.busy = false;
+                    this.message = Some((error.to_string().into(), MessageKind::Error));
+                    cx.notify();
+                })
+                .ok();
+                return;
             }
             let completion = cx.update(|cx| persist_connection(&config, cx));
             let saved = match completion.await {
@@ -364,7 +359,7 @@ impl ConnectionDialog {
             })
             .ok();
         });
-        self._task = Some(task);
+        self.task = Some(task);
     }
 
     fn delete(&mut self, cx: &mut Context<Self>) {
@@ -400,7 +395,7 @@ impl ConnectionDialog {
             })
             .ok();
         });
-        self._task = Some(task);
+        self.task = Some(task);
     }
 
     fn pick_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -411,7 +406,9 @@ impl ConnectionDialog {
             prompt: None,
         };
         let paths = cx.prompt_for_paths(options);
-        let task = cx.spawn_in(window, async move |this, cx| {
+        // The picker runs on its own so opening it cannot cancel a test or save
+        // that is still in flight (a replaced `Task` is cancelled).
+        cx.spawn_in(window, async move |this, cx| {
             let Ok(Ok(Some(paths))) = paths.await else {
                 return;
             };
@@ -434,8 +431,8 @@ impl ConnectionDialog {
                 cx.notify();
             })
             .ok();
-        });
-        self._task = Some(task);
+        })
+        .detach();
     }
 }
 
@@ -456,24 +453,45 @@ fn single_line_editor(
     })
 }
 
-fn field(label: SharedString, editor: Entity<Editor>, cx: &App) -> impl IntoElement {
+fn editor_box(editor: Entity<Editor>, cx: &App) -> impl IntoElement {
+    div()
+        .px_2()
+        .py_1()
+        .border_1()
+        .rounded_md()
+        .border_color(cx.theme().colors().border)
+        .bg(cx.theme().colors().editor_background)
+        .child(EditorElement::new(&editor, editor::EditorStyle::default()))
+}
+
+fn read_only_box(content: AnyElement, cx: &App) -> impl IntoElement {
+    div()
+        .px_2()
+        .py_1()
+        .border_1()
+        .rounded_md()
+        .border_color(cx.theme().colors().border)
+        .bg(cx.theme().colors().editor_background)
+        .child(content)
+}
+
+fn labeled_field(label: SharedString, content: impl IntoElement) -> impl IntoElement {
     v_flex()
         .gap_1()
-        .child(Label::new(label).size(LabelSize::Small))
-        .child(
-            div()
-                .px_2()
-                .py_1()
-                .border_1()
-                .rounded_md()
-                .border_color(cx.theme().colors().border)
-                .child(EditorElement::new(&editor, editor::EditorStyle::default())),
-        )
+        // A field label carries the same weight as the value it names, like the
+        // titles on the settings page; only the hint under the password field is
+        // secondary text.
+        .child(Label::new(label))
+        .child(content)
+}
+
+fn field(label: SharedString, editor: Entity<Editor>, cx: &App) -> impl IntoElement {
+    labeled_field(label, editor_box(editor, cx))
 }
 
 impl Focusable for ConnectionDialog {
-    fn focus_handle(&self, _cx: &App) -> FocusHandle {
-        self.focus_handle.clone()
+    fn focus_handle(&self, cx: &App) -> FocusHandle {
+        self.name_editor.focus_handle(cx)
     }
 }
 
@@ -489,7 +507,15 @@ impl Render for ConnectionDialog {
             tr(cx, "database.dialog.edit_title", "Edit Database Connection")
         };
 
-        let mut fields = v_flex().gap_3().child(field(
+        let mut fields = v_flex().gap_3().child(labeled_field(
+            tr(cx, "database.dialog.driver", "Driver").into(),
+            read_only_box(
+                Label::new(DatabaseState::manager(cx).driver_display_name(&self.driver_id))
+                    .into_any_element(),
+                cx,
+            ),
+        ));
+        fields = fields.child(field(
             tr(cx, "database.dialog.name", "Name").into(),
             self.name_editor.clone(),
             cx,
@@ -517,22 +543,28 @@ impl Render for ConnectionDialog {
                     cx,
                 ));
         } else {
-            let path_field = field(
+            let path_field = labeled_field(
                 tr(cx, "database.dialog.path", "Database file").into(),
-                self.path_editor.clone(),
-                cx,
-            );
-            fields = fields.child(
-                v_flex().gap_1().child(path_field).child(
-                    Button::new(
-                        "browse-database-file",
-                        tr(cx, "database.dialog.browse", "Browse…"),
+                h_flex()
+                    .gap_1()
+                    .items_center()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(editor_box(self.path_editor.clone(), cx)),
                     )
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.pick_file(window, cx);
-                    })),
-                ),
+                    .child(
+                        Button::new(
+                            "browse-database-file",
+                            tr(cx, "database.dialog.browse", "Browse…"),
+                        )
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.pick_file(window, cx);
+                        })),
+                    ),
             );
+            fields = fields.child(path_field);
         }
         if self.capabilities.requires_credentials {
             fields = fields
@@ -547,7 +579,8 @@ impl Render for ConnectionDialog {
                         "database.dialog.password_hint",
                         "Stored in the system keychain, never in settings.json.",
                     ))
-                    .size(LabelSize::Small),
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
                 );
         }
         if let Some((message, kind)) = &self.message {
@@ -604,22 +637,16 @@ impl Render for ConnectionDialog {
                     ),
             );
 
-        v_flex()
-            .track_focus(&self.focus_handle)
+        div()
+            .elevation_3(cx)
+            .occlude()
+            .w(rems(34.))
+            .key_context("DatabaseConnectionDialog")
             .on_action(cx.listener(Self::cancel))
             .on_action(cx.listener(Self::confirm))
             .child(
                 Modal::new("database-connection-dialog", None)
-                    .header(
-                        ModalHeader::new()
-                            .headline(title)
-                            .description(format!(
-                                "{} {}",
-                                tr(cx, "database.dialog.driver", "Driver:"),
-                                self.driver_id
-                            ))
-                            .show_dismiss_button(true),
-                    )
+                    .header(ModalHeader::new().headline(title).show_dismiss_button(true))
                     .section(Section::new().child(fields))
                     .footer(footer),
             )

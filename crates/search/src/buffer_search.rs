@@ -15,7 +15,7 @@ use any_vec::AnyVec;
 use collections::HashMap;
 use editor::{
     Editor, EditorSettings, MultiBufferOffset, SplittableEditor, ToggleSplitDiff,
-    actions::{Backtab, FoldAll, Tab, ToggleFoldAll, UnfoldAll},
+    actions::{Backtab, FoldAll, Tab, ToggleFoldAll, ToggleSoftWrap, UnfoldAll},
     scroll::Autoscroll,
 };
 use futures::channel::oneshot;
@@ -100,7 +100,7 @@ pub struct BufferSearchBar {
     scroll_handle: ScrollHandle,
     regex_language: Option<Arc<Language>>,
     splittable_editor: Option<WeakEntity<SplittableEditor>>,
-    _splittable_editor_subscription: Option<Subscription>,
+    splittable_editor_subscription: Option<Subscription>,
 }
 
 impl EventEmitter<Event> for BufferSearchBar {}
@@ -655,6 +655,7 @@ impl Render for BufferSearchBar {
             .capture_action(cx.listener(Self::tab))
             .capture_action(cx.listener(Self::backtab))
             .capture_action(cx.listener(Self::toggle_fold_all))
+            .capture_action(cx.listener(Self::toggle_soft_wrap))
             .on_action(cx.listener(Self::previous_history_query))
             .on_action(cx.listener(Self::next_history_query))
             .on_action(cx.listener(Self::dismiss))
@@ -721,7 +722,7 @@ impl ToolbarItemView for BufferSearchBar {
         cx.notify();
         self.active_searchable_item_subscriptions.take();
         self.splittable_editor = None;
-        self._splittable_editor_subscription = None;
+        self.splittable_editor_subscription = None;
         self.pending_search.take();
 
         if let Some(item) = self.active_searchable_item.take() {
@@ -732,7 +733,7 @@ impl ToolbarItemView for BufferSearchBar {
             .and_then(|item| item.act_as_type(TypeId::of::<SplittableEditor>(), cx))
             .and_then(|entity| entity.downcast::<SplittableEditor>().ok())
         {
-            self._splittable_editor_subscription =
+            self.splittable_editor_subscription =
                 Some(cx.observe(&splittable_editor, |_, _, cx| cx.notify()));
             self.splittable_editor = Some(splittable_editor.downgrade());
         }
@@ -999,7 +1000,7 @@ impl BufferSearchBar {
             scroll_handle: ScrollHandle::new(),
             regex_language: None,
             splittable_editor: None,
-            _splittable_editor_subscription: None,
+            splittable_editor_subscription: None,
         }
     }
 
@@ -1083,7 +1084,7 @@ impl BufferSearchBar {
                 if deploy.replace_enabled && has_seed_text {
                     handle = self.replacement_editor.focus_handle(cx);
                     select_query = false;
-                };
+                }
 
                 if select_query {
                     self.select_query(window, cx);
@@ -1153,8 +1154,7 @@ impl BufferSearchBar {
     fn supported_options(&self, cx: &mut Context<Self>) -> workspace::searchable::SearchOptions {
         self.active_searchable_item
             .as_ref()
-            .map(|item| item.supported_options(cx))
-            .unwrap_or_default()
+            .map_or_default(|item| item.supported_options(cx))
     }
 
     // We provide an expand/collapse button if we are in a multibuffer
@@ -1171,20 +1171,51 @@ impl BufferSearchBar {
         self.toggle_fold_all_in_item(window, cx);
     }
 
-    fn toggle_fold_all_in_item(&self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(item) = &self.active_searchable_item {
-            if let Some(item) = item.act_as_type(TypeId::of::<Editor>(), cx)
-                && let Ok(editor) = item.downcast::<Editor>()
-            {
-                editor.update(cx, |editor, cx| {
-                    let is_collapsed = editor.has_any_buffer_folded(cx);
-                    if is_collapsed {
-                        editor.unfold_all(&UnfoldAll, window, cx);
-                    } else {
-                        editor.fold_all(&FoldAll, window, cx);
-                    }
-                })
+    // The query editor is an editor itself and would otherwise swallow this
+    // action without any visible effect, so relay it to the searched editor
+    // while keeping the focus in the search bar.
+    fn toggle_soft_wrap(
+        &mut self,
+        action: &ToggleSoftWrap,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(item) = &self.active_searchable_item else {
+            return;
+        };
+        // A split diff editor picks which side to toggle and keeps both sides
+        // in sync, while its `act_as_type(Editor)` only exposes the RHS
+        // editor, so relay to the split editor itself when it is split.
+        if let Some(split_editor) = item.act_as_type(TypeId::of::<SplittableEditor>(), cx) {
+            let split_editor = split_editor
+                .downcast::<SplittableEditor>()
+                .expect("Is a splittable editor");
+            if split_editor.read(cx).is_split() {
+                split_editor.update(cx, |split_editor, cx| {
+                    split_editor.toggle_soft_wrap(action, window, cx)
+                });
+                return;
             }
+        }
+        if let Some(item) = item.act_as_type(TypeId::of::<Editor>(), cx) {
+            let editor = item.downcast::<Editor>().expect("Is an editor");
+            editor.update(cx, |editor, cx| editor.toggle_soft_wrap(action, window, cx));
+        }
+    }
+
+    fn toggle_fold_all_in_item(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(item) = &self.active_searchable_item
+            && let Some(item) = item.act_as_type(TypeId::of::<Editor>(), cx)
+            && let Ok(editor) = item.downcast::<Editor>()
+        {
+            editor.update(cx, |editor, cx| {
+                let is_collapsed = editor.has_any_buffer_folded(cx);
+                if is_collapsed {
+                    editor.unfold_all(&UnfoldAll, window, cx);
+                } else {
+                    editor.fold_all(&FoldAll, window, cx);
+                }
+            })
         }
     }
 
@@ -1799,17 +1830,14 @@ impl BufferSearchBar {
             });
         if new_index != self.active_match_index {
             self.active_match_index = new_index;
-            if !self.dismissed {
-                if let Some(searchable_item) = self.active_searchable_item.as_ref() {
-                    if let Some((matches, token)) = self
-                        .searchable_items_with_matches
-                        .get(&searchable_item.downgrade())
-                    {
-                        if !matches.is_empty() {
-                            searchable_item.update_matches(matches, new_index, *token, window, cx);
-                        }
-                    }
-                }
+            if !self.dismissed
+                && let Some(searchable_item) = self.active_searchable_item.as_ref()
+                && let Some((matches, token)) = self
+                    .searchable_items_with_matches
+                    .get(&searchable_item.downgrade())
+                && !matches.is_empty()
+            {
+                searchable_item.update_matches(matches, new_index, *token, window, cx);
             }
             cx.notify();
         }
@@ -1904,7 +1932,7 @@ impl BufferSearchBar {
 
     fn toggle_replace(&mut self, _: &ToggleReplace, window: &mut Window, cx: &mut Context<Self>) {
         if self.active_searchable_item.is_some() {
-            self.replace_enabled = !self.replace_enabled;
+            self.replace_enabled.toggle();
             let handle = if self.replace_enabled {
                 self.replacement_editor.focus_handle(cx)
             } else {
@@ -2038,7 +2066,7 @@ mod tests {
     use super::*;
     use editor::{
         DisplayPoint, Editor, HighlightKey, MultiBuffer, PathKey,
-        SELECTION_HIGHLIGHT_DEBOUNCE_TIMEOUT, SearchSettings, SelectionEffects,
+        SELECTION_HIGHLIGHT_DEBOUNCE_TIMEOUT, SearchSettings, SelectionEffects, SoftWrap,
         display_map::DisplayRow, test::editor_test_context::EditorTestContext,
     };
     use futures::stream::StreamExt as _;
@@ -3454,6 +3482,55 @@ mod tests {
             assert!(
                 !search_bar.query_editor.focus_handle(cx).is_focused(window),
                 "search editor should not be focused when replacement editor is focused",
+            );
+        });
+    }
+
+    #[gpui::test]
+    async fn test_toggle_soft_wrap_relays_to_searched_editor(cx: &mut TestAppContext) {
+        init_globals(cx);
+        let (editor, search_bar, cx) = init_test(cx);
+
+        search_bar.update_in(cx, |search_bar, window, cx| {
+            search_bar.deploy(
+                &Deploy {
+                    focus: true,
+                    replace_enabled: false,
+                    selection_search_enabled: false,
+                },
+                None,
+                window,
+                cx,
+            );
+        });
+        cx.run_until_parked();
+
+        search_bar.update_in(cx, |search_bar, window, cx| {
+            assert!(
+                search_bar.query_editor.focus_handle(cx).is_focused(window),
+                "query editor should be focused after deploying the search bar",
+            );
+        });
+        editor.update_in(cx, |editor, _, cx| {
+            assert!(
+                matches!(editor.soft_wrap_mode(cx), SoftWrap::None),
+                "soft wrap should be disabled initially",
+            );
+        });
+
+        cx.dispatch_action(ToggleSoftWrap);
+        cx.run_until_parked();
+
+        editor.update_in(cx, |editor, _, cx| {
+            assert!(
+                matches!(editor.soft_wrap_mode(cx), SoftWrap::EditorWidth),
+                "toggling soft wrap while the search bar is focused should affect the searched editor",
+            );
+        });
+        search_bar.update_in(cx, |search_bar, window, cx| {
+            assert!(
+                search_bar.query_editor.focus_handle(cx).is_focused(window),
+                "focus should stay in the search bar",
             );
         });
     }

@@ -63,6 +63,7 @@ use crate::{
     state::ReplayableAction,
 };
 
+#[allow(clippy::empty_enums)] // uninhabited marker; the overlay key must stay distinct
 enum HelixJumpNavigationOverlay {}
 
 pub(crate) const HELIX_JUMP_OVERLAY_KEY: NavigationOverlayKey =
@@ -356,7 +357,7 @@ pub fn init(cx: &mut App) {
                         .and_then(|c| c.checked_add(n.0))
                         .unwrap_or(count),
                 );
-            };
+            }
         });
 
         workspace.register_action(|_, _: &zzz_actions::vim::OpenDefaultKeymap, _, cx| {
@@ -1034,10 +1035,8 @@ impl Vim {
         f: impl Fn(&mut Vim, &A, &mut Window, &mut Context<Vim>) + 'static,
     ) {
         let subscription = editor.register_action(cx.listener(move |vim, action, window, cx| {
-            if !Vim::globals(cx).dot_replaying {
-                if vim.status_label.take().is_some() {
-                    cx.notify();
-                }
+            if !Vim::globals(cx).dot_replaying && vim.status_label.take().is_some() {
+                cx.notify();
             }
             f(vim, action, window, cx);
         }));
@@ -1193,7 +1192,7 @@ impl Vim {
                 | Operator::Exchange
         ) {
             self.operator_stack.clear();
-        };
+        }
         self.operator_stack.push(operator);
         self.sync_vim_settings(window, cx);
     }
@@ -1323,7 +1322,7 @@ impl Vim {
                     should_extend_pending = pending.reversed
                         && !is_empty
                         && vim.extended_pending_selection_id != Some(pending.id);
-                };
+                }
 
                 if should_extend_pending {
                     let snapshot = s.display_snapshot();
@@ -1349,10 +1348,8 @@ impl Vim {
                             point = map.clip_point(point, Bias::Left);
                         }
                         selection.collapse_to(point, selection.goal)
-                    } else if !last_mode.is_visual() && mode.is_visual() {
-                        if selection.is_empty() {
-                            selection.end = movement::right(map, selection.start);
-                        }
+                    } else if !last_mode.is_visual() && mode.is_visual() && selection.is_empty() {
+                        selection.end = movement::right(map, selection.start);
                     }
                 });
             })
@@ -1429,11 +1426,11 @@ impl Vim {
     }
 
     fn expects_character_input(&self) -> bool {
-        if let Some(operator) = self.operator_stack.last() {
-            if operator.is_waiting(self.mode) {
-                // Helix jump labels are commands that need to reach Vim before an active IME.
-                return !matches!(operator, Operator::HelixJump { .. });
-            }
+        if let Some(operator) = self.operator_stack.last()
+            && operator.is_waiting(self.mode)
+        {
+            // Helix jump labels are commands that need to reach Vim before an active IME.
+            return !matches!(operator, Operator::HelixJump { .. });
         }
         self.editor_input_enabled()
     }
@@ -1545,17 +1542,17 @@ impl Vim {
         // If editor gains focus while search bar is still open (not dismissed),
         // the user has explicitly navigated away - clear prior_selections so we
         // don't restore to the old position if they later dismiss the search.
-        if !self.search.prior_selections.is_empty() {
-            if let Some(pane) = self.pane(window, cx) {
-                let search_still_open = pane
-                    .read(cx)
-                    .toolbar()
-                    .read(cx)
-                    .item_of_type::<BufferSearchBar>()
-                    .is_some_and(|bar| !bar.read(cx).is_dismissed());
-                if search_still_open {
-                    self.search.prior_selections.clear();
-                }
+        if !self.search.prior_selections.is_empty()
+            && let Some(pane) = self.pane(window, cx)
+        {
+            let search_still_open = pane
+                .read(cx)
+                .toolbar()
+                .read(cx)
+                .item_of_type::<BufferSearchBar>()
+                .is_some_and(|bar| !bar.read(cx).is_dismissed());
+            if search_still_open {
+                self.search.prior_selections.clear();
             }
         }
 

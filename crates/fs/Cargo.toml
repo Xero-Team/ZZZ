@@ -43,9 +43,8 @@ text.workspace = true
 time.workspace = true
 util.workspace = true
 vfs.workspace = true
-is_executable = "1.0.6"
-notify = "8.2.1"
-# Vendored from https://github.com/ArturKovacs/trash @ 54e0a2d69fdc058cc2efa19a497ec8f44631d61f
+notify = "8.2.2"
+# Vendored from https://github.com/ArturKovacs/trash @ 0fdaf8dfea62d0d5270a918d160dfb58cb76eb3f
 trash = { path = "../../vendor/trash" }
 
 [target.'cfg(unix)'.dependencies]
@@ -54,9 +53,7 @@ rustix.workspace = true
 [target.'cfg(target_os = "windows")'.dependencies]
 windows.workspace = true
 dunce.workspace = true
-
-[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
-ashpd.workspace = true
+is_executable = "1.0.6"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 unicode-normalization = "0.1"

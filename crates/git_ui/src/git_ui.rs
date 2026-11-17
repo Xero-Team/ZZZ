@@ -12,7 +12,7 @@ mod blame_ui;
 pub mod clone;
 
 use git::{
-    Oid,
+    Oid, normalize_branch_name,
     repository::{Branch, CommitDetails, Upstream, UpstreamTracking, UpstreamTrackingStatus},
     status::{FileStatus, StatusCode, UnmergedStatus, UnmergedStatusCode},
 };
@@ -314,6 +314,7 @@ struct RenameBranchModal {
     current_branch: SharedString,
     editor: Entity<Editor>,
     repo: Entity<Repository>,
+    _editor_subscription: Subscription,
 }
 
 impl RenameBranchModal {
@@ -328,10 +329,16 @@ impl RenameBranchModal {
             editor.set_text(current_branch.clone(), window, cx);
             editor
         });
+        let editor_subscription = cx.subscribe(&editor, |_, _, event, cx| {
+            if matches!(event, editor::EditorEvent::BufferEdited) {
+                cx.notify();
+            }
+        });
         Self {
             current_branch: current_branch.into(),
             editor,
             repo,
+            _editor_subscription: editor_subscription,
         }
     }
 
@@ -340,7 +347,7 @@ impl RenameBranchModal {
     }
 
     fn confirm(&mut self, _: &Confirm, window: &mut Window, cx: &mut Context<Self>) {
-        let new_name = self.editor.read(cx).text(cx);
+        let new_name = normalize_branch_name(&self.editor.read(cx).text(cx));
         if new_name.is_empty() || new_name == self.current_branch.as_ref() {
             cx.emit(DismissEvent);
             return;
@@ -384,6 +391,7 @@ impl Focusable for RenameBranchModal {
 
 impl Render for RenameBranchModal {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let new_name = normalize_branch_name(&self.editor.read(cx).text(cx));
         v_flex()
             .key_context("RenameBranchModal")
             .on_action(cx.listener(Self::cancel))
@@ -409,7 +417,21 @@ impl Render for RenameBranchModal {
                         .size(HeadlineSize::XSmall),
                     ),
             )
-            .child(div().px_3().pb_3().w_full().child(self.editor.clone()))
+            .child(
+                v_flex()
+                    .px_3()
+                    .pb_3()
+                    .w_full()
+                    .gap_2()
+                    .child(self.editor.clone())
+                    .child(
+                        Label::new(new_name)
+                            .size(LabelSize::Small)
+                            .color(Color::Muted)
+                            .single_line()
+                            .truncate(),
+                    ),
+            )
     }
 }
 
@@ -608,7 +630,7 @@ impl RefPickerModal {
             editor
         });
 
-        let _editor_subscription = cx.subscribe_in(
+        let editor_subscription = cx.subscribe_in(
             &editor,
             window,
             |this, _editor, event: &editor::EditorEvent, window, cx| {
@@ -624,7 +646,7 @@ impl RefPickerModal {
             workspace,
             commit_details: None,
             lookup_task: None,
-            _editor_subscription,
+            _editor_subscription: editor_subscription,
         }
     }
 

@@ -26,13 +26,12 @@ fn migrate_one(obj: &mut serde_json::Map<String, Value>) -> Result<()> {
 fn migrate_agent_with_profiles(agent: &mut Value) -> Result<()> {
     migrate_agent_tool_permissions(agent)?;
 
-    if let Some(agent_object) = agent.as_object_mut() {
-        if let Some(profiles) = agent_object.get_mut(PROFILES_KEY) {
-            if let Some(profiles_object) = profiles.as_object_mut() {
-                for (_profile_name, profile) in profiles_object.iter_mut() {
-                    migrate_agent_tool_permissions(profile)?;
-                }
-            }
+    if let Some(agent_object) = agent.as_object_mut()
+        && let Some(profiles) = agent_object.get_mut(PROFILES_KEY)
+        && let Some(profiles_object) = profiles.as_object_mut()
+    {
+        for (_profile_name, profile) in profiles_object.iter_mut() {
+            migrate_agent_tool_permissions(profile)?;
         }
     }
 
@@ -100,22 +99,21 @@ fn migrate_default_mode_to_default(tool_permissions: &mut Value) -> Result<()> {
         return Ok(());
     };
 
-    if let Some(default_mode) = tool_permissions_object.remove(DEFAULT_MODE_KEY) {
-        if !tool_permissions_object.contains_key(DEFAULT_KEY) {
-            tool_permissions_object.insert(DEFAULT_KEY.to_owned(), default_mode);
-        }
+    if let Some(default_mode) = tool_permissions_object.remove(DEFAULT_MODE_KEY)
+        && !tool_permissions_object.contains_key(DEFAULT_KEY)
+    {
+        tool_permissions_object.insert(DEFAULT_KEY.to_owned(), default_mode);
     }
 
-    if let Some(tools) = tool_permissions_object.get_mut(TOOLS_KEY) {
-        if let Some(tools_object) = tools.as_object_mut() {
-            for (_tool_name, tool_rules) in tools_object.iter_mut() {
-                if let Some(tool_rules_object) = tool_rules.as_object_mut() {
-                    if let Some(default_mode) = tool_rules_object.remove(DEFAULT_MODE_KEY) {
-                        if !tool_rules_object.contains_key(DEFAULT_KEY) {
-                            tool_rules_object.insert(DEFAULT_KEY.to_owned(), default_mode);
-                        }
-                    }
-                }
+    if let Some(tools) = tool_permissions_object.get_mut(TOOLS_KEY)
+        && let Some(tools_object) = tools.as_object_mut()
+    {
+        for (_tool_name, tool_rules) in tools_object.iter_mut() {
+            if let Some(tool_rules_object) = tool_rules.as_object_mut()
+                && let Some(default_mode) = tool_rules_object.remove(DEFAULT_MODE_KEY)
+                && !tool_rules_object.contains_key(DEFAULT_KEY)
+            {
+                tool_rules_object.insert(DEFAULT_KEY.to_owned(), default_mode);
             }
         }
     }

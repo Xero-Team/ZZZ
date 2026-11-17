@@ -160,6 +160,10 @@ mod tests {
         }
     }
 
+    #[cfg_attr(
+        feature = "accessibility",
+        ignore = "the accessibility feature disables cached view reuse, see view.rs"
+    )]
     #[gpui::test]
     fn test_cached_reuse_keeps_entity_subscriptions(cx: &mut TestAppContext) {
         for deferred_child in [true, false] {

@@ -686,10 +686,10 @@ impl ExecutionView {
                         self.pending_input = None;
                         if self.outputs.is_empty() {
                             cx.emit(ExecutionViewFinishedEmpty);
-                        } else if ReplSettings::get_global(cx).inline_output {
-                            if let Some(small_text) = self.get_small_inline_output(cx) {
-                                cx.emit(ExecutionViewFinishedSmall(small_text));
-                            }
+                        } else if ReplSettings::get_global(cx).inline_output
+                            && let Some(small_text) = self.get_small_inline_output(cx)
+                        {
+                            cx.emit(ExecutionViewFinishedSmall(small_text));
                         }
                     }
                     ExecutionState::Unknown => self.status = ExecutionStatus::Unknown,
@@ -938,6 +938,8 @@ impl Render for ExecutionView {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use gpui::TestAppContext;
     use jupyter_protocol::media::{Media, MediaType as MimeType, TabularDataResource};
@@ -1285,37 +1287,37 @@ mod tests {
                     execution_state: ExecutionState::Busy,
                 });
                 view.push_message(&busy, window, cx);
-                assert!(matches!(view.status, ExecutionStatus::Executing));
+                assert_matches!(view.status, ExecutionStatus::Executing);
 
                 let idle = JupyterMessageContent::Status(Status {
                     execution_state: ExecutionState::Idle,
                 });
                 view.push_message(&idle, window, cx);
-                assert!(matches!(view.status, ExecutionStatus::Finished));
+                assert_matches!(view.status, ExecutionStatus::Finished);
 
                 let starting = JupyterMessageContent::Status(Status {
                     execution_state: ExecutionState::Starting,
                 });
                 view.push_message(&starting, window, cx);
-                assert!(matches!(view.status, ExecutionStatus::ConnectingToKernel));
+                assert_matches!(view.status, ExecutionStatus::ConnectingToKernel);
 
                 let dead = JupyterMessageContent::Status(Status {
                     execution_state: ExecutionState::Dead,
                 });
                 view.push_message(&dead, window, cx);
-                assert!(matches!(view.status, ExecutionStatus::Shutdown));
+                assert_matches!(view.status, ExecutionStatus::Shutdown);
 
                 let restarting = JupyterMessageContent::Status(Status {
                     execution_state: ExecutionState::Restarting,
                 });
                 view.push_message(&restarting, window, cx);
-                assert!(matches!(view.status, ExecutionStatus::Restarting));
+                assert_matches!(view.status, ExecutionStatus::Restarting);
 
                 let terminating = JupyterMessageContent::Status(Status {
                     execution_state: ExecutionState::Terminating,
                 });
                 view.push_message(&terminating, window, cx);
-                assert!(matches!(view.status, ExecutionStatus::ShuttingDown));
+                assert_matches!(view.status, ExecutionStatus::ShuttingDown);
             });
         });
     }

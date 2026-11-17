@@ -732,6 +732,98 @@ async fn test_context_server_loaded_when_first_worktree_added(cx: &mut TestAppCo
 }
 
 #[gpui::test]
+async fn test_stdio_server_restarts_when_project_root_becomes_available(cx: &mut TestAppContext) {
+    const SERVER_ID: &str = "mcp-1";
+    let server_id = ContextServerId(SERVER_ID.into());
+
+    let fs = FakeFs::new(cx.executor());
+    fs.insert_tree(
+        path!("/"),
+        json!({"lonely.rs": "", "project": {"code.rs": ""}}),
+    )
+    .await;
+
+    cx.update(|cx| {
+        let settings_store = SettingsStore::test(cx);
+        cx.set_global(settings_store);
+    });
+
+    // Open a single-file worktree, whose `root_dir()` is `None`, so the server is
+    // spawned with no working directory even though it is configured.
+    let project = Project::test(fs.clone(), [path!("/lonely.rs").as_ref()], cx).await;
+
+    let executor = cx.executor();
+    let store = project.read_with(cx, |project, _| project.context_server_store());
+    store.update(cx, |store, _| {
+        store.set_context_server_factory(Box::new(move |id, _| {
+            Arc::new(ContextServer::new(
+                id.clone(),
+                Arc::new(create_fake_transport(id.0.to_string(), executor.clone())),
+            ))
+        }));
+    });
+
+    // Configure the server globally so it starts against the file worktree.
+    {
+        let _server_events = assert_server_events(
+            &store,
+            vec![
+                (server_id.clone(), ContextServerStatus::Starting),
+                (server_id.clone(), ContextServerStatus::Running),
+            ],
+            cx,
+        );
+        set_context_server_configuration(
+            vec![(
+                server_id.0.clone(),
+                settings::ContextServerSettingsContent::Stdio {
+                    enabled: true,
+                    remote: false,
+                    command: ContextServerCommand {
+                        path: "somebinary".into(),
+                        args: vec!["arg".to_string()],
+                        env: None,
+                        timeout: None,
+                    },
+                },
+            )],
+            cx,
+        );
+        cx.run_until_parked();
+    }
+
+    // Adding a directory worktree makes the project root resolvable. Since the
+    // server was started with working directory `None`, it must be restarted so
+    // it picks up the new root instead of keeping the process working directory.
+    {
+        let _server_events = assert_server_events(
+            &store,
+            vec![
+                (server_id.clone(), ContextServerStatus::Stopped),
+                (server_id.clone(), ContextServerStatus::Starting),
+                (server_id.clone(), ContextServerStatus::Running),
+            ],
+            cx,
+        );
+        project
+            .update(cx, |project, cx| {
+                project.find_or_create_worktree(path!("/project"), true, cx)
+            })
+            .await
+            .expect("Failed to add worktree");
+        cx.run_until_parked();
+    }
+
+    cx.update(|cx| {
+        assert_eq!(
+            store.read(cx).status_for_server(&server_id),
+            Some(ContextServerStatus::Running),
+            "Server should be running again after restarting with the project root"
+        );
+    });
+}
+
+#[gpui::test]
 async fn test_multi_worktree_context_server_settings(cx: &mut TestAppContext) {
     const SERVER_A: &str = "server-from-project-a";
     const SERVER_B: &str = "server-from-project-b";

@@ -189,7 +189,7 @@ fn render_inline_code_markdown(text: &str, cx: &App) -> StyledText {
             } else {
                 code_start = plain.len();
             }
-            in_code = !in_code;
+            in_code.toggle();
         } else {
             plain.push(ch);
         }
@@ -1553,10 +1553,10 @@ fn update_pattern(
 
             if let Some(list) = rules_list {
                 let already_exists = list.0.iter().any(|r| r.pattern == new_pattern);
-                if !already_exists {
-                    if let Some(rule) = list.0.iter_mut().find(|r| r.pattern == old_pattern) {
-                        rule.pattern = new_pattern;
-                    }
+                if !already_exists
+                    && let Some(rule) = list.0.iter_mut().find(|r| r.pattern == old_pattern)
+                {
+                    rule.pattern = new_pattern;
                 }
             }
         }

@@ -9,6 +9,7 @@
 use anyhow::Result;
 use node_runtime::{NodeBinaryOptions, NodeDiscoveryError, NodeRuntime, SystemNode};
 use semver::Version;
+use std::assert_matches;
 use std::{
     env, fs,
     os::unix::fs::{PermissionsExt, symlink},
@@ -98,10 +99,10 @@ fn empty_path_entry_runs_the_node_in_the_working_directory() -> Result<()> {
             None,
             Some(env::current_dir()?.join("missing").into_os_string()),
         ] {
-            assert!(matches!(
+            assert_matches!(
                 smol::block_on(SystemNode::discover(None, search_path)),
                 Err(NodeDiscoveryError::NotFound { .. })
-            ));
+            );
         }
         return Ok(());
     }
@@ -170,18 +171,18 @@ fn configured_node_takes_precedence_and_failed_overrides_do_not_fall_back() -> R
         configured.parent().expect("configured directory"),
         "printf 'v20.0.0\\n'",
     )?;
-    assert!(matches!(
+    assert_matches!(
         smol::block_on(SystemNode::discover(
             Some(configured.clone()),
             Some(search_path.clone())
         )),
         Err(NodeDiscoveryError::TooOld { path, .. }) if path == configured
-    ));
+    );
     fs::remove_file(&configured)?;
-    assert!(matches!(
+    assert_matches!(
         smol::block_on(SystemNode::discover(Some(configured), Some(search_path))),
         Err(NodeDiscoveryError::NotFound { .. })
-    ));
+    );
     Ok(())
 }
 
@@ -192,10 +193,10 @@ fn path_order_is_preserved_when_the_first_node_is_too_old() -> Result<()> {
     let second = directory.path().join("second");
     let old = fake_node(&first, "printf 'v21.7.3\\n'")?;
     fake_node(&second, "printf 'v24.0.0\\n'")?;
-    assert!(matches!(
+    assert_matches!(
         smol::block_on(SystemNode::discover(None, Some(env::join_paths([first, second])?))),
         Err(NodeDiscoveryError::TooOld { path, .. }) if path == old
-    ));
+    );
     Ok(())
 }
 
@@ -208,17 +209,16 @@ fn reports_execution_failures_with_the_executable_path() -> Result<()> {
     )?;
     let error =
         smol::block_on(SystemNode::discover(Some(node.clone()), None)).expect_err("nonzero exit");
-    assert!(
-        matches!(&error, NodeDiscoveryError::UnsuccessfulExit { path, output }
-        if path == &node && output.status.code() == Some(7))
+    assert_matches!(&error, NodeDiscoveryError::UnsuccessfulExit { path, output }
+        if path == &node && output.status.code() == Some(7)
     );
     assert!(error.to_string().contains("broken installation"));
 
     fs::write(&node, b"#!/nonexistent-node-interpreter\n")?;
-    assert!(matches!(
+    assert_matches!(
         smol::block_on(SystemNode::discover(Some(node.clone()), None)),
         Err(NodeDiscoveryError::Probe { path, .. }) if path == node
-    ));
+    );
     Ok(())
 }
 

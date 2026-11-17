@@ -222,9 +222,9 @@ impl ProtoConversion for dap_types::Source {
             source_reference: self.source_reference,
             presentation_hint: self.presentation_hint.map(|hint| hint.to_proto().into()),
             origin: self.origin,
-            sources: self.sources.map(|src| src.to_proto()).unwrap_or_default(),
+            sources: self.sources.map_or_default(|src| src.to_proto()),
             adapter_data: Default::default(), // TODO Debugger Collab
-            checksums: self.checksums.map(|c| c.to_proto()).unwrap_or_default(),
+            checksums: self.checksums.map_or_default(|c| c.to_proto()),
         }
     }
 

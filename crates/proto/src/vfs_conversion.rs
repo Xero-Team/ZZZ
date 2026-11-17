@@ -1121,6 +1121,8 @@ fn root_has_no_payload(root: &NativePathRootV2) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use prost::Message as _;
     use serde::Deserialize;
@@ -1331,10 +1333,10 @@ mod tests {
             panic!("wire capabilities must contain limits");
         };
         limits.maximum_page_size = 0;
-        assert!(matches!(
+        assert_matches!(
             invalid_limits.to_provider_capabilities(),
             Err(VfsWireError::ZeroProviderLimit("maximum page size"))
-        ));
+        );
     }
 
     fn round_trip_provider_fixture(

@@ -260,8 +260,10 @@ filter_changes() {
     # Also track if settings/keybindings changed
     grep -E '(settings|keymap|actions)' "$TMPDIR/changed_files.txt" > "$TMPDIR/config_files.txt" || true
     
-    local source_count=$(wc -l < "$TMPDIR/source_files.txt" | tr -d ' ')
-    local config_count=$(wc -l < "$TMPDIR/config_files.txt" | tr -d ' ')
+    local source_count
+    local config_count
+    source_count=$(wc -l < "$TMPDIR/source_files.txt" | tr -d ' ')
+    config_count=$(wc -l < "$TMPDIR/config_files.txt" | tr -d ' ')
     
     log "Relevant files: $source_count source, $config_count config"
     
@@ -410,7 +412,8 @@ PREVIEW_INSTRUCTIONS
     echo "## Code Diff" >> "$TMPDIR/prompt.md"
     echo "" >> "$TMPDIR/prompt.md"
     
-    local diff_lines=$(wc -l < "$TMPDIR/changes.diff" | tr -d ' ')
+    local diff_lines
+    diff_lines=$(wc -l < "$TMPDIR/changes.diff" | tr -d ' ')
     if [[ "$diff_lines" -gt 2000 ]]; then
         warn "Diff is large ($diff_lines lines), truncating to 2000 lines"
         echo '```diff' >> "$TMPDIR/prompt.md"

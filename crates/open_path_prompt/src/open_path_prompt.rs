@@ -56,9 +56,8 @@ impl OpenPathDelegate {
         cx: &App,
     ) -> Self {
         let path_style = lister.path_style(cx);
-        let sort_mode = ProjectPanelSettings::try_get(cx)
-            .map(|settings| settings.sort_mode)
-            .unwrap_or_default();
+        let sort_mode =
+            ProjectPanelSettings::try_get(cx).map_or_default(|settings| settings.sort_mode);
         Self {
             tx: Some(tx),
             lister,
@@ -790,8 +789,7 @@ impl PickerDelegate for OpenPathDelegate {
                 string_match.candidate_id == candidate.path.id
                     && string_match.string == candidate.path.string
             })
-            .map(|string_match| string_match.positions.clone())
-            .unwrap_or_default();
+            .map_or_default(|string_match| string_match.positions.clone());
 
         let is_current_dir_candidate = candidate.path.string == self.current_dir();
 

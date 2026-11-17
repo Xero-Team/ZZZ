@@ -19,6 +19,7 @@ use math::{
     MathState, ParsedMarkdownMath, block_math_for_paragraph, extract_math_expressions,
     fenced_math_at, math_for_text_range, render_math, shield_math_events,
 };
+pub use mermaid::mermaid_theme;
 use mermaid::{
     MermaidState, ParsedMarkdownMermaidDiagram, extract_mermaid_diagrams, render_mermaid_diagram,
 };
@@ -818,7 +819,7 @@ impl Markdown {
 
     pub(crate) fn toggle_mermaid_tab(&mut self, source_offset: usize) {
         let view = self.mermaid_views.entry(source_offset).or_default();
-        view.showing_code = !view.showing_code;
+        view.showing_code.toggle();
     }
 
     pub(crate) fn mermaid_zoom_level(&self, source_offset: usize) -> f32 {
@@ -1585,6 +1586,35 @@ impl ParsedMarkdown {
 
     pub fn root_block_starts(&self) -> &Arc<[usize]> {
         &self.root_block_starts
+    }
+
+    /// The source offset of the first block that renders anything. Leading blank lines and
+    /// HTML blocks that render nothing (such as a comment) come before it, so this is the
+    /// block that sits at the top of the rendered markdown.
+    fn first_rendered_block_start(&self) -> usize {
+        let mut in_empty_html_block = false;
+        for (range, event) in self.events.iter() {
+            match event {
+                MarkdownEvent::RootStart | MarkdownEvent::RootEnd(_) => {}
+                MarkdownEvent::Start(MarkdownTag::HtmlBlock) => {
+                    in_empty_html_block = if let Some(block) = self.html_blocks.get(&range.start) {
+                        block.children.is_empty()
+                    } else {
+                        let html = self.source[range.clone()].trim();
+                        html.starts_with("<!--") && html.ends_with("-->")
+                    };
+                    if !in_empty_html_block {
+                        return range.start;
+                    }
+                }
+                MarkdownEvent::End(MarkdownTagEnd::HtmlBlock) if in_empty_html_block => {
+                    in_empty_html_block = false;
+                }
+                _ if in_empty_html_block => {}
+                _ => return range.start,
+            }
+        }
+        0
     }
 
     fn non_rendered_source_ranges(&self) -> Vec<Range<usize>> {
@@ -2950,6 +2980,7 @@ impl Element for MarkdownElement {
             self.style.base_text_style.clone(),
             self.style.syntax.clone(),
             self.line_breaking.unwrap_or(render_inputs.line_breaking),
+            render_inputs.parsed_markdown.first_rendered_block_start(),
         );
         let parsed_markdown = &render_inputs.parsed_markdown;
         let markdown_end = if let Some(last) = parsed_markdown.events.last() {
@@ -3078,7 +3109,7 @@ impl Element for MarkdownElement {
 
                             let checkbox = if let Some(on_toggle) = self.on_checkbox_toggle.clone()
                             {
-                                let task_source_range = task_range.clone();
+                                let task_source_range = task_range;
                                 checkbox.on_click(move |_state, window, cx| {
                                     on_toggle(task_source_range.clone(), !checked, window, cx);
                                 })
@@ -3113,7 +3144,6 @@ impl Element for MarkdownElement {
                     }),
                     MarkdownTag::Strong => builder.push_text_style(TextStyleRefinement {
                         font_weight: Some(FontWeight::BOLD),
-                        color: Some(cx.theme().colors().text),
                         ..Default::default()
                     }),
                     MarkdownTag::Strikethrough => builder.push_text_style(TextStyleRefinement {
@@ -3484,10 +3514,7 @@ impl Element for MarkdownElement {
                 }
                 MarkdownEvent::InlineHtml => {
                     let html = &parsed_markdown.source[range.clone()];
-                    if let Some(code) = html
-                        .strip_prefix("<code>")
-                        .and_then(|html| html.strip_suffix("</code>"))
-                    {
+                    if let Some(code) = html.strip_circumfix("<code>", "</code>") {
                         let code_start = range.start + "<code>".len();
                         self.push_markdown_code_span(
                             &mut builder,
@@ -3920,6 +3947,8 @@ struct MarkdownElementBuilder {
     rendered_links: Vec<RenderedLink>,
     rendered_footnote_refs: Vec<RenderedFootnoteRef>,
     current_source_index: usize,
+    /// The source offset of the first rendered block, whose top margin is removed.
+    first_block_start: usize,
     html_comment: bool,
     rendered_footnote_separator: bool,
     base_text_style: TextStyle,
@@ -3971,6 +4000,7 @@ impl MarkdownElementBuilder {
         base_text_style: TextStyle,
         syntax_theme: Arc<SyntaxTheme>,
         line_breaking: MarkdownLineBreaking,
+        first_block_start: usize,
     ) -> Self {
         Self {
             div_stack: vec![{
@@ -3983,6 +4013,7 @@ impl MarkdownElementBuilder {
             rendered_links: Vec::new(),
             rendered_footnote_refs: Vec::new(),
             current_source_index: 0,
+            first_block_start,
             html_comment: false,
             rendered_footnote_separator: false,
             base_text_style,
@@ -4016,7 +4047,7 @@ impl MarkdownElementBuilder {
         let mut div = div.into();
         self.flush_text();
 
-        if range.start == 0 {
+        if range.start == self.first_block_start {
             // Remove the top margin on the first element.
             div.style().refine(&StyleRefinement {
                 margin: gpui::EdgesRefinement {
@@ -4561,7 +4592,7 @@ impl RenderedLine {
                 line_rendered_index = ix;
                 out_of_bounds = true;
             }
-        };
+        }
         let source_index = self.source_index_for_rendered_index(line_rendered_index);
         if out_of_bounds {
             Err(source_index)
@@ -4812,14 +4843,13 @@ impl RenderedText {
             }
 
             // Handle gap between lines
-            if position.y > line_bounds.bottom() {
-                if let Some(next_line) = lines.peek()
-                    && position.y < next_line.layout.bounds().top()
-                    && gap_source_index.is_none()
-                {
-                    // A later table cell may contain the position, so defer the gap fallback.
-                    gap_source_index = Some(line.source_end);
-                }
+            if position.y > line_bounds.bottom()
+                && let Some(next_line) = lines.peek()
+                && position.y < next_line.layout.bounds().top()
+                && gap_source_index.is_none()
+            {
+                // A later table cell may contain the position, so defer the gap fallback.
+                gap_source_index = Some(line.source_end);
             }
         }
 
@@ -5930,6 +5960,38 @@ mod tests {
             .match_indices("![")
             .map(|(offset, _)| &*format!("markdown_image_{offset}").leak())
             .collect()
+    }
+
+    #[gpui::test]
+    fn test_first_rendered_block_has_no_top_margin(cx: &mut TestAppContext) {
+        let mut heading_top = |source: &'static str| {
+            let mut cx = render_image_layout(source, cx);
+            let selectors = image_selectors(source);
+            let [image] = selectors.as_slice() else {
+                panic!("expected one image, found {}", selectors.len());
+            };
+            cx.debug_bounds(image)
+                .expect("image should be rendered")
+                .top()
+        };
+
+        // Leading blank lines and comments render nothing, so the heading after them is the
+        // first rendered block. Its top margin would otherwise collapse through the empty
+        // blocks before it and push everything below it down.
+        let expected = heading_top("# ![](icon.png)");
+        for source in [
+            "\n# ![](icon.png)",
+            "<!-- comment -->\n\n# ![](icon.png)",
+            "<!--\nmulti-line\ncomment\n-->\n\n# ![](icon.png)",
+            "<!-- one -->\n<!-- two -->\n\n# ![](icon.png)",
+            "[zed]: https://zed.dev\n\n# ![](icon.png)",
+        ] {
+            assert_eq!(
+                heading_top(source),
+                expected,
+                "heading in {source:?} should sit at the top like it does without the leading content"
+            );
+        }
     }
 
     #[gpui::test]

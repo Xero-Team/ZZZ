@@ -23,9 +23,21 @@ use std::process::Command;
 use anyhow::{Context as _, Result, bail};
 use clap::{Args, Subcommand, ValueEnum};
 
+mod ci_wiring;
 mod gpui_api;
 mod keymaps;
+mod lints_inheritance;
+mod locale_catalog;
+mod locale_fallbacks;
+mod locale_placeholders;
+mod module_layout;
+mod msrv;
+mod release;
+mod repo;
 mod scroll_handlers;
+mod test_markers;
+
+pub use repo::Repo;
 
 #[derive(Args)]
 pub struct CheckArgs {
@@ -36,27 +48,48 @@ pub struct CheckArgs {
 #[derive(Subcommand)]
 enum CheckCommand {
     /// Every gate CI runs: markers, keymaps, scroll handlers, licenses,
-    /// locale catalog keys, DCO, philosophy, ledger, workflows, and the
-    /// `gpui` public API snapshot.
+    /// module layout, MSRV consistency, release metadata, lint inheritance,
+    /// locale catalog structure, keys, i18n call sites and catalog values,
+    /// DCO, philosophy, ledger, workflows, CI gate wiring, the `gpui` public
+    /// API snapshot, documentation formatting, and shell scripts.
     All,
     /// Reject leftover markers for unfinished work.
     Todos,
-    /// Reject macOS-only modifiers in shared keymaps and duplicate bindings.
+    /// Reject macOS-only modifiers, duplicate bindings and action names no crate
+    /// declares in shared keymaps.
     Keys,
     /// Reject re-entrant entity/ListState access inside scroll handlers.
     ScrollHandlers,
     /// Require a `LICENSE-AGPL` symlink in every crate directory.
     Licenses,
+    /// Reject new `mod.rs` module files outside vendored sources.
+    ModuleLayout,
+    /// Require the pinned Rust toolchain version to agree across its sources.
+    Msrv,
+    /// Require the manifest, lockfile, and changelog to agree on one version.
+    Release,
+    /// Require every ignored test to carry a reason.
+    TestMarkers,
+    /// Require every workspace member to opt into `[workspace.lints]`.
+    LintsInheritance,
+    /// Reject duplicate keys, malformed keys, and blank values in the catalogs.
+    LocaleCatalog,
     /// Require the locale catalogs to have identical key sets.
     LocaleKeys,
+    /// Require in-code `i18n::tr` keys to exist and fallbacks to match the catalog.
+    LocaleFallbacks,
+    /// Require en/zh catalog values to agree on format placeholders.
+    LocalePlaceholders,
     /// Require DCO sign-off on recent non-merge commits.
     Dco,
     /// Run ShellCheck over the scripts in the repository root's `script/`.
     Shellcheck {
         /// Minimum severity that fails the check.
-        #[arg(long, value_enum, default_value = "error")]
+        #[arg(long, value_enum, default_value = "warning")]
         severity: Severity,
     },
+    /// Require `docs/` and the default settings file to match Prettier.
+    Docs,
     /// Check that vendored third-party sources match their manifests.
     Vendor,
     /// Assert that rejected commercial and network surfaces stay absent.
@@ -65,6 +98,8 @@ enum CheckCommand {
     UpstreamLedger,
     /// Validate the `run:` patterns in the GitHub workflow files.
     Workflows,
+    /// Require CI to keep invoking the repository gates.
+    CiWiring,
     /// Compare the `gpui` crate's public item signatures against a snapshot.
     GpuiApi(gpui_api::GpuiApiArgs),
     /// Check documentation links with `lychee` (needs it on `PATH`).
@@ -91,8 +126,12 @@ impl Severity {
 }
 
 pub fn run_check(args: CheckArgs) -> Result<()> {
-    if !Path::new("script").is_dir() {
-        bail!("cargo xtask check must be run from the workspace root");
+    let repo = Repo::discover()?;
+    if !repo.path("script").is_dir() {
+        bail!(
+            "cargo xtask check needs a ZZZ checkout: no script/ directory under {}",
+            repo.root().display()
+        );
     }
 
     match args.command.unwrap_or(CheckCommand::All) {
@@ -101,37 +140,59 @@ pub fn run_check(args: CheckArgs) -> Result<()> {
         CheckCommand::Keys => keymaps::check(),
         CheckCommand::ScrollHandlers => scroll_handlers::check(),
         CheckCommand::Licenses => check_licenses(),
+        CheckCommand::ModuleLayout => module_layout::check(),
+        CheckCommand::Msrv => msrv::check(),
+        CheckCommand::Release => release::check(),
+        CheckCommand::TestMarkers => test_markers::check(),
+        CheckCommand::LintsInheritance => lints_inheritance::check(),
+        CheckCommand::LocaleCatalog => locale_catalog::check(),
         CheckCommand::LocaleKeys => check_locale_keys(),
+        CheckCommand::LocaleFallbacks => locale_fallbacks::check(),
+        CheckCommand::LocalePlaceholders => locale_placeholders::check(),
         CheckCommand::Dco => check_dco(),
         CheckCommand::Shellcheck { severity } => check_shellcheck(severity),
+        CheckCommand::Docs => check_docs(),
         CheckCommand::Vendor => run_script(&["script/vendor-sync", "check"], "vendor check"),
         CheckCommand::Philosophy => check_philosophy(),
         CheckCommand::UpstreamLedger => check_upstream_ledger(),
         CheckCommand::Workflows => check_workflows(),
+        CheckCommand::CiWiring => ci_wiring::check(),
         CheckCommand::GpuiApi(args) => gpui_api::check(args),
         CheckCommand::Links { all } => check_links(all),
     }
 }
 
-/// Runs the gates CI enforces. `shellcheck` and `vendor` are left out: they
-/// need tools the default runner does not install, and neither has a failure
-/// mode that a clean Linux checkout can hide.
-fn run_all() -> Result<()> {
-    let checks: &[(&str, fn() -> Result<()>)] = &[
-        ("unfinished-work markers", check_todos),
-        ("keymaps", keymaps::check),
-        ("scroll handlers", scroll_handlers::check),
-        ("crate licenses", check_licenses),
-        ("locale catalog keys", check_locale_keys),
-        ("DCO sign-off", check_dco),
-        ("philosophy boundary", check_philosophy),
-        ("upstream rejection ledger", check_upstream_ledger),
-        ("GitHub workflow files", check_workflows),
-        ("gpui public API snapshot", gpui_api::check_snapshot),
-    ];
+/// Every gate `check all` runs, in reporting order.
+///
+/// `vendor` and `links` stay out: they need tooling the CI runner does not
+/// install, and neither has a failure mode a clean Linux checkout can hide.
+const GATES: &[(&str, fn() -> Result<()>)] = &[
+    ("unfinished-work markers", check_todos),
+    ("keymaps", keymaps::check),
+    ("scroll handlers", scroll_handlers::check),
+    ("crate licenses", check_licenses),
+    ("module layout", module_layout::check),
+    ("MSRV consistency", msrv::check),
+    ("release metadata", release::check),
+    ("test markers", test_markers::check),
+    ("lint inheritance", lints_inheritance::check),
+    ("locale catalog structure", locale_catalog::check),
+    ("locale catalog keys", check_locale_keys),
+    ("i18n call sites", locale_fallbacks::check),
+    ("i18n catalog values", locale_placeholders::check),
+    ("DCO sign-off", check_dco),
+    ("philosophy boundary", check_philosophy),
+    ("upstream rejection ledger", check_upstream_ledger),
+    ("GitHub workflow files", check_workflows),
+    ("CI gate wiring", ci_wiring::check),
+    ("gpui public API snapshot", gpui_api::check_snapshot),
+    ("documentation formatting", check_docs),
+    ("shell scripts", check_shellcheck_default),
+];
 
+fn run_all() -> Result<()> {
     let mut failures = Vec::new();
-    for (name, check) in checks {
+    for (name, check) in GATES {
         println!("checking {name}");
         if let Err(error) = check() {
             eprintln!("error: {name}: {error:#}");
@@ -140,21 +201,22 @@ fn run_all() -> Result<()> {
     }
 
     if failures.is_empty() {
-        println!("all {} repository checks passed", checks.len());
+        println!("all {} repository checks passed", GATES.len());
         return Ok(());
     }
 
     bail!(
         "{} of {} checks failed: {}",
         failures.len(),
-        checks.len(),
+        GATES.len(),
         failures.join(", ")
     )
 }
 
 fn check_todos() -> Result<()> {
+    let repo = Repo::discover()?;
     // Brackets around a character keep the pattern out of plain-text searches.
-    let matches = git_grep(&[
+    let matches = repo.grep(&[
         "--no-color",
         "--ignore-case",
         "--line-number",
@@ -176,7 +238,8 @@ fn check_todos() -> Result<()> {
 }
 
 fn check_licenses() -> Result<()> {
-    let manifests = tracked_files("**/*/Cargo.toml")?;
+    let repo = Repo::discover()?;
+    let manifests = repo.tracked("**/*/Cargo.toml")?;
     let mut failures = Vec::new();
 
     for manifest in manifests {
@@ -190,7 +253,7 @@ fn check_licenses() -> Result<()> {
         {
             continue;
         }
-        if let Err(error) = check_crate_license(directory) {
+        if let Err(error) = check_crate_license(&repo, directory) {
             failures.push(format!("{}: {error}", directory.display()));
         }
     }
@@ -204,10 +267,12 @@ fn check_licenses() -> Result<()> {
     );
 }
 
-fn check_crate_license(directory: &Path) -> Result<()> {
+fn check_crate_license(repo: &Repo, directory: &Path) -> Result<()> {
     const LICENSE: &str = "LICENSE-AGPL";
 
-    let license_path = directory.join(LICENSE);
+    // `directory` is repo-relative: the symlink depth is counted from it while
+    // the file itself is read through the injected root.
+    let license_path = repo.path(&directory.join(LICENSE).to_string_lossy());
     match fs::symlink_metadata(&license_path) {
         Ok(metadata) if metadata.file_type().is_symlink() => {}
         Ok(_) => bail!("{LICENSE} exists but is not a symlink"),
@@ -259,8 +324,10 @@ fn check_shellcheck(severity: Severity) -> Result<()> {
 /// The scripts ShellCheck covers: files directly in `script/` whose shebang
 /// asks for a POSIX shell. Nested directories hold Python and JavaScript.
 fn shell_scripts() -> Result<Vec<PathBuf>> {
+    let repo = Repo::discover()?;
     let mut scripts = Vec::new();
-    let entries = fs::read_dir("script").context("failed to read the script directory")?;
+    let entries =
+        fs::read_dir(repo.path("script")).context("failed to read the script directory")?;
     for entry in entries {
         let entry = entry.context("failed to read a directory entry in script/")?;
         if !entry.file_type().is_ok_and(|file_type| file_type.is_file()) {
@@ -299,6 +366,16 @@ fn check_philosophy() -> Result<()> {
     run_script(&["script/check-philosophy"], "philosophy check")
 }
 
+fn check_docs() -> Result<()> {
+    run_script(&["script/prettier"], "documentation formatting check")
+}
+
+/// The severity `check all` enforces. Warnings are clean today, so the gate
+/// holds that bar instead of only rejecting errors.
+fn check_shellcheck_default() -> Result<()> {
+    check_shellcheck(Severity::Warning)
+}
+
 fn check_locale_keys() -> Result<()> {
     run_script(&["script/check-locale-keys"], "locale catalog key check")
 }
@@ -312,14 +389,17 @@ fn check_upstream_ledger() -> Result<()> {
 }
 
 fn check_links(all: bool) -> Result<()> {
+    let repo = Repo::discover()?;
+    let target = format!("{}/**/*", repo.path("docs/src").display());
+
     let mut command = Command::new("lychee");
     command.arg("--no-progress");
     if !all {
         command.args(["--exclude", "^http"]);
     }
-    command.arg("./docs/src/**/*");
+    command.arg(&target);
 
-    eprintln!("+ lychee --no-progress ./docs/src/**/*");
+    eprintln!("+ lychee --no-progress {target}");
     let status = command
         .status()
         .context("failed to start lychee; install it with `cargo install lychee`")?;
@@ -361,42 +441,27 @@ fn run_script(command: &[&str], description: &str) -> Result<()> {
     Ok(())
 }
 
-/// Returns the output of `git grep`, or an empty string when nothing matched.
-fn git_grep(arguments: &[&str]) -> Result<String> {
-    let output = Command::new("git")
-        .arg("grep")
-        .args(arguments)
-        .output()
-        .context("failed to run git grep")?;
+#[cfg(test)]
+mod tests {
+    /// Deleting a line from `GATES` silently disables a gate for both local
+    /// runs and CI, so the list length is pinned; adding a gate bumps it.
+    const GATE_COUNT: usize = 21;
 
-    match output.status.code() {
-        // `git grep` exits 1 when it finds nothing.
-        Some(0) => Ok(String::from_utf8_lossy(&output.stdout)
-            .trim_end()
-            .to_owned()),
-        Some(1) => Ok(String::new()),
-        _ => bail!(
-            "git grep failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        ),
-    }
-}
-
-/// Expands a `git ls-files` pathspec, so checks only look at tracked files.
-fn tracked_files(pathspec: &str) -> Result<Vec<PathBuf>> {
-    let output = Command::new("git")
-        .args(["ls-files", pathspec])
-        .output()
-        .context("failed to run git ls-files")?;
-    if !output.status.success() {
-        bail!(
-            "git ls-files failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
+    #[test]
+    fn gate_list_keeps_every_gate() {
+        assert_eq!(
+            super::GATES.len(),
+            GATE_COUNT,
+            "the gate list changed; bump GATE_COUNT when adding, restore the entry when removing"
         );
     }
 
-    Ok(String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(PathBuf::from)
-        .collect())
+    #[test]
+    fn gate_names_are_unique() {
+        let mut names: Vec<&str> = super::GATES.iter().map(|(name, _)| *name).collect();
+        names.sort_unstable();
+        let unique = names.len();
+        names.dedup();
+        assert_eq!(names.len(), unique, "duplicate gate names: {names:?}");
+    }
 }

@@ -1548,7 +1548,9 @@ impl EditorElement {
                 .snapshot
                 .buffer_snapshot()
                 .anchor_to_buffer_anchor(buffer_anchor)
-                .is_some()
+                .is_some_and(|(_, buffer_snapshot)| {
+                    project::File::from_dyn(buffer_snapshot.file()).is_some()
+                })
             {
                 let is_visible = editor
                     .gutter_hover_button
@@ -1778,10 +1780,10 @@ impl EditorElement {
             }
 
             if let Some(collaboration_hub) = &editor.collaboration_hub {
-                if editor.leader_id == Some(CollaboratorId::Agent) {
-                    if let Some((local_selection_style, _)) = selections.first_mut() {
-                        *local_selection_style = cx.theme().players().agent();
-                    }
+                if editor.leader_id == Some(CollaboratorId::Agent)
+                    && let Some((local_selection_style, _)) = selections.first_mut()
+                {
+                    *local_selection_style = cx.theme().players().agent();
                 }
 
                 let mut remote_selections = HashMap::default();
@@ -1991,9 +1993,9 @@ impl EditorElement {
                         .iter()
                         .any(|range| range.start <= cursor_position && cursor_position < range.end);
 
-                    if selection.cursor_shape == CursorShape::Block && !is_cursor_in_redacted_range
-                    {
-                        if let Some(text) = snapshot.grapheme_at(cursor_position).or_else(|| {
+                    if selection.cursor_shape == CursorShape::Block
+                        && !is_cursor_in_redacted_range
+                        && let Some(text) = snapshot.grapheme_at(cursor_position).or_else(|| {
                             if snapshot.is_empty() {
                                 snapshot.placeholder_text().and_then(|s| {
                                     s.graphemes(true).next().map(|s| s.to_owned().into())
@@ -2001,51 +2003,51 @@ impl EditorElement {
                             } else {
                                 None
                             }
-                        }) {
-                            let is_ascii_whitespace_only =
-                                text.as_ref().chars().all(|c| c.is_ascii_whitespace());
-                            let len = text.len();
+                        })
+                    {
+                        let is_ascii_whitespace_only =
+                            text.as_ref().chars().all(|c| c.is_ascii_whitespace());
+                        let len = text.len();
 
-                            let mut font = cursor_row_layout
-                                .font_id_for_index(cursor_column)
-                                .and_then(|cursor_font_id| {
-                                    window.text_system().get_font_for_id(cursor_font_id)
-                                })
-                                .unwrap_or(self.style.text.font());
-                            font.features = self.style.text.font_features.clone();
+                        let mut font = cursor_row_layout
+                            .font_id_for_index(cursor_column)
+                            .and_then(|cursor_font_id| {
+                                window.text_system().get_font_for_id(cursor_font_id)
+                            })
+                            .unwrap_or(self.style.text.font());
+                        font.features = self.style.text.font_features.clone();
 
-                            // Invert the text color for the block cursor. Ensure that the text
-                            // color is opaque enough to be visible against the background color.
-                            //
-                            // 0.75 is an arbitrary threshold to determine if the background color is
-                            // opaque enough to use as a text color.
-                            //
-                            // TODO: In the future we should ensure themes have a `text_inverse` color.
-                            let color = if cx.theme().colors().editor_background.a < 0.75 {
-                                match cx.theme().appearance {
-                                    Appearance::Dark => Hsla::black(),
-                                    Appearance::Light => Hsla::white(),
-                                }
-                            } else {
-                                cx.theme().colors().editor_background
-                            };
-
-                            let shaped = window.text_system().shape_line(
-                                text,
-                                cursor_row_layout.font_size,
-                                &[TextRun {
-                                    len,
-                                    font,
-                                    color,
-                                    ..Default::default()
-                                }],
-                                None,
-                            );
-                            if !is_ascii_whitespace_only {
-                                block_width = block_width.max(shaped.width);
+                        // Invert the text color for the block cursor. Ensure that the text
+                        // color is opaque enough to be visible against the background color.
+                        //
+                        // 0.75 is an arbitrary threshold to determine if the background color is
+                        // opaque enough to use as a text color.
+                        //
+                        // TODO: In the future we should ensure themes have a `text_inverse` color.
+                        let color = if cx.theme().colors().editor_background.a < 0.75 {
+                            match cx.theme().appearance {
+                                Appearance::Dark => Hsla::black(),
+                                Appearance::Light => Hsla::white(),
                             }
-                            block_text = Some(shaped);
+                        } else {
+                            cx.theme().colors().editor_background
+                        };
+
+                        let shaped = window.text_system().shape_line(
+                            text,
+                            cursor_row_layout.font_size,
+                            &[TextRun {
+                                len,
+                                font,
+                                color,
+                                ..Default::default()
+                            }],
+                            None,
+                        );
+                        if !is_ascii_whitespace_only {
+                            block_width = block_width.max(shaped.width);
                         }
+                        block_text = Some(shaped);
                     }
 
                     let x = cursor_character_x - scroll_pixel_position.x.into();
@@ -3872,21 +3874,19 @@ impl EditorElement {
         let boundaries_len = boundaries.len();
         while i < boundaries_len {
             let current_boundary_pos = boundaries[i].pos;
-            if start_pos < current_boundary_pos {
-                if !active_ranges.is_empty() {
-                    let mut color = base_background;
-                    for &(_, c) in &active_ranges {
-                        color = Hsla::blend(color, c);
-                    }
-                    if let Some((last_range, last_color)) = processed_ranges.last_mut() {
-                        if *last_color == color && last_range.end == start_pos {
-                            last_range.end = current_boundary_pos;
-                        } else {
-                            processed_ranges.push((start_pos..current_boundary_pos, color));
-                        }
+            if start_pos < current_boundary_pos && !active_ranges.is_empty() {
+                let mut color = base_background;
+                for &(_, c) in &active_ranges {
+                    color = Hsla::blend(color, c);
+                }
+                if let Some((last_range, last_color)) = processed_ranges.last_mut() {
+                    if *last_color == color && last_range.end == start_pos {
+                        last_range.end = current_boundary_pos;
                     } else {
                         processed_ranges.push((start_pos..current_boundary_pos, color));
                     }
+                } else {
+                    processed_ranges.push((start_pos..current_boundary_pos, color));
                 }
             }
             while i < boundaries_len && boundaries[i].pos == current_boundary_pos {
@@ -4253,7 +4253,7 @@ impl EditorElement {
                         .max(editor_margins.gutter.full_width());
                     x_offset = x_target.min(max_offset).max(min_offset);
                 }
-            };
+            }
             if element_height_in_lines != block.height() {
                 *block_resize_offset += element_height_in_lines as i32 - block.height() as i32;
                 resized_blocks.insert(custom_block_id, element_height_in_lines);
@@ -6142,7 +6142,7 @@ impl EditorElement {
                         if new_range_started {
                             if current_range.end.next_row() == new_row {
                                 edges.bottom = px(0.);
-                            };
+                            }
                             paint_highlight(
                                 current_range.start,
                                 current_range.end,
@@ -6169,7 +6169,7 @@ impl EditorElement {
                             ..Default::default()
                         };
                         current_paint = Some((new_background, new_row..new_row, edges))
-                    };
+                    }
                 }
                 if let Some((color, range, edges)) = current_paint {
                     paint_highlight(range.start, range.end, color, edges);
@@ -6248,17 +6248,17 @@ impl EditorElement {
             };
 
             let mut line_indicator_width = 0.;
-            if let Some(requested_line_width) = settings.visible_line_width(indent_guide.active) {
-                if let Some(color) = line_color {
-                    window.paint_quad(fill(
-                        window.pixel_snap_bounds(Bounds {
-                            origin: indent_guide.origin,
-                            size: size(px(requested_line_width as f32), indent_guide.length),
-                        }),
-                        color,
-                    ));
-                    line_indicator_width = requested_line_width as f32;
-                }
+            if let Some(requested_line_width) = settings.visible_line_width(indent_guide.active)
+                && let Some(color) = line_color
+            {
+                window.paint_quad(fill(
+                    window.pixel_snap_bounds(Bounds {
+                        origin: indent_guide.origin,
+                        size: size(px(requested_line_width as f32), indent_guide.length),
+                    }),
+                    color,
+                ));
+                line_indicator_width = requested_line_width as f32;
             }
 
             if let Some(color) = background_color {
@@ -6726,7 +6726,7 @@ impl EditorElement {
                     );
                 } else {
                     window.set_cursor_style(CursorStyle::IBeam, &layout.position_map.text_hitbox);
-                };
+                }
 
                 self.paint_lines_background(layout, window, cx);
                 let invisible_display_ranges = self.paint_highlights(layout, window, cx);
@@ -7953,7 +7953,7 @@ impl EditorElement {
                             Self::mouse_middle_down(editor, event, &position_map, window, cx);
                         }),
                         _ => {}
-                    };
+                    }
                 }
             }
         });
@@ -8369,12 +8369,11 @@ pub fn render_breadcrumb_text(
                                         editor.update(cx, |editor, cx| {
                                             editor.target_file_abs_path(cx)
                                         })
-                                    }) {
-                                        if let Some(path_str) = abs_path.to_str() {
-                                            cx.write_to_clipboard(ClipboardItem::new_string(
-                                                path_str.to_owned(),
-                                            ));
-                                        }
+                                    }) && let Some(path_str) = abs_path.to_str()
+                                    {
+                                        cx.write_to_clipboard(ClipboardItem::new_string(
+                                            path_str.to_owned(),
+                                        ));
                                     }
                                 }
                             })
@@ -10582,10 +10581,14 @@ impl Element for EditorElement {
         })
     }
 
+    #[allow(
+        clippy::only_used_in_recursion,
+        reason = "the inspector id is threaded into the recursive prepaint pass that re-lays out resized blocks"
+    )]
     fn prepaint(
         &mut self,
         _: Option<&GlobalElementId>,
-        _inspector_id: Option<&gpui::InspectorElementId>,
+        inspector_id: Option<&gpui::InspectorElementId>,
         bounds: Bounds<Pixels>,
         request_layout: &mut Self::RequestLayoutState,
         window: &mut Window,
@@ -10672,9 +10675,8 @@ impl Element for EditorElement {
                             cx,
                         );
 
-                    let mut highlighted_ranges = self
-                        .editor_with_selections(cx)
-                        .map(|editor| {
+                    let mut highlighted_ranges =
+                        self.editor_with_selections(cx).map_or_default(|editor| {
                             if editor == self.editor {
                                 editor.read(cx).background_highlights_in_range(
                                     start_anchor..end_anchor,
@@ -10708,8 +10710,7 @@ impl Element for EditorElement {
                                     )
                                 })
                             }
-                        })
-                        .unwrap_or_default();
+                        });
 
                     self.add_diff_hunk_highlights(
                         &row_infos,
@@ -10884,7 +10885,7 @@ impl Element for EditorElement {
                     if renderer_widths_changed {
                         return self.prepaint(
                             None,
-                            _inspector_id,
+                            inspector_id,
                             bounds,
                             request_layout,
                             window,
@@ -11019,7 +11020,7 @@ impl Element for EditorElement {
                             });
                             return self.prepaint(
                                 None,
-                                _inspector_id,
+                                inspector_id,
                                 bounds,
                                 request_layout,
                                 window,
@@ -13389,6 +13390,7 @@ mod tests {
         );
     }
 
+    #[allow(clippy::empty_enums)] // uninhabited marker; the overlay key must stay distinct
     enum PrimaryNavigationOverlay {}
 
     const PRIMARY_NAVIGATION_OVERLAY_KEY: NavigationOverlayKey =
@@ -14133,8 +14135,8 @@ mod tests {
         cx.run_until_parked();
 
         window
-            .update(cx, |editor, _window, cx| {
-                let snapshot = editor.snapshot(_window, cx);
+            .update(cx, |editor, window, cx| {
+                let snapshot = editor.snapshot(window, cx);
 
                 let line_1_display_row = Point::new(1, 0).to_display_point(&snapshot).row();
                 assert!(

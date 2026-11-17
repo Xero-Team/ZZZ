@@ -238,7 +238,7 @@ pub struct ContextMenu {
     clicked: bool,
     end_slot_action: Option<Box<dyn Action>>,
     key_context: SharedString,
-    _on_blur_subscription: Subscription,
+    on_blur_subscription: Subscription,
     keep_open_on_confirm: bool,
     fixed_width: Option<DefiniteLength>,
     main_menu: Option<Entity<ContextMenu>>,
@@ -291,7 +291,7 @@ impl ContextMenu {
         f: impl FnOnce(Self, &mut Window, &mut Context<Self>) -> Self,
     ) -> Self {
         let focus_handle = cx.retained_focus_handle();
-        let _on_blur_subscription = cx.on_blur(
+        let on_blur_subscription = cx.on_blur(
             &focus_handle,
             window,
             |this: &mut ContextMenu, window, cx| {
@@ -302,12 +302,12 @@ impl ContextMenu {
                     this.ignore_blur_until = None;
                 }
 
-                if this.main_menu.is_none() {
-                    if let SubmenuState::Open(open_submenu) = &this.submenu_state {
-                        let submenu_focus = open_submenu.entity.read(cx).focus_handle.clone();
-                        if submenu_focus.contains_focused(window, cx) {
-                            return;
-                        }
+                if this.main_menu.is_none()
+                    && let SubmenuState::Open(open_submenu) = &this.submenu_state
+                {
+                    let submenu_focus = open_submenu.entity.read(cx).focus_handle.clone();
+                    if submenu_focus.contains_focused(window, cx) {
+                        return;
                     }
                 }
 
@@ -327,7 +327,7 @@ impl ContextMenu {
                 clicked: false,
                 end_slot_action: None,
                 key_context: "menu".into(),
-                _on_blur_subscription,
+                on_blur_subscription,
                 keep_open_on_confirm: false,
                 fixed_width: None,
                 main_menu: None,
@@ -368,7 +368,7 @@ impl ContextMenu {
             let builder = Rc::new(builder);
 
             let focus_handle = cx.retained_focus_handle();
-            let _on_blur_subscription = cx.on_blur(
+            let on_blur_subscription = cx.on_blur(
                 &focus_handle,
                 window,
                 |this: &mut ContextMenu, window, cx| {
@@ -379,12 +379,12 @@ impl ContextMenu {
                         this.ignore_blur_until = None;
                     }
 
-                    if this.main_menu.is_none() {
-                        if let SubmenuState::Open(open_submenu) = &this.submenu_state {
-                            let submenu_focus = open_submenu.entity.read(cx).focus_handle.clone();
-                            if submenu_focus.contains_focused(window, cx) {
-                                return;
-                            }
+                    if this.main_menu.is_none()
+                        && let SubmenuState::Open(open_submenu) = &this.submenu_state
+                    {
+                        let submenu_focus = open_submenu.entity.read(cx).focus_handle.clone();
+                        if submenu_focus.contains_focused(window, cx) {
+                            return;
                         }
                     }
 
@@ -404,7 +404,7 @@ impl ContextMenu {
                     clicked: false,
                     end_slot_action: None,
                     key_context: "menu".into(),
-                    _on_blur_subscription,
+                    on_blur_subscription,
                     keep_open_on_confirm: true,
                     fixed_width: None,
                     main_menu: None,
@@ -450,7 +450,7 @@ impl ContextMenu {
                 clicked: false,
                 end_slot_action: None,
                 key_context: "menu".into(),
-                _on_blur_subscription: cx.on_blur(
+                on_blur_subscription: cx.on_blur(
                     &focus_handle,
                     window,
                     |this: &mut ContextMenu, window, cx| {
@@ -461,13 +461,12 @@ impl ContextMenu {
                             this.ignore_blur_until = None;
                         }
 
-                        if this.main_menu.is_none() {
-                            if let SubmenuState::Open(open_submenu) = &this.submenu_state {
-                                let submenu_focus =
-                                    open_submenu.entity.read(cx).focus_handle.clone();
-                                if submenu_focus.contains_focused(window, cx) {
-                                    return;
-                                }
+                        if this.main_menu.is_none()
+                            && let SubmenuState::Open(open_submenu) = &this.submenu_state
+                        {
+                            let submenu_focus = open_submenu.entity.read(cx).focus_handle.clone();
+                            if submenu_focus.contains_focused(window, cx) {
+                                return;
                             }
                         }
 
@@ -1272,7 +1271,7 @@ impl ContextMenu {
         cx.new(|cx| {
             let focus_handle = cx.retained_focus_handle();
 
-            let _on_blur_subscription = cx.on_blur(
+            let on_blur_subscription = cx.on_blur(
                 &focus_handle,
                 window,
                 |_this: &mut ContextMenu, _window, _cx| {},
@@ -1288,7 +1287,7 @@ impl ContextMenu {
                 clicked: false,
                 end_slot_action: None,
                 key_context: "menu".into(),
-                _on_blur_subscription,
+                on_blur_subscription,
                 keep_open_on_confirm: false,
                 fixed_width: None,
                 documentation_aside: None,
@@ -1403,7 +1402,7 @@ impl ContextMenu {
     }
 
     pub fn on_blur_subscription(mut self, new_subscription: Subscription) -> Self {
-        self._on_blur_subscription = new_subscription;
+        self.on_blur_subscription = new_subscription;
         self
     }
 
@@ -1969,11 +1968,11 @@ impl ContextMenu {
                                 this.clear_selected();
                                 window.focus(&this.focus_handle.clone(), cx);
 
-                                if let SubmenuState::Open(open_submenu) = &this.submenu_state {
-                                    if open_submenu.item_index != ix {
-                                        this.close_submenu(false, cx);
-                                        cx.notify();
-                                    }
+                                if let SubmenuState::Open(open_submenu) = &this.submenu_state
+                                    && open_submenu.item_index != ix
+                                {
+                                    this.close_submenu(false, cx);
+                                    cx.notify();
                                 }
                             }
                         }))
@@ -2020,12 +2019,11 @@ impl ContextMenu {
                                             if matches!(
                                                 &parent.submenu_state,
                                                 SubmenuState::Open(_)
-                                            ) {
-                                                if !parent.padded_submenu_bounds().is_some_and(
-                                                    |bounds| bounds.contains(&mouse_pos),
-                                                ) {
-                                                    parent.close_submenu(true, cx);
-                                                }
+                                            ) && !parent
+                                                .padded_submenu_bounds()
+                                                .is_some_and(|bounds| bounds.contains(&mouse_pos))
+                                            {
+                                                parent.close_submenu(true, cx);
                                             }
                                         });
                                     }
@@ -2275,12 +2273,11 @@ impl Render for ContextMenu {
                         }))
                         .on_mouse_down_out(cx.listener(
                             |this, event: &MouseDownEvent, window, cx| {
-                                if matches!(&this.submenu_state, SubmenuState::Open(_)) {
-                                    if let Some(padded_bounds) = this.padded_submenu_bounds() {
-                                        if padded_bounds.contains(&event.position) {
-                                            return;
-                                        }
-                                    }
+                                if matches!(&this.submenu_state, SubmenuState::Open(_))
+                                    && let Some(padded_bounds) = this.padded_submenu_bounds()
+                                    && padded_bounds.contains(&event.position)
+                                {
+                                    return;
                                 }
 
                                 if let Some(parent) = &this.main_menu {
@@ -2381,6 +2378,7 @@ impl Render for ContextMenu {
 
 #[cfg(test)]
 mod tests {
+
     use gpui::{Modifiers, TestAppContext, VisualTestContext, size};
 
     use super::*;

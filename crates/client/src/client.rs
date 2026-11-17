@@ -326,7 +326,7 @@ impl Status {
 struct ClientState {
     credentials: Option<Credentials>,
     status: (watch::Sender<Status>, watch::Receiver<Status>),
-    _reconnect_task: Option<Task<()>>,
+    reconnect_task: Option<Task<()>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -395,7 +395,7 @@ impl Default for ClientState {
         Self {
             credentials: None,
             status: watch::channel_with(Status::SignedOut),
-            _reconnect_task: None,
+            reconnect_task: None,
         }
     }
 }
@@ -544,7 +544,7 @@ impl Client {
     #[cfg(any(test, feature = "test-support"))]
     pub fn teardown(&self) {
         let mut state = self.state.write();
-        state._reconnect_task.take();
+        state.reconnect_task.take();
         self.handler_set.lock().clear();
         self.peer.teardown();
     }
@@ -610,11 +610,11 @@ impl Client {
 
         match status {
             Status::Connected { .. } => {
-                state._reconnect_task = None;
+                state.reconnect_task = None;
             }
             Status::ConnectionLost => {
                 let client = self.clone();
-                state._reconnect_task = Some(cx.spawn(async move |cx| {
+                state.reconnect_task = Some(cx.spawn(async move |cx| {
                     #[cfg(any(test, feature = "test-support"))]
                     let mut rng = StdRng::seed_from_u64(0);
                     #[cfg(not(any(test, feature = "test-support")))]
@@ -660,7 +660,7 @@ impl Client {
                 }));
             }
             Status::SignedOut | Status::UpgradeRequired => {
-                state._reconnect_task.take();
+                state.reconnect_task.take();
             }
             _ => {}
         }
@@ -1027,11 +1027,16 @@ impl Client {
         Ok(())
     }
 
-    fn authenticate(self: &Arc<Self>, _cx: &AsyncApp) -> Task<Result<Credentials>> {
+    fn authenticate(self: &Arc<Self>, cx: &AsyncApp) -> Task<Result<Credentials>> {
         #[cfg(any(test, feature = "test-support"))]
         if let Some(callback) = self.authenticate.read().as_ref() {
-            return callback(_cx);
+            return callback(cx);
         }
+        // The callback above is the only reader of `cx`, so builds without test support would warn
+        // about an unused parameter. This keeps the signature identical in both configurations
+        // without renaming the parameter, which `used_underscore_binding` rejects.
+        #[cfg(not(any(test, feature = "test-support")))]
+        let _ = cx;
 
         Task::ready(Err(anyhow!(
             "no stored credentials for the configured remote server"
@@ -1375,6 +1380,7 @@ pub const ZZZ_URL_SCHEME: &str = "zzz";
 
 /// A parsed ZZZ link that can be handled internally by the application.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::empty_enums)] // uninhabited marker; the fork handles no internal link targets
 pub enum ZZZLink {}
 
 /// Parses the given link into a ZZZ link.
@@ -1386,6 +1392,8 @@ pub fn parse_zzz_link(_link: &str, _cx: &App) -> Option<ZZZLink> {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use crate::test::FakeServer;
 
@@ -1483,10 +1491,7 @@ mod tests {
         });
         let server = FakeServer::for_client(user_id, &client, cx).await;
         let mut status = client.status();
-        assert!(matches!(
-            status.next().await,
-            Some(Status::Connected { .. })
-        ));
+        assert_matches!(status.next().await, Some(Status::Connected { .. }));
         assert_eq!(server.auth_count(), 1);
 
         server.forbid_connections();
@@ -1523,10 +1528,7 @@ mod tests {
         });
         let server = FakeServer::for_client(5, &client, cx).await;
         let mut status = client.status();
-        assert!(matches!(
-            status.next().await,
-            Some(Status::Connected { .. })
-        ));
+        assert_matches!(status.next().await, Some(Status::Connected { .. }));
 
         server.forbid_connections();
         server.disconnect();
@@ -1570,18 +1572,15 @@ mod tests {
             |cx| async move { client.connect(false, &cx).await }
         });
         executor.run_until_parked();
-        assert!(matches!(status.next().await, Some(Status::Connecting)));
+        assert_matches!(status.next().await, Some(Status::Connecting));
 
         executor.advance_clock(CONNECTION_TIMEOUT);
-        assert!(matches!(status.next().await, Some(Status::ConnectionError)));
+        assert_matches!(status.next().await, Some(Status::ConnectionError));
         auth_and_connect.await.into_response().unwrap_err();
 
         // Allow the connection to be established.
         let server = FakeServer::for_client(user_id, &client, cx).await;
-        assert!(matches!(
-            status.next().await,
-            Some(Status::Connected { .. })
-        ));
+        assert_matches!(status.next().await, Some(Status::Connected { .. }));
 
         // Disconnect client.
         server.forbid_connections();
@@ -1597,13 +1596,10 @@ mod tests {
             })
         });
         executor.advance_clock(2 * INITIAL_RECONNECTION_DELAY);
-        assert!(matches!(status.next().await, Some(Status::Reconnecting)));
+        assert_matches!(status.next().await, Some(Status::Reconnecting));
 
         executor.advance_clock(CONNECTION_TIMEOUT);
-        assert!(matches!(
-            status.next().await,
-            Some(Status::ReconnectionError { .. })
-        ));
+        assert_matches!(status.next().await, Some(Status::ReconnectionError { .. }));
     }
 
     #[gpui::test(iterations = 10)]

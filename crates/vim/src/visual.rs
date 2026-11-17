@@ -601,7 +601,7 @@ impl Vim {
         self.update_editor(cx, |_, editor, cx| {
             editor.change_selections(Default::default(), window, cx, |s| {
                 s.move_with(&mut |_, selection| {
-                    selection.reversed = !selection.reversed;
+                    selection.reversed.toggle();
                 });
             })
         });
@@ -617,7 +617,7 @@ impl Vim {
         self.update_editor(cx, |_, editor, cx| {
             editor.change_selections(Default::default(), window, cx, |s| {
                 s.move_with(&mut |_, selection| {
-                    selection.reversed = !selection.reversed;
+                    selection.reversed.toggle();
                 });
                 if mode == Mode::VisualBlock {
                     s.reverse_selections();
@@ -753,7 +753,7 @@ impl Vim {
                 s.move_with(&mut |map, selection| {
                     if line_mode {
                         selection.start = start_of_line(map, false, selection.start);
-                    };
+                    }
                     selection.collapse_to(selection.start, SelectionGoal::None)
                 });
                 if vim.mode == Mode::VisualBlock {

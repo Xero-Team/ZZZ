@@ -71,9 +71,9 @@ pub struct AppSession {
 
 impl AppSession {
     pub fn new(session: Session, cx: &Context<Self>) -> Self {
-        let _subscriptions = vec![cx.on_app_quit(Self::app_will_quit)];
+        let subscriptions = vec![cx.on_app_quit(Self::app_will_quit)];
 
-        let _serialization_task = if cfg!(not(any(test, feature = "test-support"))) {
+        let serialization_task = if cfg!(not(any(test, feature = "test-support"))) {
             let db = KeyValueStore::global(cx);
             // Disabled in tests: the infinite loop bypasses "parking forbidden" checks,
             // causing tests to hang instead of panicking.
@@ -98,8 +98,8 @@ impl AppSession {
 
         Self {
             session,
-            _subscriptions,
-            _serialization_task,
+            _subscriptions: subscriptions,
+            _serialization_task: serialization_task,
         }
     }
 

@@ -732,7 +732,7 @@ impl CallToolResponse {
         for chunk in &self.content {
             if let ToolResponseContent::Text { text: chunk } = chunk {
                 text.push_str(chunk)
-            };
+            }
         }
         text
     }

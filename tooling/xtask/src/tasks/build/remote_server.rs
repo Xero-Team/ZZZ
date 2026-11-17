@@ -1072,8 +1072,7 @@ fn rustc_version() -> String {
         .output()
         .ok()
         .filter(|output| output.status.success())
-        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
-        .unwrap_or_default()
+        .map_or_default(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
 fn host_triple() -> Result<String> {

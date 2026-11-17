@@ -146,6 +146,7 @@ pub struct SettingsContent {
 
     pub tabs: Option<ItemSettingsContent>,
     pub tab_bar: Option<TabBarSettingsContent>,
+    pub tab_switcher: Option<TabSwitcherSettingsContent>,
     pub status_bar: Option<StatusBarSettingsContent>,
 
     pub preview_tabs: Option<PreviewTabsSettingsContent>,
@@ -944,7 +945,7 @@ pub struct FileFinderSettingsContent {
     /// Whether to pre-fill the file finder's query with text selected in the
     /// focused item, such as an editor or terminal.
     ///
-    /// Default: true
+    /// Default: false
     pub prefill_query_from_selection: Option<bool>,
 }
 
@@ -1414,6 +1415,17 @@ pub struct ReplSettingsContent {
     pub output_max_height_lines: Option<usize>,
 }
 
+/// Settings for configuring the tab switcher behaviour.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
+pub struct TabSwitcherSettingsContent {
+    /// When false, files are not shown while cycling through the tab switcher.
+    /// Only the confirmed file (when the modifier key is released) is shown and
+    /// recorded in the MRU history.
+    ///
+    /// Default: true
+    pub show_file_preview: Option<bool>,
+}
+
 /// Settings for configuring the which-key popup behaviour.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct WhichKeySettingsContent {
@@ -1437,9 +1449,9 @@ pub struct WhichKeySettingsContent {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ExtendingVec<T>(pub Vec<T>);
 
-impl<T> Into<Vec<T>> for ExtendingVec<T> {
-    fn into(self) -> Vec<T> {
-        self.0
+impl<T> From<ExtendingVec<T>> for Vec<T> {
+    fn from(value: ExtendingVec<T>) -> Self {
+        value.0
     }
 }
 impl<T> From<Vec<T>> for ExtendingVec<T> {
@@ -1570,8 +1582,7 @@ impl std::str::FromStr for DelayMs {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         s.trim()
-            .strip_suffix("ms")
-            .unwrap_or(s.trim())
+            .trim_suffix("ms")
             .parse::<u64>()
             .map(DelayMs)
             .with_context(|| format!("failed to parse delay duration: {s}"))

@@ -304,8 +304,7 @@ fn possible_open_target_internal(
                 PathWithPosition {
                     path: path_with_position
                         .path
-                        .strip_prefix(&worktree_root)
-                        .unwrap_or(&path_with_position.path)
+                        .trim_prefix(&worktree_root)
                         .to_owned(),
                     row: path_with_position.row,
                     column: path_with_position.column,
@@ -365,10 +364,8 @@ fn possible_open_target_internal(
         |background_fs_checks| background_fs_checks == BackgroundFsChecks::Enabled,
     );
 
-    if open_target.is_some() {
-        if !enable_background_fs_checks || is_cwd_in_worktree {
-            return Task::ready(open_target);
-        }
+    if open_target.is_some() && (!enable_background_fs_checks || is_cwd_in_worktree) {
+        return Task::ready(open_target);
     }
 
     let fs_paths_to_check = if enable_background_fs_checks {

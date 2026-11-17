@@ -57,7 +57,7 @@ pub struct BuildArgs {
     /// Release channel baked into the binary and the bundle name. Defaults to
     /// the shipping channel, so packaging produces release artifacts while
     /// `cargo run` and `cargo build` stay on `dev`.
-    #[arg(long, value_enum, default_value = "stable")]
+    #[arg(long, value_enum)]
     channel: Option<Channel>,
     /// Fetch dependencies first and build without network access.
     #[arg(long)]
@@ -96,7 +96,7 @@ pub struct DistArgs {
     /// Release channel baked into the binary and the bundle name. Defaults to
     /// the shipping channel, so packaging produces release artifacts while
     /// `cargo run` and `cargo build` stay on `dev`.
-    #[arg(long, value_enum, default_value = "stable")]
+    #[arg(long, value_enum)]
     channel: Option<Channel>,
     /// `auto` containerizes release builds, `always` and `never` override that.
     #[arg(long, value_enum, default_value = "auto")]
@@ -138,9 +138,7 @@ pub struct DistArgs {
 
 pub fn run_build(args: BuildArgs) -> Result<()> {
     let workspace = std::env::current_dir()?;
-    let channel = args
-        .channel
-        .unwrap_or_else(|| Channel::detect_shipping(&workspace));
+    let channel = args.channel.unwrap_or_else(Channel::detect_shipping);
     let pgo = resolve_pgo(args.pgo, args.no_pgo);
     let request = BuildRequest {
         targets: default_targets(args.targets),
@@ -153,7 +151,7 @@ pub fn run_build(args: BuildArgs) -> Result<()> {
         offline: args.offline,
         sccache: !args.no_sccache,
         min_pgo_functions: args.min_pgo_functions,
-        require_pgo: require_pgo(args.require_pgo, pgo, channel),
+        require_pgo: require_pgo(args.require_pgo, pgo),
     };
 
     let plan = plan::assemble(&workspace, &request)?;
@@ -177,9 +175,7 @@ pub fn run_build(args: BuildArgs) -> Result<()> {
 
 pub fn run_dist(args: DistArgs) -> Result<()> {
     let workspace = std::env::current_dir()?;
-    let channel = args
-        .channel
-        .unwrap_or_else(|| Channel::detect_shipping(&workspace));
+    let channel = args.channel.unwrap_or_else(Channel::detect_shipping);
     let pgo = resolve_pgo(args.pgo, args.no_pgo);
     let targets = if args.all {
         distributable_targets()?
@@ -197,7 +193,7 @@ pub fn run_dist(args: DistArgs) -> Result<()> {
         offline: args.offline,
         sccache: !args.no_sccache,
         min_pgo_functions: args.min_pgo_functions,
-        require_pgo: require_pgo(false, pgo, channel),
+        require_pgo: require_pgo(false, pgo),
     };
 
     let plan = plan::assemble(&workspace, &request)?;
@@ -255,8 +251,7 @@ fn resolve_pgo(pgo: PgoMode, no_pgo: bool) -> PgoMode {
 /// PGO is mandatory when the caller asks to consume a profile. A shipping
 /// channel alone does not require one: `--no-pgo` is the documented escape
 /// hatch and is recorded in the manifest as an absent profile.
-fn require_pgo(explicit: bool, pgo: PgoMode, channel: Channel) -> bool {
-    let _ = channel;
+fn require_pgo(explicit: bool, pgo: PgoMode) -> bool {
     pgo == PgoMode::Use && explicit
 }
 
@@ -311,11 +306,11 @@ mod tests {
 
     #[test]
     fn pgo_is_only_required_when_explicitly_requested() {
-        assert!(!require_pgo(false, PgoMode::Auto, Channel::Stable));
-        assert!(!require_pgo(false, PgoMode::Use, Channel::Preview));
-        assert!(!require_pgo(false, PgoMode::Off, Channel::Stable));
-        assert!(require_pgo(true, PgoMode::Use, Channel::Stable));
-        assert!(!require_pgo(true, PgoMode::Off, Channel::Stable));
+        assert!(!require_pgo(false, PgoMode::Auto));
+        assert!(!require_pgo(false, PgoMode::Use));
+        assert!(!require_pgo(false, PgoMode::Off));
+        assert!(require_pgo(true, PgoMode::Use));
+        assert!(!require_pgo(true, PgoMode::Off));
     }
 
     #[test]
@@ -336,5 +331,25 @@ mod tests {
             Target::MacAarch64
         );
         assert!(parse_target("not-a-target").is_err());
+    }
+
+    #[test]
+    fn an_omitted_channel_leaves_room_for_the_shipping_fallback() {
+        use clap::Parser as _;
+        #[derive(clap::Parser)]
+        struct Probe {
+            #[command(flatten)]
+            args: BuildArgs,
+        }
+        // A `default_value` on the field would make this `Some(Stable)` and
+        // silently disable `detect_shipping` (and its env-var override).
+        assert_eq!(Probe::try_parse_from(["probe"]).unwrap().args.channel, None);
+        assert_eq!(
+            Probe::try_parse_from(["probe", "--channel", "preview"])
+                .unwrap()
+                .args
+                .channel,
+            Some(Channel::Preview)
+        );
     }
 }

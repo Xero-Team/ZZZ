@@ -368,8 +368,9 @@ where
             // reference is only used to check metadata and to project the pin to
             // `inner` below.
             let this = unsafe { self.get_unchecked_mut() };
-            assert!(
-                this.id == thread_id(),
+            assert_eq!(
+                this.id,
+                thread_id(),
                 "local task polled by a thread that didn't spawn it. Task spawned at {}",
                 this.location
             );

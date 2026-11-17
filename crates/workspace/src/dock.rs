@@ -322,12 +322,12 @@ impl From<settings::DockPosition> for DockPosition {
     }
 }
 
-impl Into<settings::DockPosition> for DockPosition {
-    fn into(self) -> settings::DockPosition {
-        match self {
-            Self::Left => settings::DockPosition::Left,
-            Self::Bottom => settings::DockPosition::Bottom,
-            Self::Right => settings::DockPosition::Right,
+impl From<DockPosition> for settings::DockPosition {
+    fn from(value: DockPosition) -> settings::DockPosition {
+        match value {
+            DockPosition::Left => settings::DockPosition::Left,
+            DockPosition::Bottom => settings::DockPosition::Bottom,
+            DockPosition::Right => settings::DockPosition::Right,
         }
     }
 }
@@ -692,8 +692,7 @@ impl Dock {
                         .panel_entries
                         .iter()
                         .find(|entry| entry.panel.panel_id() == panel_id)
-                        .map(|entry| entry.size_state)
-                        .unwrap_or_default();
+                        .map_or_default(|entry| entry.size_state);
 
                     let previous_axis = this.position.axis();
                     let next_axis = new_position.axis();
@@ -1161,8 +1160,9 @@ impl Dock {
     pub fn clamp_panel_size(&mut self, max_size: Pixels, window: &Window, cx: &mut App) {
         let max_size = (max_size - RESIZE_HANDLE_SIZE).abs();
         for entry in &mut self.panel_entries {
-            let use_flexible = entry.panel.has_flexible_size(window, cx);
-            if use_flexible {
+            let uses_flexible_width =
+                panel_uses_flexible_width(self.position, entry.panel.as_ref(), window, cx);
+            if uses_flexible_width {
                 continue;
             }
 
@@ -1609,17 +1609,17 @@ impl Render for PanelButtons {
                                         IconPosition::Start,
                                         None,
                                         move |window, cx| {
-                                            if !currently_flexible {
-                                                if let Some(ws) = workspace_for_flex.upgrade() {
-                                                    ws.update(cx, |workspace, cx| {
-                                                        workspace.toggle_dock_panel_flexible_size(
-                                                            &dock_for_flex,
-                                                            panel_for_flex.as_ref(),
-                                                            window,
-                                                            cx,
-                                                        );
-                                                    });
-                                                }
+                                            if !currently_flexible
+                                                && let Some(ws) = workspace_for_flex.upgrade()
+                                            {
+                                                ws.update(cx, |workspace, cx| {
+                                                    workspace.toggle_dock_panel_flexible_size(
+                                                        &dock_for_flex,
+                                                        panel_for_flex.as_ref(),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                });
                                             }
                                         },
                                     );
@@ -1632,17 +1632,17 @@ impl Render for PanelButtons {
                                         IconPosition::Start,
                                         None,
                                         move |window, cx| {
-                                            if currently_flexible {
-                                                if let Some(ws) = workspace_for_fixed.upgrade() {
-                                                    ws.update(cx, |workspace, cx| {
-                                                        workspace.toggle_dock_panel_flexible_size(
-                                                            &dock_for_fixed,
-                                                            panel_for_fixed.as_ref(),
-                                                            window,
-                                                            cx,
-                                                        );
-                                                    });
-                                                }
+                                            if currently_flexible
+                                                && let Some(ws) = workspace_for_fixed.upgrade()
+                                            {
+                                                ws.update(cx, |workspace, cx| {
+                                                    workspace.toggle_dock_panel_flexible_size(
+                                                        &dock_for_fixed,
+                                                        panel_for_fixed.as_ref(),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                });
                                             }
                                         },
                                     );

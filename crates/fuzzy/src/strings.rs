@@ -151,9 +151,9 @@ where
 
     let worker_count = executor.num_cpus().min(candidates.len());
     let segment_size = candidates.len().div_ceil(worker_count);
-    let mut segment_results = (0..worker_count)
-        .map(|_| Vec::with_capacity(max_results.min(candidates.len())))
-        .collect::<Vec<_>>();
+    let mut segment_results = Vec::from_fn(worker_count, |_| {
+        Vec::with_capacity(max_results.min(candidates.len()))
+    });
 
     executor
         .scoped(|scope| {
@@ -194,7 +194,7 @@ where
         return Vec::new();
     }
 
-    let mut results = segment_results.concat();
+    let mut results = segment_results.into_iter().flatten().collect::<Vec<_>>();
     util::truncate_to_bottom_n_sorted_by(&mut results, max_results, &|left, right| right.cmp(left));
     results
 }

@@ -117,14 +117,14 @@ impl ToolchainStore {
             active_toolchains: Default::default(),
             manifest_tree,
         });
-        let _sub = cx.subscribe(&entity, |_, _, e: &ToolchainStoreEvent, cx| {
+        let sub = cx.subscribe(&entity, |_, _, e: &ToolchainStoreEvent, cx| {
             cx.emit(e.clone())
         });
         Self {
             mode: ToolchainStoreInner::Local(entity),
             worktree_store,
             user_toolchains: Default::default(),
-            _sub,
+            _sub: sub,
         }
     }
 
@@ -139,14 +139,14 @@ impl ToolchainStore {
             project_id,
             worktree_store: worktree_store.clone(),
         });
-        let _sub = cx.subscribe(&entity, |_, _, e: &ToolchainStoreEvent, cx| {
+        let sub = cx.subscribe(&entity, |_, _, e: &ToolchainStoreEvent, cx| {
             cx.emit(e.clone())
         });
         Self {
             mode: ToolchainStoreInner::Remote(entity),
             user_toolchains: Default::default(),
             worktree_store,
-            _sub,
+            _sub: sub,
         }
     }
     pub(crate) fn activate_toolchain(

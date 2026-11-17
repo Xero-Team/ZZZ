@@ -4945,10 +4945,10 @@ mod tests {
         let new_value = "new_value";
 
         fn language_setting_fn(value: &mut serde_json::Value, _: &[&str]) -> anyhow::Result<()> {
-            if let Some(obj) = value.as_object_mut() {
-                if let Some(v) = obj.get_mut("a_setting") {
-                    *v = serde_json::json!("new_value");
-                }
+            if let Some(obj) = value.as_object_mut()
+                && let Some(v) = obj.get_mut("a_setting")
+            {
+                *v = serde_json::json!("new_value");
             }
             Ok(())
         }

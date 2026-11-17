@@ -347,7 +347,7 @@ impl WrappedLineLayout {
         } else {
             wrapped_line_start_index = 0;
             wrapped_line_start_x = Pixels::ZERO;
-        };
+        }
 
         let wrapped_line_end_index;
         let wrapped_line_end_x;
@@ -361,7 +361,7 @@ impl WrappedLineLayout {
         } else {
             wrapped_line_end_index = self.unwrapped_layout.len;
             wrapped_line_end_x = self.unwrapped_layout.width;
-        };
+        }
 
         let mut position_in_unwrapped_line = position;
         position_in_unwrapped_line.x += wrapped_line_start_x;
@@ -757,7 +757,7 @@ impl AsCacheKeyRef for CacheKeyRef<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::GlyphId;
+    use crate::{GlyphId, NoopTextSystem, TextRun, TextSystem, WindowTextSystem, font};
 
     fn glyph_at(x: f32, index: usize) -> ShapedGlyph {
         ShapedGlyph {
@@ -941,6 +941,24 @@ mod tests {
 
         let positions = glyph_x_positions(&layout);
         assert_eq!(positions, vec![0.5, 8., 16.]);
+    }
+
+    #[test]
+    fn shape_line_shares_its_text_with_the_layout_cache() {
+        let text_system =
+            WindowTextSystem::new(Arc::new(TextSystem::new(Arc::new(NoopTextSystem::new()))));
+        // Long enough to be stored on the heap rather than inline.
+        let text = SharedString::from("let value = compute_something(argument_one, argument_two);");
+        let runs = [TextRun {
+            len: text.len(),
+            font: font(".ZedMono"),
+            ..Default::default()
+        }];
+
+        text_system.shape_line(text.clone(), px(14.), &runs, None);
+        let state = text_system.line_layout_cache.state.borrow();
+        let (key, _) = state.current_frame.lines.iter().next().unwrap();
+        assert_eq!(key.text.as_ptr(), text.as_ptr());
     }
 
     #[test]

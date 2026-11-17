@@ -217,9 +217,12 @@ struct RawWindow {
     visual_id: u32,
 }
 
-// Safety: The raw pointers in RawWindow point to X11 connection
-// which is valid for the window's lifetime. These are used only for
-// passing to wgpu which needs Send+Sync for surface creation.
+// SAFETY: `RawWindow` is a plain set of identifiers that owns nothing and dereferences
+// nothing; it exists so wgpu can name an X11 window and display. `Send`/`Sync` are sound
+// because the ids stay valid for as long as the window state that produced them, and every
+// consumer only forwards them to wgpu or to XCB on the protocol thread. This impl permits
+// moving the handle wrapper, not the connection: nothing here makes concurrent XCB calls
+// safe.
 unsafe impl Send for RawWindow {}
 unsafe impl Sync for RawWindow {}
 
@@ -276,6 +279,11 @@ impl X11WindowState {
     fn is_transparent(&self) -> bool {
         self.background_appearance != WindowBackgroundAppearance::Opaque
     }
+
+    fn is_maximized(&self) -> bool {
+        // A maximized window that gets minimized will still retain its maximized state.
+        !self.hidden && self.maximized_vertical && self.maximized_horizontal
+    }
 }
 
 #[derive(Clone)]
@@ -294,6 +302,8 @@ impl rwh::HasWindowHandle for RawWindow {
         };
         let mut handle = rwh::XcbWindowHandle::new(non_zero);
         handle.visual_id = NonZeroU32::new(self.visual_id);
+        // SAFETY: the handle only names an XCB window id owned by `self`, and the `'_` in the
+        // return type ties the borrow to `&self`.
         Ok(unsafe { rwh::WindowHandle::borrow_raw(handle.into()) })
     }
 }
@@ -304,6 +314,8 @@ impl rwh::HasDisplayHandle for RawWindow {
             return Err(rwh::HandleError::Unavailable);
         };
         let handle = rwh::XcbDisplayHandle::new(Some(non_zero), self.screen_id as i32);
+        // SAFETY: the handle only names the connection owned by `self`, which the `'_` in the
+        // return type keeps borrowed for as long as the handle is alive.
         Ok(unsafe { rwh::DisplayHandle::borrow_raw(handle.into()) })
     }
 }
@@ -314,6 +326,8 @@ impl rwh::HasWindowHandle for X11Window {
             return Err(rwh::HandleError::Unavailable);
         };
         let handle = rwh::XcbWindowHandle::new(non_zero);
+        // SAFETY: the handle only names the window id owned by `self`, and the `'_` in the return
+        // type ties the borrow to `&self`.
         Ok(unsafe { rwh::WindowHandle::borrow_raw(handle.into()) })
     }
 }
@@ -330,6 +344,8 @@ impl rwh::HasDisplayHandle for X11Window {
             u64::from(state.display.id()) as i32
         };
         let handle = rwh::XcbDisplayHandle::new(Some(non_zero), screen_id);
+        // SAFETY: the handle only names the connection borrowed from `self.0.xcb`, and the `'_`
+        // in the return type ties the borrow to `&self`.
         Ok(unsafe { rwh::DisplayHandle::borrow_raw(handle.into()) })
     }
 }
@@ -589,23 +605,23 @@ impl X11WindowState {
                 )?;
             }
 
-            if params.kind == WindowKind::Floating || params.kind == WindowKind::Dialog {
-                if let Some(parent_window) = parent_window.as_ref().map(|w| w.x_window) {
-                    // WM_TRANSIENT_FOR hint indicating the main application window. For floating windows, we set
-                    // a parent window (WM_TRANSIENT_FOR) such that the window manager knows where to
-                    // place the floating window in relation to the main window.
-                    // https://specifications.freedesktop.org/wm-spec/1.4/ar01s05.html
-                    check_reply(
-                        || "X11 ChangeProperty32 setting WM_TRANSIENT_FOR for floating window failed.",
-                        xcb.change_property32(
-                            xproto::PropMode::REPLACE,
-                            x_window,
-                            atoms.WM_TRANSIENT_FOR,
-                            xproto::AtomEnum::WINDOW,
-                            &[parent_window],
-                        ),
-                    )?;
-                }
+            if (params.kind == WindowKind::Floating || params.kind == WindowKind::Dialog)
+                && let Some(parent_window) = parent_window.as_ref().map(|w| w.x_window)
+            {
+                // WM_TRANSIENT_FOR hint indicating the main application window. For floating windows, we set
+                // a parent window (WM_TRANSIENT_FOR) such that the window manager knows where to
+                // place the floating window in relation to the main window.
+                // https://specifications.freedesktop.org/wm-spec/1.4/ar01s05.html
+                check_reply(
+                    || "X11 ChangeProperty32 setting WM_TRANSIENT_FOR for floating window failed.",
+                    xcb.change_property32(
+                        xproto::PropMode::REPLACE,
+                        x_window,
+                        atoms.WM_TRANSIENT_FOR,
+                        xproto::AtomEnum::WINDOW,
+                        &[parent_window],
+                    ),
+                )?;
             }
 
             let parent = if params.kind == WindowKind::Dialog
@@ -1090,6 +1106,7 @@ impl X11WindowStatePtr {
             .map(|chunk| u32::from_ne_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
 
         let was_active = state.active;
+        let was_maximized = state.maximized_vertical && state.maximized_horizontal;
         state.active = false;
         state.fullscreen = false;
         state.maximized_vertical = false;
@@ -1114,6 +1131,19 @@ impl X11WindowStatePtr {
         // the client, and focus is the conventional means for the user to zero it.
         if state.active && !was_active {
             set_wm_hints_urgency(&self.xcb, self.x_window, false);
+        }
+
+        // Maximized changes without a geometry change get no ConfigureNotify, so report them as a move.
+        // This ignores `hidden`, since minimizing shouldn't notify bounds observers.
+        let maximized_changed =
+            (state.maximized_vertical && state.maximized_horizontal) != was_maximized;
+        drop(state);
+        if maximized_changed {
+            let callback = self.callbacks.borrow_mut().moved.take();
+            if let Some(mut fun) = callback {
+                fun();
+                self.callbacks.borrow_mut().moved = Some(fun);
+            }
         }
 
         Ok(())
@@ -1255,7 +1285,7 @@ impl X11WindowStatePtr {
             }
             let mut state = self.state.borrow_mut();
             state.input_handler = Some(input_handler);
-        };
+        }
         bounds.map(|b| b.scale(scale_factor))
     }
 
@@ -1478,8 +1508,7 @@ impl gpui::InputSource for X11Window {
             .client
             .0
             .upgrade()
-            .map(|ref_cell| ref_cell.borrow().modifiers)
-            .unwrap_or_default()
+            .map_or_default(|ref_cell| ref_cell.borrow().modifiers)
     }
 
     fn capslock(&self) -> gpui::Capslock {
@@ -1489,8 +1518,7 @@ impl gpui::InputSource for X11Window {
             .client
             .0
             .upgrade()
-            .map(|ref_cell| ref_cell.borrow().capslock)
-            .unwrap_or_default()
+            .map_or_default(|ref_cell| ref_cell.borrow().capslock)
     }
 
     fn on_input(&self, callback: Box<dyn FnMut(PlatformInput) -> gpui::DispatchEventResult>) {
@@ -1508,10 +1536,7 @@ impl gpui::WindowHost for X11Window {
     }
 
     fn is_maximized(&self) -> bool {
-        let state = self.0.state.borrow();
-
-        // A maximized window that gets minimized will still retain its maximized state.
-        !state.hidden && state.maximized_vertical && state.maximized_horizontal
+        self.0.state.borrow().is_maximized()
     }
 
     fn window_bounds(&self) -> WindowBounds {

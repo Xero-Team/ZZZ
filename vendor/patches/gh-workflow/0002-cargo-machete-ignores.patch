@@ -1,0 +1,22 @@
+diff --git a/crates/gh-workflow/Cargo.toml b/crates/gh-workflow/Cargo.toml
+--- a/crates/gh-workflow/Cargo.toml
++++ b/crates/gh-workflow/Cargo.toml
+@@ -30,3 +30,7 @@
+ 
+ [lints]
+ workspace = true
++
++[package.metadata.cargo-machete]
++# Vendored third-party crate; its unused deps are upstream's to decide.
++ignored = ["async-trait", "strum_macros"]
+diff --git a/crates/gh-workflow-tailcall/Cargo.toml b/crates/gh-workflow-tailcall/Cargo.toml
+--- a/crates/gh-workflow-tailcall/Cargo.toml
++++ b/crates/gh-workflow-tailcall/Cargo.toml
+@@ -23,3 +23,7 @@
+ 
+ [lints]
+ workspace = true
++
++[package.metadata.cargo-machete]
++# Vendored third-party crate; its unused deps are upstream's to decide.
++ignored = ["heck"]

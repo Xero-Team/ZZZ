@@ -1382,9 +1382,8 @@ impl CodeLabelExt for CodeLabel {
 
         let label = &item.label;
         let label_length = label.len();
-        let runs = highlight_id
-            .map(|highlight_id| vec![(0..label_length, highlight_id)])
-            .unwrap_or_default();
+        let runs =
+            highlight_id.map_or_default(|highlight_id| vec![(0..label_length, highlight_id)]);
         let text = if let Some(detail) = item.detail.as_deref().filter(|detail| detail != label) {
             format!("{label} {detail}")
         } else if let Some(description) = item

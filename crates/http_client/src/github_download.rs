@@ -141,8 +141,7 @@ fn ensure_download_success(status: http::StatusCode, url: &str) -> Result<()> {
         status.as_u16(),
         status
             .canonical_reason()
-            .map(|reason| format!(" ({reason})"))
-            .unwrap_or_default()
+            .map_or_default(|reason| format!(" ({reason})"))
     )
 }
 
@@ -287,7 +286,7 @@ async fn stream_response_archive(
         AssetKind::Zip => {
             util::archive::extract_zip(destination_path, response).await?;
         }
-    };
+    }
     Ok(())
 }
 
@@ -309,7 +308,7 @@ async fn stream_file_archive(
         AssetKind::Zip => {
             util::archive::extract_zip(destination_path, file_archive).await?;
         }
-    };
+    }
     Ok(())
 }
 

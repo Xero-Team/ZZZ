@@ -71,6 +71,13 @@ jobs:
       - name: Check generated Tree-sitter files
         run: cargo xtask grammars check
 
+      # `check all` formats and lints the docs, which needs Node for Prettier.
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+          package-manager-cache: false
+
       - name: Check repository gates
         run: cargo xtask check
 
@@ -84,7 +91,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        toolchain: ["1.99.1", "stable"]
+        toolchain: ["1.100.0", "stable"]
     env:
       TOOLCHAIN: ${{ matrix.toolchain }}
     steps:
@@ -99,6 +106,14 @@ jobs:
 
       - name: Prefetch locked Cargo dependencies
         run: cargo fetch --locked
+
+      - name: Install pinned FFmpeg
+        # `video` links the FFmpeg 9.0 ABI. jammy's libavutil 56 is below the
+        # floor `ffmpeg-sys-the-third` enforces, so fetch the same development
+        # package the release build bundles and point Cargo at it.
+        run: |
+          ffmpeg_dir="$(cargo xtask ffmpeg ensure --target x86_64-unknown-linux-gnu)"
+          echo "FFMPEG_DIR=$ffmpeg_dir" >> "$GITHUB_ENV"
 
       - name: Install Rust toolchain
         run: rustup toolchain install "$TOOLCHAIN" --profile minimal --no-self-update
@@ -117,22 +132,56 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Free disk space
+        # The runner image ships toolchains this job never uses, and a release
+        # build of the workspace outgrows what is left. Drop them up front
+        # rather than failing when linking fills the device.
+        run: |
+          sudo rm -rf \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/lib/android \
+            /usr/local/share/boost \
+            /usr/share/dotnet
+          df -h /
+
       - name: Install dependencies
         run: ./script/linux
 
       - name: Configure CI cargo settings
-        run: cp .cargo/ci-config.toml .cargo/config.toml
+        run: cp .cargo/ci-config.toml ~/.cargo/config.toml
 
       - name: Prefetch locked Cargo dependencies
         run: cargo fetch --locked
 
+      - name: Install pinned FFmpeg
+        # `video` links the FFmpeg 9.0 ABI. jammy's libavutil 56 is below the
+        # floor `ffmpeg-sys-the-third` enforces, so fetch the same development
+        # package the release build bundles and point Cargo at it.
+        run: |
+          ffmpeg_dir="$(cargo xtask ffmpeg ensure --target x86_64-unknown-linux-gnu)"
+          echo "FFMPEG_DIR=$ffmpeg_dir" >> "$GITHUB_ENV"
+
       - name: Run clippy gate
         run: CARGO_NET_OFFLINE=true cargo xtask clippy
+
+      # `gpui` is the crate downstream code documents against, so its rustdoc
+      # must build warning-free: a broken intra-doc link is an API doc defect
+      # that no compiler gate sees.
+      - name: Check gpui documentation
+        run: >-
+          CARGO_NET_OFFLINE=true RUSTDOCFLAGS="-D warnings"
+          cargo doc --no-deps -p gpui
 
   gpui-platform-checks:
     name: GPUI platform checks
     if: github.ref_type == 'branch' && !inputs.skip_rust_build
     runs-on: ubuntu-22.04
+    env:
+      # bindgen pins both its driver and its builtin include path to the LLVM
+      # installed below; the distribution's llvm-14 cannot parse the macOS SDK.
+      CLANG_PATH: /usr/lib/llvm-23/bin/clang
+      LIBCLANG_PATH: /usr/lib/llvm-23/lib
     steps:
       - name: Checkout repo
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -144,10 +193,24 @@ jobs:
         run: ./script/linux
 
       - name: Configure CI cargo settings
-        run: cp .cargo/ci-config.toml .cargo/config.toml
+        run: cp .cargo/ci-config.toml ~/.cargo/config.toml
 
       - name: Prefetch locked Cargo dependencies
         run: cargo fetch --locked
+
+      - name: Install LLVM for bindgen
+        # The `media` build script generates the macOS bindings on this Linux
+        # host, and bindgen takes its builtin include path from the clang it
+        # discovers. jammy's llvm-14 rejects the `__m128i` conversions in the
+        # SDK's headers, so install the same LLVM pin the build image carries.
+        run: |
+          curl --fail --silent --show-error --location \
+            https://apt.llvm.org/llvm-snapshot.gpg.key \
+            | sudo gpg --dearmor --output /usr/share/keyrings/llvm.gpg
+          echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] http://apt.llvm.org/jammy/ llvm-toolchain-jammy-23 main" \
+            | sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends clang-23 libclang1-23
 
       - name: Install GPUI cross targets
         run: rustup target add x86_64-apple-darwin x86_64-pc-windows-gnu wasm32-unknown-unknown
@@ -181,14 +244,54 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Free disk space
+        # The runner image ships toolchains this job never uses, and a test
+        # build of the workspace outgrows what is left once the FFmpeg package
+        # and WASI SDK are in place. Drop them up front rather than dying when
+        # linking fills the device.
+        run: |
+          sudo rm -rf \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/lib/android \
+            /usr/local/share/boost \
+            /usr/share/dotnet
+          df -h /
+
       - name: Install dependencies
         run: ./script/linux
 
+      - name: Install Mesa software rasterizer
+        # `gpui_wgpu`'s atlas tests create a headless device. The runner has no
+        # GPU and jammy ships no Vulkan driver, so give them Mesa's software
+        # implementation instead of failing adapter selection.
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            libegl1 libgl1-mesa-dri mesa-vulkan-drivers
+          ls /usr/share/vulkan/icd.d/
+
       - name: Configure CI cargo settings
-        run: cp .cargo/ci-config.toml .cargo/config.toml
+        run: cp .cargo/ci-config.toml ~/.cargo/config.toml
 
       - name: Prefetch locked Cargo dependencies
         run: cargo fetch --locked
+
+      - name: Install pinned FFmpeg
+        # `video` links the FFmpeg 9.0 ABI. jammy's libavutil 56 is below the
+        # floor `ffmpeg-sys-the-third` enforces, so fetch the same development
+        # package the release build bundles. The test binaries link the shared
+        # library, so its directory also goes on the loader path.
+        run: |
+          ffmpeg_dir="$(cargo xtask ffmpeg ensure --target x86_64-unknown-linux-gnu)"
+          echo "FFMPEG_DIR=$ffmpeg_dir" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$ffmpeg_dir/lib" >> "$GITHUB_ENV"
+
+      - name: Prefetch the WASI SDK
+        # `test_extension_store_with_test_extension` compiles a grammar for the
+        # dev extension, and the sysroot download does not fit in the test's own
+        # timeout. The script is idempotent and checksum-verified.
+        run: ./script/download-wasi-sdk
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@921e2c9f7148d7ba14cd819f417db338f63e733c # nextest
@@ -222,7 +325,7 @@ jobs:
         run: ./script/linux
 
       - name: Configure CI cargo settings
-        run: cp .cargo/ci-config.toml .cargo/config.toml
+        run: cp .cargo/ci-config.toml ~/.cargo/config.toml
 
       - name: Prefetch locked Cargo dependencies
         run: cargo fetch --locked

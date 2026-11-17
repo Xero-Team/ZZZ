@@ -123,8 +123,7 @@ fn schedule_task(
             abs_path: task_template
                 .cwd
                 .as_ref()
-                .map(std::path::PathBuf::from)
-                .unwrap_or_default(),
+                .map_or_default(std::path::PathBuf::from),
         },
     };
 
@@ -287,20 +286,19 @@ impl Editor {
             };
 
             rows_with_any_lens.insert(MultiBufferRow(position.to_point(snapshot).row));
-            if let project::LspAction::CodeLens(lens) = &action.lsp_action {
-                if let Some(title) = lens
+            if let project::LspAction::CodeLens(lens) = &action.lsp_action
+                && let Some(title) = lens
                     .command
                     .as_ref()
                     .map(|cmd| SharedString::from(&cmd.title))
-                {
-                    titled_lenses.push((
-                        position,
-                        CodeLensItem {
-                            title,
-                            action: action.clone(),
-                        },
-                    ));
-                }
+            {
+                titled_lenses.push((
+                    position,
+                    CodeLensItem {
+                        title,
+                        action: action.clone(),
+                    },
+                ));
             }
         }
 
@@ -992,17 +990,13 @@ mod tests {
         cx.run_until_parked();
 
         let initial_block_ids = cx.editor.read_with(&cx.cx.cx, |editor, _| {
-            editor
-                .code_lens
-                .as_ref()
-                .map(|s| {
-                    s.blocks
-                        .values()
-                        .flatten()
-                        .map(|b| b.block_id)
-                        .collect::<HashSet<_>>()
-                })
-                .unwrap_or_default()
+            editor.code_lens.as_ref().map_or_default(|s| {
+                s.blocks
+                    .values()
+                    .flatten()
+                    .map(|b| b.block_id)
+                    .collect::<HashSet<_>>()
+            })
         });
         assert_eq!(
             initial_block_ids.len(),
@@ -1023,17 +1017,13 @@ mod tests {
         cx.run_until_parked();
 
         let refreshed_block_ids = cx.editor.read_with(&cx.cx.cx, |editor, _| {
-            editor
-                .code_lens
-                .as_ref()
-                .map(|s| {
-                    s.blocks
-                        .values()
-                        .flatten()
-                        .map(|b| b.block_id)
-                        .collect::<HashSet<_>>()
-                })
-                .unwrap_or_default()
+            editor.code_lens.as_ref().map_or_default(|s| {
+                s.blocks
+                    .values()
+                    .flatten()
+                    .map(|b| b.block_id)
+                    .collect::<HashSet<_>>()
+            })
         });
         assert_eq!(
             refreshed_block_ids, initial_block_ids,
@@ -1094,17 +1084,13 @@ mod tests {
         cx.run_until_parked();
 
         let initial = cx.editor.read_with(&cx.cx.cx, |editor, _| {
-            editor
-                .code_lens
-                .as_ref()
-                .map(|s| {
-                    s.blocks
-                        .values()
-                        .flatten()
-                        .map(|b| b.block_id)
-                        .collect::<HashSet<_>>()
-                })
-                .unwrap_or_default()
+            editor.code_lens.as_ref().map_or_default(|s| {
+                s.blocks
+                    .values()
+                    .flatten()
+                    .map(|b| b.block_id)
+                    .collect::<HashSet<_>>()
+            })
         });
         assert_eq!(
             initial.len(),
@@ -1126,17 +1112,13 @@ mod tests {
             cx.run_until_parked();
 
             let after = cx.editor.read_with(&cx.cx.cx, |editor, _| {
-                editor
-                    .code_lens
-                    .as_ref()
-                    .map(|s| {
-                        s.blocks
-                            .values()
-                            .flatten()
-                            .map(|b| b.block_id)
-                            .collect::<HashSet<_>>()
-                    })
-                    .unwrap_or_default()
+                editor.code_lens.as_ref().map_or_default(|s| {
+                    s.blocks
+                        .values()
+                        .flatten()
+                        .map(|b| b.block_id)
+                        .collect::<HashSet<_>>()
+                })
             });
             assert_eq!(
                 after, initial,

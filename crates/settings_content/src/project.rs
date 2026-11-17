@@ -757,7 +757,7 @@ pub struct BlameSettings {
 pub struct BranchPickerSettingsContent {
     /// Whether to show author name as part of the commit information.
     ///
-    /// Default: false
+    /// Default: true
     pub show_author_name: Option<bool>,
 }
 

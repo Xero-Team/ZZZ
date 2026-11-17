@@ -284,7 +284,7 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Editor>,
     ) {
-        self.show_inline_diagnostics = !self.show_inline_diagnostics;
+        self.show_inline_diagnostics.toggle();
         self.refresh_inline_diagnostics(false, window, cx);
     }
 
@@ -418,7 +418,7 @@ impl Editor {
     pub(super) fn dismiss_diagnostics(&mut self, cx: &mut Context<Self>) {
         if matches!(self.active_diagnostics, ActiveDiagnostic::All) {
             return;
-        };
+        }
 
         let prev = mem::replace(&mut self.active_diagnostics, ActiveDiagnostic::None);
         if let ActiveDiagnostic::Group(group) = prev {

@@ -288,9 +288,10 @@ pub struct MultiWorkspace {
     sidebar: Option<Box<dyn SidebarHandle>>,
     sidebar_open: bool,
     sidebar_overlay: Option<AnyView>,
+    pending_bindings_popup: Option<AnyView>,
     pending_removal_tasks: Vec<Task<()>>,
-    _serialize_task: Option<Task<()>>,
-    _subscriptions: Vec<Subscription>,
+    serialize_task: Option<Task<()>>,
+    subscriptions: Vec<Subscription>,
     previous_focus_handle: Option<FocusHandle>,
 }
 
@@ -312,7 +313,7 @@ impl MultiWorkspace {
 
     pub fn new(workspace: Entity<Workspace>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let release_subscription = cx.on_release(|this: &mut MultiWorkspace, _cx| {
-            if let Some(task) = this._serialize_task.take() {
+            if let Some(task) = this.serialize_task.take() {
                 task.detach();
             }
             for task in std::mem::take(&mut this.pending_removal_tasks) {
@@ -347,9 +348,10 @@ impl MultiWorkspace {
             sidebar: None,
             sidebar_open: false,
             sidebar_overlay: None,
+            pending_bindings_popup: None,
             pending_removal_tasks: Vec::new(),
-            _serialize_task: None,
-            _subscriptions: vec![
+            serialize_task: None,
+            subscriptions: vec![
                 release_subscription,
                 quit_subscription,
                 settings_subscription,
@@ -359,11 +361,11 @@ impl MultiWorkspace {
     }
 
     pub fn register_sidebar<T: Sidebar>(&mut self, sidebar: Entity<T>, cx: &mut Context<Self>) {
-        self._subscriptions
+        self.subscriptions
             .push(cx.observe(&sidebar, |_this, _, cx| {
                 cx.notify();
             }));
-        self._subscriptions
+        self.subscriptions
             .push(cx.subscribe(&sidebar, |this, _, event, cx| match event {
                 SidebarEvent::SerializeNeeded => {
                     this.serialize(cx);
@@ -379,6 +381,22 @@ impl MultiWorkspace {
     pub fn set_sidebar_overlay(&mut self, overlay: Option<AnyView>, cx: &mut Context<Self>) {
         self.sidebar_overlay = overlay;
         cx.notify();
+    }
+
+    /// Shows the which-key popup for the pending key sequence. It is drawn above the modal layer
+    /// instead of in it, so the chord can still complete in an open modal.
+    pub fn set_pending_bindings_popup(&mut self, popup: Option<AnyView>, cx: &mut Context<Self>) {
+        // Which-key clears the popup on every keystroke that leaves no pending input, and
+        // observers of this entity, like the agent panel's terminal notification, react to notify.
+        if popup.is_none() && self.pending_bindings_popup.is_none() {
+            return;
+        }
+        self.pending_bindings_popup = popup;
+        cx.notify();
+    }
+
+    pub fn pending_bindings_popup(&self) -> Option<&AnyView> {
+        self.pending_bindings_popup.as_ref()
     }
 
     pub fn sidebar_open(&self) -> bool {
@@ -1581,8 +1599,8 @@ impl MultiWorkspace {
         cx.emit(MultiWorkspaceEvent::WorkspaceRemoved(workspace.entity_id()));
         workspace.update(cx, |workspace, _cx| {
             workspace.session_id.take();
-            workspace._schedule_serialize_workspace.take();
-            workspace._serialize_workspace_task.take();
+            workspace.schedule_serialize_workspace.take();
+            workspace.serialize_workspace_task.take();
         });
 
         if let Some(workspace_id) = workspace.read(cx).database_id() {
@@ -1607,7 +1625,7 @@ impl MultiWorkspace {
     }
 
     pub fn serialize(&mut self, cx: &mut Context<Self>) {
-        self._serialize_task = Some(cx.spawn(async move |this, cx| {
+        self.serialize_task = Some(cx.spawn(async move |this, cx| {
             let Some((window_id, session_id, state)) = this
                 .read_with(cx, |this, cx| {
                     let state = MultiWorkspaceState {
@@ -1650,12 +1668,12 @@ impl MultiWorkspace {
     /// await it. Used by the quit handler to ensure pending DB writes
     /// complete before the process exits.
     pub fn flush_serialization(&mut self) -> Task<()> {
-        self._serialize_task.take().unwrap_or(Task::ready(()))
+        self.serialize_task.take().unwrap_or(Task::ready(()))
     }
 
     fn app_will_quit(&mut self, _cx: &mut Context<Self>) -> impl Future<Output = ()> + use<> {
         let mut tasks: Vec<Task<()>> = Vec::new();
-        if let Some(task) = self._serialize_task.take() {
+        if let Some(task) = self.serialize_task.take() {
             tasks.push(task);
         }
         tasks.extend(std::mem::take(&mut self.pending_removal_tasks));
@@ -1666,28 +1684,7 @@ impl MultiWorkspace {
     }
 
     pub fn focus_active_workspace(&self, window: &mut Window, cx: &mut App) {
-        // If a dock panel is zoomed, focus it instead of the center pane.
-        // Otherwise, focusing the center pane triggers dismiss_zoomed_items_to_reveal
-        // which closes the zoomed dock.
-        let focus_handle = {
-            let workspace = self.workspace().read(cx);
-            let mut target = None;
-            for dock in workspace.all_docks() {
-                let dock = dock.read(cx);
-                if dock.is_open() {
-                    if let Some(panel) = dock.active_panel() {
-                        if panel.is_zoomed(window, cx) {
-                            target = Some(panel.activation_focus_handle(cx));
-                            break;
-                        }
-                    }
-                }
-            }
-            target.unwrap_or_else(|| {
-                let pane = workspace.active_pane().clone();
-                pane.read(cx).focus_handle(cx)
-            })
-        };
+        let focus_handle = self.workspace().read(cx).fallback_focus_handle(window, cx);
         window.focus(&focus_handle, cx);
     }
 
@@ -2295,7 +2292,13 @@ impl Render for MultiWorkspace {
                         ),
                     ))
                     .with_priority(2)
-                })),
+                }))
+                // Above the sidebar overlay, since a chord can be pending inside it too.
+                .children(
+                    self.pending_bindings_popup
+                        .clone()
+                        .map(|popup| deferred(popup).with_priority(3)),
+                ),
             window,
             cx,
             Tiling {

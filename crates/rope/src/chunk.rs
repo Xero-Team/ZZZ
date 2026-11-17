@@ -115,7 +115,7 @@ impl Chunk {
     pub fn append(&mut self, slice: ChunkSlice) {
         if slice.is_empty() {
             return;
-        };
+        }
 
         let base_ix = self.text.len();
         self.chars |= slice.chars << base_ix;
@@ -228,14 +228,14 @@ pub struct ChunkSlice<'a> {
     text: &'a str,
 }
 
-impl Into<Chunk> for ChunkSlice<'_> {
-    fn into(self) -> Chunk {
+impl From<ChunkSlice<'_>> for Chunk {
+    fn from(value: ChunkSlice<'_>) -> Chunk {
         Chunk {
-            chars: self.chars,
-            chars_utf16: self.chars_utf16,
-            newlines: self.newlines,
-            tabs: self.tabs,
-            text: self.text.try_into().expect("conversion should succeed"),
+            chars: value.chars,
+            chars_utf16: value.chars_utf16,
+            newlines: value.newlines,
+            tabs: value.tabs,
+            text: value.text.try_into().expect("conversion should succeed"),
         }
     }
 }

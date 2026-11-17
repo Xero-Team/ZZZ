@@ -1885,8 +1885,7 @@ impl Project {
 
         let root_name = std::path::Path::new(abs_path)
             .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
+            .map_or_default(|n| n.to_string_lossy().to_string());
 
         let client = AnyProtoClient::new(NoopProtoClient::new());
         let native_abs_path = vfs::NativePath::from_unix_bytes(abs_path.as_bytes());
@@ -3321,6 +3320,8 @@ impl Project {
                 }),
                 Err(_) => {}
             },
+            SettingsObserverEvent::GlobalTasksUpdated(_)
+            | SettingsObserverEvent::GlobalDebugScenariosUpdated(_) => {}
         }
     }
 
@@ -4249,7 +4250,7 @@ impl Project {
         buffer: &Entity<Buffer>,
         cx: &mut Context<Self>,
     ) -> Task<Option<ResolvedPath>> {
-        if util::paths::is_absolute(path, self.path_style(cx)) || path.starts_with("~") {
+        if util::paths::is_absolute(path, self.path_style(cx)) || path.starts_with('~') {
             self.resolve_abs_path(path, cx)
         } else {
             self.resolve_path_in_worktrees(path, buffer, cx)
@@ -4330,12 +4331,10 @@ impl Project {
 
         if let Some(file) = buffer.read(cx).file()
             && let Some(dir) = file.path().parent()
+            && let Some(joined) = path_style.join(&*dir.display(path_style), path)
+            && let Some(joined) = RelPath::new(joined.as_ref(), path_style).ok()
         {
-            if let Some(joined) = path_style.join(&*dir.display(path_style), path)
-                && let Some(joined) = RelPath::new(joined.as_ref(), path_style).ok()
-            {
-                candidates.push(joined.into_arc());
-            }
+            candidates.push(joined.into_arc());
         }
 
         let buffer_worktree_id = buffer.read(cx).file().map(|file| file.worktree_id(cx));
@@ -4474,10 +4473,10 @@ impl Project {
         let released_tx = std::sync::Arc::new(Mutex::new(Some(released_tx)));
         let release_subscription =
             cx.observe_release(&worktree, move |_project, _released_worktree, _cx| {
-                if let Some(released_tx) = released_tx.lock().take() {
-                    if released_tx.send(()).is_err() {
-                        log::debug!("worktree release waiter was dropped");
-                    }
+                if let Some(released_tx) = released_tx.lock().take()
+                    && released_tx.send(()).is_err()
+                {
+                    log::debug!("worktree release waiter was dropped");
                 }
             });
 
@@ -4738,13 +4737,13 @@ impl Project {
 
             for worktree in worktree_store.visible_worktrees(cx) {
                 let worktree = worktree.read(cx);
-                if let Ok(rel_path) = RelPath::new(path, path_style) {
-                    if let Some(entry) = worktree.entry_for_path(&rel_path) {
-                        return Some(ProjectPath {
-                            worktree_id: worktree.id(),
-                            path: entry.path.clone(),
-                        });
-                    }
+                if let Ok(rel_path) = RelPath::new(path, path_style)
+                    && let Some(entry) = worktree.entry_for_path(&rel_path)
+                {
+                    return Some(ProjectPath {
+                        worktree_id: worktree.id(),
+                        path: entry.path.clone(),
+                    });
                 }
             }
         }

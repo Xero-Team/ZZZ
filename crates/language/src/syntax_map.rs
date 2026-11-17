@@ -410,7 +410,7 @@ impl SyntaxSnapshot {
                 );
                 layers.append(slice, text);
                 continue;
-            };
+            }
 
             let Some(layer) = cursor.item() else { break };
             let Dimensions(start_byte, start_point, _) =
@@ -782,7 +782,7 @@ impl SyntaxSnapshot {
                                 log::error!("error parsing text: {e:?}");
                                 continue;
                             }
-                        };
+                        }
 
                         changed_ranges = join_ranges(
                             invalidated_ranges
@@ -839,7 +839,7 @@ impl SyntaxSnapshot {
                                 log::error!("error parsing text: {e:?}");
                                 continue;
                             }
-                        };
+                        }
                         changed_ranges = vec![step_start_byte..step_end_byte];
                     }
 
@@ -1068,10 +1068,10 @@ impl SyntaxSnapshot {
         iter::from_fn(move || {
             while let Some(layer) = cursor.item() {
                 let mut info = None;
-                if let SyntaxLayerContent::Parsed { language, .. } = &layer.content {
-                    if include_hidden || !language.config.hidden {
-                        info = Some(language);
-                    }
+                if let SyntaxLayerContent::Parsed { language, .. } = &layer.content
+                    && (include_hidden || !language.config.hidden)
+                {
+                    info = Some(language);
                 }
                 cursor.next();
                 if info.is_some() {
@@ -2236,6 +2236,7 @@ impl Drop for QueryCursorHandle {
         cursor.set_point_range(Point::zero().to_ts_point()..Point::MAX.to_ts_point());
         cursor.set_containing_byte_range(0..usize::MAX);
         cursor.set_containing_point_range(Point::zero().to_ts_point()..Point::MAX.to_ts_point());
+        cursor.set_max_start_depth(None);
         QUERY_CURSORS.lock().push(cursor)
     }
 }

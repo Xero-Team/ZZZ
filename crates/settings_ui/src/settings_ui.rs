@@ -188,7 +188,7 @@ impl<T: PartialEq + Clone + Send + Sync + 'static> AnySettingField for SettingFi
         let (file, value) = cx
             .global::<SettingsStore>()
             .get_value_from_file(file.to_settings(), self.pick);
-        return (file, value.is_some());
+        (file, value.is_some())
     }
 
     fn reset_to_default_fn(
@@ -215,7 +215,7 @@ impl<T: PartialEq + Clone + Send + Sync + 'static> AnySettingField for SettingFi
         }
         let current_file = current_file.clone();
 
-        return Some(Box::new(move |window, cx| {
+        Some(Box::new(move |window, cx| {
             let store = SettingsStore::global(cx);
             let default_value = (this.pick)(store.raw_default_settings());
             let is_set_somewhere_other_than_default = store
@@ -238,7 +238,7 @@ impl<T: PartialEq + Clone + Send + Sync + 'static> AnySettingField for SettingFi
             )
             // todo(settings_ui): Don't log err
             .log_err();
-        }));
+        }))
     }
 
     fn json_path(&self) -> Option<&'static str> {
@@ -381,14 +381,14 @@ impl NonFocusableHandle {
 
     fn from_handle(handle: FocusHandle, window: &mut Window, cx: &mut App) -> Entity<Self> {
         cx.new(|cx| {
-            let _subscription = cx.on_focus(&handle, window, {
+            let subscription = cx.on_focus(&handle, window, {
                 move |_, window, cx| {
                     window.focus_next(cx);
                 }
             });
             Self {
                 handle,
-                _subscription,
+                _subscription: subscription,
             }
         })
     }
@@ -685,6 +685,7 @@ pub fn open_settings_editor(
         let default_rem_size = 16.0;
         let scale_factor = current_rem_size / default_rem_size;
         let scaled_bounds: gpui::Size<Pixels> = default_bounds.map(|axis| axis * scale_factor);
+        let display_id = cx.active_display().map(|display| display.id());
 
         let app_id = ReleaseChannel::global(cx).app_id();
         let window_decorations = match std::env::var("ZZZ_WINDOW_DECORATIONS") {
@@ -717,7 +718,8 @@ pub fn open_settings_editor(
                     width: px(900.0),
                     height: px(240.0),
                 }),
-                window_bounds: Some(WindowBounds::centered(scaled_bounds, cx)),
+                window_bounds: Some(WindowBounds::centered(display_id, scaled_bounds, cx)),
+                display_id,
                 ..Default::default()
             },
             |window, cx| {
@@ -1189,7 +1191,7 @@ impl SettingsPageItem {
                     }
                 }
 
-                return content.into_any_element();
+                content.into_any_element()
             }
             SettingsPageItem::ActionLink(action_link) => v_flex()
                 .group("setting-item")
@@ -2092,7 +2094,7 @@ impl SettingsWindow {
             return;
         }
 
-        let is_json_link_query = query.starts_with("#");
+        let is_json_link_query = query.starts_with('#');
         if is_json_link_query {
             let indices = self.filter_by_json_path(&query);
             if !indices.is_empty() {
@@ -2303,9 +2305,9 @@ impl SettingsWindow {
             .pages
             .iter()
             .map(|page| {
-                std::iter::repeat_with(|| NonFocusableHandle::new(0, false, window, cx))
-                    .take(page.items.len())
-                    .collect()
+                Vec::from_fn(page.items.len(), |_| {
+                    NonFocusableHandle::new(0, false, window, cx)
+                })
             })
             .collect::<Vec<_>>();
     }
@@ -2408,7 +2410,7 @@ impl SettingsWindow {
                     continue;
                 };
 
-                missing_worktrees.push((worktree_id, directory_name.clone()));
+                missing_worktrees.push((worktree_id, directory_name));
                 let path = RelPath::empty().to_owned().into_arc();
 
                 let settings_ui_file = SettingsUiFile::Project((worktree_id, path));
@@ -2537,7 +2539,7 @@ impl SettingsWindow {
             self.open_and_scroll_to_navbar_entry(self.navbar_entry, None, true, window, cx);
         } else {
             self.open_first_nav_page();
-        };
+        }
     }
 
     fn change_file_in_sub_page(
@@ -3849,7 +3851,7 @@ impl SettingsWindow {
                         cx.spawn_in(window, async move |_, cx| {
                             if let Some(create_task) = create_task {
                                 create_task.await.ok()?;
-                            };
+                            }
 
                             workspace_weak
                                 .update_in(cx, |workspace, window, cx| {
@@ -3884,7 +3886,7 @@ impl SettingsWindow {
                 // Server files are not editable
                 return;
             }
-        };
+        }
     }
 
     fn current_page_index(&self) -> usize {
@@ -3959,21 +3961,21 @@ impl SettingsWindow {
     ) -> bool {
         for page in &self.pages {
             for (item_index, item) in page.items.iter().enumerate() {
-                if let SettingsPageItem::SubPageLink(sub_page_link) = item {
-                    if sub_page_link.json_path == Some(json_path) {
-                        let section_header = page
-                            .items
-                            .iter()
-                            .take(item_index)
-                            .rev()
-                            .find_map(|item| item.header_text().map(|text| text.resolve(cx)))
-                            .unwrap_or_else(|| {
-                                app_i18n::tr(cx, "settings_ui.common.settings", "Settings").into()
-                            });
+                if let SettingsPageItem::SubPageLink(sub_page_link) = item
+                    && sub_page_link.json_path == Some(json_path)
+                {
+                    let section_header = page
+                        .items
+                        .iter()
+                        .take(item_index)
+                        .rev()
+                        .find_map(|item| item.header_text().map(|text| text.resolve(cx)))
+                        .unwrap_or_else(|| {
+                            app_i18n::tr(cx, "settings_ui.common.settings", "Settings").into()
+                        });
 
-                        self.push_sub_page(sub_page_link.clone(), section_header, window, cx);
-                        return true;
-                    }
+                    self.push_sub_page(sub_page_link.clone(), section_header, window, cx);
+                    return true;
                 }
             }
         }
@@ -4000,22 +4002,21 @@ impl SettingsWindow {
                     }
                     _ => None,
                 };
-                if item_json_path == Some(json_path) {
-                    if let Some(navbar_entry_index) = self
+                if item_json_path == Some(json_path)
+                    && let Some(navbar_entry_index) = self
                         .navbar_entries
                         .iter()
                         .position(|e| e.page_index == page_index && e.is_root)
-                    {
-                        self.open_and_scroll_to_navbar_entry(
-                            navbar_entry_index,
-                            None,
-                            false,
-                            window,
-                            cx,
-                        );
-                        self.scroll_to_content_item(item_index, window, cx);
-                        return true;
-                    }
+                {
+                    self.open_and_scroll_to_navbar_entry(
+                        navbar_entry_index,
+                        None,
+                        false,
+                        window,
+                        cx,
+                    );
+                    self.scroll_to_content_item(item_index, window, cx);
+                    return true;
                 }
             }
         }
@@ -4086,7 +4087,7 @@ impl SettingsWindow {
         {
             index = prev_index.checked_sub(1);
         }
-        return index.expect("No root entry found");
+        index.expect("No root entry found")
     }
 }
 
@@ -4938,7 +4939,7 @@ pub mod test {
                 selected_idx = Some(index);
                 line = pre;
             }
-            let (kind, title) = line.split_once(" ").unwrap();
+            let (kind, title) = line.split_once(' ').unwrap();
             assert_eq!(kind.len(), 1);
             let kind = kind.chars().next().unwrap();
             if kind == 'v' {

@@ -161,7 +161,7 @@ impl NewProcessModal {
                         }),
                     };
 
-                    let _subscriptions = [
+                    let subscriptions = [
                         cx.subscribe(&debug_picker, |_, _, _, cx| {
                             cx.emit(DismissEvent);
                         }),
@@ -304,7 +304,7 @@ impl NewProcessModal {
                         debugger: None,
                         mode,
                         debug_panel: debug_panel.downgrade(),
-                        _subscriptions,
+                        _subscriptions: subscriptions,
                     }
                 });
             })?;
@@ -566,7 +566,7 @@ impl NewProcessModal {
                 };
 
                 for adapter in available_adapters.into_iter() {
-                    menu = menu.entry(adapter.0.clone(), None, setter_for_name(adapter.clone()));
+                    menu = menu.entry(adapter.0.clone(), None, setter_for_name(adapter));
                 }
 
                 menu
@@ -1367,9 +1367,9 @@ impl PickerDelegate for DebugDelegate {
         self.selected_index = ix;
     }
 
-    fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> std::sync::Arc<str> {
+    fn placeholder_text(&self, _window: &mut Window, cx: &mut App) -> std::sync::Arc<str> {
         tr(
-            _cx,
+            cx,
             "debugger_ui.new_process_modal.find_debug_task",
             "Find a debug task, or debug a command",
         )
@@ -1766,7 +1766,7 @@ pub(crate) fn resolve_path(path: &mut String) {
             std::path::MAIN_SEPARATOR,
             strip_path
         );
-    };
+    }
 }
 
 #[cfg(test)]

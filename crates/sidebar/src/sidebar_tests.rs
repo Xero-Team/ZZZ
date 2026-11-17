@@ -619,10 +619,10 @@ async fn test_single_workspace_no_threads(cx: &mut TestAppContext) {
     let project = init_test_project_with_agent_panel("/my-project", cx).await;
     let (multi_workspace, cx) =
         cx.add_window_view(|window, cx| MultiWorkspace::test_new(project, window, cx));
-    let (_sidebar, _panel) = setup_sidebar_with_agent_panel(&multi_workspace, cx);
+    let (sidebar, _panel) = setup_sidebar_with_agent_panel(&multi_workspace, cx);
 
     assert_eq!(
-        visible_entries_as_strings(&_sidebar, cx),
+        visible_entries_as_strings(&sidebar, cx),
         vec!["v [my-project]"]
     );
 }
@@ -4504,8 +4504,9 @@ async fn test_activate_archived_thread_reuses_workspace_in_another_window(cx: &m
         1,
         "should reuse the existing workspace in the other window"
     );
-    assert!(
-        cx_a.read(|cx| cx.active_window().unwrap()) == *multi_workspace_b,
+    assert_eq!(
+        cx_a.read(|cx| cx.active_window().unwrap()),
+        *multi_workspace_b,
         "should activate the window that already owns the matching workspace"
     );
     sidebar.read_with(cx_a, |sidebar, _| {
@@ -4585,8 +4586,9 @@ async fn test_activate_archived_thread_reuses_workspace_in_another_window_with_t
         1,
         "should reuse the existing workspace in the other window"
     );
-    assert!(
-        cx_a.read(|cx| cx.active_window().unwrap()) == *multi_workspace_b,
+    assert_eq!(
+        cx_a.read(|cx| cx.active_window().unwrap()),
+        *multi_workspace_b,
         "should activate the window that already owns the matching workspace"
     );
     sidebar_a.read_with(cx_a, |sidebar, _| {
@@ -4655,8 +4657,9 @@ async fn test_activate_archived_thread_prefers_current_window_for_matching_paths
     });
     cx_a.run_until_parked();
 
-    assert!(
-        cx_a.read(|cx| cx.active_window().unwrap()) == *multi_workspace_a,
+    assert_eq!(
+        cx_a.read(|cx| cx.active_window().unwrap()),
+        *multi_workspace_a,
         "should keep activation in the current window when it already has a matching workspace"
     );
     sidebar_a.read_with(cx_a, |sidebar, _| {
@@ -5073,9 +5076,9 @@ async fn test_restore_worktree_when_branch_has_moved(cx: &mut TestAppContext) {
         .update(cx, |p, cx| p.git_scans_complete(cx))
         .await;
 
-    let (multi_workspace, _cx) =
+    let (multi_workspace, window_cx) =
         cx.add_window_view(|window, cx| MultiWorkspace::test_new(main_project.clone(), window, cx));
-    multi_workspace.update_in(_cx, |mw, window, cx| {
+    multi_workspace.update_in(window_cx, |mw, window, cx| {
         mw.test_add_workspace(worktree_project.clone(), window, cx)
     });
 
@@ -5187,9 +5190,9 @@ async fn test_restore_worktree_when_branch_has_not_moved(cx: &mut TestAppContext
         .update(cx, |p, cx| p.git_scans_complete(cx))
         .await;
 
-    let (multi_workspace, _cx) =
+    let (multi_workspace, window_cx) =
         cx.add_window_view(|window, cx| MultiWorkspace::test_new(main_project.clone(), window, cx));
-    multi_workspace.update_in(_cx, |mw, window, cx| {
+    multi_workspace.update_in(window_cx, |mw, window, cx| {
         mw.test_add_workspace(worktree_project.clone(), window, cx)
     });
 
@@ -5285,9 +5288,9 @@ async fn test_restore_worktree_when_branch_does_not_exist(cx: &mut TestAppContex
         .update(cx, |p, cx| p.git_scans_complete(cx))
         .await;
 
-    let (multi_workspace, _cx) =
+    let (multi_workspace, window_cx) =
         cx.add_window_view(|window, cx| MultiWorkspace::test_new(main_project.clone(), window, cx));
-    multi_workspace.update_in(_cx, |mw, window, cx| {
+    multi_workspace.update_in(window_cx, |mw, window, cx| {
         mw.test_add_workspace(worktree_project.clone(), window, cx)
     });
 
@@ -8939,8 +8942,8 @@ async fn test_linked_worktree_workspace_reachable_after_adding_worktree_to_proje
     // When a linked worktree is opened as its own workspace and then a new
     // folder is added to the main project group, the linked worktree
     // workspace must still be reachable from some sidebar entry.
-    let (_fs, project) = init_multi_project_test(&["/my-project"], cx).await;
-    let fs = _fs.clone();
+    let (fs, project) = init_multi_project_test(&["/my-project"], cx).await;
+    let fs = fs.clone();
 
     // Set up git worktree infrastructure.
     fs.insert_tree(
@@ -9523,14 +9526,14 @@ mod property_test {
         let mut duplicates: Vec<(acp::SessionId, String)> = Vec::new();
 
         for entry in &sidebar.contents.entries {
-            if let Some(session_id) = entry.session_id() {
-                if !seen.insert(session_id.clone()) {
-                    let title = match entry {
-                        ListEntry::Thread(thread) => thread.metadata.display_title().to_string(),
-                        _ => "<unknown>".to_string(),
-                    };
-                    duplicates.push((session_id.clone(), title));
-                }
+            if let Some(session_id) = entry.session_id()
+                && !seen.insert(session_id.clone())
+            {
+                let title = match entry {
+                    ListEntry::Thread(thread) => thread.metadata.display_title().to_string(),
+                    _ => "<unknown>".to_string(),
+                };
+                duplicates.push((session_id.clone(), title));
             }
         }
 
@@ -9627,8 +9630,7 @@ mod property_test {
 
             let group_workspaces = workspaces_by_group
                 .get(&group_key)
-                .map(|ws| ws.as_slice())
-                .unwrap_or_default();
+                .map_or_default(|ws| ws.as_slice());
 
             // Main code path queries (run for all groups, even without workspaces).
             // Skip drafts (session_id: None) — they are not shown in the

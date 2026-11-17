@@ -213,14 +213,12 @@ impl ChangedFileEntry {
         let file_name: SharedString = file
             .path
             .file_name()
-            .map(|n| n.to_owned())
-            .unwrap_or_default()
+            .map_or_default(|n| n.to_owned())
             .into();
         let dir_path: SharedString = file
             .path
             .parent()
-            .map(|p| p.as_unix_str().to_owned())
-            .unwrap_or_default()
+            .map_or_default(|p| p.as_unix_str().to_owned())
             .into();
 
         let status_code = match (&file.old_text, &file.new_text) {
@@ -548,7 +546,7 @@ impl QueryState {
         match self {
             Self::Confirmed((query, _)) => *self = Self::Pending(std::mem::take(query)),
             _ => {}
-        };
+        }
     }
 }
 
@@ -995,26 +993,24 @@ impl GraphData {
                         segments,
                         ..
                     } = state
-                    {
-                        if let Some(CommitLineSegment::Curve {
+                        && let Some(CommitLineSegment::Curve {
                             to_column,
                             curve_kind: CurveKind::Merge,
                             ..
                         }) = segments.first_mut()
+                    {
+                        let curve_row = *starting_row + 1;
+                        let would_overlap = if lane_column != commit_lane && curve_row < commit_row
                         {
-                            let curve_row = *starting_row + 1;
-                            let would_overlap =
-                                if lane_column != commit_lane && curve_row < commit_row {
-                                    self.commits[curve_row..commit_row]
-                                        .iter()
-                                        .any(|c| c.lane == commit_lane)
-                                } else {
-                                    false
-                                };
+                            self.commits[curve_row..commit_row]
+                                .iter()
+                                .any(|c| c.lane == commit_lane)
+                        } else {
+                            false
+                        };
 
-                            if would_overlap {
-                                *to_column = lane_column;
-                            }
+                        if would_overlap {
+                            *to_column = lane_column;
                         }
                     }
 
@@ -1424,9 +1420,9 @@ pub struct GitGraph {
     log_order: LogOrder,
     selected_commit_diff: Option<CommitDiff>,
     selected_commit_diff_stats: Option<(usize, usize)>,
-    _commit_diff_task: Option<Task<()>>,
+    commit_diff_task: Option<Task<()>>,
     selected_commit_message: Option<DetailPanelCommitMessage>,
-    _selected_commit_message_task: Option<Task<()>>,
+    selected_commit_message_task: Option<Task<()>>,
     commit_details_split_state: Entity<SplitState>,
     repo_id: RepositoryId,
     changed_files_scroll_handle: UniformListScrollHandle,
@@ -1583,10 +1579,10 @@ impl GitGraph {
 
         cx.subscribe(&git_store, |this, _, event, cx| match event {
             GitStoreEvent::RepositoryUpdated(updated_repo_id, repo_event, _) => {
-                if this.repo_id == *updated_repo_id {
-                    if let Some(repository) = this.get_repository(cx) {
-                        this.on_repository_event(repository, repo_event, cx);
-                    }
+                if this.repo_id == *updated_repo_id
+                    && let Some(repository) = this.get_repository(cx)
+                {
+                    this.on_repository_event(repository, repo_event, cx);
                 }
             }
             _ => {}
@@ -1666,9 +1662,9 @@ impl GitGraph {
             },
             workspace,
             graph_data: graph,
-            _commit_diff_task: None,
+            commit_diff_task: None,
             selected_commit_message: None,
-            _selected_commit_message_task: None,
+            selected_commit_message_task: None,
             context_menu: None,
             table_interaction_state,
             column_widths,
@@ -2182,7 +2178,7 @@ impl GitGraph {
         self.selected_commit_diff = None;
         self.selected_commit_diff_stats = None;
         self.selected_commit_message = None;
-        self._selected_commit_message_task = None;
+        self.selected_commit_message_task = None;
         self.changed_files_expanded_dirs.clear();
         cx.emit(ItemEvent::Edit);
         cx.notify();
@@ -2398,7 +2394,7 @@ impl GitGraph {
 
         let diff_receiver = repository.update(cx, |repo, _| repo.load_commit_diff(diff_sha));
 
-        self._commit_diff_task = Some(cx.spawn(async move |this, cx| {
+        self.commit_diff_task = Some(cx.spawn(async move |this, cx| {
             if let Ok(Ok(diff)) = diff_receiver.await {
                 this.update(cx, |this, cx| {
                     let stats = compute_diff_stats(&diff);
@@ -2428,7 +2424,7 @@ impl GitGraph {
             return;
         }
 
-        self._selected_commit_message_task = None;
+        self.selected_commit_message_task = None;
         match repository.update(cx, |repository, cx| {
             repository.fetch_commit_data(sha, true, cx).clone()
         }) {
@@ -2436,7 +2432,7 @@ impl GitGraph {
                 self.set_selected_commit_message(cx, data.sha, data.message.clone());
             }
             CommitDataState::Loading(Some(receiver)) => {
-                self._selected_commit_message_task = Some(cx.spawn(async move |this, cx| {
+                self.selected_commit_message_task = Some(cx.spawn(async move |this, cx| {
                     if let Ok(data) = receiver.await {
                         this.update(cx, |this, cx| {
                             this.set_selected_commit_message(cx, data.sha, data.message.clone());
@@ -2466,7 +2462,7 @@ impl GitGraph {
             message: cx.new(|cx| Markdown::new(message, languages, None, cx)),
             scroll_handle: ScrollHandle::new(),
         });
-        self._selected_commit_message_task = None;
+        self.selected_commit_message_task = None;
         cx.notify();
     }
 
@@ -2499,8 +2495,7 @@ impl GitGraph {
         let mut next_selection = self
             .search_state
             .selected_index
-            .map(|index| index + 1)
-            .unwrap_or_default();
+            .map_or_default(|index| index + 1);
 
         if next_selection >= self.search_state.matches.len() {
             next_selection = 0;
@@ -2758,8 +2753,7 @@ impl GitGraph {
                 let ref_name = Self::ref_name_from_decoration(&name);
                 let git_tasks = self
                     .git_task_context(commit.data.sha, ref_name.as_deref(), cx)
-                    .map(|task_context| self.git_context_menu_tasks(&task_context, cx))
-                    .unwrap_or_default();
+                    .map_or_default(|task_context| self.git_context_menu_tasks(&task_context, cx));
                 (name, ref_name, git_tasks)
             })
             .collect::<Vec<_>>();
@@ -2836,8 +2830,7 @@ impl GitGraph {
         let copy_tag_disabled = tag_names.is_empty();
         let git_tasks = self
             .git_task_context(sha, ref_name.as_deref(), cx)
-            .map(|task_context| self.git_context_menu_tasks(&task_context, cx))
-            .unwrap_or_default();
+            .map_or_default(|task_context| self.git_context_menu_tasks(&task_context, cx));
 
         let header = match &ref_name {
             Some(ref_name) => format!("Ref {ref_name}"),
@@ -3154,7 +3147,7 @@ impl GitGraph {
             CommitDataState::Loading(_) => ("Loading...".into(), "".into(), None),
         };
 
-        let date_string = commit_timestamp.map(format_timestamp).unwrap_or_default();
+        let date_string = commit_timestamp.map_or_default(format_timestamp);
 
         let remote = repository.update(cx, |repo, cx| self.get_remote(repo, window, cx));
 
@@ -3178,10 +3171,8 @@ impl GitGraph {
         let (total_lines_added, total_lines_removed) =
             self.selected_commit_diff_stats.unwrap_or((0, 0));
 
-        let changed_file_entries: Vec<ChangedFileEntry> = self
-            .selected_commit_diff
-            .as_ref()
-            .map(|diff| {
+        let changed_file_entries: Vec<ChangedFileEntry> =
+            self.selected_commit_diff.as_ref().map_or_default(|diff| {
                 let mut files = diff.files.iter().collect::<Vec<_>>();
                 if !self.changed_files_view_mode.is_tree() {
                     files.sort_by_key(|file| file.status());
@@ -3190,8 +3181,7 @@ impl GitGraph {
                     .into_iter()
                     .map(|file| ChangedFileEntry::from_commit_file(file, cx))
                     .collect()
-            })
-            .unwrap_or_default();
+            });
         let changed_file_entries = Rc::new(changed_file_entries);
         let tree_entries: Rc<Vec<ChangedFileTreeEntry>> = if self.changed_files_view_mode.is_tree()
         {
@@ -3240,9 +3230,9 @@ impl GitGraph {
                                     this.selected_commit_diff = None;
                                     this.selected_commit_diff_stats = None;
                                     this.selected_commit_message = None;
-                                    this._selected_commit_message_task = None;
+                                    this.selected_commit_message_task = None;
                                     this.changed_files_expanded_dirs.clear();
-                                    this._commit_diff_task = None;
+                                    this.commit_diff_task = None;
                                     cx.notify();
                                 })),
                         ),
@@ -3631,12 +3621,12 @@ impl GitGraph {
             .w_full()
             .gap_1()
             .grid_cols(1)
-            .max_h(line_height * 12.)
             .child(
                 div()
                     .id("commit-message")
                     .text_sm()
-                    .size_full()
+                    .w_full()
+                    .max_h(line_height * 12.)
                     .overflow_y_scroll()
                     .track_scroll(scroll_handle)
                     .child(MarkdownElement::new(message.clone(), message_style))
@@ -4374,7 +4364,7 @@ pub fn generate_random_commit_dag(
     }
 
     let mut commits: Vec<Arc<InitialGraphCommitData>> = Vec::with_capacity(num_commits);
-    let oids: Vec<Oid> = (0..num_commits).map(|_| Oid::random(rng)).collect();
+    let oids: Vec<Oid> = Vec::from_fn(num_commits, |_| Oid::random(rng));
 
     for i in 0..num_commits {
         let sha = oids[i];
@@ -4773,7 +4763,7 @@ impl Render for GitGraph {
                 this.select_previous_match(cx);
             }))
             .on_action(cx.listener(|this, _: &ToggleCaseSensitive, _window, cx| {
-                this.search_state.case_sensitive = !this.search_state.case_sensitive;
+                this.search_state.case_sensitive.toggle();
                 this.search_state.state.next_state();
                 cx.emit(ItemEvent::Edit);
                 cx.notify();
@@ -5150,20 +5140,17 @@ mod persistence {
             Some(LOG_SOURCE_BRANCH) => state
                 .log_source_value
                 .as_ref()
-                .map(|v| LogSource::Branch(v.clone().into()))
-                .unwrap_or_default(),
+                .map_or_default(|v| LogSource::Branch(v.clone().into())),
             Some(LOG_SOURCE_SHA) => state
                 .log_source_value
                 .as_ref()
                 .and_then(|v| Oid::from_str(v).ok())
-                .map(LogSource::Sha)
-                .unwrap_or_default(),
+                .map_or_default(LogSource::Sha),
             Some(LOG_SOURCE_PATH) => state
                 .log_source_value
                 .as_ref()
                 .and_then(|v| RepoPath::new(v).ok())
-                .map(LogSource::Path)
-                .unwrap_or_default(),
+                .map_or_default(LogSource::Path),
             None | Some(_) => LogSource::default(),
         }
     }
@@ -5252,6 +5239,8 @@ impl GitGraph {
 }
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use super::*;
     use anyhow::{Context, Result, bail};
     use collections::{HashMap, HashSet};
@@ -5300,7 +5289,7 @@ mod tests {
         }
 
         let mut commits: Vec<Arc<InitialGraphCommitData>> = Vec::with_capacity(num_commits);
-        let oids: Vec<Oid> = (0..num_commits).map(|_| Oid::random(rng)).collect();
+        let oids: Vec<Oid> = Vec::from_fn(num_commits, |_| Oid::random(rng));
 
         for i in 0..num_commits {
             let sha = oids[i];
@@ -6528,10 +6517,10 @@ mod tests {
             persistence::deserialize_log_source(&state),
             LogSource::Path(path)
         );
-        assert!(matches!(
+        assert_matches!(
             persistence::deserialize_log_order(&state),
             LogOrder::TopoOrder
-        ));
+        );
         assert_eq!(
             state.selected_sha.as_deref(),
             Some(sha.to_string()).as_deref()
@@ -6551,10 +6540,10 @@ mod tests {
             persistence::deserialize_log_source(&all_state),
             LogSource::All
         );
-        assert!(matches!(
+        assert_matches!(
             persistence::deserialize_log_order(&all_state),
             LogOrder::DateOrder
-        ));
+        );
 
         let branch_state = SerializedGitGraphState {
             log_source_type: Some(persistence::LOG_SOURCE_BRANCH),
@@ -6581,10 +6570,10 @@ mod tests {
             persistence::deserialize_log_source(&empty_state),
             LogSource::All
         );
-        assert!(matches!(
+        assert_matches!(
             persistence::deserialize_log_order(&empty_state),
             LogOrder::DateOrder
-        ));
+        );
     }
 
     #[gpui::test]
@@ -8170,8 +8159,9 @@ mod tests {
                 .expect("custom Git task should be scheduled")
         });
 
-        assert!(
-            matches!(task_source_kind, TaskSourceKind::AbsPath { .. }),
+        assert_matches!(
+            task_source_kind,
+            TaskSourceKind::AbsPath { .. },
             "scheduled task should come from global tasks"
         );
         assert_eq!(resolved_task.resolved_label, "Git Show abcdef1");

@@ -107,6 +107,9 @@ impl TestScheduler {
             thread: self.thread.clone(),
             state: self.state.clone(),
         });
+        // SAFETY: `into_raw` hands ownership of a freshly boxed `TracingWaker` to the `Waker`, and
+        // `WAKER_VTABLE` is defined below with exactly that data type, so every vtable function
+        // reinterprets the pointer as `TracingWaker`. The `Waker` drops it once, through `drop_raw`.
         let waker = unsafe { Waker::new(Box::into_raw(waker) as *const (), &WAKER_VTABLE) };
         let max_ticks = if timeout.is_some() {
             self.rng
@@ -800,6 +803,8 @@ impl TracingWaker {
 
     fn clone_raw(waker: *const ()) -> RawWaker {
         let waker = waker.cast::<TracingWaker>();
+        // SAFETY: `clone` borrows the data pointer, which the caller still owns through its
+        // `RawWaker`; the reference is only used to clone, so it cannot outlive the borrow.
         let waker = unsafe { &*waker };
         RawWaker::new(
             Box::into_raw(Box::new(waker.clone())) as *const (),
@@ -808,17 +813,23 @@ impl TracingWaker {
     }
 
     fn wake_raw(waker: *const ()) {
+        // SAFETY: `wake` consumes the `RawWaker`, so this is the one place that takes ownership of
+        // the data pointer and drops it; no other vtable function keeps a copy.
         let waker = unsafe { Box::from_raw(waker as *mut TracingWaker) };
         waker.wake();
     }
 
     fn wake_by_ref_raw(waker: *const ()) {
         let waker = waker.cast::<TracingWaker>();
+        // SAFETY: `wake_by_ref` only borrows; ownership stays with the caller's `RawWaker`, so the
+        // reference must not be turned into a `Box` here.
         let waker = unsafe { &*waker };
         waker.wake_by_ref();
     }
 
     fn drop_raw(waker: *const ()) {
+        // SAFETY: `drop` receives ownership of the data pointer exactly once, when the last
+        // `Waker` sharing it is dropped, so this `Box` is the sole owner.
         let waker = unsafe { Box::from_raw(waker as *mut TracingWaker) };
         drop(waker);
     }

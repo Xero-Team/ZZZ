@@ -36,6 +36,7 @@ use std::{
         Arc,
         atomic::{self, AtomicBool},
     },
+    time::Duration,
 };
 use ui::{
     ButtonLike, Checkbox, CommonAnimationExt, ContextMenu, HighlightedLabel, Indicator, KeyBinding,
@@ -134,30 +135,8 @@ impl FileFinder {
     ) -> Task<()> {
         let project = workspace.project().clone();
 
-        let currently_opened_path = workspace.active_item(cx).and_then(|item| {
-            let project = project.read(cx);
-            let project_path = item.project_path(cx)?;
-            let resource_id = item.resource_id(cx);
-            let abs_path = project
-                .worktree_for_id(project_path.worktree_id, cx)?
-                .read(cx)
-                .absolutize(&project_path.path);
-            Some(FoundPath::new(project_path, abs_path).with_resource_id(resource_id))
-        });
+        let (currently_opened_path, history_items) = Self::history_items(workspace, cx);
 
-        let history_items = workspace
-            .recent_navigation_history(Some(MAX_RECENT_SELECTIONS), cx)
-            .into_iter()
-            .filter_map(|(project_path, abs_path)| {
-                let resource_id = project
-                    .read(cx)
-                    .entry_for_path(&project_path, cx)
-                    .and_then(|entry| entry.resource_id);
-                let path = FoundPath::new(project_path, abs_path?).with_resource_id(resource_id);
-                let is_file = path.is_file(&project.read(cx), cx);
-                Some(cx.background_spawn(async move { is_file.await.then_some(path) }))
-            })
-            .collect::<Vec<_>>();
         cx.spawn_in(window, async move |workspace, cx| {
             let history_items = join_all(history_items).await.into_iter().flatten();
 
@@ -182,6 +161,37 @@ impl FileFinder {
                 })
                 .log_err();
         })
+    }
+
+    fn history_items(
+        workspace: &Workspace,
+        cx: &App,
+    ) -> (Option<FoundPath>, Vec<Task<Option<FoundPath>>>) {
+        let project = workspace.project().read(cx);
+
+        let currently_opened_path = workspace.active_item(cx).and_then(|item| {
+            let project_path = item.project_path(cx)?;
+            let resource_id = item.resource_id(cx);
+            let abs_path = project
+                .worktree_for_id(project_path.worktree_id, cx)?
+                .read(cx)
+                .absolutize(&project_path.path);
+            Some(FoundPath::new(project_path, abs_path).with_resource_id(resource_id))
+        });
+
+        let history_items = workspace
+            .recent_navigation_history(Some(MAX_RECENT_SELECTIONS), cx)
+            .into_iter()
+            .filter_map(|(project_path, abs_path)| {
+                let resource_id = project
+                    .entry_for_path(&project_path, cx)
+                    .and_then(|entry| entry.resource_id);
+                let path = FoundPath::new(project_path, abs_path?).with_resource_id(resource_id);
+                let is_file = path.is_file(project, cx);
+                Some(cx.background_spawn(async move { is_file.await.then_some(path) }))
+            })
+            .collect::<Vec<_>>();
+        (currently_opened_path, history_items)
     }
 
     fn seed_query(
@@ -412,6 +422,7 @@ impl FileFinder {
 }
 
 const MAX_SEED_QUERY_LENGTH: usize = 100;
+const WORKTREE_UPDATE_REFRESH_DEBOUNCE: Duration = Duration::from_millis(200);
 
 fn sanitize_file_query(selection: &str) -> Option<String> {
     let query = selection.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -473,6 +484,7 @@ pub struct FileFinderDelegate {
     focus_handle: FocusHandle,
     include_ignored: Option<bool>,
     include_ignored_refresh: Task<()>,
+    debounce_next_refresh: bool,
 }
 
 /// Use a custom ordering for file finder: the regular one
@@ -1139,6 +1151,52 @@ impl FileFinderDelegate {
         cx: &mut Context<FileFinder>,
     ) -> Self {
         Self::subscribe_to_updates(&project, window, cx);
+        Self::new_unsubscribed(
+            file_finder,
+            workspace,
+            project,
+            currently_opened_path,
+            history_items,
+            separate_history,
+            cx,
+        )
+    }
+
+    /// Builds a delegate that owns no `FileFinder` modal, for embedders such as
+    /// search-everywhere that render its matches themselves.
+    pub fn new_detached(workspace: &Workspace, cx: &mut App) -> Task<Self> {
+        let (currently_opened_path, history_items) = FileFinder::history_items(workspace, cx);
+        let weak_workspace = workspace.weak_handle();
+        let project = workspace.project().clone();
+        cx.spawn(async move |cx| {
+            let history_items = join_all(history_items)
+                .await
+                .into_iter()
+                .flatten()
+                .collect();
+            cx.update(|cx| {
+                Self::new_unsubscribed(
+                    WeakEntity::new_invalid(),
+                    weak_workspace,
+                    project,
+                    currently_opened_path,
+                    history_items,
+                    false,
+                    cx,
+                )
+            })
+        })
+    }
+
+    fn new_unsubscribed(
+        file_finder: WeakEntity<FileFinder>,
+        workspace: WeakEntity<Workspace>,
+        project: Entity<Project>,
+        currently_opened_path: Option<FoundPath>,
+        history_items: Vec<FoundPath>,
+        separate_history: bool,
+        cx: &mut App,
+    ) -> Self {
         Self {
             file_finder,
             workspace,
@@ -1162,6 +1220,7 @@ impl FileFinderDelegate {
             focus_handle: cx.focus_handle(),
             include_ignored: FileFinderSettings::get_global(cx).include_ignored,
             include_ignored_refresh: Task::ready(()),
+            debounce_next_refresh: false,
         }
     }
 
@@ -1170,10 +1229,13 @@ impl FileFinderDelegate {
         window: &mut Window,
         cx: &mut Context<FileFinder>,
     ) {
-        cx.subscribe_in(project, window, |file_finder, _, event, window, cx| {
-            match event {
+        cx.subscribe_in(
+            project,
+            window,
+            |file_finder, _, event, window, cx| match event {
                 project::Event::WorktreeUpdatedEntries(_, _) => {
                     file_finder.picker.update(cx, |picker, cx| {
+                        picker.delegate.debounce_next_refresh = true;
                         picker.delegate.refresh_history(window, cx);
                         picker.refresh(window, cx);
                     })
@@ -1184,8 +1246,8 @@ impl FileFinderDelegate {
                         .update(cx, |picker, cx| picker.refresh(window, cx))
                 }
                 _ => {}
-            };
-        })
+            },
+        )
         .detach();
     }
 
@@ -1420,12 +1482,12 @@ impl FileFinderDelegate {
                 let mut expect_worktree = available_worktree.first().cloned();
                 for worktree in &available_worktree {
                     let worktree_root = worktree.read(cx).root_name();
-                    if worktree_count > 1 {
-                        if let Ok(suffix) = query_path.strip_prefix(worktree_root) {
-                            query_path = Cow::Owned(suffix.to_owned());
-                            expect_worktree = Some(worktree.clone());
-                            break;
-                        }
+                    if worktree_count > 1
+                        && let Ok(suffix) = query_path.strip_prefix(worktree_root)
+                    {
+                        query_path = Cow::Owned(suffix.to_owned());
+                        expect_worktree = Some(worktree.clone());
+                        break;
                     }
                 }
 
@@ -2034,6 +2096,7 @@ impl PickerDelegate for FileFinderDelegate {
         window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Task<()> {
+        let debounce_refresh = std::mem::take(&mut self.debounce_next_refresh);
         let raw_query = raw_query.trim();
 
         let raw_query = match &raw_query.get(0..2) {
@@ -2099,6 +2162,11 @@ impl PickerDelegate for FileFinderDelegate {
             let path = query.path_position.path.clone();
 
             cx.spawn_in(window, async move |this, cx| {
+                if debounce_refresh {
+                    cx.background_executor()
+                        .timer(WORKTREE_UPDATE_REFRESH_DEBOUNCE)
+                        .await;
+                }
                 maybe!(async move {
                     let is_absolute_path = path.is_absolute();
                     let did_resolve_abs_path = is_absolute_path

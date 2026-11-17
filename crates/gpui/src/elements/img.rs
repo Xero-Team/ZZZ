@@ -593,6 +593,7 @@ impl ImageSource {
 }
 
 #[derive(Clone)]
+#[allow(clippy::empty_enums)] // Distinct marker type: `!` would collide with the other Asset markers.
 enum ImageDecoder {}
 
 impl Asset for ImageDecoder {
@@ -610,6 +611,7 @@ impl Asset for ImageDecoder {
 
 /// An image loader for the GPUI asset system
 #[derive(Clone)]
+#[allow(clippy::empty_enums)] // Distinct marker type: `!` would collide with the other Asset markers.
 pub enum ImageAssetLoader {}
 
 impl Asset for ImageAssetLoader {
@@ -638,7 +640,7 @@ impl Asset for ImageAssetLoader {
                     let mut body = Vec::new();
                     response.body_mut().read_to_end(&mut body).await?;
                     if !response.status().is_success() {
-                        let mut body = String::from_utf8_lossy(&body).into_owned();
+                        let mut body = String::from_utf8_lossy_owned(body);
                         let first_line = body.lines().next().unwrap_or("").trim_end();
                         body.truncate(first_line.len());
                         return Err(ImageCacheError::BadStatus {

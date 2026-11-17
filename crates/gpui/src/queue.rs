@@ -77,7 +77,7 @@ impl<T> PriorityQueueState<T> {
             Priority::High => queues.high_priority.push_back(item),
             Priority::Medium => queues.medium_priority.push_back(item),
             Priority::Low => queues.low_priority.push_back(item),
-        };
+        }
     }
 
     fn recv(&self) -> Result<MutexGuard<'_, PriorityQueues<T>>, RecvError> {

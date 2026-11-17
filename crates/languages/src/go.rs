@@ -85,7 +85,7 @@ impl LspInstaller for GoLspAdapter {
 
         if delegate.which("go".as_ref()).await.is_none() {
             if DID_SHOW_NOTIFICATION
-                .compare_exchange(false, true, SeqCst, SeqCst)
+                .try_update(SeqCst, SeqCst, |shown| (!shown).then_some(true))
                 .is_ok()
             {
                 cx.update(|cx| {
@@ -476,12 +476,11 @@ fn json_string_array(value: &serde_json::Value, key: &str) -> Vec<String> {
     value
         .get(key)
         .and_then(|v| v.as_array())
-        .map(|arr| {
+        .map_or_default(|arr| {
             arr.iter()
                 .filter_map(|v| v.as_str().map(String::from))
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 fn parent_for_path_style(path: &Path, path_style: PathStyle) -> Option<PathBuf> {
@@ -719,7 +718,7 @@ impl ContextProvider for GoContextProvider {
                     .map_or_else(
                         || format!("{}", buffer_dir.to_string_lossy()),
                         |relative_pkg_dir| {
-                            if relative_pkg_dir.as_os_str().is_empty() {
+                            if relative_pkg_dir.is_empty() {
                                 ".".into()
                             } else {
                                 format!("./{}", relative_pkg_dir.to_string_lossy())
@@ -743,22 +742,22 @@ impl ContextProvider for GoContextProvider {
                 (GO_MODULE_ROOT_TASK_VARIABLE.clone(), module_dir)
             });
 
-        let _subtest_name = variables.get(&VariableName::Custom(Cow::Borrowed("_subtest_name")));
+        let subtest_name = variables.get(&VariableName::Custom(Cow::Borrowed("_subtest_name")));
 
-        let go_subtest_variable = extract_subtest_name(_subtest_name.unwrap_or(""))
+        let go_subtest_variable = extract_subtest_name(subtest_name.unwrap_or(""))
             .map(|subtest_name| (GO_SUBTEST_NAME_TASK_VARIABLE.clone(), subtest_name));
 
-        let _table_test_case_name = variables.get(&VariableName::Custom(Cow::Borrowed(
+        let table_test_case_name = variables.get(&VariableName::Custom(Cow::Borrowed(
             "_table_test_case_name",
         )));
 
-        let go_table_test_case_variable = _table_test_case_name
+        let go_table_test_case_variable = table_test_case_name
             .and_then(extract_subtest_name)
             .map(|case_name| (GO_TABLE_TEST_CASE_NAME_TASK_VARIABLE.clone(), case_name));
 
-        let _suite_name = variables.get(&VariableName::Custom(Cow::Borrowed("_suite_name")));
+        let suite_name = variables.get(&VariableName::Custom(Cow::Borrowed("suite_name")));
 
-        let go_suite_variable = _suite_name
+        let go_suite_variable = suite_name
             .and_then(extract_subtest_name)
             .map(|suite_name| (GO_SUITE_NAME_TASK_VARIABLE.clone(), suite_name));
 

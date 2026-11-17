@@ -1531,7 +1531,7 @@ impl ToolchainLister for PythonToolchainProvider {
                 Some(PythonEnvironmentKind::Conda) => {
                     if toolchain.environment.manager.is_none() {
                         return vec![];
-                    };
+                    }
 
                     let manager = match conda_manager {
                         settings::CondaManager::Conda => "conda",
@@ -1584,14 +1584,14 @@ impl ToolchainLister for PythonToolchainProvider {
                     | PythonEnvironmentKind::UvWorkspace
                     | PythonEnvironmentKind::Poetry,
                 ) => {
-                    if let Some(activation_scripts) = &toolchain.activation_scripts {
-                        if let Some(activate_script_path) = activation_scripts.get(&shell) {
-                            let activate_keyword = shell.activate_keyword();
-                            if let Some(quoted) =
-                                shell.try_quote(&activate_script_path.to_string_lossy())
-                            {
-                                activation_script.push(format!("{activate_keyword} {quoted}"));
-                            }
+                    if let Some(activation_scripts) = &toolchain.activation_scripts
+                        && let Some(activate_script_path) = activation_scripts.get(&shell)
+                    {
+                        let activate_keyword = shell.activate_keyword();
+                        if let Some(quoted) =
+                            shell.try_quote(&activate_script_path.to_string_lossy())
+                        {
+                            activation_script.push(format!("{activate_keyword} {quoted}"));
                         }
                     }
                 }
@@ -1706,8 +1706,7 @@ impl<'a> EnvironmentApi<'a> {
     pub fn from_env(project_env: &'a HashMap<String, String>) -> Self {
         let paths = project_env
             .get("PATH")
-            .map(|p| std::env::split_paths(p).collect())
-            .unwrap_or_default();
+            .map_or_default(|p| std::env::split_paths(p).collect());
 
         EnvironmentApi {
             global_search_locations: Arc::new(Mutex::new(paths)),
@@ -2443,10 +2442,7 @@ impl RuffLspAdapter {
                             }
                         } else if value_type.starts_with("list[") {
                             schema_entry.insert("type".to_owned(), serde_json::json!("array"));
-                            if let Some(item_type) = value_type
-                                .strip_prefix("list[")
-                                .and_then(|s| s.strip_suffix(']'))
-                            {
+                            if let Some(item_type) = value_type.strip_circumfix("list[", ']') {
                                 let json_type = match item_type {
                                     "str" => "string",
                                     "int" => "integer",
@@ -2800,6 +2796,12 @@ impl PyreflyLspAdapter {
 impl PyreflyLspAdapter {
     const GITHUB_ASSET_KIND: AssetKind = AssetKind::TarGz;
     const ARCH_SERVER_NAME: &str = "linux";
+}
+
+#[cfg(target_os = "freebsd")]
+impl PyreflyLspAdapter {
+    const GITHUB_ASSET_KIND: AssetKind = AssetKind::TarGz;
+    const ARCH_SERVER_NAME: &str = "freebsd";
 }
 
 #[cfg(target_os = "windows")]

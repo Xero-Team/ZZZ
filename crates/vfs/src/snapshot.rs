@@ -345,10 +345,10 @@ impl ResourceRegistry {
                 .records
                 .get(&removed_id)
                 .map(|record| record.path.clone());
-            if let Some(path) = removed_identity {
-                if state.ids_by_path.get(&path) == Some(&removed_id) {
-                    state.ids_by_path.remove(&path);
-                }
+            if let Some(path) = removed_identity
+                && state.ids_by_path.get(&path) == Some(&removed_id)
+            {
+                state.ids_by_path.remove(&path);
             }
             let removed_path = state
                 .records
@@ -793,10 +793,10 @@ impl VfsSnapshot {
         if let Some(parent) = old_path.parent() {
             rescan_roots.push(parent);
         }
-        if let Some(parent) = new_path.parent() {
-            if !rescan_roots.contains(&parent) {
-                rescan_roots.push(parent);
-            }
+        if let Some(parent) = new_path.parent()
+            && !rescan_roots.contains(&parent)
+        {
+            rescan_roots.push(parent);
         }
         if !rescan_roots.is_empty() {
             self.registry.set_rescan_state(SnapshotRescanState::Running);

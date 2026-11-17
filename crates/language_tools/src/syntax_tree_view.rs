@@ -587,8 +587,8 @@ impl Item for SyntaxTreeView {
 
     fn to_item_events(_: &Self::Event, _: &mut dyn FnMut(workspace::item::ItemEvent)) {}
 
-    fn tab_content_text(&self, _detail: usize, _cx: &App) -> SharedString {
-        "Syntax Tree".into()
+    fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
+        tr(cx, "language_tools.syntax.tab_title", "Syntax Tree").into()
     }
 
     fn can_split(&self) -> bool {

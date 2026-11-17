@@ -1,0 +1,9 @@
+This crate ports the JSON prettier from asylum
+(https://github.com/viniengelage/asylum) at
+eaab3fb8226637dbd65f8184c1890c5b6556b902.
+
+Upstream license: GNU General Public License version 3 or later.
+The full license text is in the repository root LICENSE-GPL file.
+
+Ported file:
+- src/toolbox.rs (rewritten against ZZZ's panel and i18n APIs)

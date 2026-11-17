@@ -131,8 +131,7 @@ impl DevContainerContext {
             return HashMap::default();
         };
         task.await
-            .map(|env| env.into_iter().collect::<std::collections::HashMap<_, _>>())
-            .unwrap_or_default()
+            .map_or_default(|env| env.into_iter().collect::<std::collections::HashMap<_, _>>())
     }
 }
 

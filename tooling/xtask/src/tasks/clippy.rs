@@ -271,7 +271,14 @@ fn run_auxiliary_checks(workspace: &Path) -> Result<()> {
     }
 
     if is_installed("cargo-machete") {
-        run_tool(cargo_program(), &["machete"], workspace, "cargo machete")?;
+        // Run the binary directly: through `cargo`, 0.9 receives the bare
+        // subcommand name as an extra path and fails walking it.
+        run_tool(
+            OsString::from("cargo-machete"),
+            &["."],
+            workspace,
+            "cargo machete",
+        )?;
     }
 
     if is_installed("typos") {

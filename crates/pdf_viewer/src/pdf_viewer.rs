@@ -1,5 +1,7 @@
 mod actions;
+mod annotate;
 mod document;
+mod edit;
 mod item;
 mod persistence;
 mod search;
@@ -64,6 +66,14 @@ actions!(
         NextMatch,
         /// Jump to the previous search match.
         PreviousMatch,
+        /// Toggle the annotation palette.
+        ToggleAnnotate,
+        /// Copy the current page's text to the clipboard.
+        CopyPageText,
+        /// Rotate the current page counter-clockwise.
+        RotatePageLeft,
+        /// Rotate the current page clockwise.
+        RotatePageRight,
     ]
 );
 

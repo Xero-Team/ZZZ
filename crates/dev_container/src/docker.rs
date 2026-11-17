@@ -711,6 +711,8 @@ where
 
 #[cfg(test)]
 mod test {
+    use std::assert_matches;
+
     use std::{
         collections::HashMap,
         ffi::OsStr,
@@ -965,8 +967,8 @@ mod test {
 
     #[test]
     fn parse_find_process_output_none() {
-        assert!(matches!(parse_find_process_output(""), Ok(None)));
-        assert!(matches!(parse_find_process_output("   \n\n"), Ok(None)));
+        assert_matches!(parse_find_process_output(""), Ok(None));
+        assert_matches!(parse_find_process_output("   \n\n"), Ok(None));
     }
 
     #[test]

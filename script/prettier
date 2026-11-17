@@ -9,15 +9,27 @@ else
     MODE="--check"
 fi
 
-pnpm dlx "prettier@${PRETTIER_VERSION}" assets/settings/default.json --parser=jsonc $MODE || {
+# Prefer pnpm's content-addressed store; fall back to npx so a machine (and the
+# CI runner) needs only Node. Both paths pin the same Prettier version.
+if command -v pnpm >/dev/null 2>&1; then
+    RUNNER=(pnpm dlx)
+else
+    RUNNER=(npx --yes)
+fi
+
+run_prettier() {
+    "${RUNNER[@]}" "prettier@${PRETTIER_VERSION}" "$@" "$MODE"
+}
+
+run_prettier assets/settings/default.json --parser=jsonc || {
     echo "To fix, run from the root of the ZZZ repo:"
-    echo "  pnpm dlx prettier@${PRETTIER_VERSION} assets/settings/default.json --parser=jsonc --write"
+    echo "  script/prettier --write"
     false
 }
 
 cd docs
-pnpm dlx "prettier@${PRETTIER_VERSION}" . $MODE || {
+run_prettier . || {
     echo "To fix, run from the root of the ZZZ repo:"
-    echo "  cd docs && pnpm dlx prettier@${PRETTIER_VERSION} . --write && cd .."
+    echo "  script/prettier --write"
     false
 }

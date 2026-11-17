@@ -1,0 +1,9 @@
+This crate ports code from lathe (https://github.com/paterschris/lathe) at
+44d467a53adc884a41e8015f922f00e628841690.
+
+Upstream license: GNU General Public License version 3 or later.
+The full license text is in the repository root LICENSE-GPL file.
+
+Files ported:
+- src/search_everywhere.rs
+- src/search_everywhere_tests.rs

@@ -184,10 +184,7 @@ impl Report {
     pub fn write_markdown(self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         let path = path.as_ref();
 
-        if let Some(parent) = path
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-        {
+        if let Some(parent) = path.parent().filter(|parent| !parent.is_empty()) {
             fs::create_dir_all(parent).with_context(|| {
                 format!(
                     "Failed to create parent directory for markdown report at {}",

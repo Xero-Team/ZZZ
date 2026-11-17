@@ -51,16 +51,13 @@ The docs use a custom preprocessor (`docs_preprocessor`) that expands special co
 
 ### Formatting Requirements
 
-All documentation must pass **Prettier** formatting:
+All documentation must pass **Prettier** formatting. `cargo xtask check docs`
+runs the same check in CI, so a page that fails it blocks the gate:
 
 ```sh
-cd docs && npx prettier --check src/
+script/prettier          # check
+script/prettier --write  # fix
 ```
-
-Before any documentation change is considered complete:
-
-1. Run Prettier to format: `cd docs && npx prettier --write src/`
-2. Verify it passes: `cd docs && npx prettier --check src/`
 
 Prettier config: 80 character line width (`docs/.prettierrc`)
 
@@ -125,56 +122,10 @@ Use an in-repo asset, or omit the image.
 
 ## Voice and Tone
 
-### Core Principles
-
-- **Practical over promotional**: Focus on what users can do, not on selling ZZZ. Avoid marketing language like "powerful," "revolutionary," or "best-in-class."
-- **Honest about limitations**: When ZZZ lacks a feature or doesn't match another tool's depth, say so directly. Pair limitations with workarounds or alternative workflows.
-- **Direct and concise**: Use short sentences. Get to the point. Developers are scanning, not reading novels.
-- **Second person**: Address the reader as "you." Avoid "the user" or "one."
-- **Present tense**: "ZZZ opens the file" not "ZZZ will open the file."
-
-### What to Avoid
-
-- Superlatives without substance ("incredibly fast," "seamlessly integrated")
-- Hedging language ("simply," "just," "easily")—if something is simple, the instructions will show it
-- Apologetic tone for missing features—state the limitation and move on
-- Comparisons that disparage other tools—be factual, not competitive
-- Lots of use of em or en dashes.
-
-## Examples of Good Copy
-
-### Good: Direct and actionable
-
-```
-To format on save, open the Settings Editor (`Cmd+,`) and search for `format_on_save`. Set it to `on`.
-
-Or add this to your settings.json:
-{
-  "format_on_save": "on"
-}
-```
-
-### Bad: Wordy and promotional
-
-```
-ZZZ provides a powerful and seamless formatting experience. Simply navigate to the settings and you'll find the format_on_save option which enables ZZZ's incredible auto-formatting capabilities.
-```
-
-### Good: Honest about limitations
-
-```
-ZZZ doesn't index your project like IntelliJ does. You open a folder and start working immediately—no waiting. The trade-off: cross-project analysis relies on language servers, which may not go as deep.
-
-**How to adapt:**
-- Use `Cmd+Shift+F` for project-wide text search
-- Use `Cmd+O` for symbol search (powered by your language server)
-```
-
-### Bad: Defensive or dismissive
-
-```
-While some users might miss indexing, ZZZ's approach is actually better because it's faster.
-```
+`docs/.rules` is the authority for voice, formatting, and terminology in
+user-facing documentation. It already lists the principles, the phrases to
+avoid, worked examples of good and bad copy, and the terminology table, so
+they are not repeated here. Read it before writing or rewriting a page.
 
 ## Scope
 
@@ -237,31 +188,9 @@ For each provider or distinct feature:
 
 ## Style Rules
 
-Inherit all conventions from `docs/.rules`. Key points:
-
-### Voice
-
-- Second person ("you"), present tense
-- Direct and concise—no hedging ("simply", "just", "easily")
-- Honest about limitations; no promotional language
-
-### Formatting
-
-- Keybindings: backticks with `+` for simultaneous keys (`Cmd+Shift+P`)
-- Show both macOS and Linux/Windows variants when they differ
-- Use `sh` code blocks for terminal commands
-- Settings: show Settings Editor UI first, JSON as secondary
-
-### Terminology
-
-| Use             | Instead of                                                            |
-| --------------- | --------------------------------------------------------------------- |
-| folder          | directory                                                             |
-| project         | workspace                                                             |
-| Settings Editor | settings UI                                                           |
-| command palette | command bar                                                           |
-| panel           | tool window, sidebar (be specific: "Project Panel," "Terminal Panel") |
-| language server | LSP (spell out first use, then LSP is fine)                           |
+Inherit every convention from `docs/.rules`: voice, formatting, terminology,
+and the worked examples. Do not restate those rules in this file or in a page;
+link to `docs/.rules` instead, so a change lands in one place.
 
 ## ZZZ-Specific Conventions
 

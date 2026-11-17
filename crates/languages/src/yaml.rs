@@ -188,7 +188,7 @@ fn worktree_root(delegate: &Arc<dyn LspAdapterDelegate>, settings: Option<Value>
     let schemas = schemas
         .into_iter()
         .map(|(url, v)| {
-            if !url.starts_with(".") && !url.starts_with("~") {
+            if !url.starts_with('.') && !url.starts_with('~') {
                 (url, v)
             } else {
                 let resolved_url = delegate

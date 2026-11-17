@@ -29,6 +29,7 @@ actions!(
         OpenDatabase,
         AddDatabaseConnection,
         ToggleDatabasePanel,
+        OpenSelectedConnection,
         RunStatement,
         RunSelection,
         CancelQuery,

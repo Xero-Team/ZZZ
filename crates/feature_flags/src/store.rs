@@ -72,7 +72,7 @@ pub struct FeatureFlagStore {
     server_flags: HashMap<String, String>,
     server_flags_received: bool,
 
-    _settings_subscription: Option<Subscription>,
+    settings_subscription: Option<Subscription>,
 }
 
 impl FeatureFlagStore {
@@ -83,7 +83,7 @@ impl FeatureFlagStore {
         });
 
         cx.update_default_global::<FeatureFlagStore, _>(|store, _| {
-            store._settings_subscription = Some(subscription);
+            store.settings_subscription = Some(subscription);
         });
     }
 
@@ -197,13 +197,11 @@ impl FeatureFlagStore {
         if let Some(requested) = FeatureFlagsSettings::get_global(cx)
             .overrides
             .get(descriptor.name)
-        {
-            if let Some(variant) = (descriptor.variants)()
+            && let Some(variant) = (descriptor.variants)()
                 .into_iter()
                 .find(|v| v.override_key == requested.as_str())
-            {
-                return variant.override_key;
-            }
+        {
+            return variant.override_key;
         }
 
         if (cfg!(debug_assertions) || self.staff)

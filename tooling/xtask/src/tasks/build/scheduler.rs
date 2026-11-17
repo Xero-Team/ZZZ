@@ -86,14 +86,14 @@ pub fn execute(plan: &Plan, options: ExecuteOptions) -> Result<()> {
                 launched = true;
                 continue;
             }
-            if let Some(guard) = &task.guard {
-                if guard.should_skip()? {
-                    eprintln!("skip [{}] (already done)", task.id);
-                    skipped.insert(task.id.clone());
-                    started.insert(task.id.clone());
-                    launched = true;
-                    continue;
-                }
+            if let Some(guard) = &task.guard
+                && guard.should_skip()?
+            {
+                eprintln!("skip [{}] (already done)", task.id);
+                skipped.insert(task.id.clone());
+                started.insert(task.id.clone());
+                launched = true;
+                continue;
             }
 
             let jobs = task.jobs.max(1).min(total_jobs);

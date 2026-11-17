@@ -736,6 +736,7 @@ pub struct Window {
     display_id: Option<DisplayId>,
     is_resizable: bool,
     is_minimizable: bool,
+    last_window_bounds: WindowBounds,
     sprite_atlas: Arc<dyn PlatformAtlas>,
     text_system: Rc<WindowTextSystem>,
     text_rendering_mode: Rc<Cell<TextRenderingMode>>,
@@ -963,43 +964,16 @@ pub(crate) struct ElementStateBox {
     pub(crate) type_name: &'static str,
 }
 
-fn active_window_bounds(cx: &mut App) -> Option<WindowBounds> {
-    let window_update_stack = cx.window_update_stack.clone();
-    let window_stack = cx.window_stack().unwrap_or_default();
-
-    let active_window = window_stack
-        .into_iter()
-        .filter(|window| !window_update_stack.contains(&window.window_id()))
-        .find_map(|window| {
-            window
-                .update(cx, |_, window, _| window.window_bounds())
-                .ok()
-        });
-
-    active_window.or_else(|| {
-        cx.active_window()
-            .filter(|window| !window_update_stack.contains(&window.window_id()))
-            .and_then(|window| {
-                window
-                    .update(cx, |_, window, _| window.window_bounds())
-                    .ok()
-            })
-    })
-}
-
-fn default_bounds(display_id: Option<DisplayId>, cx: &mut App) -> WindowBounds {
-    let active_window_bounds = active_window_bounds(cx);
-
+fn default_bounds(
+    active_window_bounds: Option<WindowBounds>,
+    display: Option<&dyn PlatformDisplay>,
+) -> WindowBounds {
     const CASCADE_OFFSET: f32 = 25.0;
-
-    let display = display_id.map_or_else(|| cx.primary_display(), |id| cx.find_display(id));
 
     let default_placement = || Bounds::new(point(px(0.), px(0.)), DEFAULT_WINDOW_SIZE);
 
     // Use visible_bounds to exclude taskbar/dock areas
-    let display_bounds = display
-        .as_ref()
-        .map_or_else(default_placement, |d| d.visible_bounds());
+    let display_bounds = display.map_or_else(default_placement, |d| d.visible_bounds());
 
     let (
         Bounds {
@@ -1012,9 +986,7 @@ fn default_bounds(display_id: Option<DisplayId>, cx: &mut App) -> WindowBounds {
         // but they should always open as regular windowed windows.
         Some(bounds) => (bounds.get_bounds(), WindowBounds::Windowed),
         None => (
-            display
-                .as_ref()
-                .map_or_else(default_placement, |d| d.default_bounds()),
+            display.map_or_else(default_placement, |d| d.default_bounds()),
             WindowBounds::Windowed,
         ),
     };
@@ -1042,6 +1014,8 @@ fn default_bounds(display_id: Option<DisplayId>, cx: &mut App) -> WindowBounds {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     #[cfg(feature = "accessibility")]
     use crate::AccessibilityUpdate;
     #[cfg(feature = "frame-diagnostics")]
@@ -1059,7 +1033,8 @@ mod tests {
     use crate::{
         AnyWindowHandle, AppContext as _, Bounds, Context, FocusHandle, InteractiveElement as _,
         IntoElement, ParentElement as _, Pixels, Render, RequestFrameOptions, Styled as _,
-        TestAppContext, Window, WindowAppearance, canvas, div, px, size,
+        TestAppContext, Window, WindowAppearance, WindowBounds, WindowOptions, canvas, div, px,
+        size,
     };
     #[cfg(feature = "frame-diagnostics")]
     use scheduler::Instant;
@@ -1084,6 +1059,26 @@ mod tests {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
             self.render_count.set(self.render_count.get() + 1);
             div()
+        }
+    }
+
+    #[gpui::test]
+    fn test_maximized_window_opens_when_backend_cannot_zoom(cx: &mut TestAppContext) {
+        // The test platform inherits WindowHost's "zoom unsupported" default.
+        // A maximized window must still open: its bounds are already applied
+        // through WindowParams, so requesting the maximized state is only a
+        // best-effort decoration, not a prerequisite for creating the window.
+        let result = cx.update(|cx| {
+            cx.open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Maximized(Bounds::maximized(None, cx))),
+                    ..Default::default()
+                },
+                |_, cx| cx.new(|_| EmptyView),
+            )
+        });
+        if let Err(error) = result {
+            panic!("a maximized window must open even when the backend cannot zoom: {error:#}");
         }
     }
 
@@ -1702,6 +1697,50 @@ mod tests {
             ),
             None,
         );
+    }
+
+    #[gpui::test]
+    fn test_window_opened_from_bounds_observer_uses_new_bounds(cx: &mut TestAppContext) {
+        use std::{cell::Cell, rc::Rc};
+
+        use crate::{Empty, Subscription};
+
+        struct BoundsObserver {
+            _subscription: Subscription,
+        }
+
+        impl Render for BoundsObserver {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                Empty
+            }
+        }
+
+        let opened_window = Rc::new(Cell::new(None));
+        let window = cx.add_window({
+            let opened_window = opened_window.clone();
+            move |window, cx| BoundsObserver {
+                _subscription: cx.observe_window_bounds(window, move |_, _, cx| {
+                    let handle = cx
+                        .open_window(WindowOptions::default(), |_, cx| cx.new(|_| EmptyView))
+                        .unwrap();
+                    opened_window.set(Some(AnyWindowHandle::from(handle)));
+                }),
+            }
+        });
+        window
+            .update(cx, |_, window, _| window.activate_window())
+            .unwrap();
+
+        let new_size = size(px(400.), px(300.));
+        cx.simulate_window_resize(window.into(), new_size);
+
+        let opened_window = opened_window
+            .take()
+            .expect("bounds observer should have opened a window");
+        let opened_size = opened_window
+            .update(cx, |_, window, _| window.bounds().size)
+            .unwrap();
+        assert_eq!(opened_size, new_size);
     }
 
     #[test]
@@ -2705,14 +2744,8 @@ mod tests {
         let window = cx.add_window(|_, _| EmptyView);
         window
             .update(cx, |_, window, _| {
-                assert!(matches!(
-                    window.window_handle(),
-                    Err(HandleError::NotSupported)
-                ));
-                assert!(matches!(
-                    window.display_handle(),
-                    Err(HandleError::NotSupported)
-                ));
+                assert_matches!(window.window_handle(), Err(HandleError::NotSupported));
+                assert_matches!(window.display_handle(), Err(HandleError::NotSupported));
             })
             .unwrap();
     }

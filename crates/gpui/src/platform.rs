@@ -2,7 +2,7 @@ mod app_menu;
 mod keyboard;
 mod keystroke;
 
-#[cfg(all(target_os = "linux", feature = "wayland"))]
+#[cfg(all(any(target_os = "linux", target_os = "freebsd"), feature = "wayland"))]
 #[expect(missing_docs)]
 pub mod layer_shell;
 
@@ -22,7 +22,7 @@ mod visual_test;
 pub mod scap_screen_capture;
 
 #[cfg(all(
-    any(target_os = "windows", target_os = "linux"),
+    any(target_os = "windows", target_os = "linux", target_os = "freebsd"),
     feature = "screen-capture"
 ))]
 pub(crate) type PlatformScreenCaptureFrame = scap::frame::Frame;
@@ -44,8 +44,8 @@ use async_task::Runnable;
 use futures::channel::oneshot;
 #[cfg(any(test, feature = "test-support"))]
 use image::RgbaImage;
-use image::codecs::gif::GifDecoder;
-use image::{AnimationDecoder as _, Frame};
+use image::codecs::{gif::GifDecoder, webp::WebPDecoder};
+use image::{AnimationDecoder as _, Frame, Rgba};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use scheduler::Instant;
 pub use scheduler::RunnableMeta;
@@ -1689,8 +1689,8 @@ pub struct WindowOptions {
     /// Whether the window should be minimized by the user
     pub is_minimizable: bool,
 
-    /// The display to create the window on, if this is None,
-    /// the window will be created on the main display
+    /// The display to create the window on. If neither this nor `window_bounds` is set, the window
+    /// is created on the active window's display. Otherwise, it falls back to the primary display.
     pub display_id: Option<DisplayId>,
 
     /// The appearance of the window background.
@@ -1813,9 +1813,10 @@ impl WindowBounds {
         }
     }
 
-    /// Creates a new window bounds that centers the window on the screen.
-    pub fn centered(size: Size<Pixels>, cx: &App) -> Self {
-        WindowBounds::Windowed(Bounds::centered(None, size, cx))
+    /// Creates window bounds centered on the given display, or the primary display if none is
+    /// provided.
+    pub fn centered(display_id: Option<DisplayId>, size: Size<Pixels>, cx: &App) -> Self {
+        WindowBounds::Windowed(Bounds::centered(display_id, size, cx))
     }
 }
 
@@ -1879,7 +1880,7 @@ pub enum WindowKind {
 
     /// A Wayland LayerShell window, used to draw overlays or backgrounds for applications such as
     /// docks, notifications or wallpapers.
-    #[cfg(all(target_os = "linux", feature = "wayland"))]
+    #[cfg(all(any(target_os = "linux", target_os = "freebsd"), feature = "wayland"))]
     LayerShell(layer_shell::LayerShellOptions),
 
     /// A window that appears on top of its parent window and blocks interaction with it
@@ -2498,7 +2499,35 @@ impl Image {
             }
             ImageFormat::Png => frames_for_image(&self.bytes, image::ImageFormat::Png)?,
             ImageFormat::Jpeg => frames_for_image(&self.bytes, image::ImageFormat::Jpeg)?,
-            ImageFormat::Webp => frames_for_image(&self.bytes, image::ImageFormat::WebP)?,
+            ImageFormat::Webp => {
+                let mut decoder = WebPDecoder::new(Cursor::new(&self.bytes))?;
+                if decoder.has_animation() {
+                    if let Err(error) = decoder.set_background_color(Rgba([0, 0, 0, 0])) {
+                        log::debug!("Skipping WebP background color: {error}");
+                    }
+                    let mut frames = SmallVec::new();
+                    for frame in decoder.into_frames() {
+                        match frame {
+                            Ok(mut frame) => {
+                                // Convert from RGBA to BGRA.
+                                for pixel in frame.buffer_mut().chunks_exact_mut(4) {
+                                    pixel.swap(0, 2);
+                                }
+                                frames.push(frame);
+                            }
+                            Err(err) => {
+                                log::debug!("Skipping WebP frame due to decode error: {err}");
+                            }
+                        }
+                    }
+                    if frames.is_empty() {
+                        anyhow::bail!("WebP could not be decoded: all frames failed");
+                    }
+                    frames
+                } else {
+                    frames_for_image(&self.bytes, image::ImageFormat::WebP)?
+                }
+            }
             ImageFormat::Bmp => frames_for_image(&self.bytes, image::ImageFormat::Bmp)?,
             ImageFormat::Tiff => frames_for_image(&self.bytes, image::ImageFormat::Tiff)?,
             ImageFormat::Ico => frames_for_image(&self.bytes, image::ImageFormat::Ico)?,
@@ -2624,6 +2653,36 @@ mod image_tests {
         for pixel in bytes.chunks_exact(4) {
             assert_eq!(pixel, &[0xF8, 0xBD, 0x38, 0xFF]);
         }
+    }
+
+    #[test]
+    fn test_animated_webp_image_to_image_data_decodes_frames() {
+        // 1x1 2-frame animated WebP (frame 0: red, frame 1: blue, 100ms delay each).
+        const ANIMATED_WEBP: &[u8] = &[
+            82, 73, 70, 70, 192, 0, 0, 0, 87, 69, 66, 80, 86, 80, 56, 88, 10, 0, 0, 0, 2, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 65, 78, 73, 77, 6, 0, 0, 0, 255, 255, 255, 255, 0, 0, 65, 78, 77, 70,
+            72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 2, 86, 80, 56, 32, 48, 0,
+            0, 0, 208, 1, 0, 157, 1, 42, 1, 0, 1, 0, 2, 0, 52, 37, 160, 2, 116, 186, 1, 248, 0, 3,
+            176, 0, 254, 240, 196, 11, 255, 32, 185, 97, 117, 200, 215, 255, 32, 63, 228, 7, 252,
+            128, 255, 248, 242, 0, 0, 0, 65, 78, 77, 70, 68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 100, 0, 0, 0, 86, 80, 56, 32, 44, 0, 0, 0, 148, 1, 0, 157, 1, 42, 1, 0, 1, 0, 0,
+            0, 52, 37, 160, 2, 116, 186, 0, 3, 152, 0, 254, 249, 147, 111, 255, 144, 31, 255, 144,
+            31, 255, 144, 31, 255, 32, 63, 226, 23, 123, 32, 48, 0,
+        ];
+
+        let image = Image::from_bytes(ImageFormat::Webp, ANIMATED_WEBP.to_vec());
+        let render_image = image.to_image_data(SvgRenderer::new(Arc::new(()))).unwrap();
+
+        assert_eq!(render_image.frame_count(), 2);
+        assert_eq!(render_image.size(0), size(1.into(), 1.into()));
+        assert_eq!(
+            Duration::from(render_image.delay(0)),
+            Duration::from_millis(100)
+        );
+        assert_eq!(
+            Duration::from(render_image.delay(1)),
+            Duration::from_millis(100)
+        );
     }
 
     #[test]

@@ -79,8 +79,8 @@ fn parse_hosts(line: &str, hosts: &mut BTreeSet<String>) {
     hosts.extend(
         line.split_whitespace()
             .map(|field| field.trim_end_matches('\\'))
-            .filter(|field| !field.starts_with("!"))
-            .filter(|field| !field.contains("*"))
+            .filter(|field| !field.starts_with('!'))
+            .filter(|field| !field.contains('*'))
             .filter(|field| *field != "\\")
             .filter(|field| !field.is_empty())
             .map(|field| field.to_owned()),

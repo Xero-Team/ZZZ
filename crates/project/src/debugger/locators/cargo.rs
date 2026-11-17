@@ -192,7 +192,7 @@ impl DapLocator for CargoLocator {
                 .iter()
                 .rev()
                 .take_while(|name| "--" != name.as_str())
-                .find(|name| !name.starts_with("-"))
+                .find(|name| !name.starts_with('-'))
                 .cloned();
         }
         let executable = {

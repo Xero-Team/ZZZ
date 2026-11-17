@@ -156,7 +156,7 @@ impl EntryViewState {
                             let element = create_terminal(
                                 self.workspace.clone(),
                                 self.project.clone(),
-                                terminal.clone(),
+                                terminal,
                                 window,
                                 cx,
                             )
@@ -193,25 +193,20 @@ impl EntryViewState {
                                     let multibuffer = diff.read(cx).multibuffer();
                                     if let Some((buffer_id, (ranges, _))) =
                                         selections_by_buffer.iter().next()
-                                    {
-                                        if let Some(buffer) =
+                                        && let Some(buffer) =
                                             multibuffer.read(cx).buffer(*buffer_id)
-                                        {
-                                            if let Some(range) = ranges.first() {
-                                                let point =
-                                                    buffer.read(cx).offset_to_point(range.start.0);
-                                                if let Some(path) = diff.read(cx).file_path(cx) {
-                                                    cx.emit(EntryViewEvent {
-                                                        entry_index,
-                                                        view_event: ViewEvent::OpenDiffLocation {
-                                                            path,
-                                                            position: point,
-                                                            split: *split,
-                                                        },
-                                                    });
-                                                }
-                                            }
-                                        }
+                                        && let Some(range) = ranges.first()
+                                        && let Some(path) = diff.read(cx).file_path(cx)
+                                    {
+                                        let point = buffer.read(cx).offset_to_point(range.start.0);
+                                        cx.emit(EntryViewEvent {
+                                            entry_index,
+                                            view_event: ViewEvent::OpenDiffLocation {
+                                                path,
+                                                position: point,
+                                                split: *split,
+                                            },
+                                        });
                                     }
                                 }
                             }
@@ -260,7 +255,7 @@ impl EntryViewState {
                     self.set_entry(index, Entry::CompletedPlan);
                 }
             }
-        };
+        }
     }
 
     fn set_entry(&mut self, index: usize, entry: Entry) {
@@ -724,14 +719,8 @@ mod tests {
         });
 
         view_state.read_with(cx, |view_state, _cx| {
-            assert!(matches!(
-                view_state.entry(0),
-                Some(Entry::Elicitation { .. })
-            ));
-            assert!(matches!(
-                view_state.entry(1),
-                Some(Entry::AssistantMessage(_))
-            ));
+            assert_matches!(view_state.entry(0), Some(Entry::Elicitation { .. }));
+            assert_matches!(view_state.entry(1), Some(Entry::AssistantMessage(_)));
         });
     }
 

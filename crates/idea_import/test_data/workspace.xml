@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="0f1e" name="Changes" comment="" />
+  </component>
+  <component name="RunManager" selected="Python.cli">
+    <configuration name="cli" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="service" />
+      <option name="INTERPRETER_OPTIONS" value="-X dev" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="$USER_HOME$/.venvs/tools/bin/python" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ENV_FILES" value="$PROJECT_DIR$/.env" />
+      <option name="SCRIPT_NAME" value="tools.cli" />
+      <option name="PARAMETERS" value="" />
+      <option name="MODULE_MODE" value="true" />
+      <method v="2" />
+    </configuration>
+    <configuration name="parser tests" type="GoTestRunConfiguration" factoryName="Go Test">
+      <module name="app" />
+      <working_directory value="$MODULE_DIR$/internal/parser" />
+      <go_parameters value="-count=1" />
+      <parameters value="-test.v" />
+      <kind value="DIRECTORY" />
+      <package value="github.com/acme/app" />
+      <directory value="$PROJECT_DIR$/internal/parser" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTestParse\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Main" type="Application" factoryName="Application">
+      <option name="MAIN_CLASS_NAME" value="com.acme.Main" />
+      <module name="app" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Attach JVM" type="Remote">
+      <option name="HOST" value="localhost" />
+      <option name="PORT" value="5005" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Everything" type="CompoundRunConfigurationType">
+      <toRun name="API server" type="PythonConfigurationType" />
+      <toRun name="controller [kube]" type="GoApplicationRunConfiguration" />
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="PythonConfigurationType" factoryName="Python">
+      <option name="PARENT_ENVS" value="true" />
+      <method v="2" />
+    </configuration>
+    <list>
+      <item itemvalue="Python.cli" />
+    </list>
+  </component>
+</project>

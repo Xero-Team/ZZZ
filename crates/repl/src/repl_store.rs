@@ -143,10 +143,10 @@ impl ReplStore {
     ) {
         for specs in self.kernel_specifications_for_worktree.values_mut() {
             for kernel_spec in specs.iter_mut() {
-                if let KernelSpecification::PythonEnv(env_spec) = kernel_spec {
-                    if env_spec == spec {
-                        env_spec.has_ipykernel = true;
-                    }
+                if let KernelSpecification::PythonEnv(env_spec) = kernel_spec
+                    && env_spec == spec
+                {
+                    env_spec.has_ipykernel = true;
                 }
             }
         }

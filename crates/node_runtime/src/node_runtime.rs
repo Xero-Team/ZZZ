@@ -427,10 +427,10 @@ fn deserialize_npm_info_from_response(data: &[u8]) -> Result<NpmInfo, serde_json
     let value: serde_json::Value = serde_json::from_slice(data)?;
 
     // npm >= 12 returns an array with one object: [ { ... } ]
-    if let serde_json::Value::Array(arr) = &value {
-        if arr.len() == 1 {
-            return NpmInfo::deserialize(&arr[0]);
-        }
+    if let serde_json::Value::Array(arr) = &value
+        && arr.len() == 1
+    {
+        return NpmInfo::deserialize(&arr[0]);
     }
 
     // npm <= v11 returns a bare JSON object: { ... }
@@ -1310,10 +1310,10 @@ fn npm_command_env(node_binary: Option<&Path>) -> HashMap<String, String> {
         command_env.insert("PATH".into(), env_path.to_string_lossy().into_owned());
     }
 
-    if let Ok(node_ca_certs) = env::var(NODE_CA_CERTS_ENV_VAR) {
-        if !node_ca_certs.is_empty() {
-            command_env.insert(NODE_CA_CERTS_ENV_VAR.to_owned(), node_ca_certs);
-        }
+    if let Ok(node_ca_certs) = env::var(NODE_CA_CERTS_ENV_VAR)
+        && !node_ca_certs.is_empty()
+    {
+        command_env.insert(NODE_CA_CERTS_ENV_VAR.to_owned(), node_ca_certs);
     }
 
     #[cfg(windows)]
@@ -1337,6 +1337,8 @@ fn npm_command_env(node_binary: Option<&Path>) -> HashMap<String, String> {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches;
+
     use std::{
         env, fs,
         path::{Path, PathBuf},
@@ -1520,9 +1522,8 @@ mod tests {
         for version in ["21.7.3", "22.0.0-rc.1"] {
             let error = check_node_version(path, node_output(&format!("v{version}\n")))
                 .expect_err("unsupported version");
-            assert!(
-                matches!(&error, NodeDiscoveryError::TooOld { path: actual_path, version: actual_version }
-                    if actual_path == path && actual_version == &Version::parse(version)?)
+            assert_matches!(&error, NodeDiscoveryError::TooOld { path: actual_path, version: actual_version }
+                    if actual_path == path && actual_version == &Version::parse(version)?
             );
             assert!(
                 error
@@ -1531,11 +1532,11 @@ mod tests {
             );
         }
         let stdout = "not node\n";
-        assert!(matches!(
+        assert_matches!(
             check_node_version(path, node_output(stdout)),
             Err(NodeDiscoveryError::InvalidVersion { path: actual_path, output, .. })
                 if actual_path == path && output == stdout
-        ));
+        );
         Ok(())
     }
 

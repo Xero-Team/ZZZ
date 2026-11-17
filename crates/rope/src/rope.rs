@@ -854,7 +854,7 @@ impl<'a> Chunks<'a> {
             } else if offset < *self.chunks.start() {
                 self.chunks.seek(&offset, Bias::Right);
             }
-        };
+        }
 
         self.offset = offset;
     }

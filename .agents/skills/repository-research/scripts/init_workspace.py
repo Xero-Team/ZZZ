@@ -22,10 +22,10 @@ def main() -> int:
     (workspace / "surveys").mkdir(exist_ok=True)
 
     copies = {
-        assets / "SOURCES.tsv": workspace / "SOURCES.tsv",
-        assets / "EVIDENCE.tsv": workspace / "EVIDENCE.tsv",
-        assets / "EXPERIMENTS.tsv": workspace / "EXPERIMENTS.tsv",
-        assets / "report-template.md": workspace / "REPORT.md",
+        assets / "sources.tsv": workspace / "sources.tsv",
+        assets / "evidence.tsv": workspace / "evidence.tsv",
+        assets / "experiments.tsv": workspace / "experiments.tsv",
+        assets / "report-template.md": workspace / "report.md",
     }
     for source, destination in copies.items():
         if destination.exists():

@@ -1,4 +1,6 @@
 //! This module contains all actions supported by [`Editor`].
+// serde's derive emits an empty `__Field` enum for actions whose fields are all skipped.
+#![allow(clippy::empty_enums)]
 use super::*;
 use gpui::{Action, actions};
 use project::project_settings::GoToDiagnosticSeverityFilter;

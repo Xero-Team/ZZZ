@@ -789,7 +789,7 @@ impl RulesLibrary {
                             }
                             editor
                         });
-                        let _subscriptions = vec![
+                        let subscriptions = vec![
                             cx.subscribe_in(
                                 &title_editor,
                                 window,
@@ -816,7 +816,7 @@ impl RulesLibrary {
                                 body_editor,
                                 next_title_and_body_to_save: None,
                                 pending_save: None,
-                                _subscriptions,
+                                _subscriptions: subscriptions,
                             },
                         );
                         this.set_active_rule(Some(prompt_id), window, cx);
@@ -1320,6 +1320,7 @@ impl Render for RulesLibrary {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use prompt_store::{BuiltInPrompt, UserPromptId};
 

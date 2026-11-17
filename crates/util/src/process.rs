@@ -113,11 +113,21 @@ impl Child {
 
     #[cfg(not(windows))]
     pub fn kill(&mut self) -> Result<()> {
-        let pid = self.process.id();
-        unsafe {
-            libc::killpg(pid as i32, libc::SIGKILL);
+        let pid =
+            i32::try_from(self.process.id()).context("child process id does not fit in a pid_t")?;
+        // SAFETY: `Child::spawn` runs `set_pre_exec_to_start_new_session`, so the child is the
+        // leader of its own process group and `killpg` here cannot reach this process's group.
+        // `killpg` carries no memory-safety preconditions; an already-reaped group reports ESRCH.
+        let result = unsafe { libc::killpg(pid, libc::SIGKILL) };
+        if result == 0 {
+            return Ok(());
         }
-        Ok(())
+        let error = std::io::Error::last_os_error();
+        if error.raw_os_error() == Some(libc::ESRCH) {
+            // The process group is already gone, which is the state the caller asked for.
+            return Ok(());
+        }
+        Err(error).context("failed to kill process group")
     }
 
     #[cfg(windows)]

@@ -257,7 +257,7 @@ fn template_big_table_of_actions(book: &mut Book, actions: &ActionManifest) {
 }
 
 fn format_binding(binding: String) -> String {
-    binding.replace("\\", "\\\\")
+    binding.replace('\\', "\\\\")
 }
 
 fn escape_html_text(text: &str) -> String {
@@ -498,7 +498,7 @@ fn template_and_validate_json_snippets(
                         err.to_string(),
                     ));
                     continue;
-                };
+                }
                 let tag_range_complete = tag_start - 1..tag_end + 1;
                 offset -= tag_range_complete.len();
                 chapter.content.replace_range(tag_range_complete, "");
@@ -587,7 +587,7 @@ fn template_and_validate_json_snippets(
                 )?;
             }
             label => anyhow::bail!("Unexpected JSON code block tag: {label}"),
-        };
+        }
         Ok(())
     });
     Ok(())
@@ -617,7 +617,7 @@ fn template_and_validate_json_snippets(
 /// ```
 fn name_for_action(action_as_str: String) -> String {
     action_as_str
-        .split(",")
+        .split(',')
         .next()
         .map(|name| name.trim_matches('"').to_owned())
         .unwrap_or(action_as_str)
@@ -826,7 +826,7 @@ fn handle_postprocessing() -> Result<()> {
         path: &'a std::path::PathBuf,
         root: &'a std::path::PathBuf,
     ) -> &'a std::path::Path {
-        path.strip_prefix(&root).unwrap_or(path)
+        path.trim_prefix(&root)
     }
     fn extract_title_from_page(contents: &str, pretty_path: &std::path::Path) -> Result<String> {
         let captures = title_regex()
@@ -839,8 +839,7 @@ fn handle_postprocessing() -> Result<()> {
 
         Ok(title_tag_contents
             .trim()
-            .strip_suffix("- ZZZ")
-            .unwrap_or(title_tag_contents)
+            .trim_suffix("- ZZZ")
             .trim()
             .to_owned())
     }

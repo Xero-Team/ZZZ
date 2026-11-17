@@ -363,7 +363,7 @@ pub fn session(editor: WeakEntity<Editor>, cx: &mut App) -> SessionSupport {
 
     if let Some(session) = store.read(cx).get_session(entity_id).cloned() {
         return SessionSupport::ActiveSession(session);
-    };
+    }
 
     let Some(language) = get_language(editor.clone(), cx) else {
         return SessionSupport::Unsupported;

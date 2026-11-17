@@ -1,5 +1,4 @@
 diff --git a/Cargo.toml b/Cargo.toml
-index c401fd42843529ec8ab677a6ca4772d3a5ad56b8..b4c8a1c1c5a3ecb2ffd5b0f2e1d1a24a0f5b6e17 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -3,13 +3,6 @@
@@ -27,7 +26,7 @@ index c401fd42843529ec8ab677a6ca4772d3a5ad56b8..b4c8a1c1c5a3ecb2ffd5b0f2e1d1a24a
 @@ -37,8 +29,6 @@
  web-time = "1.1.0"
  nix = "0.29.0"
- notify = { version = "8.2.1", path = "notify" }
+ notify = { version = "8.2.2", path = "notify" }
 -notify-debouncer-full = { version = "0.6.0", path = "notify-debouncer-full" }
 -notify-debouncer-mini = { version = "0.7.0", path = "notify-debouncer-mini" }
  notify-types = { version = "2.0.0", path = "notify-types" }

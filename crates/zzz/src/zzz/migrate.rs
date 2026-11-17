@@ -92,7 +92,7 @@ impl MigrationBanner {
                         ToolbarItemLocation::Hidden,
                     ));
                     self.reset(cx);
-                };
+                }
             }
         }
     }

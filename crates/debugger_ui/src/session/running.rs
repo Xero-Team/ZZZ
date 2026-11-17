@@ -873,7 +873,7 @@ impl RunningState {
             cx,
         );
 
-        let _subscriptions = vec![
+        let subscriptions = vec![
             cx.on_app_quit(move |this, cx| {
                 let shutdown = this
                     .session
@@ -996,7 +996,7 @@ impl RunningState {
             project: weak_project,
             focus_handle,
             variable_list,
-            _subscriptions,
+            _subscriptions: subscriptions,
             thread_id: None,
             _remote_id: None,
             stack_frame_list,
@@ -1270,7 +1270,7 @@ impl RunningState {
                 util::merge_non_null_json_value_into(extra_config, &mut config);
 
                 Self::substitute_variables_in_config(&mut config, &task_context);
-            };
+            }
 
             Ok(DebugTaskDefinition {
                 label,
@@ -1465,7 +1465,7 @@ impl RunningState {
     ) {
         if self.pane_items_status(cx).get(&item_kind) == Some(&true) {
             return;
-        };
+        }
         let pane = self.panes.last_pane();
         let sub_view = self.create_sub_view(item_kind, &pane, cx);
 

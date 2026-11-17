@@ -17,15 +17,13 @@ accessibility = ["gpui/accessibility", "dep:accesskit", "dep:accesskit_windows"]
 test-support = ["gpui/test-support"]
 screen-capture = ["gpui/screen-capture", "scap"]
 
-[dependencies]
-gpui.workspace = true
-
 [target.'cfg(target_os = "windows")'.dependencies]
 accesskit = { workspace = true, optional = true }
 accesskit_windows = { workspace = true, optional = true }
 anyhow.workspace = true
 collections.workspace = true
 futures.workspace = true
+gpui.workspace = true
 image.workspace = true
 itertools.workspace = true
 log.workspace = true

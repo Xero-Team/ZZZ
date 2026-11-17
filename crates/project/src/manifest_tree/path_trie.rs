@@ -70,8 +70,8 @@ impl<Label: Ord + Clone> RootPathTrie<Label> {
                 Entry::Occupied(occupied_entry) => occupied_entry.into_mut(),
             };
         }
-        let _previous_value = current.labels.insert(value, presence);
-        debug_assert_eq!(_previous_value, None);
+        let previous_value = current.labels.insert(value, presence);
+        debug_assert_eq!(previous_value, None);
         current
     }
 
@@ -93,16 +93,16 @@ impl<Label: Ord + Clone> RootPathTrie<Label> {
                 && (callback)(&current.worktree_relative_path, &current.labels).is_break()
             {
                 return;
-            };
+            }
             current = match current.children.get(key) {
                 Some(child) => child,
                 None => return,
             };
         }
-        if !current.labels.is_empty() {
-            if callback(&current.worktree_relative_path, &current.labels).is_break() {
-                return;
-            }
+        if !current.labels.is_empty()
+            && callback(&current.worktree_relative_path, &current.labels).is_break()
+        {
+            return;
         }
     }
 

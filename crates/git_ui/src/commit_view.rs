@@ -22,7 +22,7 @@ use language::{
     Buffer, Capability, DiskState, File, LanguageRegistry, LineEnding, OffsetRangeExt as _,
     ReplicaId, Rope, TextBuffer,
 };
-use markdown::{Markdown, MarkdownElement};
+use markdown::{Markdown, MarkdownElement, MarkdownStyle};
 use multi_buffer::PathKey;
 use project::{Project, WorktreeId, git_store::Repository};
 use settings::Settings;
@@ -644,8 +644,7 @@ impl CommitView {
                                                     .opened_icon(IconName::FoldVertical)
                                                     .tooltip(Tooltip::text(expand_tooltip))
                                                     .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.message_expanded =
-                                                            !this.message_expanded;
+                                                        this.message_expanded.toggle();
                                                         cx.notify();
                                                     })),
                                                 )
@@ -715,7 +714,10 @@ impl CommitView {
             return None;
         }
 
-        let markdown_style = hover_markdown_style(window, cx);
+        let markdown_style = MarkdownStyle {
+            soft_break_as_hard_break: true,
+            ..hover_markdown_style(window, cx)
+        };
         let collapsed = message.contains('\n') && !self.message_expanded;
         let collapsed_height = window.line_height();
 
@@ -756,7 +758,7 @@ impl CommitView {
                         Self::close_commit_view(commit_view, workspace, cx).await?;
                         return Err(err);
                     }
-                };
+                }
                 Self::close_commit_view(commit_view, workspace, cx).await?;
                 anyhow::Ok(())
             },
@@ -783,7 +785,7 @@ impl CommitView {
                         Self::close_commit_view(commit_view, workspace, cx).await?;
                         return Err(err);
                     }
-                };
+                }
                 Self::close_commit_view(commit_view, workspace, cx).await?;
                 anyhow::Ok(())
             },
@@ -810,7 +812,7 @@ impl CommitView {
                         Self::close_commit_view(commit_view, workspace, cx).await?;
                         return Err(err);
                     }
-                };
+                }
                 Self::close_commit_view(commit_view, workspace, cx).await?;
                 anyhow::Ok(())
             },
@@ -1161,8 +1163,7 @@ impl Item for CommitView {
             .rhs_editor()
             .read(cx)
             .addon::<CommitDiffAddon>()
-            .map(|addon| addon.file_statuses.clone())
-            .unwrap_or_default();
+            .map_or_default(|addon| addon.file_statuses.clone());
         let Some(workspace_entity) = self.workspace.upgrade() else {
             return Task::ready(None);
         };

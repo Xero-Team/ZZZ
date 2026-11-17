@@ -1,0 +1,8 @@
+This crate ports code from tau (https://github.com/gopherlian/tau) at
+a7708f8354e4f939caf77e297aa4f4ee2ecd00a3.
+
+Upstream license: GNU General Public License version 3 or later.
+The full license text is in the repository root LICENSE-GPL file.
+
+Ported file:
+- src/project_bookmarks.rs (preview pane removed; ZZZ has no picker_preview)

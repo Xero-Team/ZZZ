@@ -449,8 +449,7 @@ fn available_commands<'a>(
     let buffer = buffer.read(cx);
     let adapters = buffer
         .language()
-        .map(|language| project.languages().lsp_adapters(&language.name()))
-        .unwrap_or_default();
+        .map_or_default(|language| project.languages().lsp_adapters(&language.name()));
     let worktree_owning_servers = File::from_dyn(buffer.file())
         .and_then(|file| project.worktree_for_id(file.worktree_id(cx), cx))
         .map(|worktree| worktree.read(cx))

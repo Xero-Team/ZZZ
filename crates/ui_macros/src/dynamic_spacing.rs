@@ -172,6 +172,7 @@ fn expand(input: &DynamicSpacingInput) -> syn::Result<TokenStream> {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]

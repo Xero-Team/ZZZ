@@ -129,10 +129,7 @@ fn localize_permission_label(cx: &App, label: &str) -> SharedString {
                 }
 
                 if let Some(display) = display.strip_suffix(" commands") {
-                    let display = display
-                        .strip_prefix('`')
-                        .and_then(|display| display.strip_suffix('`'))
-                        .unwrap_or(display);
+                    let display = display.strip_circumfix('`', '`').unwrap_or(display);
                     return tr(
                         cx,
                         "agent_ui.thread_view.always_for_commands",
@@ -142,10 +139,7 @@ fn localize_permission_label(cx: &App, label: &str) -> SharedString {
                     .into();
                 }
 
-                if let Some(display) = display
-                    .strip_prefix('`')
-                    .and_then(|display| display.strip_suffix('`'))
-                {
+                if let Some(display) = display.strip_circumfix('`', '`') {
                     return tr(
                         cx,
                         "agent_ui.thread_view.always_for_pattern",
@@ -287,8 +281,8 @@ fn parse_cat_numbered_code(code: &str) -> Option<ParsedCatNumberedCode> {
 }
 
 fn strip_line_ending(line: &str) -> &str {
-    let without_lf = line.strip_suffix('\n').unwrap_or(line);
-    without_lf.strip_suffix('\r').unwrap_or(without_lf)
+    let without_lf = line.trim_suffix('\n');
+    without_lf.trim_suffix('\r')
 }
 
 fn parse_cat_numbered_line(line: &str) -> Option<(u32, &str)> {
@@ -655,9 +649,9 @@ pub struct ThreadView {
         clippy::pub_underscore_fields,
         reason = "kept alive so the cancellation task is not dropped"
     )]
-    pub _cancel_task: Option<Task<()>>,
-    _save_task: Option<Task<()>>,
-    _draft_resolve_task: Option<Task<()>>,
+    pub cancel_task: Option<Task<()>>,
+    save_task: Option<Task<()>>,
+    draft_resolve_task: Option<Task<()>>,
     pub skip_queue_processing_count: usize,
     pub user_interrupted_generation: bool,
     pub can_fast_track_queue: bool,
@@ -667,7 +661,7 @@ pub struct ThreadView {
         clippy::pub_underscore_fields,
         reason = "kept alive for the lifetime of the view"
     )]
-    pub _subscriptions: Vec<Subscription>,
+    pub subscriptions: Vec<Subscription>,
     pub message_editor: Entity<MessageEditor>,
     pub add_context_menu_handle: PopoverMenuHandle<ContextMenu>,
     pub thinking_effort_menu_handle: PopoverMenuHandle<ContextMenu>,
@@ -705,7 +699,7 @@ pub struct TurnFields {
         clippy::pub_underscore_fields,
         reason = "kept alive so the turn timer task is not dropped"
     )]
-    pub _turn_timer_task: Option<Task<()>>,
+    pub turn_timer_task: Option<Task<()>>,
     pub last_turn_duration: Option<Duration>,
     pub last_turn_tokens: Option<u64>,
     pub turn_generation: usize,
@@ -851,7 +845,7 @@ impl ThreadView {
             } else {
                 Some(editor.update(cx, |editor, cx| editor.draft_contents(cx)))
             };
-            this._draft_resolve_task = Some(cx.spawn(async move |this, cx| {
+            this.draft_resolve_task = Some(cx.spawn(async move |this, cx| {
                 let draft = match draft_contents_task {
                     Some(task) => task.await.log_err().filter(|blocks| !blocks.is_empty()),
                     None => None,
@@ -887,7 +881,7 @@ impl ThreadView {
             list_state,
             session_capabilities,
             resumed_without_history,
-            _subscriptions: subscriptions,
+            subscriptions,
             permission_dropdown_handle: PopoverMenuHandle::default(),
             thread_retry_status: None,
             thread_error: None,
@@ -915,9 +909,9 @@ impl ThreadView {
             is_loading_contents: false,
             new_server_version_available: None,
             elicitation_form_states: HashMap::default(),
-            _cancel_task: None,
-            _save_task: None,
-            _draft_resolve_task: None,
+            cancel_task: None,
+            save_task: None,
+            draft_resolve_task: None,
             skip_queue_processing_count: 0,
             user_interrupted_generation: false,
             can_fast_track_queue: false,
@@ -964,7 +958,7 @@ impl ThreadView {
     /// Schedule a throttled save of the thread state (draft prompt, scroll position, etc.).
     /// Multiple calls within `SERIALIZATION_THROTTLE_TIME` are coalesced into a single save.
     fn schedule_save(&mut self, cx: &mut Context<Self>) {
-        self._save_task = Some(cx.spawn(async move |this, cx| {
+        self.save_task = Some(cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(SERIALIZATION_THROTTLE_TIME)
                 .await;
@@ -1082,11 +1076,10 @@ impl ThreadView {
                     && self.thread.read(cx).supports_truncate(cx)
                     && user_message.id.is_some()
                     && !self.is_subagent()
+                    && editor.read(cx).text(cx).as_str() == user_message.content.to_markdown(cx)
                 {
-                    if editor.read(cx).text(cx).as_str() == user_message.content.to_markdown(cx) {
-                        self.editing_message = None;
-                        cx.notify();
-                    }
+                    self.editing_message = None;
+                    cx.notify();
                 }
             }
             ViewEvent::MessageEditorEvent(_editor, MessageEditorEvent::SendImmediately) => {}
@@ -1174,7 +1167,7 @@ impl ThreadView {
         self.turn_fields.last_turn_duration = None;
         self.turn_fields.last_turn_tokens = None;
         self.turn_fields.turn_tokens = Some(0);
-        self.turn_fields._turn_timer_task = Some(cx.spawn(async move |this, cx| {
+        self.turn_fields.turn_timer_task = Some(cx.spawn(async move |this, cx| {
             loop {
                 cx.background_executor().timer(Duration::from_secs(1)).await;
                 if this.update(cx, |_, cx| cx.notify()).is_err() {
@@ -1195,14 +1188,14 @@ impl ThreadView {
             .take()
             .map(|started| started.elapsed());
         self.turn_fields.last_turn_tokens = self.turn_fields.turn_tokens.take();
-        self.turn_fields._turn_timer_task = None;
+        self.turn_fields.turn_timer_task = None;
     }
 
     pub fn update_turn_tokens(&mut self, cx: &App) {
-        if let Some(usage) = self.thread.read(cx).token_usage() {
-            if let Some(tokens) = &mut self.turn_fields.turn_tokens {
-                *tokens += usage.output_tokens;
-            }
+        if let Some(usage) = self.thread.read(cx).token_usage()
+            && let Some(tokens) = &mut self.turn_fields.turn_tokens
+        {
+            *tokens += usage.output_tokens;
         }
     }
 
@@ -1364,7 +1357,7 @@ impl ThreadView {
             })
             .log_err();
 
-            let _stop_turn = defer({
+            let stop_turn = defer({
                 let this = this.clone();
                 let mut cx = cx.clone();
                 move || {
@@ -1414,7 +1407,7 @@ impl ThreadView {
 
             let res = send.await;
             let _turn_time_ms = turn_start_time.elapsed().as_millis();
-            drop(_stop_turn);
+            drop(stop_turn);
             this.update(cx, |this, cx| {
                 // Cancellation can return control to the UI before this response settles.
                 if this.turn_fields.turn_generation != generation {
@@ -1505,7 +1498,7 @@ impl ThreadView {
         self.thread_retry_status.take();
         self.thread_error.take();
         self.user_interrupted_generation = true;
-        self._cancel_task = Some(self.thread.update(cx, |thread, cx| thread.cancel(cx)));
+        self.cancel_task = Some(self.thread.update(cx, |thread, cx| thread.cancel(cx)));
         self.sync_generating_indicator(cx);
         cx.notify();
     }
@@ -1873,7 +1866,7 @@ impl ThreadView {
                     editor.set_message(user_message.chunks.clone(), window, cx);
                 }
             })
-        };
+        }
         self.message_editor.focus_handle(cx).focus(window, cx);
         cx.notify();
     }
@@ -2389,12 +2382,10 @@ impl ThreadView {
             .update(cx, |action_log, cx| action_log.reject_all_edits(cx))
             .detach();
 
-        if has_changes {
-            if let Some(workspace) = self.workspace.upgrade() {
-                workspace.update(cx, |workspace, cx| {
-                    crate::ui::show_undo_reject_toast(workspace, action_log, cx);
-                });
-            }
+        if has_changes && let Some(workspace) = self.workspace.upgrade() {
+            workspace.update(cx, |workspace, cx| {
+                crate::ui::show_undo_reject_toast(workspace, action_log, cx);
+            });
         }
     }
 
@@ -3045,7 +3036,7 @@ impl ThreadView {
                     .child(Disclosure::new("queue_disclosure", self.queue_expanded))
                     .child(Label::new(title).size(LabelSize::Small).color(Color::Muted))
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.queue_expanded = !this.queue_expanded;
+                        this.queue_expanded.toggle();
                         cx.notify();
                     })),
             )
@@ -3193,7 +3184,7 @@ impl ThreadView {
                     })),
             )
             .on_click(cx.listener(|this, _, _, cx| {
-                this.plan_expanded = !this.plan_expanded;
+                this.plan_expanded.toggle();
                 cx.notify();
             }))
             .into_any_element()
@@ -3479,7 +3470,7 @@ impl ThreadView {
                         }
                     })
                     .on_click(cx.listener(|this, _, _, cx| {
-                        this.edits_expanded = !this.edits_expanded;
+                        this.edits_expanded.toggle();
                         cx.notify();
                     })),
             )
@@ -3815,7 +3806,7 @@ impl ThreadView {
 
     fn render_message_queue_entries(
         &self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &Context<Self>,
     ) -> impl IntoElement {
         let message_editor = self.message_editor.read(cx);
@@ -3851,7 +3842,7 @@ impl ThreadView {
                             )
                         };
 
-                        let editor_focused = editor.focus_handle(cx).is_focused(_window);
+                        let editor_focused = editor.focus_handle(cx).is_focused(window);
                         h_flex()
                             .group("queue_entry")
                             .w_full()
@@ -4291,7 +4282,7 @@ impl ThreadView {
                         this.icon_color(Color::Accent)
                     }
                 })
-                .tooltip(move |_window, cx| {
+                .tooltip(move |window, cx| {
                     if is_editor_empty && !is_generating {
                         Tooltip::for_action(
                             tr(cx, "agent_ui.thread_view.type_to_send", "Type to Send"),
@@ -4334,7 +4325,7 @@ impl ThreadView {
                                         )),
                                 )
                                 .into_any_element()
-                        })(_window, cx)
+                        })(window, cx)
                     } else {
                         Tooltip::for_action(
                             tr(cx, "agent_ui.thread_view.send_message", "Send Message"),
@@ -5837,12 +5828,11 @@ impl ThreadView {
                 cx.notify();
             }
         } else if self.auto_expanded_thinking_block.is_some() {
-            if thinking_display == ThinkingBlockDisplay::Auto {
-                if let Some(key) = self.auto_expanded_thinking_block {
-                    if !self.user_toggled_thinking_blocks.contains(&key) {
-                        self.expanded_thinking_blocks.remove(&key);
-                    }
-                }
+            if thinking_display == ThinkingBlockDisplay::Auto
+                && let Some(key) = self.auto_expanded_thinking_block
+                && !self.user_toggled_thinking_blocks.contains(&key)
+            {
+                self.expanded_thinking_blocks.remove(&key);
             }
             self.auto_expanded_thinking_block = None;
             cx.notify();
@@ -5965,10 +5955,8 @@ impl ThreadView {
             .entry(entry_ix)
             .and_then(|entry| entry.scroll_handle_for_assistant_message_chunk(chunk_ix));
 
-        if should_auto_scroll {
-            if let Some(ref handle) = scroll_handle {
-                handle.scroll_to_bottom();
-            }
+        if should_auto_scroll && let Some(ref handle) = scroll_handle {
+            handle.scroll_to_bottom();
         }
 
         let panel_bg = cx.theme().colors().panel_background;
@@ -6305,8 +6293,7 @@ impl ThreadView {
         // strip the fences so the copy button yields just the command text.
         let command_source = command.read(cx).source();
         let command_text = command_source
-            .strip_prefix("```\n")
-            .and_then(|s| s.strip_suffix("\n```"))
+            .strip_circumfix("```\n", "\n```")
             .unwrap_or(&command_source)
             .to_owned();
 
@@ -8524,9 +8511,7 @@ impl ThreadView {
             .as_ref()
             .map(|thread| thread.read(cx).session_id().clone());
         let action_log = thread.as_ref().map(|thread| thread.read(cx).action_log());
-        let changed_buffers = action_log
-            .map(|log| log.read(cx).changed_buffers(cx))
-            .unwrap_or_default();
+        let changed_buffers = action_log.map_or_default(|log| log.read(cx).changed_buffers(cx));
 
         let is_pending_tool_call = thread_view
             .as_ref()
@@ -8969,15 +8954,14 @@ impl ThreadView {
     ) -> Option<SharedString> {
         if matches!(status, ToolCallStatus::Failed) {
             tool_call.content.iter().find_map(|content| {
-                if let ToolCallContent::ContentBlock(block) = content {
-                    if let Some(source) = block.text_content(cx).filter(|source| !source.is_empty())
-                    {
-                        if source == "User canceled" {
-                            return None;
-                        }
-
-                        return Some(SharedString::from(source));
+                if let ToolCallContent::ContentBlock(block) = content
+                    && let Some(source) = block.text_content(cx).filter(|source| !source.is_empty())
+                {
+                    if source == "User canceled" {
+                        return None;
                     }
+
+                    return Some(SharedString::from(source));
                 }
                 None
             })
@@ -9769,7 +9753,7 @@ impl ThreadView {
             let search_bar = cx.new(|cx| {
                 ThreadSearchBar::new(thread, thread_view_for_search, on_activate, window, cx)
             });
-            self._subscriptions.push(cx.subscribe_in(
+            self.subscriptions.push(cx.subscribe_in(
                 &search_bar,
                 window,
                 |this, _bar, event, window, cx| {

@@ -55,6 +55,26 @@ extend-exclude = [
     "crates/gpui_macos/src/dispatcher.rs",
     # Tests contain `baˇr` that cause `"ba" should be "by" or "be".`-like false-positives
     "crates/editor/src/document_symbols.rs",
+    # Vendored tree-sitter grammars are generated third-party code.
+    "crates/grammars/vendor/",
+    # Vendored third-party crates are not ours to spellcheck.
+    "vendor/",
+    # These files quote upstream commit subjects verbatim.
+    "docs/src/development/upstream-rejected.tsv",
+    "docs/src/development/upstream/",
+    # Upstream tree-sitter query files.
+    "crates/grammars/src/powershell/",
+    # Windows command-line help text, which contains flags like `/fo csv`.
+    "crates/grammars/src/cmd/testdata/",
+    # Vendored JSON schema text.
+    "crates/json_schema_store/src/schemas/",
+    # Path corpora and progress records, which contain bare path fragments.
+    "crates/vfs/test_data/path_corpus.json",
+    "docs/src/development/vfs-refactor-progress.md",
+    "docs/src/development/gpui-refactor-progress.md",
+    "docs/src/development/database/progress.md",
+    "docs/src/development/text-rendering-research/evidence.tsv",
+    ".agents/skills/repository-research/references/codebase-analysis.md",
 ]
 
 [default]
@@ -84,6 +104,44 @@ extend-ignore-re = [
     # Yarn Plug'n'Play
     "PnP",
     # `image` crate method: Delay::from_numer_denom_ms
-    "numer"
+    "numer",
+    # `grammers` is the Telegram MTProto client library we depend on.
+    "grammers",
+    # ScreenCaptureKit bindings keep Apple's own naming.
+    "scap",
+    "Scap",
+    # AMD GPU Services, same as the `ags`/`AGS` entries above.
+    "Ags",
+    # Deliberate search-token prefix in the repository-research skill script.
+    "retriev",
+    # Vim's `:elete` command.
+    ":elete",
+    # `writeable_path_from_extension` follows wasmtime's WASI spelling.
+    "writeable",
+    # Valid variant of "unparsable", used in test names.
+    "unparseable",
+    # Mermaid generates `.composit` and `.alt-composit` SVG classes itself.
+    "composit",
+    # Regex fragments that spell out `#[ignore]` a character at a time.
+    "ignor",
+    # Simulated backspace key name in command-palette tests.
+    "bcksp",
+    # SQL type substrings matched by the MySQL type sniffer.
+    "DOUB",
+    # `café` in the identifier-sanitizing test.
+    "café",
+    # Partial-typing search query in the settings search test.
+    '"fo"',
+    '"ba"',
+    '"bck"',
+    # `/fo csv` is a Windows `driverquery`/`tasklist` flag, not prose.
+    "/fo ",
+    # Vim's bracket notation for command abbreviations.
+    '\[elete\]',
+    # Font file name and a synthetic test string.
+    "SVGinOT",
+    "GHIzJ",
+    # Output of the identifier normalizer for `café-option`.
+    "CAF__OPTION",
 ]
 check-filename = true

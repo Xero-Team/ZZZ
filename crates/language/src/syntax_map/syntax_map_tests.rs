@@ -375,7 +375,7 @@ fn test_dynamic_language_injection(cx: &mut App) {
         &buffer,
         Point::new(3, 0)..Point::new(3, 0),
         &[
-            "(document (section (paragraph (inline)) (fenced_code_block (fenced_code_block_delimiter) (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter))))",
+            "(document (section (paragraph (inline)) (fenced_code_block (fenced_code_block_delimiter) info_string: (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter))))",
             "(inline (code_span (code_span_delimiter) (code_span_delimiter)))",
             "...(function_item name: (identifier) parameters: (parameters) body: (block)...",
         ],
@@ -392,7 +392,7 @@ fn test_dynamic_language_injection(cx: &mut App) {
         &buffer,
         Point::new(3, 0)..Point::new(3, 0),
         &[
-            "(document (section (paragraph (inline)) (fenced_code_block (fenced_code_block_delimiter) (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter))))",
+            "(document (section (paragraph (inline)) (fenced_code_block (fenced_code_block_delimiter) info_string: (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter))))",
             "(inline (code_span (code_span_delimiter) (code_span_delimiter)))",
             "...(call method: (identifier) arguments: (argument_list (call method: (identifier) arguments: (argument_list) block: (block)...",
         ],
@@ -409,7 +409,7 @@ fn test_dynamic_language_injection(cx: &mut App) {
         &buffer,
         Point::new(3, 0)..Point::new(3, 0),
         &[
-            "(document (section (paragraph (inline)) (fenced_code_block (fenced_code_block_delimiter) (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter))))",
+            "(document (section (paragraph (inline)) (fenced_code_block (fenced_code_block_delimiter) info_string: (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter))))",
             "(inline (code_span (code_span_delimiter) (code_span_delimiter)))",
         ],
     );
@@ -423,7 +423,7 @@ fn test_dynamic_language_injection(cx: &mut App) {
         &buffer,
         Point::new(3, 0)..Point::new(3, 0),
         &[
-            "(document (section (paragraph (inline)) (fenced_code_block (fenced_code_block_delimiter) (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter))))",
+            "(document (section (paragraph (inline)) (fenced_code_block (fenced_code_block_delimiter) info_string: (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter))))",
             "(inline (code_span (code_span_delimiter) (code_span_delimiter)))",
             "(document (text))",
         ],
@@ -1101,7 +1101,7 @@ fn test_empty_combined_injections_inside_injections(cx: &mut App) {
         Point::new(0, 0)..Point::new(5, 0),
         &[
             // Markdown document
-            "(document (section (fenced_code_block (fenced_code_block_delimiter) (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter)) (paragraph (inline))))",
+            "(document (section (fenced_code_block (fenced_code_block_delimiter) info_string: (info_string (language)) (block_continuation) (code_fence_content (block_continuation)) (fenced_code_block_delimiter)) (paragraph (inline))))",
             // ERB template in the code block
             "(template...",
             // Markdown inline content
@@ -1373,6 +1373,34 @@ fn test_injection_grouped_by_host(cx: &mut App) {
 
         assert_eq!(sql_layers, *expected_layers, "buffer text:\n{text}");
     }
+}
+
+#[gpui::test]
+fn test_max_start_depth_does_not_carry_over_to_later_queries(cx: &mut App) {
+    fn highlights_query(grammar: &Grammar) -> Option<&Query> {
+        grammar
+            .highlights_config
+            .as_ref()
+            .map(|config| &config.query)
+    }
+
+    let (buffer, syntax_map) = test_edit_sequence("Rust", &["fn a() { b(c); }"], cx);
+    let capture_count = || {
+        syntax_map
+            .captures(0..buffer.len(), &buffer, highlights_query)
+            .count()
+    };
+
+    let expected_capture_count = capture_count();
+    assert!(expected_capture_count > 0);
+
+    drop(syntax_map.matches_with_options(
+        0..buffer.len(),
+        &buffer,
+        TreeSitterOptions::max_start_depth(1),
+        highlights_query,
+    ));
+    assert_eq!(capture_count(), expected_capture_count);
 }
 
 #[gpui::test]

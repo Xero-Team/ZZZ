@@ -431,16 +431,12 @@ impl DisplayMap {
             }]);
             self.block_map.deferred_edits.set(edits);
             self.block_map.retain_blocks_raw(&mut |block| {
-                if companion
+                !companion
                     .read(cx)
                     .lhs_custom_block_to_balancing_block
                     .borrow()
                     .values()
                     .any(|id| *id == block.id)
-                {
-                    return false;
-                }
-                true
             });
             return;
         };
@@ -3907,7 +3903,7 @@ pub mod tests {
 
                     assert_eq!(unmarked_snapshot.clip_point(markers[0], bias), markers[1])
                 }
-            };
+            }
         }
 
         use Bias::{Left, Right};

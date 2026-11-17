@@ -61,10 +61,8 @@ pub struct NeovimConnection {
 impl NeovimConnection {
     pub async fn new(mut test_case_id: String) -> Self {
         // When running under perf, don't create duplicate files.
-        if cfg!(perf_enabled) {
-            if test_case_id.ends_with(perf::consts::SUF_NORMAL) {
-                test_case_id.truncate(test_case_id.len() - perf::consts::SUF_NORMAL.len());
-            }
+        if cfg!(perf_enabled) && test_case_id.ends_with(perf::consts::SUF_NORMAL) {
+            test_case_id.truncate(test_case_id.len() - perf::consts::SUF_NORMAL.len());
         }
         #[cfg(feature = "neovim")]
         let handler = NvimHandler {};
@@ -155,9 +153,8 @@ impl NeovimConnection {
 
     #[cfg(not(feature = "neovim"))]
     pub async fn send_keystroke(&mut self, keystroke_text: &str) {
-        if matches!(self.data.front(), Some(NeovimData::Get { .. })) {
-            self.data.pop_front();
-        }
+        self.data
+            .pop_front_if(|data| matches!(data, NeovimData::Get { .. }));
         assert_eq!(
             self.data.pop_front(),
             Some(NeovimData::Key(keystroke_text.to_string())),
@@ -263,9 +260,8 @@ impl NeovimConnection {
 
     #[cfg(not(feature = "neovim"))]
     pub async fn set_option(&mut self, value: &str) {
-        if let Some(NeovimData::Get { .. }) = self.data.front() {
-            self.data.pop_front();
-        };
+        self.data
+            .pop_front_if(|data| matches!(data, NeovimData::Get { .. }));
         assert_eq!(
             self.data.pop_front(),
             Some(NeovimData::SetOption {
@@ -289,9 +285,8 @@ impl NeovimConnection {
 
     #[cfg(not(feature = "neovim"))]
     pub async fn exec(&mut self, value: &str) {
-        if let Some(NeovimData::Get { .. }) = self.data.front() {
-            self.data.pop_front();
-        };
+        self.data
+            .pop_front_if(|data| matches!(data, NeovimData::Get { .. }));
         assert_eq!(
             self.data.pop_front(),
             Some(NeovimData::Exec {
@@ -303,9 +298,8 @@ impl NeovimConnection {
 
     #[cfg(not(feature = "neovim"))]
     pub async fn read_register(&mut self, register: char) -> String {
-        if let Some(NeovimData::Get { .. }) = self.data.front() {
-            self.data.pop_front();
-        };
+        self.data
+            .pop_front_if(|data| matches!(data, NeovimData::Get { .. }));
         if let Some(NeovimData::ReadRegister { name, value }) = self.data.pop_front()
             && name == register
         {

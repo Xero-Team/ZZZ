@@ -134,7 +134,7 @@ impl InitialGraphCommitData {
                 let ref_name = ref_name.as_ref();
                 // `git log --decorate` renders the checked-out branch as
                 // `HEAD -> <branch>`.
-                let ref_name = ref_name.strip_prefix("HEAD -> ").unwrap_or(ref_name);
+                let ref_name = ref_name.trim_prefix("HEAD -> ");
 
                 if ref_name == "HEAD"
                     || ref_name.starts_with("tag: ")
@@ -226,18 +226,16 @@ fn parse_cat_file_commit(sha: Oid, content: &str) -> Option<CommitData> {
                 if let Ok(oid) = Oid::from_str(parent_sha.trim()) {
                     parents.push(oid);
                 }
-            } else if let Some(author_line) = line.strip_prefix("author ") {
-                if let Some((name_email, _timestamp_tz)) = author_line.rsplit_once(' ') {
-                    if let Some((name_email, timestamp_str)) = name_email.rsplit_once(' ') {
-                        if let Ok(ts) = timestamp_str.parse::<i64>() {
-                            commit_timestamp = ts;
-                        }
-                        if let Some((name, email)) = name_email.rsplit_once(" <") {
-                            author_name = SharedString::from(name.to_owned());
-                            author_email =
-                                SharedString::from(email.trim_end_matches('>').to_owned());
-                        }
-                    }
+            } else if let Some(author_line) = line.strip_prefix("author ")
+                && let Some((name_email, _timestamp_tz)) = author_line.rsplit_once(' ')
+                && let Some((name_email, timestamp_str)) = name_email.rsplit_once(' ')
+            {
+                if let Ok(ts) = timestamp_str.parse::<i64>() {
+                    commit_timestamp = ts;
+                }
+                if let Some((name, email)) = name_email.rsplit_once(" <") {
+                    author_name = SharedString::from(name.to_owned());
+                    author_email = SharedString::from(email.trim_end_matches('>').to_owned());
                 }
             }
         } else {
@@ -298,7 +296,7 @@ impl Branch {
     pub fn remote_name(&self) -> Option<&str> {
         self.ref_name
             .strip_prefix("refs/remotes/")
-            .and_then(|stripped| stripped.split("/").next())
+            .and_then(|stripped| stripped.split('/').next())
     }
 
     pub fn tracking_status(&self) -> Option<UpstreamTrackingStatus> {
@@ -394,14 +392,13 @@ impl Worktree {
             let name_anchor_dir = path_style
                 .file_name(name_anchor_path)
                 .and_then(|name| name.to_str());
-            if name_anchor_dir == Some(dir_name) {
-                if let Some(parent_name) = path_style
+            if name_anchor_dir == Some(dir_name)
+                && let Some(parent_name) = path_style
                     .parent(&self.path)
                     .and_then(|parent| path_style.file_name(parent))
                     .and_then(|name| name.to_str())
-                {
-                    return parent_name.to_owned();
-                }
+            {
+                return parent_name.to_owned();
             }
         }
 
@@ -471,7 +468,7 @@ impl Upstream {
     pub fn remote_name(&self) -> Option<&str> {
         self.ref_name
             .strip_prefix("refs/remotes/")
-            .and_then(|stripped| stripped.split("/").next())
+            .and_then(|stripped| stripped.split('/').next())
     }
 
     pub fn stripped_ref_name(&self) -> Option<&str> {
@@ -2161,7 +2158,7 @@ impl GitRepository for RealGitRepository {
                         (name, revision.peel_to_commit()?)
                     };
                 let (_, branch_name) = resolved_name
-                    .split_once("/")
+                    .split_once('/')
                     .context("Unexpected branch format")?;
                 let mut branch = match repo.branch(&branch_name, &branch_commit, false) {
                     Ok(branch) => branch,
@@ -3036,10 +3033,10 @@ impl GitRepository for RealGitRepository {
                 let local_branch_exists =
                     |branch: &str| refs.contains_key(format!("refs/heads/{branch}").as_str());
 
-                if let Ok(default_branch) = git.run(&["config", "init.defaultBranch"]).await {
-                    if local_branch_exists(&default_branch) {
-                        return Ok(Some(default_branch.into()));
-                    }
+                if let Ok(default_branch) = git.run(&["config", "init.defaultBranch"]).await
+                    && local_branch_exists(&default_branch)
+                {
+                    return Ok(Some(default_branch.into()));
                 }
 
                 if local_branch_exists("main") {
@@ -3085,8 +3082,8 @@ impl GitRepository for RealGitRepository {
 
                     if !output.status.success() {
                         return Err(GitBinaryCommandError {
-                            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-                            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+                            stdout: String::from_utf8_lossy_owned(output.stdout),
+                            stderr: String::from_utf8_lossy_owned(output.stderr),
                             status: output.status,
                         }
                         .into());
@@ -3771,6 +3768,16 @@ impl GitBinary {
             .env("GIT_ASKPASS", ask_pass.script_path())
             .env("SSH_ASKPASS", ask_pass.script_path())
             .env("SSH_ASKPASS_REQUIRE", "force");
+
+        if !env.contains_key("GIT_CONFIG_COUNT")
+            && let Some(gpg_wrapper) = ask_pass.gpg_wrapper_path()
+        {
+            command
+                .env("GIT_CONFIG_COUNT", "1")
+                .env("GIT_CONFIG_KEY_0", "gpg.program")
+                .env("GIT_CONFIG_VALUE_0", gpg_wrapper);
+        }
+
         let git_process = command.spawn()?;
 
         run_askpass_command(ask_pass, git_process).await
