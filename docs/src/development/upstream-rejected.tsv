@@ -233,6 +233,7 @@ sha	class	reason_code	note	source
 47b8ea58	C	absent-api	Reveal-in-panel needs `Item::active_project_path` and missing DiffMultibuffer.	upstream-sync-2026-09-18.md
 47c46191f4	C	absent-api	Handles unavailable macOS pasteboards by restoring the `nil` check. Upstream rewrote `gpui_macos/src/pasteboard.rs` onto `objc2` (`Message`, `Retained`, `msg_send`), while ZZZ's file is still the `cocoa`/objc1 implementation with `id`/`nil` and no `Retained` handling. The hunks have no local anchor and the backend is macOS-only, so nothing can be validated here.	upstream-sync-2026-11-10-b.md
 480d81bf	C	philosophy	ChatGPT Subscription setup/cancellation is an explicitly rejected account-bound surface.	upstream-sync-2026-09-02.md
+482e76524b	C	absent-api	Passes the selected file to `CommitViewOptions::reveal_file` from `LogSource::Path` in `crates/git_ui/src/git_graph.rs`. Local `crates/git_ui/src` has no `git_graph` module, so the call site and its `LogSource` type are absent.	upstream-sync-2026-11-17-b.md
 483b746b56	C	untriaged	Opens absolute paths from the file finder. Over 1200 lines across `file_finder`, `picker`, `workspace`, and `crates/picker_preview`, which ZZZ does not carry; the preview path is the feature's substrate.	upstream-sync-2026-11-10-b.md
 484bcbfea6	C	absent-api	Gates the Linux backend on `not(target_env = "ohos")`. ZZZ has no local ohos target or backend, so the change would only add dead configuration.	upstream-sync-2026-10-27.md
 4882254fae	C	absent-api	Batched SSH environment probe depends on the absent local `RemoteEnvironment`, `os_version`, and `home_dir` machinery.	upstream-sync-2026-10-10.md
@@ -296,6 +297,7 @@ sha	class	reason_code	note	source
 5638be1f	C	philosophy	ChatGPT subscription authentication.	upstream-sync-2026-08-07.md
 566f893ee3	C	untriaged	Handles OpenAI Responses reasoning events in `crates/open_ai`, which ZZZ does not carry.	upstream-sync-2026-10-24-b.md
 56934ec056	C	upstream-infra	Patches ACP v2 metadata by key; ZZZ imports only `schema::v1` and has no `acp/v2.rs` or `MetadataUpdate::V2`.	upstream-sync-2026-10-17.md
+5709f329dc	C	upstream-infra	Adds Corgi build configuration for FHS Linux to `corgi.toml` and `nix/dev`. ZZZ has the `nix/` tree but no `corgi.toml` at the repo root, so there is nothing to extend. Upstream-only build tooling.	upstream-sync-2026-11-17-b.md
 574df448ea	C	untriaged	Requires `language_models`, `google_ai`, and `opencode` providers that ZZZ does not carry.	upstream-sync-2026-10-24-b.md
 5786fee5	C	untriaged	Community automation.	upstream-sync-2026-08-07.md
 582e6a57	C	unisolatable	Broad async language-loader and query API rewrite.	upstream-sync-2026-08-27.md
@@ -367,6 +369,7 @@ sha	class	reason_code	note	source
 6e0a0835	C	untriaged	CI-only `gh` toolchain acquisition.	upstream-sync-2026-08-27.md
 6e2fae61	C	upstream-infra	Wasmtime/lockfile-only dependency update.	upstream-sync-2026-08-27.md
 6e368ab5	C	untriaged	Proto extension version-only bump; local is still 0.3.2.	upstream-sync-2026-09-18.md
+6e7c5d3ae8	C	absent-api	Accepts stringified `start_line`/`end_line` in `crates/agent/src/tools/read_file_tool.rs`. Local `crates/agent/src/tools/` holds only `context_server_registry.rs`, and `deserialize_maybe_stringified` does not exist, so the tool and its schema have no local home.	upstream-sync-2026-11-17-b.md
 6ec43d6319	C	absent-api	Missing-parameter diagnostics modify the excluded native `agent` tool-input implementation.	upstream-sync-2026-10-09.md
 6efd4950	C	upstream-infra	Upstream-only lint-creator fixture guidance.	upstream-sync-2026-08-27.md
 6f73c7d0	C	untriaged	Replaces `GlobalWatcher` with `OsWatcher`; depends on rejected `db10a8dd`.	upstream-sync-2026-09-17.md
