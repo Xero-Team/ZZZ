@@ -63,6 +63,7 @@ sha	class	reason_code	note	source
 1271f8b0	C	philosophy	rustc 1.97 bump is 66-file lockfile/agent/collab churn.	upstream-sync-2026-08-18.md
 129c68ff4b	C	philosophy	Edit-prediction subscription messaging plus `client` plan helpers for Zed's hosted organizations.	upstream-sync-2026-10-10.md
 12a19dcc	C	philosophy	Native agent sandbox.	upstream-sync-2026-08-07.md
+12c1fc907f	C	absent-api	Makes `always_confirm` patterns prompt for in-project `edit_file`/`write_file` edits. Local `crates/agent/src/tools/` contains only `context_server_registry.rs`, and `authorize_file_edit` does not exist, because ZZZ ships no native file-edit tools.	upstream-sync-2026-11-17.md
 12ef40c3	C	diverged	Broad LSP diagnostic message/protocol rewrite conflicts with local diagnostics.	upstream-sync-2026-08-27.md
 12f79c0aeb	C	philosophy	`cloud_api_client` crate and cloud websocket path are absent.	upstream-sync-2026-09-30.md
 1416404b88	C	untriaged	Seven-hundred-line rework of discard selection, trash-untracked filtering, git transport, and the git panel; not isolatable onto ZZZ's flow.	upstream-sync-2026-10-21.md
@@ -458,6 +459,7 @@ sha	class	reason_code	note	source
 8886dcb0	C	upstream-infra	Benchmark/test dispatcher plumbing only; no local runtime behavior.	upstream-sync-2026-08-07.md
 8968bf78	C	absent-api	Non-UTF-8 git blobs; staged_diff deleted.	upstream-sync-2026-08-18.md
 897ba9ad	C	diverged	Remote markdown images; preview/agent_ui diverged.	upstream-sync-2026-08-18.md
+89d3da6578	C	absent-api	Adds `LanguageModel::supports_system_prompt_updates`. Local `crates/language_model/src` holds only `api_key.rs`, `language_model.rs`, and `request.rs`, and no local provider crate would set the flag, so the field would have no setter and no caller.	upstream-sync-2026-11-17.md
 8a41a5cc04	C	upstream-infra	Adds GitHub Trusted Publishing endpoints to `tooling/crates_io_client`. Depends on the absent client crate; upstream-only infrastructure.	upstream-sync-2026-11-04.md
 8a4bd132	C	upstream-infra	Release-bundle symbol stripping and Sentry/debug-file packaging are upstream release infrastructure.	upstream-sync-2026-09-02.md
 8a5cf7e23a	C	diverged	Swaps the Wallace shadow blur for Levien's approximation. A dry-run cherry-pick conflicts in all three shader files; the local shadow shader has neither `load_shadow` nor the inset-shadow fields the patch edits.	upstream-sync-2026-11-12.md
@@ -506,6 +508,7 @@ sha	class	reason_code	note	source
 98f39bfc	C	untriaged	Community automation.	upstream-sync-2026-08-07.md
 98f75a23bc	C	untriaged	Dependency-removal churn with no independent local behavior.	upstream-sync-2026-09-30.md
 9930d2c2	C	absent-api	Bundle-config / share-generics follow-up; `.cargo/bundle-config.toml` is absent.	upstream-sync-2026-09-18.md
+99dd426cba	C	upstream-infra	Adds a high-merge-rate highlight to the community PR board workflow plus `github_helpers`/`snowflake_helpers`. Upstream community and CI automation.	upstream-sync-2026-11-17.md
 99f4c21c	C	philosophy	OpenCode Go/Zen subscription-model catalog and settings.	upstream-sync-2026-08-27.md
 99f947e5f6	C	absent-api	Plan-card removal depends on the absent `ContextCompaction` surface.	upstream-sync-2026-09-24.md
 9a631e54	C	absent-api	Upstream `path` crate is absent; local `paths` has separate GPL scope.	upstream-sync-2026-08-07.md
@@ -547,6 +550,7 @@ a484d108da	C	untriaged	Renders subagent cards from state introduced by the rejec
 a49db374	C	upstream-infra	macOS-test backtrace workflow tuning; the CI workflows and generator are absent.	upstream-sync-2026-09-24.md
 a4a3a968d1	C	unisolatable	Rewrites `crates/path`'s `PathStyle`; ZZZ has no `path` crate and its shared `util::paths` call sites do not need this refactor.	upstream-sync-2026-10-21.md
 a4b9dc5f	C	absent-api	Mistral reasoning-effort APIs (`ReasoningEffort`, `supports_disabling_thinking`) are absent.	upstream-sync-2026-09-24.md
+a57e2fdc38	C	upstream-infra	Collapses upstream `.rules` into `AGENTS.md`, deletes `CLAUDE.md`/`GEMINI.md`, and rewrites `script/danger/dangerfile.ts`. Local `AGENTS.md` names `.rules` as the Rust/GPUI authority and `docs/.rules` as the documentation authority; the dangerfile is CI automation.	upstream-sync-2026-11-17.md
 a598842e88	C	absent-api	Routes v2 reported session state; no local ACP v2 transport.	upstream-sync-2026-10-16.md
 a5c4ca8bf6	C	absent-api	Offers ACP v1 subagents behind `acp-beta`. The subagent offering path and beta-flag rollout are absent locally.	upstream-sync-2026-10-27.md
 a60addb9	C	diverged	objc2 prompt migration conflicts with ZZZ's macOS platform layout and dependency feature set; no safe isolated port was established on this Linux host.	upstream-sync-2026-09-02.md
@@ -695,6 +699,7 @@ d356b2f5	C	philosophy	Subscription OpenAI compaction and account-bound route.	up
 d36a706614	C	absent-api	Implements ACP v2 background work (paused tool calls, background list, cancel buttons). Depends on `agent_servers/src/acp/v2.rs` and `acp_thread` state updates that are absent locally.	upstream-sync-2026-11-04.md
 d38a754e1b	C	absent-api	Adds ACP v2 session deletion on top of the absent v2 session state machine.	upstream-sync-2026-10-21.md
 d3ccd57194	C	untriaged	Sidebar/`ThreadItem` theme colors; the local sidebar renders new-thread menus and thread entries differently, so the hunk is not isolatable.	upstream-sync-2026-09-30.md
+d3d58c304b	C	upstream-infra	Rewrites the MCP server extension policy in `docs/src/extensions/publishing/prerequisites.md`. Local `docs/src/extensions/` has no `publishing/` directory, and the paragraph describes the upstream extension registry.	upstream-sync-2026-11-17.md
 d3e54c97	C	absent-api	Requires the absent `fs_embed!` architecture; ZZZ uses direct rust-embed paths.	upstream-sync-2026-09-02.md
 d401423073	C	philosophy	Removes collab extension endpoints now served by Cloud. ZZZ has no `crates/collab` and no Cloud endpoints.	upstream-sync-2026-10-29.md
 d4cd310e	C	absent-api	Modifies the deleted upstream action-profiler module.	upstream-sync-2026-08-27.md
