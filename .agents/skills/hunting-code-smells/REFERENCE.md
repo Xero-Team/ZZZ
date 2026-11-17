@@ -45,6 +45,12 @@ the sources. Section 2 uses `MEM-` IDs anchored to a named clause in the
 Reference or the FLS, so each finding cites the language contract and not an
 opinion.
 
+Severity is only one axis. Whether the reviewed change introduced a finding is
+the other, and it decides whether the finding blocks this change. A P1 that
+predates the diff belongs under 「历史遗留」 in the template, not under a
+blocking heading; the two classes are orthogonal, so P1 does not mean the same
+thing in each.
+
 ## 1. ZZZ hard rules (P0)
 
 These come from `.rules`, `AGENTS.md`, `clippy.toml`, and
@@ -396,6 +402,7 @@ Write the report in Simplified Chinese. Keep code identifiers in English.
 ## 代码异味审查报告
 
 **范围**: <diff / crate / 文件列表>
+**轮次**: 第 <N> 轮（上限 3）
 **检查命令**: <实际运行的命令与结果>
 
 ### P0 — 阻断合并
@@ -418,12 +425,26 @@ Write the report in Simplified Chinese. Keep code identifiers in English.
 
 ### 未修复（仅报告）
 
+#### 本次引入
+
 - `file:line` — <为什么超出本次范围>
+
+#### 历史遗留（pre-existing）
+
+- `file:line` — <为什么不是本次引入，以及为什么不阻塞本次合并>
+
+### 未发现问题
+
+<零发现时必须有此节，并明确写出「未发现问题」。不要留空，也不要省略>
 
 ### 剩余最高风险
 
 - <一个>
 ```
+
+`**轮次**` 与「历史遗留」两栏不是装饰。轮次超过 3 之后不再报告新发现；
+历史遗留与本次引入是两个维度，P1 的历史遗留不应与 P1 的本次引入并列在
+同一栏里。零发现时给出明确结论，比让读者从空段落推断更省时间。
 
 ## 10. Reviewer anti-patterns
 

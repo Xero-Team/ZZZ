@@ -1,0 +1,271 @@
+#!/usr/bin/env python3
+"""Report the review tier a pull request's changed paths put it in.
+
+`docs/src/development/review-policy.md` scales review by risk instead of by
+author. This script is the classifier: it reads the changed paths, matches them
+against the tier map below, and prints the tier, the number of human approvals
+the policy asks for, and which files produced that verdict.
+
+It reports. It does not approve, block, or count approvals: approval counts
+live in branch protection and CODEOWNERS, which this script cannot read without
+the API. Keeping the classifier here means the tier is reproducible locally,
+by a reviewer, before the pull request exists.
+
+The tier map is code, not configuration, on purpose. A pull request that lowers
+a tier has to edit this file, and `script/**` is itself high tier, so the
+change needs the review it is trying to avoid.
+
+Usage:
+    script/check-review-tier --base main
+    script/check-review-tier --files changed-paths.txt
+    script/check-review-tier --self-test
+"""
+
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+TIER_ORDER = ("low", "medium", "high")
+
+# Human approvals the policy asks for at each tier. Every tier needs at least
+# one, because CONTRIBUTING.md already requires a human review for anything
+# authored here; the tier decides how many and whether owners must sign off.
+APPROVALS = {"low": 1, "medium": 1, "high": 2}
+
+CODEOWNERS_REVIEW = {"low": False, "medium": False, "high": True}
+
+DEFAULT_TIER = "medium"
+
+TIERS = {
+    "low": (
+        "docs/**",
+        "legal/**",
+        "*.md",
+    ),
+    "medium": (
+        "crates/**",
+        "extensions/**",
+        "assets/**",
+    ),
+    "high": (
+        # Gates, workflows, and anything that can silence them.
+        ".github/**",
+        "script/**",
+        "tooling/**",
+        ".agents/**",
+        # Dependency and toolchain surface: a bad pin breaks every build.
+        "Cargo.toml",
+        "Cargo.lock",
+        "rust-toolchain.toml",
+        "clippy.toml",
+        "rustfmt.toml",
+        "typos.toml",
+        "deny.toml",
+        "vendor/**",
+        # Rules and the philosophy ledger: project policy, not product code.
+        ".rules",
+        "docs/src/development/upstream-rejected.tsv",
+        # Every user-visible string, plus the fallback parity the gates enforce.
+        "assets/locales/**",
+    ),
+}
+
+
+def pattern_to_regex(pattern):
+    """Translates a tier glob into a regex where `**` spans path separators."""
+    pieces = []
+    index = 0
+    while index < len(pattern):
+        if pattern.startswith("**", index):
+            pieces.append(".*")
+            index += 2
+        elif pattern[index] == "*":
+            pieces.append("[^/]*")
+            index += 1
+        elif pattern[index] == "?":
+            pieces.append("[^/]")
+            index += 1
+        else:
+            pieces.append(re.escape(pattern[index]))
+            index += 1
+    return re.compile("^" + "".join(pieces) + "$")
+
+
+COMPILED_TIERS = {
+    tier: tuple((pattern, pattern_to_regex(pattern)) for pattern in patterns)
+    for tier, patterns in TIERS.items()
+}
+
+
+def tier_of(path):
+    """Returns the highest tier whose globs match the path."""
+    for tier in reversed(TIER_ORDER):
+        if any(regex.match(path) for _, regex in COMPILED_TIERS[tier]):
+            return tier
+    return DEFAULT_TIER
+
+
+def classify(paths):
+    """Returns the tier for the whole change and the per-path verdicts."""
+    matches = [(path, tier_of(path)) for path in paths]
+    if not matches:
+        return DEFAULT_TIER, matches
+    highest = max(TIER_ORDER.index(tier) for _, tier in matches)
+    return TIER_ORDER[highest], matches
+
+
+def read_paths_from_file(path):
+    text = Path(path).read_text(encoding="utf-8")
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def resolve_base(base):
+    """Returns the ref that actually exists for `base`, or None.
+
+    `actions/checkout` does not create a remote-tracking ref for the target
+    branch, so `origin/<base>` is a guess and `<base>` is the local fallback.
+    """
+    for candidate in (f"origin/{base}", base):
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            return candidate
+    return None
+
+
+def changed_paths(ref):
+    """Returns the paths this branch changed relative to the merge base."""
+    result = subprocess.run(
+        ["git", "diff", "--name-only", f"{ref}...HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or "git diff failed"
+        raise ValueError(detail)
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def report(tier, matches):
+    drivers = sorted({path for path, verdict in matches if verdict == tier})
+    counts = {candidate: 0 for candidate in TIER_ORDER}
+    for _, verdict in matches:
+        counts[verdict] += 1
+
+    print(f"review tier: {tier}")
+    print(f"changed files: {len(matches)}")
+    print(
+        "changed by tier: "
+        + ", ".join(f"{candidate} {counts[candidate]}" for candidate in TIER_ORDER)
+    )
+    print(f"required human approvals: {APPROVALS[tier]}")
+    print(
+        "codeowners review: "
+        + ("required" if CODEOWNERS_REVIEW[tier] else "not required")
+    )
+    if matches and tier != DEFAULT_TIER:
+        print("decided by:")
+        # Only the files that reach the winning tier: the rest is noise when the
+        # author wants to know what made this a high-tier change.
+        for path in drivers:
+            print(f"  {path}")
+    elif not matches:
+        print("no changed paths; the default tier applies")
+
+
+def self_test():
+    cases = [
+        ("a docs change is low", ["docs/src/development/testing.md"], "low"),
+        ("a top-level markdown file is low", ["README.md"], "low"),
+        ("a crate change is medium", ["crates/editor/src/editor.rs"], "medium"),
+        ("an extension change is medium", ["extensions/rust/src/lib.rs"], "medium"),
+        ("a workflow change is high", [".github/workflows/ci.yaml"], "high"),
+        ("a gate script change is high", ["script/check-pr-metadata"], "high"),
+        ("a toolchain pin is high", ["rust-toolchain.toml"], "high"),
+        ("a manifest change is high", ["Cargo.toml"], "high"),
+        ("a locale catalog is high", ["assets/locales/zh-CN.json"], "high"),
+        ("a skill change is high", [".agents/skills/hunting-code-smells/SKILL.md"], "high"),
+        ("the philosophy ledger is high", ["docs/src/development/upstream-rejected.tsv"], "high"),
+        (
+            "the highest path wins",
+            ["docs/src/development/testing.md", "script/check-philosophy"],
+            "high",
+        ),
+        (
+            "an unmatched path falls back to medium",
+            [".gitignore"],
+            "medium",
+        ),
+        ("an empty change falls back to medium", [], "medium"),
+    ]
+    failed = 0
+    for description, paths, expected in cases:
+        tier, _ = classify(paths)
+        if tier == expected:
+            print(f"ok: {description}")
+            continue
+        failed += 1
+        print(
+            f"FAIL: {description}\n  expected {expected}, got {tier} for {paths}",
+            file=sys.stderr,
+        )
+    return failed
+
+
+def main(argv):
+    arguments = argv[1:]
+    if arguments == ["--self-test"]:
+        return 1 if self_test() else 0
+
+    base = None
+    files = None
+    while arguments:
+        flag = arguments.pop(0)
+        if flag == "--base" and arguments:
+            base = arguments.pop(0)
+        elif flag == "--files" and arguments:
+            files = arguments.pop(0)
+        else:
+            print(__doc__.strip().splitlines()[-2].strip(), file=sys.stderr)
+            return 2
+
+    if files is not None:
+        try:
+            paths = read_paths_from_file(files)
+        except OSError as error:
+            print(f"FAIL: cannot read {files}: {error}", file=sys.stderr)
+            return 2
+    elif base is not None:
+        if not base.strip():
+            # A push event has no base branch. Reporting the default tier here
+            # would look like a real verdict.
+            print("no base branch on this event; skipping tier classification")
+            return 0
+        ref = resolve_base(base)
+        if ref is None:
+            print(
+                f"FAIL: neither origin/{base} nor {base} resolves; fetch the "
+                "base branch before classifying",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            paths = changed_paths(ref)
+        except ValueError as error:
+            print(f"FAIL: cannot diff against {ref}: {error}", file=sys.stderr)
+            return 2
+    else:
+        print(__doc__.strip().splitlines()[-2].strip(), file=sys.stderr)
+        return 2
+
+    tier, matches = classify(paths)
+    report(tier, matches)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

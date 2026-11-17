@@ -2,10 +2,12 @@
 """Validate the structured fields of a pull request.
 
 `CONTRIBUTING.md` requires an AI review on every change, `.rules` pins down
-the `Release Notes:` line, and the pull request template asks for a human
-review decision on anything that is not upstream absorption. All three live
-in a textarea that nothing reads, so the requirement has been a reviewer's
-memory rather than a check result.
+the `Release Notes:` line, the template asks for a human review decision on
+anything that is not upstream absorption, and
+`docs/src/development/review-policy.md` requires the author to state the
+change's risk and how to revert it. All of it lives in a textarea that nothing
+reads, so the requirement has been a reviewer's memory rather than a check
+result.
 
 This script reads the pull request event GitHub already handed the workflow
 and reports what is missing. It never talks to the API: the event payload
@@ -32,6 +34,21 @@ RELEASE_NOTES_RE = re.compile(
 )
 
 HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+
+# Sections the template ships empty and the policy requires the author to fill.
+# The heading text is lowercased the same way `sections()` keys its result.
+REQUIRED_SECTIONS = (
+    (
+        "risk",
+        "Risk",
+        "what breaks if this is wrong, and who notices first",
+    ),
+    (
+        "how to revert",
+        "How to revert",
+        "the command or steps that undo this change",
+    ),
+)
 
 failures = []
 
@@ -129,6 +146,17 @@ def check_human_review(body, labels):
     )
 
 
+def check_required_sections(body):
+    found = sections(body)
+    for key, label, description in REQUIRED_SECTIONS:
+        if found.get(key, "").strip():
+            continue
+        fail(
+            f'missing the "## {label}" answer: write {description}. '
+            'An empty section blocks the check the same way a missing one does'
+        )
+
+
 def check_event(event):
     global failures
     failures = []
@@ -137,6 +165,7 @@ def check_event(event):
     check_ai_review(body, labels)
     check_release_notes(body)
     check_human_review(body, labels)
+    check_required_sections(body)
     return failures
 
 
@@ -149,6 +178,16 @@ def self_test():
     reviewed = (
         "## AI review (required)\n\n- Review: https://example.invalid/review\n\n"
         "## Human review\n\n- [x] Not required (upstream absorption)\n\n"
+        "## Risk\n\nA wrong verdict blocks every merge; CI notices first.\n\n"
+        "## How to revert\n\nRevert the commit; there is no migration.\n\n"
+        "## Release Notes\n\nRelease Notes:\n\n- N/A\n"
+    )
+    unfilled = (
+        "## AI review (required)\n\n- Review:\n- Follow-up:\n\n"
+        "## Human review\n\n- [ ] Human review requested\n"
+        "- [ ] Not required (upstream absorption)\n\n"
+        "## Risk\n\n<!-- What breaks if this is wrong? -->\n\n"
+        "## How to revert\n\n<!-- The command that undoes this. -->\n\n"
         "## Release Notes\n\nRelease Notes:\n\n- N/A\n"
     )
     cases = [
@@ -158,22 +197,24 @@ def self_test():
             [],
         ),
         (
-            "labels can stand in for the fields",
+            "labels can stand in for the review fields only",
             {"body": "", "labels": [{"name": "ai-reviewed"}, {"name": "upstream"}]},
-            ["Release Notes"],
+            ["Release Notes", "## Risk", "## How to revert"],
         ),
         (
-            "an empty template fails every field",
+            "an unfilled template fails every field",
+            {"body": unfilled, "labels": []},
+            ["AI review", "Human review", "## Risk", "## How to revert"],
+        ),
+        (
+            "an empty risk section fails on its own",
             {
-                "body": (
-                    "## AI review (required)\n\n- Review:\n- Follow-up:\n\n"
-                    "## Human review\n\n- [ ] Human review requested\n"
-                    "- [ ] Not required (upstream absorption)\n\n"
-                    "## Release Notes\n\nRelease Notes:\n\n- N/A\n"
+                "body": reviewed.replace(
+                    "A wrong verdict blocks every merge; CI notices first.\n\n", ""
                 ),
                 "labels": [],
             },
-            ["AI review", "Human review"],
+            ["## Risk"],
         ),
         (
             "an unknown release notes prefix fails",

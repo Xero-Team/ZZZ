@@ -37,6 +37,14 @@ AI review. `PR metadata` fails while neither box is ticked, unless the
 
 <!-- How did you verify this? Commands, tests, screenshots. -->
 
+## Risk
+
+<!-- What breaks if this is wrong, and who notices first? Name the blast radius. -->
+
+## How to revert
+
+<!-- The command or steps that undo this change. "N/A" is fine when a plain revert works. -->
+
 ## Release Notes
 
 <!--

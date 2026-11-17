@@ -26,7 +26,15 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          # The tier classifier diffs against the base branch, so it needs the
+          # merge base and not a single-commit clone.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Check pull request fields
         run: ./script/check-pr-metadata "$GITHUB_EVENT_PATH"
+
+      - name: Classify review risk
+        run: |
+          git fetch --no-tags origin "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
+          ./script/check-review-tier --base "$GITHUB_BASE_REF"

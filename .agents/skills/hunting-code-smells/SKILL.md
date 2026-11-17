@@ -91,8 +91,31 @@ unrelated documentation.
   `fallback` equals the `en.json` value.
 - Scope discipline. Fix the requested area only. Do not reformat untouched
   regions and do not bundle unrelated refactors.
+- Generated and vendored trees are out of scope by default: `vendor/`,
+  `target/`, and generated tree-sitter sources. A finding inside them is not
+  actionable; name the generator or the dependency instead.
 - Do not edit `.rules` inline. If a reusable trap emerges, put a "Suggested
   .rules additions" section in the report instead.
+
+## Review Rounds
+
+A review that keeps reporting old findings burns the author's cycles without
+lowering risk. The report is the record, and three rounds is the cap.
+
+- Round 1 is the full pass. Every later round reviews only the diff that
+  changed since the previous round.
+- After round 3, report no new findings. Say which part of the approach needs
+  re-evaluation instead, and let the author decide.
+- Never re-report a finding the report already lists. If it is still open, say
+  it is unchanged; do not re-derive it as new.
+- A finding this diff introduced and one that predates it are different
+  classes. Report the second as pre-existing and do not let it block a change
+  that merely sits next to it.
+- Do not drop a real finding either. Fix it, list it as open, or propose it as
+  a follow-up with `file:line`.
+
+When the user wants a second opinion rather than another round, that is
+`adversarial-review`, not a repeat of this skill.
 
 ## Prerequisites
 

@@ -21,10 +21,16 @@ const CI_WORKFLOW: &str = ".github/workflows/ci.yaml";
 /// These live outside `ci.yaml`, so the `run:` scan below cannot see them.
 /// A deleted workflow, or a deleted step inside one, disables the gate the
 /// same way a deleted CI step does.
-const REQUIRED_STEPS: &[(&str, &str)] = &[(
-    ".github/workflows/pr-metadata.yml",
-    "script/check-pr-metadata",
-)];
+const REQUIRED_STEPS: &[(&str, &str)] = &[
+    (
+        ".github/workflows/pr-metadata.yml",
+        "script/check-pr-metadata",
+    ),
+    (
+        ".github/workflows/pr-metadata.yml",
+        "script/check-review-tier",
+    ),
+];
 
 /// Stable command signatures the CI pipeline must keep invoking. They are
 /// matched as substrings of `run:` values so unrelated flag changes do not
