@@ -19,6 +19,7 @@ use math::{
     MathState, ParsedMarkdownMath, block_math_for_paragraph, extract_math_expressions,
     fenced_math_at, math_for_text_range, render_math, shield_math_events,
 };
+pub use mermaid::mermaid_theme;
 use mermaid::{
     MermaidState, ParsedMarkdownMermaidDiagram, extract_mermaid_diagrams, render_mermaid_diagram,
 };

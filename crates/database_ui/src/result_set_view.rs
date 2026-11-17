@@ -1,7 +1,8 @@
 //! The database browser `Item`: schema tree, SQL editor, and result sets.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::ops::Range;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use database_core::{
@@ -17,9 +18,9 @@ use i18n::tr;
 use project::Project;
 use ui::prelude::*;
 use ui::{
-    Button, ButtonSize, ButtonStyle, ColumnWidthConfig, CopyableTableCell, IconButton, Table,
-    TableAccessibility, TableCellTextAlignment, TableSortDirection, Tooltip, table_sort_button,
-    with_copy_on_right_click,
+    Button, ButtonSize, ButtonStyle, ColumnWidthConfig, CopyableTableCell, IconButton, ListItem,
+    Table, TableAccessibility, TableCellTextAlignment, TableSortDirection, Tooltip,
+    table_sort_button, with_copy_on_right_click,
 };
 use workspace::Item;
 use workspace::Workspace;
@@ -27,7 +28,10 @@ use workspace::item::SaveOptions;
 
 use crate::connection_dialog::describe_error;
 use crate::credentials::KeychainCredentials;
-use crate::er_diagram::{ErDiagram, mermaid_theme, render_diagram};
+use crate::er_diagram::{
+    ErDiagram, ZOOM_STEP, clamp_zoom, fit_width_zoom, max_zoom, mermaid_theme, min_zoom, rasterize,
+    render_svg,
+};
 use crate::notebook::DatabaseNotebook;
 use crate::result_grid::{CellClass, CellPresentation, ResultGridState, SortDirection};
 use crate::{CancelCellEdit, CancelQuery, RunSelection, RunStatement, StageCellEdit};
@@ -221,6 +225,9 @@ pub struct ResultSetView {
     described_schemas: Vec<TableSchema>,
     er_diagram: Option<ErDiagram>,
     show_er_diagram: bool,
+    /// Width the ER panel was last laid out at, written from its prepaint and
+    /// read by "fit width".
+    er_viewport: Rc<Cell<Option<Pixels>>>,
     explain_plan: Option<ExplainPlan>,
     show_explain: bool,
     show_history: bool,
@@ -357,6 +364,7 @@ impl ResultSetView {
             described_schemas: Vec::new(),
             er_diagram: None,
             show_er_diagram: false,
+            er_viewport: Rc::new(Cell::new(None)),
             explain_plan: None,
             show_explain: false,
             show_history: false,
@@ -635,10 +643,53 @@ impl ResultSetView {
         cx.notify();
     }
 
+    /// Lay the diagram out once. The SVG is kept so the zoom can change later
+    /// without repeating Mermaid layout.
     fn start_diagram_render(&mut self, source: String, cx: &mut Context<Self>) {
         let theme = mermaid_theme(cx);
+        let render = cx.background_spawn(render_svg(source, theme));
+        let task = cx.spawn(async move |view, cx| {
+            let rendered = render.await;
+            view.update(cx, |view, cx| {
+                match rendered {
+                    Ok((svg, size)) => {
+                        if let Some(diagram) = &mut view.er_diagram {
+                            diagram.svg = Some(svg);
+                            diagram.size = Some(size);
+                            // Open at the diagram's natural size so its labels
+                            // are legible; "fit width" is one click away.
+                            diagram.zoom = Some(clamp_zoom(1.0, size));
+                        }
+                        view.start_diagram_raster(cx);
+                    }
+                    Err(error) => {
+                        log::warn!("failed to render the database ER diagram: {error}");
+                        if let Some(diagram) = &mut view.er_diagram {
+                            diagram.image = Some(Err(error));
+                        }
+                    }
+                }
+                cx.notify();
+            })
+            .ok();
+        });
+        self.diagram_task = Some(task);
+    }
+
+    /// Rasterize the diagram SVG at the current zoom. The previous raster stays
+    /// on screen until the new one is ready so zooming does not flash.
+    fn start_diagram_raster(&mut self, cx: &mut Context<Self>) {
+        let Some(diagram) = self.er_diagram.as_mut() else {
+            return;
+        };
+        let (Some(svg), Some(size), Some(zoom)) = (diagram.svg.clone(), diagram.size, diagram.zoom)
+        else {
+            return;
+        };
+        let zoom = clamp_zoom(zoom, size);
+        diagram.zoom = Some(zoom);
         let renderer = cx.svg_renderer();
-        let render = cx.background_spawn(render_diagram(source, theme, renderer));
+        let render = cx.background_spawn(rasterize(svg, zoom, renderer));
         let task = cx.spawn(async move |view, cx| {
             let image = render.await;
             view.update(cx, |view, cx| {
@@ -646,13 +697,58 @@ impl ResultSetView {
                     diagram.image = Some(image.clone());
                 }
                 if let Err(error) = &image {
-                    log::warn!("failed to render the database ER diagram: {error}");
+                    log::warn!("failed to rasterize the database ER diagram: {error}");
                 }
                 cx.notify();
             })
             .ok();
         });
         self.diagram_task = Some(task);
+    }
+
+    fn set_diagram_zoom(&mut self, zoom: f32, cx: &mut Context<Self>) {
+        let Some(diagram) = self.er_diagram.as_mut() else {
+            return;
+        };
+        let Some(size) = diagram.size else {
+            return;
+        };
+        let zoom = clamp_zoom(zoom, size);
+        if diagram.zoom == Some(zoom) {
+            return;
+        }
+        diagram.zoom = Some(zoom);
+        self.start_diagram_raster(cx);
+        cx.notify();
+    }
+
+    fn zoom_diagram_by(&mut self, factor: f32, cx: &mut Context<Self>) {
+        let Some(diagram) = self.er_diagram.as_ref() else {
+            return;
+        };
+        let Some(zoom) = diagram.zoom else {
+            return;
+        };
+        self.set_diagram_zoom(zoom * factor, cx);
+    }
+
+    /// Fit the diagram's width to the panel, never magnifying it.
+    fn fit_diagram(&mut self, cx: &mut Context<Self>) {
+        let Some(diagram) = self.er_diagram.as_ref() else {
+            return;
+        };
+        let Some(size) = diagram.size else {
+            return;
+        };
+        let viewport_width = self.er_viewport.get().unwrap_or(size.width);
+        let zoom = clamp_zoom(fit_width_zoom(viewport_width, size), size);
+        self.set_diagram_zoom(zoom, cx);
+    }
+
+    /// Return to the diagram's natural size, where one Mermaid pixel is one
+    /// screen pixel.
+    fn reset_diagram_zoom(&mut self, cx: &mut Context<Self>) {
+        self.set_diagram_zoom(1.0, cx);
     }
 
     fn close_er_diagram(&mut self, cx: &mut Context<Self>) {
@@ -916,8 +1012,6 @@ impl ResultSetView {
     fn render_explain(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let plan = self.explain_plan.as_ref()?;
         let lines = flatten_plan(plan);
-        let muted = cx.theme().colors().text_muted;
-        let text = cx.theme().colors().text;
         let mut rows = v_flex().gap_0p5();
         for line in &lines {
             rows = rows.child(
@@ -926,12 +1020,11 @@ impl ResultSetView {
                     .items_start()
                     .pl(px(12.0 * line.depth as f32))
                     .child(
-                        div()
-                            .text_xs()
-                            .text_color(muted)
-                            .child(format!("#{}", line.id)),
+                        Label::new(format!("#{}", line.id))
+                            .size(LabelSize::Small)
+                            .color(Color::Muted),
                     )
-                    .child(div().text_sm().text_color(text).child(line.detail.clone())),
+                    .child(Label::new(line.detail.clone())),
             );
         }
         Some(
@@ -952,13 +1045,15 @@ impl ResultSetView {
                             .size(ButtonSize::Compact)
                             .on_click(cx.listener(|this, _, _, cx| this.close_explain(cx))),
                         )
-                        .child(div().text_xs().text_color(muted).child(
-                            tr(cx, "database.explain.rows", "{} plan steps").replacen(
+                        .child(
+                            Label::new(tr(cx, "database.explain.rows", "{} plan steps").replacen(
                                 "{}",
                                 &lines.len().to_string(),
                                 1,
-                            ),
-                        )),
+                            ))
+                            .size(LabelSize::Small)
+                            .color(Color::Muted),
+                        ),
                 )
                 .child(
                     v_flex()
@@ -986,13 +1081,20 @@ impl ResultSetView {
 
     /// Open a notebook tab for this connection. The notebook gets its own
     /// sessions so its cells do not share this view's query or transaction.
+    ///
+    /// The pane asks every item it already holds for its `buffer_kind` before
+    /// adding a new one, this view included, so the add has to happen after the
+    /// click handler returns; doing it inline leases this view twice.
     fn open_notebook(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let config = self.config.clone();
-        self.workspace
-            .update(cx, |workspace, cx| {
-                DatabaseNotebook::deploy(workspace, config.clone(), window, cx);
-            })
-            .ok();
+        let workspace = self.workspace.clone();
+        cx.defer_in(window, move |_, window, cx| {
+            workspace
+                .update(cx, |workspace, cx| {
+                    DatabaseNotebook::deploy(workspace, config, window, cx);
+                })
+                .ok();
+        });
     }
 
     fn open_history(&mut self, cx: &mut Context<Self>) {
@@ -1067,7 +1169,6 @@ impl ResultSetView {
         if !self.show_history {
             return None;
         }
-        let muted = cx.theme().colors().text_muted;
         let border = cx.theme().colors().border;
         let entries = self.history_entries.clone();
         let error = self.history_error.clone();
@@ -1075,21 +1176,25 @@ impl ResultSetView {
         let mut body = v_flex().gap_1();
         if let Some(error) = error {
             body = body.child(
-                div().text_sm().text_color(cx.theme().status().error).child(
+                Label::new(
                     tr(
                         cx,
                         "database.history.read_failed",
                         "Could not read the query history: {}",
                     )
                     .replacen("{}", &error, 1),
-                ),
+                )
+                .color(Color::Error),
             );
         } else if entries.is_empty() {
-            body = body.child(div().text_sm().text_color(muted).child(tr(
-                cx,
-                "database.history.empty",
-                "No statements have run on this connection yet.",
-            )));
+            body = body.child(
+                Label::new(tr(
+                    cx,
+                    "database.history.empty",
+                    "No statements have run on this connection yet.",
+                ))
+                .color(Color::Muted),
+            );
         }
         for entry in entries {
             let sql = entry.statement.clone();
@@ -1118,17 +1223,20 @@ impl ResultSetView {
                 (None, None) => None,
             };
             let mut stats = h_flex().gap_2().items_center();
-            stats = stats.child(div().text_xs().text_color(muted).child(timestamp));
+            stats = stats.child(
+                Label::new(timestamp)
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
+            );
             if !entry.success {
                 stats = stats.child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().status().error)
-                        .child(tr(cx, "database.history.failed", "failed")),
+                    Label::new(tr(cx, "database.history.failed", "failed"))
+                        .size(LabelSize::Small)
+                        .color(Color::Error),
                 );
             }
             if let Some(meta) = meta {
-                stats = stats.child(div().text_xs().text_color(muted).child(meta));
+                stats = stats.child(Label::new(meta).size(LabelSize::Small).color(Color::Muted));
             }
             body = body.child(
                 h_flex()
@@ -1146,11 +1254,9 @@ impl ResultSetView {
                             .flex_1()
                             .min_w_0()
                             .overflow_hidden()
-                            .whitespace_nowrap()
-                            .text_sm()
                             .cursor_pointer()
                             .hover(|style| style.bg(cx.theme().colors().element_hover))
-                            .child(label)
+                            .child(Label::new(label).truncate())
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.load_history_entry(load_sql.clone(), window, cx);
                             })),
@@ -1305,6 +1411,9 @@ impl ResultSetView {
                     view.show_er_diagram = false;
                 }
                 view.grid.sync(result_set.as_deref(), &mut *cx);
+                // The selection points at a row and column of the result it was
+                // made in, so a new result set invalidates it.
+                view.selected_cell = None;
                 let row_count = result_set.as_ref().map_or(0, |set| set.rows.len());
                 let truncation = result_set.as_ref().and_then(|set| set.truncation);
                 if let Some(tab) = view.tabs.get_mut(tab_index) {
@@ -1387,6 +1496,9 @@ impl ResultSetView {
         cx.notify();
     }
 
+    /// Select a cell so its value can be read in full. Reading a value does not
+    /// depend on the row being writable, so this works for aggregates, joins and
+    /// read-only drivers; only the edit affordances need `result.editable`.
     fn select_cell(
         &mut self,
         row_index: usize,
@@ -1397,11 +1509,82 @@ impl ResultSetView {
         let Some(result) = self.active_result() else {
             return;
         };
-        let Some(column) = result.columns.get(column_index) else {
+        if result.columns.get(column_index).is_none() {
             return;
+        }
+
+        self.selected_cell = Some((row_index, column_index));
+        if self.cell_editable(&result, column_index) {
+            let text = match result.value_at(row_index, column_index) {
+                Some(value) if !value.is_null() => value.to_export_text(),
+                _ => String::new(),
+            };
+            self.value_editor
+                .update(cx, |editor, cx| editor.set_text(text, window, cx));
+            self.value_editor
+                .update(cx, |editor, cx| editor.focus_handle(cx))
+                .focus(window, cx);
+        }
+        cx.notify();
+    }
+
+    /// Whether the cell has an editing form in the grid. A binary column has no
+    /// textual form (D-07), and a result that is not a single-table SELECT with
+    /// its primary key has no row to write back to.
+    fn cell_editable(&self, result: &ResultSet, column_index: usize) -> bool {
+        result.editable
+            && result
+                .columns
+                .get(column_index)
+                .is_some_and(|column| !matches!(column.declared_type, ColumnType::Blob))
+    }
+
+    /// The selected cell, shown in full. The grid truncates a value to its
+    /// column width, and values from aggregates or joins were previously
+    /// unreachable because selecting them required an editable result.
+    fn render_cell_inspector(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (row_index, column_index) = self.selected_cell?;
+        let result = self.active_result()?;
+        let column = result.columns.get(column_index)?;
+        let presentation = CellPresentation::for_value(result.value_at(row_index, column_index));
+        let color = match presentation.class {
+            CellClass::Null | CellClass::Binary => Color::Muted,
+            CellClass::Number | CellClass::Text => Color::Default,
         };
-        if !result.editable {
-            let message = if self.capabilities.row_editing {
+        let editable = self.cell_editable(&result, column_index);
+        let busy = self.edit_running || self.query_running;
+
+        let mut location = h_flex()
+            .gap_2()
+            .items_center()
+            .min_w_0()
+            .child(
+                Label::new(
+                    tr(cx, "database.edit.cell", "Row {}, column {}")
+                        .replacen("{}", &(row_index + 1).to_string(), 1)
+                        .replacen("{}", &column.name, 1),
+                )
+                .size(LabelSize::Small)
+                .color(Color::Muted),
+            )
+            .child(
+                Label::new(tr(cx, "database.cell.type", "Type: {}").replacen(
+                    "{}",
+                    &column.declared_type.display_name(),
+                    1,
+                ))
+                .size(LabelSize::Small)
+                .color(Color::Muted),
+            );
+        if !editable {
+            // Say why the cell cannot be edited instead of hiding the controls.
+            let reason = if matches!(column.declared_type, ColumnType::Blob) {
+                tr(
+                    cx,
+                    "database.edit.binary_read_only",
+                    "Binary values cannot be edited here.",
+                )
+            } else if self.capabilities.row_editing {
                 tr(
                     cx,
                     "database.edit.needs_primary_key",
@@ -1414,32 +1597,111 @@ impl ResultSetView {
                     "This connection does not support row editing.",
                 )
             };
-            self.set_message(QueryMessage::Info(message), cx);
-            return;
-        }
-        if matches!(column.declared_type, ColumnType::Blob) {
-            self.set_message(
-                QueryMessage::Info(tr(
-                    cx,
-                    "database.edit.binary_read_only",
-                    "Binary values cannot be edited here.",
-                )),
-                cx,
+            location = location.child(
+                Label::new(reason)
+                    .size(LabelSize::Small)
+                    .color(Color::Muted)
+                    .truncate(),
             );
-            return;
         }
 
-        self.selected_cell = Some((row_index, column_index));
-        let text = match result.value_at(row_index, column_index) {
-            Some(value) if !value.is_null() => value.to_export_text(),
-            _ => String::new(),
-        };
-        self.value_editor
-            .update(cx, |editor, cx| editor.set_text(text, window, cx));
-        self.value_editor
-            .update(cx, |editor, cx| editor.focus_handle(cx))
-            .focus(window, cx);
-        cx.notify();
+        let copy_text = presentation.copy_text.clone();
+        let header = h_flex()
+            .w_full()
+            .gap_2()
+            .items_center()
+            .justify_between()
+            .child(location)
+            .child(
+                Button::new(
+                    "database-copy-cell-value",
+                    tr(cx, "database.cell.copy", "Copy Value"),
+                )
+                .size(ButtonSize::Compact)
+                .on_click(cx.listener(move |_, _, _, cx| {
+                    cx.write_to_clipboard(ClipboardItem::new_string(copy_text.clone()));
+                })),
+            );
+
+        let value = div()
+            .id("database-cell-value")
+            .w_full()
+            .max_h(px(140.))
+            .overflow_y_scroll()
+            .rounded_md()
+            .border_1()
+            .border_color(cx.theme().colors().border)
+            .bg(cx.theme().colors().editor_background)
+            .px_2()
+            .py_1()
+            .child(
+                v_flex()
+                    .gap_0p5()
+                    .children(presentation.text.split('\n').map(|line| {
+                        Label::new(line.to_owned())
+                            .buffer_font(cx)
+                            .color(color)
+                            .into_any_element()
+                    })),
+            );
+
+        let mut inspector = v_flex()
+            .id("database-cell-inspector")
+            .w_full()
+            .gap_1()
+            .px_2()
+            .py_1()
+            .border_t_1()
+            .border_color(cx.theme().colors().border_variant)
+            .child(header)
+            .child(value);
+
+        if editable {
+            inspector = inspector.child(
+                h_flex()
+                    .gap_1()
+                    .items_center()
+                    .child(
+                        div()
+                            .key_context("DatabaseValueEditor")
+                            .w(px(280.))
+                            .px_2()
+                            .py_1()
+                            .border_1()
+                            .rounded_md()
+                            .border_color(cx.theme().colors().border)
+                            .child(EditorElement::new(
+                                &self.value_editor,
+                                EditorStyle::default(),
+                            )),
+                    )
+                    .child(
+                        Button::new(
+                            "database-stage-edit",
+                            tr(cx, "database.edit.stage", "Stage"),
+                        )
+                        .size(ButtonSize::Compact)
+                        .style(ButtonStyle::Filled)
+                        .disabled(busy)
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            view.stage_selected_cell(window, cx);
+                        })),
+                    )
+                    .child(
+                        Button::new(
+                            "database-cancel-edit",
+                            tr(cx, "database.edit.cancel", "Cancel"),
+                        )
+                        .size(ButtonSize::Compact)
+                        .disabled(busy)
+                        .on_click(cx.listener(|view, _, window, cx| {
+                            view.cancel_cell_edit(window, cx);
+                        })),
+                    ),
+            );
+        }
+
+        Some(inspector.into_any_element())
     }
 
     fn cancel_cell_edit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -1617,13 +1879,11 @@ impl ResultSetView {
         };
         // An import can open a transaction before the view has any result set,
         // so the bar must not depend on one.
-        let result = self.active_result();
-        let editable = result.as_ref().is_some_and(|result| result.editable);
+        let editable = self.active_result().is_some_and(|result| result.editable);
         if pending == 0 && applied == 0 && !open {
             return None;
         }
 
-        let muted = cx.theme().colors().text_muted;
         let busy = self.edit_running || self.query_running;
         let mut bar = h_flex()
             .w_full()
@@ -1632,97 +1892,11 @@ impl ResultSetView {
             .items_center()
             .px_2()
             .py_1()
-            .text_sm()
             .border_b_1()
             .border_color(cx.theme().colors().border_variant);
 
-        if !editable && pending == 0 && applied == 0 && !open {
-            // Say why instead of silently offering nothing to click.
-            let reason = if self.capabilities.row_editing {
-                tr(
-                    cx,
-                    "database.edit.needs_primary_key",
-                    "Only a single-table SELECT that returns the primary key can be edited.",
-                )
-            } else {
-                tr(
-                    cx,
-                    "database.edit.driver_read_only",
-                    "This connection does not support row editing.",
-                )
-            };
-            bar = bar.child(div().text_color(muted).child(reason));
-        }
-
-        if let Some(result) = result.as_ref().filter(|result| result.editable) {
-            match self.selected_cell {
-                Some((row_index, column_index)) => {
-                    let column_name = result
-                        .columns
-                        .get(column_index)
-                        .map_or_else(String::new, |column| column.name.clone());
-                    bar = bar
-                        .child(
-                            div().text_color(muted).child(
-                                tr(cx, "database.edit.cell", "Row {}, column {}")
-                                    .replacen("{}", &(row_index + 1).to_string(), 1)
-                                    .replacen("{}", &column_name, 1),
-                            ),
-                        )
-                        .child(
-                            div()
-                                .key_context("DatabaseValueEditor")
-                                .w(px(280.))
-                                .px_2()
-                                .py_1()
-                                .border_1()
-                                .rounded_md()
-                                .border_color(cx.theme().colors().border)
-                                .child(EditorElement::new(
-                                    &self.value_editor,
-                                    EditorStyle::default(),
-                                )),
-                        )
-                        .child(
-                            Button::new(
-                                "database-stage-edit",
-                                tr(cx, "database.edit.stage", "Stage"),
-                            )
-                            .size(ButtonSize::Compact)
-                            .style(ButtonStyle::Filled)
-                            .disabled(busy)
-                            .on_click(cx.listener(
-                                |view, _, window, cx| {
-                                    view.stage_selected_cell(window, cx);
-                                },
-                            )),
-                        )
-                        .child(
-                            Button::new(
-                                "database-cancel-edit",
-                                tr(cx, "database.edit.cancel", "Cancel"),
-                            )
-                            .size(ButtonSize::Compact)
-                            .disabled(busy)
-                            .on_click(cx.listener(
-                                |view, _, window, cx| {
-                                    view.cancel_cell_edit(window, cx);
-                                },
-                            )),
-                        );
-                }
-                None => {
-                    bar = bar.child(div().text_color(muted).child(tr(
-                        cx,
-                        "database.edit.select_cell",
-                        "Select a cell to edit it.",
-                    )));
-                }
-            }
-        }
-
         bar = bar.child(
-            div().text_color(muted).child(
+            Label::new(
                 tr(
                     cx,
                     "database.edit.counts",
@@ -1731,7 +1905,8 @@ impl ResultSetView {
                 .replacen("{}", &pending.to_string(), 1)
                 .replacen("{}", &applied_statements.to_string(), 1)
                 .replacen("{}", &affected_rows.to_string(), 1),
-            ),
+            )
+            .color(Color::Muted),
         );
 
         if pending > 0 && applied == 0 {
@@ -1928,41 +2103,55 @@ impl ResultSetView {
 
     fn render_er_diagram(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let diagram = self.er_diagram.as_ref()?;
-        let muted = cx.theme().colors().text_muted;
-        let body = match &diagram.image {
-            Some(Ok(image)) => v_flex()
+        let source = diagram.source.clone();
+        let natural = diagram.size;
+        let zoom = diagram.zoom;
+        let image = diagram.image.clone();
+        let viewport = self.er_viewport.clone();
+
+        // The image is sized by hand instead of with `max_w_full`: squeezing a
+        // wide schema into the panel width was what made its labels unreadable.
+        let body = match (image, natural, zoom) {
+            (Some(Ok(image)), Some(size), Some(zoom)) => v_flex()
                 .id("database-er-diagram-image")
                 .w_full()
                 .flex_1()
                 .min_h_0()
                 .overflow_scroll()
-                .child(img(image.clone()).max_w_full())
+                .child(img(image).w(size.width * zoom).h(size.height * zoom))
                 .into_any_element(),
-            Some(Err(error)) => div()
-                .text_sm()
-                .text_color(cx.theme().status().error)
-                .child(
-                    tr(
-                        cx,
-                        "database.er.render_failed",
-                        "The diagram could not be rendered: {}",
-                    )
-                    .replacen("{}", error, 1),
+            (Some(Err(error)), _, _) => Label::new(
+                tr(
+                    cx,
+                    "database.er.render_failed",
+                    "The diagram could not be rendered: {}",
                 )
-                .into_any_element(),
-            None => div()
-                .text_sm()
-                .text_color(muted)
-                .child(tr(cx, "database.er.rendering", "Rendering the diagram…"))
+                .replacen("{}", &error, 1),
+            )
+            .color(Color::Error)
+            .into_any_element(),
+            _ => Label::new(tr(cx, "database.er.rendering", "Rendering the diagram…"))
+                .color(Color::Muted)
                 .into_any_element(),
         };
-        let source = diagram.source.clone();
+
         Some(
             v_flex()
                 .id("database-er-diagram")
+                .relative()
                 .flex_1()
                 .min_h_0()
                 .gap_2()
+                .child(
+                    // Reports the width the panel was laid out at; "fit width"
+                    // is the only control that needs it.
+                    canvas(
+                        move |bounds, _window, _cx| viewport.set(Some(bounds.size.width)),
+                        |_, _, _, _| {},
+                    )
+                    .absolute()
+                    .size_full(),
+                )
                 .child(
                     h_flex()
                         .gap_1()
@@ -1987,27 +2176,79 @@ impl ResultSetView {
                                     ));
                                 },
                             )),
-                        ),
+                        )
+                        .child(div().flex_1())
+                        .when_some(natural.zip(zoom), |controls, (size, zoom)| {
+                            let at_max = zoom >= max_zoom(size);
+                            controls
+                                .child(
+                                    IconButton::new("database-er-zoom-out", IconName::Dash)
+                                        .icon_size(IconSize::XSmall)
+                                        .disabled(zoom <= min_zoom(size))
+                                        .tooltip(Tooltip::text(tr(
+                                            cx,
+                                            "database.er.zoom_out",
+                                            "Zoom Out",
+                                        )))
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.zoom_diagram_by(1.0 / ZOOM_STEP, cx)
+                                        })),
+                                )
+                                .child(
+                                    div().min_w(px(56.0)).child(
+                                        Button::new(
+                                            "database-er-actual-size",
+                                            format!("{}%", (zoom * 100.0).round() as i32),
+                                        )
+                                        .size(ButtonSize::Compact)
+                                        .tooltip(Tooltip::text(tr(
+                                            cx,
+                                            "database.er.actual_size",
+                                            "Actual Size",
+                                        )))
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| {
+                                                this.reset_diagram_zoom(cx)
+                                            }),
+                                        ),
+                                    ),
+                                )
+                                .child(
+                                    IconButton::new("database-er-zoom-in", IconName::Plus)
+                                        .icon_size(IconSize::XSmall)
+                                        .disabled(at_max)
+                                        .tooltip(Tooltip::text(tr(
+                                            cx,
+                                            "database.er.zoom_in",
+                                            "Zoom In",
+                                        )))
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.zoom_diagram_by(ZOOM_STEP, cx)
+                                        })),
+                                )
+                                .child(
+                                    Button::new(
+                                        "database-er-fit",
+                                        tr(cx, "database.er.fit", "Fit Width"),
+                                    )
+                                    .size(ButtonSize::Compact)
+                                    .on_click(cx.listener(|this, _, _, cx| this.fit_diagram(cx))),
+                                )
+                        }),
                 )
                 .child(body)
                 .into_any_element(),
         )
     }
 
-    fn render_message(&self, cx: &App) -> Option<AnyElement> {
+    fn render_message(&self, _cx: &App) -> Option<AnyElement> {
         let tab = self.tabs.get(self.active_tab)?;
         let message = tab.message.as_ref()?;
         let (text, color) = match message {
-            QueryMessage::Info(text) => (text.clone(), cx.theme().colors().text_muted),
-            QueryMessage::Error(text) => (text.clone(), cx.theme().status().error),
+            QueryMessage::Info(text) => (text.clone(), Color::Muted),
+            QueryMessage::Error(text) => (text.clone(), Color::Error),
         };
-        Some(
-            div()
-                .text_sm()
-                .text_color(color)
-                .child(text)
-                .into_any_element(),
-        )
+        Some(Label::new(text).color(color).into_any_element())
     }
 
     fn render_result(&mut self, cx: &mut Context<Self>) -> AnyElement {
@@ -2022,7 +2263,6 @@ impl ResultSetView {
             return v_flex().into_any_element();
         }
 
-        let muted = cx.theme().colors().text_muted;
         let cols = result.columns.len();
         // If the grid has not adopted this result yet, show physical order rather
         // than silently hiding rows.
@@ -2120,7 +2360,6 @@ impl ResultSetView {
 
         let cells_result = result.clone();
         let cells_order = order.clone();
-        let cells_editable = result.editable;
         let table = table.uniform_list(
             "database-result-rows",
             row_count,
@@ -2129,36 +2368,33 @@ impl ResultSetView {
                     .filter_map(|display_index| {
                         let row_index = *cells_order.get(display_index)?;
                         let row = cells_result.rows.get(row_index)?;
-                        Some(view.render_result_row(
-                            row,
-                            row_index,
-                            display_index,
-                            cols,
-                            cells_editable,
-                            cx,
-                        ))
+                        Some(view.render_result_row(row, row_index, display_index, cols, cx))
                     })
                     .collect()
             }),
         );
 
         let mut summary = h_flex().gap_3().items_center().child(
-            div().text_xs().text_color(muted).child(
+            Label::new(
                 tr(cx, "database.query.result_shape", "{} rows × {} columns")
                     .replacen("{}", &row_count.to_string(), 1)
                     .replacen("{}", &cols.to_string(), 1),
-            ),
+            )
+            .size(LabelSize::Small)
+            .color(Color::Muted),
         );
         if let Some(truncation) = result.truncation {
             summary = summary.child(
-                div().text_xs().text_color(muted).child(
+                Label::new(
                     tr(
                         cx,
                         "database.query.truncated",
                         "Showing the first {} rows; the result is larger.",
                     )
                     .replacen("{}", &truncation.row_limit.to_string(), 1),
-                ),
+                )
+                .size(LabelSize::Small)
+                .color(Color::Muted),
             );
         }
         if let (Some((column, _)), Some(_)) = (sort, result.truncation) {
@@ -2167,7 +2403,7 @@ impl ResultSetView {
                 .get(column)
                 .map_or_else(String::new, |column| column.name.clone());
             summary = summary.child(
-                div().text_xs().text_color(muted).child(
+                Label::new(
                     tr(
                         cx,
                         "database.grid.sorted_note",
@@ -2175,7 +2411,9 @@ impl ResultSetView {
                     )
                     .replacen("{}", &column_name, 1)
                     .replacen("{}", &row_count.to_string(), 1),
-                ),
+                )
+                .size(LabelSize::Small)
+                .color(Color::Muted),
             );
         }
 
@@ -2230,7 +2468,6 @@ impl ResultSetView {
     }
 
     fn render_schema_tree(&mut self, cx: &mut Context<Self>) -> AnyElement {
-        let hover = cx.theme().colors().element_hover;
         let mut column = v_flex().gap_1().p_2();
         if !self.catalogs.is_empty() {
             column = column.child(
@@ -2267,27 +2504,34 @@ impl ResultSetView {
         for catalog in &self.catalogs {
             let catalog_label =
                 tr(cx, "database.tree.catalog", "Catalog: {}").replacen("{}", &catalog.name, 1);
-            column = column.child(div().font_weight(FontWeight::BOLD).child(catalog_label));
+            column = column.child(
+                Label::new(catalog_label)
+                    .size(LabelSize::Small)
+                    .color(Color::Muted)
+                    .weight(FontWeight::BOLD),
+            );
             for schema in &catalog.schemas {
-                column = column.child(div().pl_2().child(schema.name.clone()));
+                column = column.child(
+                    Label::new(schema.name.clone())
+                        .size(LabelSize::Small)
+                        .color(Color::Muted),
+                );
                 for table in &schema.tables {
                     let table_ref = table.reference.clone();
-                    let marker = match table.kind {
-                        database_core::ObjectKind::Table => "▸",
-                        database_core::ObjectKind::View => "◇",
+                    let icon = match table.kind {
+                        database_core::ObjectKind::Table => IconName::ListTree,
+                        database_core::ObjectKind::View => IconName::Eye,
                     };
-                    let label = format!("{marker} {}", table.reference.name);
                     column = column.child(
-                        div()
-                            .id(ElementId::Name(
-                                format!("db-table-{}", table.reference.name).into(),
-                            ))
-                            .pl_4()
-                            .hover(|style| style.bg(hover))
-                            .on_click(cx.listener(move |view, _, _, cx| {
-                                view.toggle_table(table_ref.clone(), cx);
-                            }))
-                            .child(label),
+                        ListItem::new(ElementId::Name(
+                            format!("db-table-{}", table.reference.name).into(),
+                        ))
+                        .indent_level(1)
+                        .start_slot(Icon::new(icon).size(IconSize::XSmall).color(Color::Muted))
+                        .child(Label::new(table.reference.name.clone()).truncate())
+                        .on_click(cx.listener(move |view, _, _, cx| {
+                            view.toggle_table(table_ref.clone(), cx);
+                        })),
                     );
                 }
             }
@@ -2300,11 +2544,8 @@ impl ResultSetView {
             return v_flex().into_any_element();
         };
         let mut column = v_flex().gap_1().p_2();
-        column = column.child(div().font_weight(FontWeight::BOLD).child(tr(
-            cx,
-            "database.tree.columns",
-            "Columns",
-        )));
+        column = column
+            .child(Label::new(tr(cx, "database.tree.columns", "Columns")).weight(FontWeight::BOLD));
         if self.capabilities.row_editing
             && self.capabilities.transactions
             && schema.kind == database_core::ObjectKind::Table
@@ -2324,34 +2565,78 @@ impl ResultSetView {
             );
         }
         for column_meta in &schema.columns {
-            let suffix = if column_meta.primary_key { " (PK)" } else { "" };
-            column = column.child(div().pl_2().child(format!(
-                "{} : {:?}{suffix}",
-                column_meta.name, column_meta.declared_type
-            )));
+            let mut row = h_flex()
+                .min_w_0()
+                .gap_1()
+                .items_center()
+                .child(Label::new(column_meta.name.clone()).truncate())
+                .child(
+                    Label::new(column_meta.declared_type.display_name())
+                        .size(LabelSize::Small)
+                        .color(Color::Muted),
+                );
+            if column_meta.primary_key {
+                row = row.child(
+                    Label::new(tr(cx, "database.tree.primary_key_badge", "PK"))
+                        .size(LabelSize::XSmall)
+                        .color(Color::Muted),
+                );
+            }
+            column = column.child(row);
         }
         if let Some(primary_key) = &schema.primary_key {
             column = column.child(
-                div()
-                    .pl_2()
-                    .child(format!("PK: {}", primary_key.columns.join(", "))),
+                Label::new(
+                    tr(cx, "database.tree.primary_key", "Primary key: {}").replacen(
+                        "{}",
+                        &primary_key.columns.join(", "),
+                        1,
+                    ),
+                )
+                .size(LabelSize::Small)
+                .color(Color::Muted),
             );
         }
         for index in &schema.indexes {
-            let unique = if index.unique { " UNIQUE" } else { "" };
-            column = column.child(div().pl_2().child(format!(
-                "INDEX {} ({}){unique}",
-                index.name,
-                index.columns.join(", ")
-            )));
+            let key = if index.unique {
+                "database.tree.index_unique"
+            } else {
+                "database.tree.index"
+            };
+            let fallback = if index.unique {
+                "Unique index {} ({})"
+            } else {
+                "Index {} ({})"
+            };
+            column = column.child(
+                Label::new(
+                    tr(cx, key, fallback)
+                        .replacen("{}", &index.name, 1)
+                        .replacen("{}", &index.columns.join(", "), 1),
+                )
+                .size(LabelSize::Small)
+                .color(Color::Muted),
+            );
         }
         for foreign_key in &schema.foreign_keys {
-            column = column.child(div().pl_2().child(format!(
-                "FK ({}) → {}({})",
-                foreign_key.columns.join(", "),
-                foreign_key.referenced_table,
-                foreign_key.referenced_columns.join(", ")
-            )));
+            column = column.child(
+                Label::new(
+                    tr(
+                        cx,
+                        "database.tree.foreign_key",
+                        "Foreign key ({}) → {} ({})",
+                    )
+                    .replacen("{}", &foreign_key.columns.join(", "), 1)
+                    .replacen("{}", &foreign_key.referenced_table, 1)
+                    .replacen(
+                        "{}",
+                        &foreign_key.referenced_columns.join(", "),
+                        1,
+                    ),
+                )
+                .size(LabelSize::Small)
+                .color(Color::Muted),
+            );
         }
         column.into_any_element()
     }
@@ -2362,7 +2647,6 @@ impl ResultSetView {
         row_index: usize,
         display_index: usize,
         columns: usize,
-        editable: bool,
         cx: &mut Context<Self>,
     ) -> Vec<AnyElement> {
         let selected_cell = self.selected_cell;
@@ -2388,16 +2672,14 @@ impl ResultSetView {
                 let cell = cell.when(selected_cell == Some((row_index, column)), |cell| {
                     cell.bg(cx.theme().colors().element_selected)
                 });
-                let cell = if editable {
-                    cell.on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(move |view, _, window, cx| {
-                            view.select_cell(row_index, column, window, cx);
-                        }),
-                    )
-                } else {
-                    cell
-                };
+                // Selecting a cell is always possible: inspecting a value does
+                // not require the row to be editable.
+                let cell = cell.on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |view, _, window, cx| {
+                        view.select_cell(row_index, column, window, cx);
+                    }),
+                );
                 cell.into_any_element()
             })
             .collect()
@@ -2533,12 +2815,12 @@ impl Item for ResultSetView {
 impl Render for ResultSetView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let background = cx.theme().colors().editor_background;
-        let muted = cx.theme().colors().text_muted;
         let schema_tree = self.render_schema_tree(cx);
         let table_details = self.render_table_details(cx);
         let toolbar = self.render_toolbar(cx);
         let message = self.render_message(cx);
         let edit_bar = self.render_edit_bar(cx);
+        let cell_inspector = self.render_cell_inspector(cx);
         let result = self.render_result(cx);
         let er_diagram = if self.show_er_diagram {
             self.render_er_diagram(cx)
@@ -2560,14 +2842,10 @@ impl Render for ResultSetView {
                 h_flex()
                     .p_2()
                     .gap_2()
+                    .child(Label::new(self.config.display_name.clone()).weight(FontWeight::BOLD))
+                    .child(Label::new(self.status_text.clone()).color(Color::Muted))
                     .child(
-                        div()
-                            .font_weight(FontWeight::BOLD)
-                            .child(self.config.display_name.clone()),
-                    )
-                    .child(div().text_color(muted).child(self.status_text.clone()))
-                    .child(
-                        div().text_color(muted).child(
+                        Label::new(
                             tr(cx, "database.status.capabilities", "Editing: {}").replacen(
                                 "{}",
                                 if self.capabilities.row_editing {
@@ -2578,7 +2856,8 @@ impl Render for ResultSetView {
                                 .as_str(),
                                 1,
                             ),
-                        ),
+                        )
+                        .color(Color::Muted),
                     ),
             )
             .child(
@@ -2621,7 +2900,8 @@ impl Render for ResultSetView {
                                     )
                                     .children(message)
                                     .children(edit_bar)
-                                    .child(div().flex_1().child(result))
+                                    .child(div().flex_1().min_h_0().child(result))
+                                    .children(cell_inspector)
                                 },
                             ),
                     ),

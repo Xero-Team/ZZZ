@@ -209,6 +209,28 @@ impl ColumnType {
             }
         }
     }
+
+    /// The type name shown in the UI. Type names are SQL vocabulary rather
+    /// than prose, so they are the same in every locale.
+    pub fn display_name(&self) -> String {
+        match self {
+            ColumnType::Integer => "Integer".to_owned(),
+            ColumnType::Real => "Real".to_owned(),
+            ColumnType::Text => "Text".to_owned(),
+            ColumnType::Blob => "Blob".to_owned(),
+            ColumnType::Date => "Date".to_owned(),
+            ColumnType::DateTime => "DateTime".to_owned(),
+            ColumnType::Time => "Time".to_owned(),
+            ColumnType::Bool => "Boolean".to_owned(),
+            ColumnType::Numeric { precision, scale } => match (precision, scale) {
+                (Some(precision), Some(scale)) => format!("Numeric({precision},{scale})"),
+                (Some(precision), None) => format!("Numeric({precision})"),
+                _ => "Numeric".to_owned(),
+            },
+            ColumnType::Json => "JSON".to_owned(),
+            ColumnType::Other { declared } => declared.clone(),
+        }
+    }
 }
 
 /// Metadata for one result-set or table column.
@@ -695,6 +717,27 @@ mod tests {
         assert_matches!(
             ColumnType::from_declared("GEOMETRY"),
             ColumnType::Other { .. }
+        );
+    }
+
+    #[test]
+    fn column_type_display_names_stay_readable() {
+        assert_eq!(ColumnType::Integer.display_name(), "Integer");
+        assert_eq!(ColumnType::Bool.display_name(), "Boolean");
+        assert_eq!(
+            ColumnType::Numeric {
+                precision: Some(10),
+                scale: Some(2)
+            }
+            .display_name(),
+            "Numeric(10,2)"
+        );
+        assert_eq!(
+            ColumnType::Other {
+                declared: "GEOMETRY".to_owned()
+            }
+            .display_name(),
+            "GEOMETRY"
         );
     }
 

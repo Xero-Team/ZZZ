@@ -249,7 +249,7 @@ impl ConnectionPanel {
         .detach();
     }
 
-    fn status_text(&self, config: &ConnectionConfig, cx: &App) -> (SharedString, Hsla) {
+    fn status_text(&self, config: &ConnectionConfig, cx: &App) -> (SharedString, Color) {
         if self.manager.capabilities_for(&config.driver_id).is_none() {
             let text = tr(
                 cx,
@@ -257,24 +257,24 @@ impl ConnectionPanel {
                 "Driver not available: {}",
             )
             .replacen("{}", &config.driver_id, 1);
-            return (text.into(), cx.theme().colors().text_muted);
+            return (text.into(), Color::Muted);
         }
         match self.manager.status(&config.id) {
             Some(ConnectionStatus::Connected) => (
                 tr(cx, "database.status.connected", "Connected").into(),
-                cx.theme().status().success,
+                Color::Success,
             ),
             Some(ConnectionStatus::Connecting) => (
                 tr(cx, "database.status.connecting", "Connecting…").into(),
-                cx.theme().status().info,
+                Color::Info,
             ),
             Some(ConnectionStatus::Querying) => (
                 tr(cx, "database.status.querying", "Running query").into(),
-                cx.theme().status().info,
+                Color::Info,
             ),
             _ => (
                 tr(cx, "database.status.disconnected", "Disconnected").into(),
-                cx.theme().colors().text_muted,
+                Color::Muted,
             ),
         }
     }
@@ -553,19 +553,12 @@ impl ConnectionPanel {
                     .flex_1()
                     .min_w_0()
                     .overflow_hidden()
+                    .child(Label::new(config.display_name.clone()).truncate())
                     .child(
-                        div()
-                            .truncate()
-                            .text_sm()
-                            .text_color(cx.theme().colors().text)
-                            .child(config.display_name.clone()),
-                    )
-                    .child(
-                        div()
-                            .truncate()
-                            .text_xs()
-                            .text_color(status_color)
-                            .child(status_text),
+                        Label::new(status_text)
+                            .size(LabelSize::Small)
+                            .color(status_color)
+                            .truncate(),
                     ),
             )
             .end_slot(

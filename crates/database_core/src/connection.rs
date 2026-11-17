@@ -92,6 +92,15 @@ impl ConnectionManager {
             .map(|registered| registered.capabilities.clone())
     }
 
+    /// The driver's user-facing name, so the UI never shows the raw id. Falls
+    /// back to the id for a driver that is not installed.
+    pub fn driver_display_name(&self, driver_id: &str) -> String {
+        self.drivers.lock().get(driver_id).map_or_else(
+            || driver_id.to_owned(),
+            |registered| registered.driver.display_name().to_owned(),
+        )
+    }
+
     /// Save (or replace) a non-sensitive connection configuration. Credentials
     /// are stored separately under `ConnectionConfig::credential_key()`.
     pub fn upsert_config(&self, config: ConnectionConfig) {

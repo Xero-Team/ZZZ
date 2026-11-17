@@ -40,16 +40,12 @@ enum CellMessage {
 }
 
 impl CellMessage {
-    fn render(&self, cx: &App) -> AnyElement {
+    fn render(&self) -> AnyElement {
         let (text, color) = match self {
-            CellMessage::Info(text) => (text.clone(), cx.theme().colors().text_muted),
-            CellMessage::Error(text) => (text.clone(), cx.theme().status().error),
+            CellMessage::Info(text) => (text.clone(), Color::Muted),
+            CellMessage::Error(text) => (text.clone(), Color::Error),
         };
-        div()
-            .text_sm()
-            .text_color(color)
-            .child(text)
-            .into_any_element()
+        Label::new(text).color(color).into_any_element()
     }
 }
 
@@ -406,10 +402,9 @@ impl DatabaseNotebook {
         let id = cell.id;
         let running = cell.running;
         let result = cell.result.clone();
-        let message = cell.message.as_ref().map(|message| message.render(cx));
+        let message = cell.message.as_ref().map(|message| message.render());
         let editor = cell.editor.clone();
         let border = cx.theme().colors().border;
-        let muted = cx.theme().colors().text_muted;
         let can_move_up = index > 0;
         let can_move_down = index + 1 < self.cells.len();
         let can_delete = self.cells.len() > 1;
@@ -419,10 +414,9 @@ impl DatabaseNotebook {
             .gap_1()
             .items_center()
             .child(
-                div()
-                    .text_xs()
-                    .text_color(muted)
-                    .child(format!("[{}]", index + 1)),
+                Label::new(format!("[{}]", index + 1))
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
             )
             .child(
                 Button::new(
@@ -580,7 +574,6 @@ fn render_cell_result(result: &ResultSet, cx: &App) -> AnyElement {
     if result.columns.is_empty() {
         return v_flex().into_any_element();
     }
-    let muted = cx.theme().colors().text_muted;
     let border = cx.theme().colors().border;
 
     let mut header = h_flex().gap_2();
@@ -590,10 +583,12 @@ fn render_cell_result(result: &ResultSet, cx: &App) -> AnyElement {
                 .w(px(NOTEBOOK_COLUMN_WIDTH))
                 .flex_shrink_0()
                 .overflow_hidden()
-                .whitespace_nowrap()
-                .text_xs()
-                .font_weight(FontWeight::BOLD)
-                .child(column.name.clone()),
+                .child(
+                    Label::new(column.name.clone())
+                        .size(LabelSize::Small)
+                        .weight(FontWeight::BOLD)
+                        .truncate(),
+                ),
         );
     }
 
@@ -613,14 +608,16 @@ fn render_cell_result(result: &ResultSet, cx: &App) -> AnyElement {
                     .w(px(NOTEBOOK_COLUMN_WIDTH))
                     .flex_shrink_0()
                     .overflow_hidden()
-                    .whitespace_nowrap()
-                    .text_xs()
-                    .text_color(if value.is_null() {
-                        muted
-                    } else {
-                        cx.theme().colors().text
-                    })
-                    .child(text),
+                    .child(
+                        Label::new(text)
+                            .size(LabelSize::Small)
+                            .color(if value.is_null() {
+                                Color::Muted
+                            } else {
+                                Color::Default
+                            })
+                            .truncate(),
+                    ),
             );
         }
         rows = rows.child(line);
@@ -638,7 +635,7 @@ fn render_cell_result(result: &ResultSet, cx: &App) -> AnyElement {
         .child(rows);
     if shown < result.rows.len() {
         body = body.child(
-            div().text_xs().text_color(muted).child(
+            Label::new(
                 tr(
                     cx,
                     "database.notebook.preview_truncated",
@@ -646,7 +643,9 @@ fn render_cell_result(result: &ResultSet, cx: &App) -> AnyElement {
                 )
                 .replacen("{}", &shown.to_string(), 1)
                 .replacen("{}", &result.rows.len().to_string(), 1),
-            ),
+            )
+            .size(LabelSize::Small)
+            .color(Color::Muted),
         );
     }
     body.into_any_element()
@@ -700,7 +699,6 @@ impl Item for DatabaseNotebook {
 impl Render for DatabaseNotebook {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let background = cx.theme().colors().editor_background;
-        let muted = cx.theme().colors().text_muted;
         let cells = self.render_cells(cx);
 
         v_flex()
@@ -712,16 +710,15 @@ impl Render for DatabaseNotebook {
                 h_flex()
                     .p_2()
                     .gap_2()
+                    .child(Label::new(self.config.display_name.clone()).weight(FontWeight::BOLD))
                     .child(
-                        div()
-                            .font_weight(FontWeight::BOLD)
-                            .child(self.config.display_name.clone()),
-                    )
-                    .child(div().text_color(muted).child(tr(
-                        cx,
-                        "database.notebook.caption",
-                        "One connection per notebook",
-                    ))),
+                        Label::new(tr(
+                            cx,
+                            "database.notebook.caption",
+                            "One connection per notebook",
+                        ))
+                        .color(Color::Muted),
+                    ),
             )
             .child(
                 v_flex()

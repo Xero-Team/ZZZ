@@ -464,10 +464,24 @@ fn editor_box(editor: Entity<Editor>, cx: &App) -> impl IntoElement {
         .child(EditorElement::new(&editor, editor::EditorStyle::default()))
 }
 
+fn read_only_box(content: AnyElement, cx: &App) -> impl IntoElement {
+    div()
+        .px_2()
+        .py_1()
+        .border_1()
+        .rounded_md()
+        .border_color(cx.theme().colors().border)
+        .bg(cx.theme().colors().editor_background)
+        .child(content)
+}
+
 fn labeled_field(label: SharedString, content: impl IntoElement) -> impl IntoElement {
     v_flex()
         .gap_1()
-        .child(Label::new(label).size(LabelSize::Small))
+        // A field label carries the same weight as the value it names, like the
+        // titles on the settings page; only the hint under the password field is
+        // secondary text.
+        .child(Label::new(label))
         .child(content)
 }
 
@@ -493,7 +507,15 @@ impl Render for ConnectionDialog {
             tr(cx, "database.dialog.edit_title", "Edit Database Connection")
         };
 
-        let mut fields = v_flex().gap_3().child(field(
+        let mut fields = v_flex().gap_3().child(labeled_field(
+            tr(cx, "database.dialog.driver", "Driver").into(),
+            read_only_box(
+                Label::new(DatabaseState::manager(cx).driver_display_name(&self.driver_id))
+                    .into_any_element(),
+                cx,
+            ),
+        ));
+        fields = fields.child(field(
             tr(cx, "database.dialog.name", "Name").into(),
             self.name_editor.clone(),
             cx,
@@ -557,7 +579,8 @@ impl Render for ConnectionDialog {
                         "database.dialog.password_hint",
                         "Stored in the system keychain, never in settings.json.",
                     ))
-                    .size(LabelSize::Small),
+                    .size(LabelSize::Small)
+                    .color(Color::Muted),
                 );
         }
         if let Some((message, kind)) = &self.message {
@@ -623,16 +646,7 @@ impl Render for ConnectionDialog {
             .on_action(cx.listener(Self::confirm))
             .child(
                 Modal::new("database-connection-dialog", None)
-                    .header(
-                        ModalHeader::new()
-                            .headline(title)
-                            .description(format!(
-                                "{} {}",
-                                tr(cx, "database.dialog.driver", "Driver:"),
-                                self.driver_id
-                            ))
-                            .show_dismiss_button(true),
-                    )
+                    .header(ModalHeader::new().headline(title).show_dismiss_button(true))
                     .section(Section::new().child(fields))
                     .footer(footer),
             )
