@@ -1031,7 +1031,8 @@ impl Markdown {
                     .languages_by_path
                     .get(&path_range.path)
                     .cloned(),
-                CodeBlockKind::Fenced | CodeBlockKind::Indented => None,
+                CodeBlockKind::Fenced => self.parsed_markdown.fallback_code_block_language.clone(),
+                CodeBlockKind::Indented => None,
             }
         })
     }
@@ -1321,6 +1322,7 @@ impl Markdown {
                         heading_slugs: HashMap::default(),
                         footnote_definitions: HashMap::default(),
                         link_definition_spans: Arc::default(),
+                        fallback_code_block_language: None,
                     },
                     Default::default(),
                 );
@@ -1341,6 +1343,7 @@ impl Markdown {
             let heading_slugs = parsed.heading_slugs;
             let footnote_definitions = parsed.footnote_definitions;
             let link_definition_spans = parsed.link_definition_spans;
+            let has_untagged_code_block = parsed.has_untagged_code_block;
             let mermaid_diagrams = if should_render_mermaid_diagrams {
                 extract_mermaid_diagrams(&source, &events)
             } else {
@@ -1356,15 +1359,10 @@ impl Markdown {
             let mut images_by_source_offset = HashMap::default();
             let mut languages_by_name = TreeMap::default();
             let mut languages_by_path = TreeMap::default();
+            let mut fallback_code_block_language = None;
             if let Some(registry) = language_registry.as_ref() {
                 for name in language_names {
-                    let mut language = if !name.is_empty() {
-                        registry.language_for_name_or_extension(&name).await
-                    } else if let Some(fallback) = &fallback {
-                        registry.language_for_name(fallback.as_ref()).await
-                    } else {
-                        continue;
-                    };
+                    let mut language = registry.language_for_name_or_extension(&name).await;
                     if language.is_err()
                         && let Some((first_word, _)) = name.split_once(char::is_whitespace)
                     {
@@ -1382,6 +1380,11 @@ impl Markdown {
                     {
                         languages_by_path.insert(path, language);
                     }
+                }
+
+                if has_untagged_code_block && let Some(fallback) = &fallback {
+                    fallback_code_block_language =
+                        registry.language_for_name(fallback.as_ref()).await.ok();
                 }
             }
 
@@ -1424,6 +1427,7 @@ impl Markdown {
                     heading_slugs,
                     footnote_definitions,
                     link_definition_spans: Arc::from(link_definition_spans),
+                    fallback_code_block_language,
                 },
                 images_by_source_offset,
             )
@@ -1575,6 +1579,7 @@ pub struct ParsedMarkdown {
     pub heading_slugs: HashMap<SharedString, usize>,
     pub footnote_definitions: HashMap<SharedString, usize>,
     pub(crate) link_definition_spans: Arc<[Range<usize>]>,
+    pub(crate) fallback_code_block_language: Option<Arc<Language>>,
 }
 
 impl ParsedMarkdown {
@@ -2820,7 +2825,7 @@ impl MarkdownElement {
         }
 
         let language = match kind {
-            CodeBlockKind::Fenced => None,
+            CodeBlockKind::Fenced => inputs.parsed_markdown.fallback_code_block_language.clone(),
             CodeBlockKind::FencedLang(language) => inputs
                 .parsed_markdown
                 .languages_by_name
@@ -5702,6 +5707,78 @@ mod tests {
             };
             assert_eq!(resolved_name("Go Mod"), Some("Go Mod".into()));
             assert_eq!(resolved_name("Go extra"), Some("Go".into()));
+        });
+    }
+
+    #[gpui::test]
+    fn test_fallback_language_highlights_untagged_code_blocks(cx: &mut TestAppContext) {
+        let language = language::rust_lang();
+        let language_registry = Arc::new(LanguageRegistry::test(cx.executor()));
+        language_registry.add(language.clone());
+
+        let source = indoc::indoc! {"
+            ```
+            fn main() {}
+            ```
+        "};
+        let markdown = cx.new(|cx| {
+            Markdown::new(
+                source.into(),
+                Some(language_registry),
+                Some(language.name()),
+                cx,
+            )
+        });
+        cx.run_until_parked();
+
+        markdown.read_with(cx, |markdown, _| {
+            let fallback = markdown
+                .parsed_markdown()
+                .fallback_code_block_language
+                .as_ref()
+                .expect("the fallback language must be resolved for untagged code blocks");
+            assert_eq!(fallback.name(), language.name());
+            assert_eq!(
+                markdown
+                    .first_code_block_language()
+                    .map(|language| language.name()),
+                Some(language.name()),
+                "untagged code blocks must resolve to the fallback language"
+            );
+        });
+    }
+
+    #[gpui::test]
+    fn test_no_fallback_language_without_untagged_code_blocks(cx: &mut TestAppContext) {
+        let language = language::rust_lang();
+        let language_registry = Arc::new(LanguageRegistry::test(cx.executor()));
+        language_registry.add(language.clone());
+
+        let source = indoc::indoc! {"
+            ```rust
+            fn main() {}
+            ```
+        "};
+        let markdown = cx.new(|cx| {
+            Markdown::new(
+                source.into(),
+                Some(language_registry),
+                Some(language.name()),
+                cx,
+            )
+        });
+        cx.run_until_parked();
+
+        markdown.read_with(cx, |markdown, _| {
+            assert_eq!(
+                markdown
+                    .parsed_markdown()
+                    .fallback_code_block_language
+                    .as_ref()
+                    .map(|language| language.name()),
+                None,
+                "The fallback language must not be loaded when no code block needs it"
+            );
         });
     }
 

@@ -1449,6 +1449,7 @@ mod tests {
             heading_slugs: parsed.heading_slugs,
             footnote_definitions: parsed.footnote_definitions,
             link_definition_spans: Arc::from(parsed.link_definition_spans),
+            fallback_code_block_language: None,
         }
     }
 
