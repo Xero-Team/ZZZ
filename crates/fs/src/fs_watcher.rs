@@ -1,3 +1,4 @@
+use collections::FxHashMap;
 use gpui::{BackgroundExecutor, Task};
 use notify::{Event, EventKind};
 use parking_lot::Mutex;
@@ -673,7 +674,7 @@ struct PathRegistrationState {
 }
 
 #[derive(Default)]
-struct WatchPaths(HashMap<WatchKey, PathRegistrationState>);
+struct WatchPaths(FxHashMap<WatchKey, PathRegistrationState>);
 
 impl WatchPaths {
     fn contains(&self, key: &WatchKey) -> bool {
