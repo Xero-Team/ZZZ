@@ -91,6 +91,10 @@ unrelated documentation.
   `fallback` equals the `en.json` value.
 - Scope discipline. Fix the requested area only. Do not reformat untouched
   regions and do not bundle unrelated refactors.
+- A bug fix is proven, not asserted: the record is a test that failed before the
+  fix, passed after it, and failed again once the fix was reverted. A test that
+  never went red proves nothing, and a fix checked only by the test written
+  beside it is unproven. See "Proving a Fix" below.
 - Generated and vendored trees are out of scope by default: `vendor/`,
   `target/`, and generated tree-sitter sources. A finding inside them is not
   actionable; name the generator or the dependency instead.
@@ -117,6 +121,27 @@ lowering risk. The report is the record, and three rounds is the cap.
 When the user wants a second opinion rather than another round, that is
 `adversarial-review`, not a repeat of this skill.
 
+## Proving a Fix
+
+A review that accepts "fixed" without evidence has moved the bug, not removed it.
+Before any bug-fix claim, establish three things and state which you actually have:
+
+1. **Cause.** Label it `Proven` (you read the failing value, ran the code, or
+   pulled the record), `Inferred` (consistent with the evidence but unconfirmed),
+   or `Unknown` (name the artifact that would settle it). A plausible mechanism
+   is not the mechanism.
+2. **Red.** The test must fail against the code as it stands before the fix. If
+   it passes, the bug is not reproduced and the test measures something else.
+   Assert the observable consequence, not a call count.
+3. **Green, then red again.** Apply the smallest fix, watch it pass, then revert
+   the fix and watch the same test fail. A test that stayed green is decoration;
+   rewrite it rather than reporting coverage.
+
+When the buggy path cannot be invoked directly, say which substitute you used —
+extracted module, structural assertion, model test, or characterization test — and
+label it as such. `REFERENCE.md` section 11 carries the taxonomy and the report
+lines. Never describe a test as "revealing the bug" unless you watched it fail.
+
 ## Prerequisites
 
 - A built toolchain so `cargo xtask clippy` and `cargo fmt` run.
@@ -134,7 +159,7 @@ When the user wants a second opinion rather than another round, that is
    check, and the fast `rg` detectors for the P0 hard rules. Inventory the
    unsafe surface with the section 2 lead commands before reading the code, so
    you know whether the memory-safety contract is in scope. Record every FAIL.
- 3. Manual pass. Read the target against `REFERENCE.md` in severity order:
+3. Manual pass. Read the target against `REFERENCE.md` in severity order:
    section 1 (P0 hard rules), section 2 (memory safety and UB contract — P0
    inside `unsafe`, FFI, and manual allocation, and P0 for a new or changed
    `unsafe` without a `// SAFETY:` invariant; P1 for a pre-existing undocumented
@@ -149,7 +174,9 @@ When the user wants a second opinion rather than another round, that is
    smell would require a redesign, report it and propose the refactor instead
    of doing it unasked.
 6. Verify. Re-run the checks from step 2 that cover the changed area, plus
-   `cargo test -p <crate>` for behavior-affecting changes.
+   `cargo test -p <crate>` for behavior-affecting changes. When the change is a
+   bug fix, produce the red-green-red record from "Proving a Fix" and quote the
+   actual failure output.
 7. Report in Simplified Chinese using the template in `REFERENCE.md`.
 
 ## Examples

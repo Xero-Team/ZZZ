@@ -18,6 +18,7 @@ English.
 - 8. Mechanical checks
 - 9. Review report template
 - 10. Reviewer anti-patterns
+- 11. Verification evidence
 - Sources
 
 ## How to use this catalog
@@ -404,6 +405,7 @@ Write the report in Simplified Chinese. Keep code identifiers in English.
 **范围**: <diff / crate / 文件列表>
 **轮次**: 第 <N> 轮（上限 3）
 **检查命令**: <实际运行的命令与结果>
+**修复证据**: <无 bug 修复时写「N/A」；否则写红 → 绿 → 回退红的命令与真实输出，以及 Cause 标签>
 
 ### P0 — 阻断合并
 
@@ -457,6 +459,50 @@ Write the report in Simplified Chinese. Keep code identifiers in English.
 - Reintroducing a philosophy surface behind a setting.
 - Treating a Clean Code heuristic as a hard rule when the project already
   decided otherwise. Project rules win.
+- Accepting a bug fix as done because the new test passes. That is a claim, not
+  a proof, unless the test was red before the fix.
+
+## 11. Verification evidence
+
+A fix is evidence-backed only when the cause, the red run, and the post-revert
+red run are each observed. This section is the taxonomy for that record.
+
+### Cause labels
+
+| Label | Means | Allowed in the report |
+|-------|-------|-----------------------|
+| `Proven` | The failing value, real log line, or reproduction was read or run | State the artifact you inspected |
+| `Inferred` | Consistent with evidence, not directly confirmed | Say what would confirm it |
+| `Unknown` | Cannot be established from what is available | Name the one artifact that would settle it |
+
+A plausible mechanism is not a mechanism. When two candidates remain, rule them
+out one at a time by reading code, not by reasoning about which is likelier.
+
+### Substitute tests, when a true red is impossible
+
+| Type | Use when | Honesty requirement |
+|------|----------|---------------------|
+| Extract, then test | The logic can move to a module with injected dependencies | Preferred. Do the extraction if it is small. |
+| Structural test | The call site is unreachable but the invariant is visible in source | Say in the header that it is structural and should be replaced once the path is reachable |
+| Model test | Two components cannot be instantiated together | Mirror the real code field for field, cite the `file:line` it models, and note that it is a model |
+| Characterization test | Documenting current behavior you are not fixing | Name it as such; it will invert when the bug is fixed |
+
+None of these may be reported as a regression test. A model test in particular
+still needs the revert step, because that is where fake tests hide.
+
+### Reverting the fix
+
+Re-run the same command and the same assertion with only the fix undone. If the
+test stays green, widen or narrow the test until it goes red, or report the bug
+as still unproven. Do not delete the failing assertion to make the revert look
+clean, and do not commit the reverted state.
+
+### What the report must quote
+
+- The red command and the actual failure line, not a summary of it.
+- The green result for the same command.
+- The post-revert failure, again as an actual line.
+- The remaining uncertainty, including any test run you could not perform.
 
 ## Sources
 
