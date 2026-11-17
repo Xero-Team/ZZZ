@@ -840,7 +840,8 @@ impl ThreadView {
         ));
 
         subscriptions.push(cx.observe(&message_editor, |this, editor, cx| {
-            let draft_contents_task = if editor.read(cx).text(cx).is_empty() {
+            let is_empty = editor.read(cx).editor().read(cx).is_empty(cx);
+            let draft_contents_task = if is_empty {
                 None
             } else {
                 Some(editor.update(cx, |editor, cx| editor.draft_contents(cx)))
