@@ -1,0 +1,16 @@
+# Forgejo collaboration bridge; credentials stay in the bot deployment.
+# Keep this binding identical on both default branches.
+[forgejo.bridge]
+enabled = true
+destination = "xero-team/ZZZ"
+github_repository = "Xero-Team/ZZZ"
+github_repository_id = 1383213006
+forgejo_repository_id = 17
+issues = true
+pull_requests = true
+comments = true
+sync_refs = true
+
+[forgejo.mirror]
+enabled = false
+destination = "xero-team/ZZZ"
