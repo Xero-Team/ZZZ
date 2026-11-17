@@ -8232,11 +8232,15 @@ impl LspStore {
                             .and_then(|new_hints_by_server| {
                                 lsp_store.update(cx, |lsp_store, cx| {
                                     let lsp_data = lsp_store.latest_lsp_data(&buffer, cx);
-                                    let update_cache = lsp_data.buffer_version == query_version;
+                                    // `chunk` indexes the chunk list of the buffer version this
+                                    // fetch was started for. If the buffer changed meanwhile,
+                                    // the cache has been rebuilt for the new version and may hold
+                                    // fewer chunks, so the stale id must not be used to index it.
+                                    if lsp_data.buffer_version != query_version {
+                                        return other_servers_cached;
+                                    }
                                     if new_hints_by_server.is_empty() {
-                                        if update_cache {
-                                            lsp_data.inlay_hints.invalidate_for_chunk(chunk);
-                                        }
+                                        lsp_data.inlay_hints.invalidate_for_chunk(chunk);
                                         other_servers_cached
                                     } else {
                                         let mut result = other_servers_cached;
@@ -8268,13 +8272,11 @@ impl LspStore {
                                                     )
                                                 })
                                                 .collect::<Vec<_>>();
-                                            if update_cache {
-                                                lsp_data.inlay_hints.insert_new_hints(
-                                                    chunk,
-                                                    server_id,
-                                                    new_hints.clone(),
-                                                );
-                                            }
+                                            lsp_data.inlay_hints.insert_new_hints(
+                                                chunk,
+                                                server_id,
+                                                new_hints.clone(),
+                                            );
                                             result.insert(server_id, new_hints);
                                         }
                                         result
