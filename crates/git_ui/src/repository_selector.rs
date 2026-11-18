@@ -89,6 +89,7 @@ impl RepositorySelector {
             .read(cx)
             .repositories()
             .values()
+            .filter(|repository| repository.read(cx).backend().is_git())
             .cloned()
             .collect();
         sort_by_display_name(&mut repository_entries, &display_names, cx);

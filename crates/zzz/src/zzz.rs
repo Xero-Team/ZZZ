@@ -29,6 +29,7 @@ use fs::Fs;
 use futures::FutureExt as _;
 use futures::{StreamExt, channel::mpsc, select_biased};
 use git_ui::commit_view::CommitViewToolbar;
+use git_ui::fossil_panel::FossilPanel;
 use git_ui::git_panel::GitPanel;
 use git_ui::project_diff::{BranchDiffToolbar, ProjectDiffToolbar};
 use git_ui::solo_diff_view::{SoloDiffGitToolbar, SoloDiffStyleToolbar};
@@ -737,6 +738,7 @@ fn initialize_panels(window: &mut Window, cx: &mut Context<Workspace>) -> Task<a
         let session_file_panel =
             terminal_mode::SessionFilePanel::load(workspace_handle.clone(), cx.clone());
         let git_panel = GitPanel::load(workspace_handle.clone(), cx.clone());
+        let fossil_panel = FossilPanel::load(workspace_handle.clone(), cx.clone());
         let telegram_panel = TelegramPanel::load(workspace_handle.clone(), cx.clone());
         let debug_panel = DebugPanel::load(workspace_handle.clone(), cx);
 
@@ -762,6 +764,7 @@ fn initialize_panels(window: &mut Window, cx: &mut Context<Workspace>) -> Task<a
             add_panel_when_ready(ssh_session_panel, workspace_handle.clone(), cx.clone()),
             add_panel_when_ready(session_file_panel, workspace_handle.clone(), cx.clone()),
             add_panel_when_ready(git_panel, workspace_handle.clone(), cx.clone()),
+            add_panel_when_ready(fossil_panel, workspace_handle.clone(), cx.clone()),
             add_panel_when_ready(telegram_panel, workspace_handle.clone(), cx.clone()),
             add_panel_when_ready(debug_panel, workspace_handle.clone(), cx.clone()),
             initialize_agent_panel(workspace_handle, cx.clone()).map(|r| r.log_err()),

@@ -5512,6 +5512,30 @@ Visit [the Configuration page](../ai/configuration.md) under the AI section to l
 
 See the [debugger page](../debugger.md) for more information about debugging support within ZZZ.
 
+## Fossil Panel
+
+- Description: Setting to customize the behavior of the read-only fossil panel.
+- Setting: `fossil_panel`
+- Default:
+
+```json [settings]
+{
+  "fossil_panel": {
+    "button": true,
+    "dock": "left",
+    "default_width": 300,
+    "starts_open": false
+  }
+}
+```
+
+**Options**
+
+- `button`: Whether to show the fossil panel button in the status bar
+- `dock`: Where to dock the fossil panel. Can be `left` or `right`
+- `default_width`: Default width of the fossil panel
+- `starts_open`: Whether the fossil panel should open on startup
+
 ## Git Panel
 
 - Description: Setting to customize the behavior of the git panel.

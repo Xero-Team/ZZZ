@@ -29,7 +29,7 @@ use git::repository::{
 };
 use git::stash::GitStash;
 use git::status::{DiffStat, StageStatus};
-use git::{Amend, Commit, Signoff, ToggleStaged, repository::RepoPath, status::FileStatus};
+use git::{Amend, Commit, Signoff, ToggleStaged, repository::RepoPath};
 use git::{
     ExpandCommitEditor, GitHostingProviderRegistry, GitRemote, RestoreTrackedFiles, StageAll,
     StashAll, StashApply, StashPop, ToggleCommitEditor, ToggleFillCommitEditor,
@@ -86,6 +86,12 @@ use workspace::{
 use zzz_actions::{
     DecreaseBufferFontSize, IncreaseBufferFontSize, ResetBufferFontSize,
     workspace::{CopyPath, CopyRelativePath},
+};
+
+use crate::changes_list::{
+    DirectoryRow as ChangesListDirectoryRow, ListEntry as ChangesListEntry, Section,
+    SectionHeader as ChangesListSectionHeader, TreeKey, TreeStatusRow as ChangesListTreeStatusRow,
+    TreeViewState as ChangesListTreeViewState,
 };
 
 const MAX_HISTORY_TAG_CHIPS: usize = 3;
@@ -554,83 +560,32 @@ fn commit_history_from_response(
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-enum Section {
-    Conflict,
-    Tracked,
-    New,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-struct GitHeaderEntry {
-    header: Section,
-}
-
-impl GitHeaderEntry {
-    pub fn contains(&self, status_entry: &GitStatusEntry, repo: &Repository) -> bool {
-        let this = &self.header;
-        let status = status_entry.status;
-        match this {
-            Section::Conflict => {
-                repo.had_conflict_on_last_merge_head_change(&status_entry.repo_path)
-            }
-            Section::Tracked => !status.is_created(),
-            Section::New => status.is_created(),
-        }
-    }
-    pub fn title(&self, cx: &App) -> String {
-        match self.header {
-            Section::Conflict => tr(cx, "git_ui.git_panel.section.conflicts", "Conflicts"),
-            Section::Tracked => tr(cx, "git_ui.git_panel.section.tracked", "Tracked"),
-            Section::New => tr(cx, "git_ui.git_panel.section.untracked", "Untracked"),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-enum GitListEntry {
-    Status(GitStatusEntry),
-    TreeStatus(GitTreeStatusEntry),
-    Directory(GitTreeDirEntry),
-    Header(GitHeaderEntry),
-}
+type GitListEntry = ChangesListEntry<GitStatusEntry>;
+type GitHeaderEntry = ChangesListSectionHeader;
+type GitTreeStatusEntry = ChangesListTreeStatusRow<GitStatusEntry>;
+type GitTreeDirEntry = ChangesListDirectoryRow;
+type TreeViewState = ChangesListTreeViewState<GitStatusEntry>;
 
 impl GitListEntry {
-    fn is_selectable(&self) -> bool {
-        matches!(self, GitListEntry::Status(_) | GitListEntry::TreeStatus(_))
-    }
-
     fn status_entry(&self) -> Option<&GitStatusEntry> {
-        match self {
-            GitListEntry::Status(entry) => Some(entry),
-            GitListEntry::TreeStatus(entry) => Some(&entry.entry),
-            _ => None,
-        }
+        self.file()
     }
 
     fn directory_entry(&self) -> Option<&GitTreeDirEntry> {
-        match self {
-            GitListEntry::Directory(entry) => Some(entry),
-            _ => None,
-        }
+        self.directory()
     }
+}
 
-    /// Returns the tree indentation depth for this entry.
-    fn depth(&self) -> usize {
-        match self {
-            GitListEntry::Directory(dir) => dir.depth,
-            GitListEntry::TreeStatus(status) => status.depth,
-            _ => 0,
-        }
-    }
-
-    fn repo_path(&self) -> Option<&RepoPath> {
-        match self {
-            GitListEntry::Status(entry) => Some(&entry.repo_path),
-            GitListEntry::TreeStatus(entry) => Some(&entry.entry.repo_path),
-            GitListEntry::Directory(entry) => Some(&entry.key.path),
-            GitListEntry::Header(_) => None,
-        }
+fn section_contains(
+    section: &GitHeaderEntry,
+    status_entry: &GitStatusEntry,
+    repo: &Repository,
+) -> bool {
+    let status = status_entry.status;
+    match section.header {
+        Section::Conflict => repo.had_conflict_on_last_merge_head_change(&status_entry.repo_path),
+        Section::Tracked => !status.is_created(),
+        Section::New => status.is_created(),
     }
 }
 
@@ -697,201 +652,29 @@ impl GitPanelViewMode {
     }
 }
 
-#[derive(Default)]
-struct TreeViewState {
-    // Maps visible index to actual entry index.
-    // Length equals the number of visible entries.
-    // This is needed because some entries (like collapsed directories) may be hidden.
-    logical_indices: Vec<usize>,
-    expanded_dirs: HashMap<TreeKey, bool>,
-    directory_descendants: HashMap<TreeKey, Vec<GitStatusEntry>>,
-}
+pub use crate::changes_list::StatusEntry as GitStatusEntry;
 
-impl TreeViewState {
-    fn build_tree_entries(
-        &mut self,
-        section: Section,
-        mut entries: Vec<GitStatusEntry>,
-        seen_directories: &mut HashSet<TreeKey>,
-    ) -> Vec<(GitListEntry, bool)> {
-        if entries.is_empty() {
-            return Vec::new();
-        }
-
-        entries.sort_by(|a, b| a.repo_path.cmp(&b.repo_path));
-
-        let mut root = TreeNode::default();
-        for entry in entries {
-            let components: Vec<&str> = entry.repo_path.components().collect();
-            if components.is_empty() {
-                root.files.push(entry);
-                continue;
-            }
-
-            let mut current = &mut root;
-            let mut current_path = String::new();
-
-            for (ix, component) in components.iter().enumerate() {
-                if ix == components.len() - 1 {
-                    current.files.push(entry.clone());
-                } else {
-                    if !current_path.is_empty() {
-                        current_path.push('/');
-                    }
-                    current_path.push_str(component);
-                    let dir_path = match RepoPath::new(&current_path) {
-                        Ok(dir_path) => dir_path,
-                        Err(error) => {
-                            log::error!(
-                                "Failed to build git tree directory path {current_path:?}: {error}"
-                            );
-                            continue;
-                        }
-                    };
-
-                    let component = SharedString::from(component.to_string());
-
-                    current = current
-                        .children
-                        .entry(component.clone())
-                        .or_insert_with(|| TreeNode {
-                            name: component,
-                            path: Some(dir_path),
-                            ..Default::default()
-                        });
-                }
-            }
-        }
-
-        let (flattened, _) = self.flatten_tree(&root, section, 0, seen_directories);
-        flattened
-    }
-
-    fn flatten_tree(
-        &mut self,
-        node: &TreeNode,
-        section: Section,
-        depth: usize,
-        seen_directories: &mut HashSet<TreeKey>,
-    ) -> (Vec<(GitListEntry, bool)>, Vec<GitStatusEntry>) {
-        let mut all_statuses = Vec::new();
-        let mut flattened = Vec::new();
-
-        for child in node.children.values() {
-            let (terminal, name) = Self::compact_directory_chain(child);
-            let Some(path) = terminal.path.clone().or_else(|| child.path.clone()) else {
-                continue;
-            };
-            let (child_flattened, mut child_statuses) =
-                self.flatten_tree(terminal, section, depth + 1, seen_directories);
-            let key = TreeKey { section, path };
-            let expanded = *self.expanded_dirs.get(&key).unwrap_or(&true);
-            self.expanded_dirs.entry(key.clone()).or_insert(true);
-            seen_directories.insert(key.clone());
-
-            self.directory_descendants
-                .insert(key.clone(), child_statuses.clone());
-
-            flattened.push((
-                GitListEntry::Directory(GitTreeDirEntry {
-                    key,
-                    name,
-                    depth,
-                    expanded,
-                }),
-                true,
-            ));
-
-            if expanded {
-                flattened.extend(child_flattened);
-            } else {
-                flattened.extend(child_flattened.into_iter().map(|(child, _)| (child, false)));
-            }
-
-            all_statuses.append(&mut child_statuses);
-        }
-
-        for file in &node.files {
-            all_statuses.push(file.clone());
-            flattened.push((
-                GitListEntry::TreeStatus(GitTreeStatusEntry {
-                    entry: file.clone(),
-                    depth,
-                }),
-                true,
-            ));
-        }
-
-        (flattened, all_statuses)
-    }
-
-    fn compact_directory_chain(mut node: &TreeNode) -> (&TreeNode, SharedString) {
-        let mut parts = vec![node.name.clone()];
-        while node.files.is_empty() && node.children.len() == 1 {
-            let Some(child) = node.children.values().next() else {
-                continue;
-            };
-            if child.path.is_none() {
-                break;
-            }
-            parts.push(child.name.clone());
-            node = child;
-        }
-        let name = parts.join("/");
-        (node, SharedString::from(name))
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-struct GitTreeStatusEntry {
-    entry: GitStatusEntry,
-    depth: usize,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
-struct TreeKey {
-    section: Section,
-    path: RepoPath,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-struct GitTreeDirEntry {
-    key: TreeKey,
-    name: SharedString,
-    depth: usize,
-    // staged_state: ToggleState,
-    expanded: bool,
-}
-
-#[derive(Default)]
-struct TreeNode {
-    name: SharedString,
-    path: Option<RepoPath>,
-    children: BTreeMap<SharedString, TreeNode>,
-    files: Vec<GitStatusEntry>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct GitStatusEntry {
-    pub(crate) repo_path: RepoPath,
-    pub(crate) status: FileStatus,
-    pub(crate) staging: StageStatus,
-    pub(crate) diff_stat: Option<DiffStat>,
-}
-
-impl GitStatusEntry {
-    fn display_name(&self, path_style: PathStyle) -> String {
-        self.repo_path.file_name().map_or_else(
-            || self.repo_path.display(path_style).to_string(),
-            |name| name.to_owned(),
-        )
-    }
-
-    fn parent_dir(&self, path_style: PathStyle) -> Option<String> {
-        self.repo_path
-            .parent()
-            .map(|parent| parent.display(path_style).to_string())
-    }
+/// The repository the Git panel should show.
+///
+/// Fossil checkouts live in the same store as Git ones, and the store's active
+/// repository follows the file being edited, so a Fossil checkout can be active
+/// while Git repositories remain. In that case show one of those instead of an
+/// empty "No Git Repositories" panel; the repository selector still switches
+/// between them.
+fn active_git_repository(project: &Project, cx: &App) -> Option<Entity<Repository>> {
+    let git_store = project.git_store();
+    let git_store = git_store.read(cx);
+    git_store
+        .active_repository()
+        .filter(|repository| repository.read(cx).backend().is_git())
+        .or_else(|| {
+            git_store
+                .repositories()
+                .iter()
+                .filter(|(_, repository)| repository.read(cx).backend().is_git())
+                .min_by_key(|(id, _)| id.0)
+                .map(|(_, repository)| repository.clone())
+        })
 }
 
 /// The label for `repository`, disambiguated against every other repository in
@@ -1073,7 +856,8 @@ impl GitPanel {
         let app_state = workspace.app_state().clone();
         let fs = app_state.fs.clone();
         let git_store = project.read(cx).git_store().clone();
-        let active_repository = project.read(cx).active_repository(cx);
+        let active_repository = active_git_repository(project.read(cx), cx);
+
         let signoff_enabled = serialized_panel
             .as_ref()
             .is_some_and(|panel| panel.signoff_enabled);
@@ -2585,7 +2369,7 @@ impl GitPanel {
                         .iter()
                         .filter_map(|entry| entry.status_entry())
                         .filter(|status_entry| {
-                            section.contains(status_entry, &repo)
+                            section_contains(section, status_entry, &repo)
                                 && GitPanel::stage_status_for_entry(status_entry, &repo).as_bool()
                                     != Some(goal_staged_state)
                         })
@@ -3939,7 +3723,7 @@ impl GitPanel {
 
     fn schedule_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let handle = cx.entity().downgrade();
-        let new_active_repository = self.project.read(cx).active_repository(cx);
+        let new_active_repository = active_git_repository(self.project.read(cx), cx);
         let active_repository_changed = self.active_repository.as_ref().map(Entity::entity_id)
             != new_active_repository.as_ref().map(Entity::entity_id);
         if active_repository_changed {
@@ -6284,6 +6068,12 @@ impl GitPanel {
         let has_directory_worktree = project
             .visible_worktrees(cx)
             .any(|worktree| !worktree.read(cx).is_single_file());
+        // A Fossil checkout is not a Git repository, and offering `git init`
+        // inside one would put a second VCS in the same directory.
+        let has_fossil_checkout = project
+            .repositories(cx)
+            .values()
+            .any(|repository| repository.read(cx).backend().is_fossil());
         if worktree_count > 0 && self.active_repository.is_none() {
             v_flex()
                 .gap_1()
@@ -6296,7 +6086,7 @@ impl GitPanel {
                     ))
                     .color(Color::Muted),
                 )
-                .when(has_directory_worktree, |this| {
+                .when(has_directory_worktree && !has_fossil_checkout, |this| {
                     this.child(
                         Button::new(
                             "initialize_repository",
@@ -6608,7 +6398,7 @@ impl GitPanel {
                         .color(Color::Muted),
                     )
                     .child(
-                        Label::new(header.title(cx))
+                        Label::new(crate::changes_list::section_title(header.header, cx))
                             .color(Color::Muted)
                             .size(LabelSize::Small),
                     ),
@@ -8484,7 +8274,7 @@ mod tests {
 
     use git::{
         repository::repo_path,
-        status::{StatusCode, UnmergedStatus, UnmergedStatusCode},
+        status::{FileStatus, StatusCode, UnmergedStatus, UnmergedStatusCode},
     };
     use gpui::{TestAppContext, UpdateGlobal, VisualTestContext, px};
     use project::FakeFs;
@@ -9655,7 +9445,7 @@ mod tests {
 
     #[gpui::test]
     async fn test_bulk_staging(cx: &mut TestAppContext) {
-        use GitListEntry::*;
+        use crate::changes_list::ListEntry::*;
 
         init_test(cx);
         let fs = FakeFs::new(cx.background_executor.clone());
@@ -9850,7 +9640,7 @@ mod tests {
 
     #[gpui::test]
     async fn test_bulk_staging_with_sort_by_paths(cx: &mut TestAppContext) {
-        use GitListEntry::*;
+        use crate::changes_list::ListEntry::*;
 
         init_test(cx);
         let fs = FakeFs::new(cx.background_executor.clone());

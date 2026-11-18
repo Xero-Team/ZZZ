@@ -1036,6 +1036,16 @@
     // they live in the platform keychain under the connection's stable id.
     "connections": [],
   },
+  "fossil_panel": {
+    // Whether to show the fossil panel button in the status bar.
+    "button": true,
+    // Where to dock the fossil panel. Can be 'left' or 'right'.
+    "dock": "left",
+    // Default width of the fossil panel.
+    "default_width": 300,
+    // Whether the fossil panel should open on startup.
+    "starts_open": false,
+  },
   "git_panel": {
     // Whether to show the git panel button in the status bar.
     "button": true,

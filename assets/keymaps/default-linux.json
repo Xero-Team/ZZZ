@@ -710,6 +710,7 @@
       "ctrl-shift-e": "project_panel::ToggleFocus",
       "ctrl-shift-b": "outline_panel::ToggleFocus",
       "ctrl-shift-g": "git_panel::ToggleFocus",
+      "ctrl-shift-7": "fossil_panel::ToggleFocus",
       "ctrl-shift-d": "debug_panel::ToggleFocus",
       "ctrl-shift-8": "telegram_panel::ToggleFocus",
       "ctrl-shift-9": "database::ToggleDatabasePanel",
