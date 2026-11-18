@@ -14,7 +14,8 @@ use git::{
         AskPassDelegate, Branch, CommitData, CommitDataReader, CommitDetails, CommitOptions,
         CreateWorktreeTarget, FetchOptions, GRAPH_CHUNK_SIZE, GitRepository,
         GitRepositoryCheckpoint, InitialGraphCommitData, LogOrder, LogSource, PushOptions, RefEdit,
-        Remote, RepoPath, ResetMode, SearchCommitArgs, Worktree, commit_hash_search_query,
+        Remote, RepoPath, RepositoryBackend, ResetMode, SearchCommitArgs, Worktree,
+        commit_hash_search_query,
     },
     stash::GitStash,
     status::{
@@ -173,6 +174,10 @@ impl FakeGitRepository {
 }
 
 impl GitRepository for FakeGitRepository {
+    fn backend(&self) -> RepositoryBackend {
+        RepositoryBackend::Git
+    }
+
     fn reload_index(&self) {}
 
     fn load_index_text(&self, path: RepoPath) -> BoxFuture<'_, Option<String>> {

@@ -1398,7 +1398,7 @@ impl GitService for RealFs {
         if git::fossil::is_fossil_checkout_db_path(dotgit_path) {
             anyhow::ensure!(
                 git::fossil::fossil_support_enabled(),
-                "Fossil support is disabled; set {}=1 to open this checkout",
+                "Fossil support is disabled by the {} environment variable; unset it to open this checkout",
                 git::fossil::FOSSIL_SUPPORT_ENV_VAR
             );
             return Ok(Arc::new(git::fossil::FossilRepository::new(

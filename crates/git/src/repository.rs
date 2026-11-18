@@ -775,7 +775,32 @@ pub fn delete_branch_flag(is_remote_tracking_ref: bool, force: bool) -> &'static
     }
 }
 
+/// Which backend implements a repository.
+///
+/// The Git panel and the Fossil panel each claim the repositories they can
+/// render. A Fossil checkout has no index and no writable surfaces, so it
+/// belongs to the Fossil panel and never to the Git panel's staging UI.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RepositoryBackend {
+    Git,
+    Fossil,
+}
+
+impl RepositoryBackend {
+    pub fn is_git(self) -> bool {
+        matches!(self, Self::Git)
+    }
+
+    pub fn is_fossil(self) -> bool {
+        matches!(self, Self::Fossil)
+    }
+}
+
 pub trait GitRepository: Send + Sync {
+    /// The backend implementing this repository. Every implementation states
+    /// this explicitly, so a new backend cannot inherit Git's UI by accident.
+    fn backend(&self) -> RepositoryBackend;
+
     fn reload_index(&self);
 
     /// Returns the contents of an entry in the repository's index, or None if there is no entry for the given path.
@@ -1318,6 +1343,10 @@ fn parse_remote_urls(stdout: &str) -> HashMap<String, String> {
 }
 
 impl GitRepository for RealGitRepository {
+    fn backend(&self) -> RepositoryBackend {
+        RepositoryBackend::Git
+    }
+
     fn reload_index(&self) {
         if let Ok(mut index) = self.repository.lock().index() {
             index.read(false).log_err();

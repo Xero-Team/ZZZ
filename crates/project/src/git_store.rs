@@ -40,8 +40,8 @@ use git::{
         Branch, BranchesScanResult, CommitData, CommitDetails, CommitDiff, CommitFile,
         CommitOptions, CreateWorktreeTarget, DiffType, FetchOptions, GitCommitTemplate,
         GitRepository, GitRepositoryCheckpoint, InitialGraphCommitData, LogOrder, LogSource,
-        PushOptions, Remote, RemoteCommandOutput, RepoPath, ResetMode, SearchCommitArgs,
-        UpstreamTrackingStatus, Worktree as GitWorktree, delete_branch_flag,
+        PushOptions, Remote, RemoteCommandOutput, RepoPath, RepositoryBackend, ResetMode,
+        SearchCommitArgs, UpstreamTrackingStatus, Worktree as GitWorktree, delete_branch_flag,
     },
     stash::{GitStash, StashEntry},
     status::{
@@ -392,6 +392,11 @@ pub struct RepositorySnapshot {
     pub remote_upstream_url: Option<String>,
     pub stash_entries: GitStash,
     pub linked_worktrees: Arc<[GitWorktree]>,
+    /// The backend behind this repository.
+    ///
+    /// Known before the backend is opened for a checkout we can recognize from
+    /// the filesystem, and refreshed from the backend once it is.
+    pub backend: RepositoryBackend,
 }
 
 type JobId = u64;
@@ -4443,6 +4448,19 @@ impl RepositoryId {
     }
 }
 
+/// The backend for a repository whose common directory is `common_dir_abs_path`.
+///
+/// A Fossil checkout stores its metadata in a database in the checkout root and
+/// registers that path as both the repository and the common directory, so the
+/// path identifies the backend before anything is opened.
+fn backend_for_common_dir(common_dir_abs_path: &Path) -> RepositoryBackend {
+    if git::fossil::is_fossil_checkout_db_path(common_dir_abs_path) {
+        RepositoryBackend::Fossil
+    } else {
+        RepositoryBackend::Git
+    }
+}
+
 impl RepositorySnapshot {
     fn empty(
         id: RepositoryId,
@@ -4458,6 +4476,11 @@ impl RepositorySnapshot {
             dot_git_abs_path.unwrap_or_else(|| work_directory_abs_path.join(".git").into());
         let common_dir_abs_path =
             common_dir_abs_path.unwrap_or_else(|| repository_dir_abs_path.clone());
+        // A Fossil checkout keeps its metadata database in the checkout root, and
+        // the worktree registers that path as both the repository and the common
+        // directory. The path alone identifies the backend, for local checkouts
+        // and for the ones a remote project announces, before it is opened.
+        let backend = backend_for_common_dir(&common_dir_abs_path);
 
         Self {
             id,
@@ -4476,6 +4499,7 @@ impl RepositorySnapshot {
             remote_upstream_url: None,
             stash_entries: Default::default(),
             linked_worktrees: Arc::from([]),
+            backend,
             path_style,
         }
     }
@@ -4890,6 +4914,14 @@ impl Repository {
             Some(Ok(RepositoryState::Local(state))) => state.backend.is_trusted(),
             _ => false,
         }
+    }
+
+    /// The backend behind this repository.
+    ///
+    /// Each panel claims the repositories whose backend it can render, so a
+    /// Fossil checkout never reaches the Git panel's staging UI.
+    pub fn backend(&self) -> RepositoryBackend {
+        self.snapshot.backend
     }
 
     pub fn snapshot(&self) -> RepositorySnapshot {
@@ -10845,6 +10877,7 @@ async fn compute_snapshot(
             remote_origin_url,
             remote_upstream_url,
             linked_worktrees,
+            backend: backend.backend(),
             scan_id: prev_snapshot.scan_id + 1,
             ..prev_snapshot
         };
