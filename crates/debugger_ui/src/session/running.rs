@@ -648,7 +648,6 @@ pub(crate) fn new_debugger_pane(
                                 .on_click(cx.listener(move |pane, _, _, cx| {
                                     let is_zoomed = pane.is_zoomed();
                                     pane.set_zoomed(!is_zoomed, cx);
-                                    cx.notify();
                                 }))
                                 .tooltip({
                                     let focus_handle = focus_handle.clone();
@@ -1727,9 +1726,7 @@ impl RunningState {
             return;
         };
 
-        if Some(ThreadId(selected_thread.id)) != self.thread_id {
-            self.select_thread(ThreadId(selected_thread.id), window, cx);
-        }
+        self.select_thread(ThreadId(selected_thread.id), window, cx);
     }
 
     pub fn selected_thread_id(&self) -> Option<ThreadId> {

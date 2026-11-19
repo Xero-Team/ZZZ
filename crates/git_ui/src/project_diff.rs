@@ -462,18 +462,6 @@ impl ProjectDiff {
         }
     }
 
-    pub fn deploy_at_project_path(
-        workspace: &mut Workspace,
-        project_path: ProjectPath,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
-    ) {
-        let project_diff = open_head_diff(workspace, false, window, cx);
-        project_diff.update(cx, |project_diff, cx| {
-            project_diff.move_to_project_path(&project_path, window, cx);
-        });
-    }
-
     pub fn autoscroll(&self, cx: &mut Context<Self>) {
         self.editor.update(cx, |editor, cx| {
             editor.rhs_editor().update(cx, |editor, cx| {

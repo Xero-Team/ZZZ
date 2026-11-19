@@ -2265,10 +2265,9 @@ impl ProjectPanel {
                         already_exists = true;
                     }
                 } else {
-                    let new_path = if let Some(parent) = entry.path.clone().parent() {
-                        parent.join(&filename)
-                    } else {
-                        filename.into()
+                    let new_path = match entry.path.parent() {
+                        Some(parent) => parent.join(&filename),
+                        None => filename.into(),
                     };
 
                     // We skip the collision check for worktree roots as the
@@ -4233,9 +4232,7 @@ impl ProjectPanel {
                     let destination_path = dest_dir.join(&relative_path);
 
                     // Create parent directories if needed
-                    if let Some(parent) = destination_path.parent()
-                        && !parent.exists()
-                    {
+                    if let Some(parent) = destination_path.parent() {
                         fs.create_dir(parent).await.log_err();
                     }
 

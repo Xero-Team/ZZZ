@@ -2012,7 +2012,6 @@ impl GitPanel {
                     )
                 });
                 this.update_visible_entries(window, cx);
-                cx.notify();
                 task
             })?
             .await?;

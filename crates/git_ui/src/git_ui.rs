@@ -26,9 +26,12 @@ use notifications::status_toast::StatusToast;
 use project::git_store::Repository;
 use project_diff::ProjectDiff;
 use time::OffsetDateTime;
-use ui::prelude::*;
-use util::ResultExt;
-use workspace::{ModalView, OpenMode, Workspace, notifications::DetachAndPromptErr};
+use ui::{ButtonLike, ContextMenu, ElevationIndex, PopoverMenuHandle, TintColor, prelude::*};
+use util::ResultExt as _;
+use workspace::{
+    ModalView, OpenMode, Workspace,
+    notifications::{DetachAndPromptErr, NotifyTaskExt},
+};
 use zzz_actions;
 
 use crate::{
@@ -1156,7 +1159,6 @@ mod remote_button {
             .anchor(Anchor::TopRight)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn split_button(
         id: SharedString,
         left_label: impl Into<SharedString>,
