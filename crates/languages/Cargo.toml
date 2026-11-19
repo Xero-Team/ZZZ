@@ -15,7 +15,6 @@ test-support = [
 load-grammars = [
     "grammars/load-grammars",
     "tree-sitter",
-    "tree-sitter-gitcommit",
 ]
 
 [dependencies]
@@ -59,8 +58,7 @@ snippet.workspace = true
 task.workspace = true
 terminal.workspace = true
 theme.workspace = true
-tree-sitter = { workspace = true, optional = true }
-tree-sitter-gitcommit = { workspace = true, optional = true }
+tree-sitter = { workspace = true, optional = true , features = ["wasm"] }
 url.workspace = true
 util.workspace = true
 vfs.workspace = true

@@ -273,7 +273,6 @@ mod tests {
     use crate::format::{ListOrDirect, VsCodeSnippet, VsSnippetsFile};
     use collections::HashMap;
     use fs::FakeFs;
-    use gpui;
     use gpui::TestAppContext;
     use indoc::indoc;
 

@@ -624,24 +624,6 @@ struct HighlightedTextBuilder {
 }
 
 impl HighlightedText {
-    pub fn from_buffer_range<T: ToOffset>(
-        range: Range<T>,
-        snapshot: &text::BufferSnapshot,
-        syntax_snapshot: &SyntaxSnapshot,
-        override_style: Option<HighlightStyle>,
-        syntax_theme: &SyntaxTheme,
-    ) -> Self {
-        let mut highlighted_text = HighlightedTextBuilder::default();
-        highlighted_text.add_text_from_buffer_range(
-            range,
-            snapshot,
-            syntax_snapshot,
-            override_style,
-            syntax_theme,
-        );
-        highlighted_text.build()
-    }
-
     pub fn to_styled_text(&self, default_style: &TextStyle) -> StyledText {
         gpui::StyledText::new(self.text.clone())
             .with_default_highlights(default_style, self.highlights.iter().cloned())
@@ -1173,63 +1155,6 @@ impl Buffer {
                 capability: Capability::ReadOnly,
                 modeline,
             }
-        }
-    }
-
-    pub fn build_empty_snapshot(cx: &mut App) -> BufferSnapshot {
-        let entity_id = cx.reserve_entity::<Self>().entity_id();
-        let buffer_id = entity_id.as_non_zero_u64().into();
-        let text = TextBuffer::new_normalized(
-            ReplicaId::LOCAL,
-            buffer_id,
-            Default::default(),
-            Rope::new(),
-        );
-        let text = text.into_snapshot();
-        let syntax = SyntaxMap::new(&text).snapshot();
-        let tree_sitter_data = TreeSitterData::new(&text);
-        BufferSnapshot {
-            text,
-            syntax,
-            tree_sitter_data: Arc::new(tree_sitter_data),
-            file: None,
-            diagnostics: Default::default(),
-            remote_selections: Default::default(),
-            language: None,
-            non_text_state_update_count: 0,
-            capability: Capability::ReadOnly,
-            modeline: None,
-        }
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn build_snapshot_sync(
-        text: Rope,
-        language: Option<Arc<Language>>,
-        language_registry: Option<Arc<LanguageRegistry>>,
-        cx: &mut App,
-    ) -> BufferSnapshot {
-        let entity_id = cx.reserve_entity::<Self>().entity_id();
-        let buffer_id = entity_id.as_non_zero_u64().into();
-        let text =
-            TextBuffer::new_normalized(ReplicaId::LOCAL, buffer_id, Default::default(), text)
-                .into_snapshot();
-        let mut syntax = SyntaxMap::new(&text).snapshot();
-        if let Some(language) = language.clone() {
-            syntax.reparse(&text, language_registry, language);
-        }
-        let tree_sitter_data = TreeSitterData::new(&text);
-        BufferSnapshot {
-            text,
-            syntax,
-            tree_sitter_data: Arc::new(tree_sitter_data),
-            file: None,
-            diagnostics: Default::default(),
-            remote_selections: Default::default(),
-            language,
-            non_text_state_update_count: 0,
-            capability: Capability::ReadOnly,
-            modeline: None,
         }
     }
 
@@ -3447,11 +3372,9 @@ impl Buffer {
         let old_version = self.version.clone();
 
         let ops = self.text.randomly_undo_redo(rng);
-        if !ops.is_empty() {
-            for op in ops {
-                self.send_operation(Operation::Buffer(op), true, cx);
-                self.did_edit(&old_version, was_dirty, true, cx);
-            }
+        for op in ops {
+            self.send_operation(Operation::Buffer(op), true, cx);
+            self.did_edit(&old_version, was_dirty, true, cx);
         }
     }
 }
@@ -3884,21 +3807,6 @@ impl BufferSnapshot {
         )
     }
 
-    pub fn highlighted_text_for_range<T: ToOffset>(
-        &self,
-        range: Range<T>,
-        override_style: Option<HighlightStyle>,
-        syntax_theme: &SyntaxTheme,
-    ) -> HighlightedText {
-        HighlightedText::from_buffer_range(
-            range,
-            &self.text,
-            &self.syntax,
-            override_style,
-            syntax_theme,
-        )
-    }
-
     /// Invokes the given callback for each line of text in the given range of the buffer.
     /// Uses callback to avoid allocating a string for each line.
     fn for_each_line(&self, range: Range<Point>, mut callback: impl FnMut(u32, &str)) {
@@ -4315,36 +4223,6 @@ impl BufferSnapshot {
         result
     }
 
-    /// Returns the root syntax node within the given row
-    pub fn syntax_root_ancestor(&self, position: Anchor) -> Option<tree_sitter::Node<'_>> {
-        let start_offset = position.to_offset(self);
-
-        let row = self.summary_for_anchor::<text::PointUtf16>(&position).row as usize;
-
-        let layer = self
-            .syntax
-            .layers_for_range(start_offset..start_offset, &self.text, true)
-            .next()?;
-
-        let mut cursor = layer.node().walk();
-
-        // Descend to the first leaf that touches the start of the range.
-        while cursor.goto_first_child_for_byte(start_offset).is_some() {
-            if cursor.node().end_byte() == start_offset {
-                cursor.goto_next_sibling();
-            }
-        }
-
-        // Ascend to the root node within the same row.
-        while cursor.goto_parent() {
-            if cursor.node().start_position().row != row {
-                break;
-            }
-        }
-
-        Some(cursor.node())
-    }
-
     /// Returns the outline for the buffer.
     ///
     /// This method allows passing an optional [`SyntaxTheme`] to
@@ -4696,14 +4574,6 @@ impl BufferSnapshot {
             body_range: open_point.zip(close_point).map(|(start, end)| start..end),
             annotation_range: None,
         })
-    }
-
-    pub fn function_body_fold_ranges<T: ToOffset>(
-        &self,
-        within: Range<T>,
-    ) -> impl Iterator<Item = Range<usize>> + '_ {
-        self.text_object_ranges(within, TreeSitterOptions::default())
-            .filter_map(|(range, obj)| (obj == TextObject::InsideFunction).then_some(range))
     }
 
     /// For each grammar in the language, runs the provided
@@ -5294,7 +5164,6 @@ impl BufferSnapshot {
     }
 
     /// Returns selections for remote peers intersecting the given range.
-    #[allow(clippy::type_complexity)]
     pub fn selections_in_range(
         &self,
         range: Range<Anchor>,
