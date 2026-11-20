@@ -7,9 +7,9 @@ Normative rules for the `absorbing-upstream` skill.
 Override only when the user supplies a value.
 
 ```text
-LAST_REVIEWED_UPSTREAM=aff99ecc3249cfa95e720c4d6c1eb4a72105a3ee
+LAST_REVIEWED_UPSTREAM=54fff2ff5b2f9fdbe1b99c0c2566e15dcb6cfcb9
 LOCAL_BASE_BRANCH=main
-LOCAL_BASE_COMMIT=be1bfe60fe43c3e031a2742ecdc7776f606fe6a8
+LOCAL_BASE_COMMIT=a1d1f80a1d
 UPSTREAM_URL=https://github.com/zed-industries/zed.git
 UPSTREAM_REF=refs/heads/main
 WORK_BRANCH=sync/upstream-YYYY-MM-DD
@@ -20,18 +20,17 @@ CREATE_PR=no
 PUSH=no
 ```
 
-As of 2026-11-15, local `main` is `da3887d10e`. The last new upstream
-window is `docs/src/development/upstream/upstream-sync-2026-11-13.md` on
-`sync/upstream-2026-11-13`; it reviews `6ceb6fee87..aff99ecc32`, the
-first 20 of 22 commits, and advances the reviewed baseline to
-`aff99ecc32`. The live head at query time was `dc93abce2f`, so the next
-range starts with `83df5df635` and `dc93abce2f`. The preceding chain
-ends at `2026-11-12`, which closed on `6ceb6fee87`.
-`upstream-sync-2026-11-14.md` re-checks 40 earlier `C` rows and does not
-move the baseline. The most recent full re-audit is
-`docs/src/development/upstream/upstream-sync-audit-2026-11-03.md`; the
-tree holds 48 sync reports and 5 audit reports. Query live upstream
-again at run start; never trust these recorded values as the live head.
+As of 2026-11-20, the batch E report commit `a1d1f80a1d` is the local
+base on `main`. The last new upstream window is `docs/src/development/upstream/upstream-sync-2026-11-20-e.md`; it
+reviews `4a7d10473a..54fff2ff5b`, the 25 commits that batches B through D
+left behind, and advances the reviewed baseline to `54fff2ff5b`, which was
+also the live head at query time, so no commit is waiting for review. The
+preceding chain reviews `6ceb6fee87..4a7d10473a` across the 2026-11-13,
+2026-11-16, 2026-11-17, 2026-11-20, 2026-11-20-b, 2026-11-20-c and
+2026-11-20-d reports. The most recent full re-audit is
+`docs/src/development/upstream/upstream-sync-audit-2026-11-17.md`; the tree
+holds 57 sync reports and 6 audit reports. Query live upstream again at run
+start; never trust these recorded values as the live head.
 The next range starts after `LAST_REVIEWED_UPSTREAM`.
 
 ## Philosophy
