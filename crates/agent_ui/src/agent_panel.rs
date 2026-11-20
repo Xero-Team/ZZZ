@@ -84,6 +84,73 @@ use workspace::{
     dock::{DockPosition, Panel, PanelEvent},
 };
 
+/// The active connection's account labels, rendered inside the panel's
+/// **Toggle Agent Menu** popover. The composer's **Agent Options** menu is for
+/// configuration, so account information belongs here instead.
+struct AgentAccountLabels {
+    status: watch::Receiver<Option<acp::AuthStatusResponse>>,
+    _updates: Task<()>,
+}
+
+impl AgentAccountLabels {
+    fn new(
+        status: watch::Receiver<Option<acp::AuthStatusResponse>>,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut updates = status.clone();
+        Self {
+            status,
+            _updates: cx.spawn(async move |this, cx| {
+                while updates.changed().await.is_ok() {
+                    if this.update(cx, |_, cx| cx.notify()).is_err() {
+                        break;
+                    }
+                }
+            }),
+        }
+    }
+}
+
+impl Render for AgentAccountLabels {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let status = self.status.borrow();
+        let mut rows = v_flex().px_2();
+        if let Some(status) = status.as_ref() {
+            // Several accounts may be active, for example one per provider, and an
+            // agent that reports any active account is telling us the rest are not in use.
+            let has_active = status
+                .accounts
+                .iter()
+                .any(|account| account.active == Some(true));
+            for account in &status.accounts {
+                if has_active && account.active != Some(true) {
+                    continue;
+                }
+                let detail = [
+                    &account.organization,
+                    &account.name,
+                    &account.email,
+                    &account.description,
+                ]
+                .into_iter()
+                .filter_map(|field| field.as_deref())
+                .find(|text| !text.is_empty());
+                let label = match detail {
+                    Some(detail) => format!("{} · {detail}", account.label),
+                    None => account.label.clone(),
+                };
+                rows = rows.child(
+                    Label::new(label)
+                        .size(LabelSize::Small)
+                        .color(Color::Muted)
+                        .truncate(),
+                );
+            }
+        }
+        rows
+    }
+}
+
 const AGENT_PANEL_KEY: &str = "agent_panel";
 const MIN_PANEL_WIDTH: Pixels = px(300.);
 const LAST_USED_AGENT_KEY: &str = "agent_panel__last_used_external_agent";
@@ -4039,6 +4106,16 @@ impl AgentPanel {
                                 Box::new(ToggleWorkspaceSidebar),
                             );
 
+                        let auth_status = conversation_view
+                            .as_ref()
+                            .and_then(|view| view.read(cx).agent_auth_status());
+                        if has_auth_methods || supports_logout || auth_status.is_some() {
+                            menu = menu.separator()
+                        }
+                        if let Some(status) = auth_status {
+                            menu = menu
+                                .embedded_view(cx.new(|cx| AgentAccountLabels::new(status, cx)));
+                        }
                         if has_auth_methods {
                             menu = menu.action(
                                 tr(cx, "agent_ui.panel.reauthenticate", "Reauthenticate"),

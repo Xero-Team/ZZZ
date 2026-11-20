@@ -36,6 +36,13 @@ use util::process::Child;
 use anyhow::{Context as _, Result};
 use gpui::{App, AppContext as _, AsyncApp, Entity, SharedString, Task, WeakEntity};
 
+/// The `auth/status` snapshot lives in its own file but stays a child module so it can
+/// name `ClientContext`; `acp/` is not a module directory here.
+#[path = "acp_auth_status.rs"]
+mod auth_status;
+
+use auth_status::update as update_auth_status;
+
 use acp_thread::{AcpThread, AuthRequired, LoadError, TerminalProviderEvent};
 use terminal::TerminalBuilder;
 use terminal::terminal_settings::{AlternateScroll, CursorShape};
@@ -316,6 +323,7 @@ impl<T> FlattenAcpResult<T> for Result<Result<T, AcpError>, anyhow::Error> {
 /// Holds state needed by foreground work dispatched from background handler closures.
 #[derive(Clone)]
 struct ClientContext {
+    auth_status: std::rc::Weak<auth_status::ConnectionAuthStatus>,
     sessions: Rc<RefCell<HashMap<acp::SessionId, AcpSession>>>,
     pending_sessions: Rc<RefCell<HashMap<acp::SessionId, PendingAcpSession>>>,
     session_list: Rc<RefCell<Option<Rc<AcpSessionList>>>>,
@@ -350,12 +358,15 @@ impl ForegroundWorkItem for ForegroundBarrier {
     }
 }
 
-struct ElicitationDisconnectWork {
+struct ClientDisconnectWork {
     acknowledgment: futures::channel::oneshot::Sender<()>,
 }
 
-impl ForegroundWorkItem for ElicitationDisconnectWork {
+impl ForegroundWorkItem for ClientDisconnectWork {
     fn run(self: Box<Self>, cx: &mut AsyncApp, context: &ClientContext) {
+        if let Some(status) = context.auth_status.upgrade() {
+            status.disconnect();
+        }
         let threads = context
             .sessions
             .borrow()
@@ -387,7 +398,7 @@ async fn cancel_elicitations_after_disconnect(
     dispatch_tx: mpsc::UnboundedSender<ForegroundWork>,
 ) -> Result<(), AcpError> {
     let (acknowledgment, received) = futures::channel::oneshot::channel();
-    let work: ForegroundWork = Box::new(ElicitationDisconnectWork { acknowledgment });
+    let work: ForegroundWork = Box::new(ClientDisconnectWork { acknowledgment });
     if let Err(error) = dispatch_tx.unbounded_send(work) {
         error.into_inner().reject();
         return Err(dispatch_queue_closed_error());
@@ -497,6 +508,7 @@ pub struct AcpConnection {
     sessions: Rc<RefCell<HashMap<acp::SessionId, AcpSession>>>,
     pending_sessions: Rc<RefCell<HashMap<acp::SessionId, PendingAcpSession>>>,
     auth_methods: Vec<acp::AuthMethod>,
+    auth_status: Option<Rc<auth_status::ConnectionAuthStatus>>,
     agent_server_store: WeakEntity<AgentServerStore>,
     agent_capabilities: acp::AgentCapabilities,
     request_elicitations: Entity<ElicitationStore>,
@@ -777,6 +789,11 @@ fn connect_client_future(
                 on_request!(handle_create_elicitation),
                 agent_client_protocol::on_receive_request!(),
             )
+            // --- Notification handlers (agent→client) ---
+            .on_receive_notification(
+                on_notification!(update_auth_status),
+                agent_client_protocol::on_receive_notification!(),
+            )
             .on_receive_notification(
                 on_notification!(handle_session_notification),
                 agent_client_protocol::on_receive_notification!(),
@@ -1006,7 +1023,11 @@ impl AcpConnection {
             }
         };
 
+        let auth_status = cx
+            .update(|cx| cx.has_flag::<AcpBetaFeatureFlag>())
+            .then(auth_status::ConnectionAuthStatus::new);
         let dispatch_context = ClientContext {
+            auth_status: auth_status.as_ref().map(Rc::downgrade).unwrap_or_default(),
             sessions: sessions.clone(),
             pending_sessions: pending_sessions.clone(),
             session_list: client_session_list.clone(),
@@ -1157,9 +1178,11 @@ impl AcpConnection {
         } else {
             response.auth_methods
         };
-        Ok(Self {
+        let auth_status = auth_status.filter(|_| response.agent_capabilities.auth.status.is_some());
+        let result = Self {
             id: agent_id,
             auth_methods,
+            auth_status,
             agent_server_store,
             connection,
             telemetry_id,
@@ -1177,7 +1200,9 @@ impl AcpConnection {
             _wait_task: wait_task,
             _stderr_task: stderr_task,
             child: Some(child),
-        })
+        };
+        cx.update(|cx| result.refresh_auth_status(cx));
+        Ok(result)
     }
 
     pub fn prompt_capabilities(&self) -> &acp::PromptCapabilities {
@@ -1204,6 +1229,7 @@ impl AcpConnection {
             sessions,
             pending_sessions,
             auth_methods: vec![],
+            auth_status: None,
             agent_server_store,
             agent_capabilities,
             request_elicitations,
@@ -1907,6 +1933,25 @@ impl AgentConnection for AcpConnection {
         &self.auth_methods
     }
 
+    fn auth_status(&self) -> Option<watch::Receiver<Option<acp::AuthStatusResponse>>> {
+        Some(self.auth_status.as_ref()?.receiver())
+    }
+
+    fn refresh_auth_status(&self, cx: &App) {
+        let Some(status) = &self.auth_status else {
+            return;
+        };
+        let conn = self.connection.clone();
+        status.query(
+            async move {
+                into_foreground_future(conn.send_request(acp::AuthStatusRequest::new()))
+                    .await
+                    .ok()
+            },
+            cx,
+        );
+    }
+
     fn terminal_auth_task(
         &self,
         method_id: &acp::AuthMethodId,
@@ -2303,6 +2348,14 @@ pub mod test_support {
             self.inner.auth_methods()
         }
 
+        fn auth_status(&self) -> Option<watch::Receiver<Option<acp::AuthStatusResponse>>> {
+            self.inner.auth_status()
+        }
+
+        fn refresh_auth_status(&self, cx: &App) {
+            self.inner.refresh_auth_status(cx)
+        }
+
         fn terminal_auth_task(
             &self,
             method: &acp::AuthMethodId,
@@ -2527,6 +2580,7 @@ pub mod test_support {
 
         let request_elicitations = cx.new(|_| ElicitationStore::default());
         let dispatch_context = ClientContext {
+            auth_status: Default::default(),
             sessions: sessions.clone(),
             pending_sessions: pending_sessions.clone(),
             session_list: client_session_list.clone(),
@@ -2770,6 +2824,48 @@ mod tests {
             debug_log.trailing_stderr().as_deref(),
             Some("recent stderr")
         );
+    }
+
+    #[test]
+    fn auth_status_debug_messages_preserve_the_wire_payload() {
+        use AcpDebugMessageDirection::{Incoming, Outgoing};
+        use serde_json::json;
+
+        let snapshot = json!({
+            "state": "authenticated",
+            "accounts": [{"label": "Work", "email": "user@example.test", "active": true}],
+            "_meta": {"source": "test"}
+        });
+        let legacy = json!({"authStatus": {"kind": "account", "label": "Work"}});
+        let log = AcpDebugLog::default();
+        let (_, live) = log.subscribe();
+        log.record_line(
+            Outgoing,
+            r#"{"jsonrpc":"2.0","id":1,"method":"auth/status","params":{}}"#,
+        );
+        for message in [
+            json!({"jsonrpc":"2.0", "id":1, "result":snapshot}),
+            json!({"jsonrpc":"2.0", "method":"auth/status_update", "params":snapshot}),
+            json!({"jsonrpc":"2.0", "method":"_auth/status_update", "params":legacy}),
+        ] {
+            log.record_line(Incoming, &message.to_string());
+        }
+        for messages in [
+            log.subscribe().0,
+            std::iter::from_fn(|| live.try_recv().ok()).collect(),
+        ] {
+            let payloads = messages
+                .iter()
+                .filter_map(|entry| match &entry.message {
+                    AcpDebugMessageContent::Response {
+                        result: Ok(value), ..
+                    } => value.as_ref(),
+                    AcpDebugMessageContent::Notification { params, .. } => params.as_ref(),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(payloads, [&snapshot, &snapshot, &legacy]);
+        }
     }
 
     #[test]
@@ -3382,6 +3478,7 @@ mod tests {
 
         let request_elicitations = cx.new(|_| ElicitationStore::default());
         let dispatch_context = ClientContext {
+            auth_status: Default::default(),
             sessions: sessions.clone(),
             pending_sessions: pending_sessions.clone(),
             session_list: client_session_list.clone(),

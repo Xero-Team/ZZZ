@@ -591,6 +591,12 @@ impl ConversationView {
         })
     }
 
+    pub(crate) fn agent_auth_status(
+        &self,
+    ) -> Option<watch::Receiver<Option<acp::AuthStatusResponse>>> {
+        self.as_connected()?.connection.auth_status()
+    }
+
     pub fn active_thread(&self) -> Option<&Entity<ThreadView>> {
         match &self.server_state {
             ServerState::Connected(connected) => connected.active_view(),
@@ -1889,6 +1895,10 @@ impl ConversationView {
                                 })
                             }
                         } else {
+                            // The agent may report new account labels right after a login.
+                            if let Some(connected) = this.as_connected() {
+                                connected.connection.refresh_auth_status(cx);
+                            }
                             this.reset(window, cx);
                         }
                         this.auth_task.take()
@@ -1925,6 +1935,10 @@ impl ConversationView {
                             active.update(cx, |active, cx| active.handle_thread_error(err, cx));
                         }
                     } else {
+                        // The agent may report new account labels right after a login.
+                        if let Some(connected) = this.as_connected() {
+                            connected.connection.refresh_auth_status(cx);
+                        }
                         this.reset(window, cx);
                     }
                     this.auth_task.take()
@@ -2949,6 +2963,8 @@ impl ConversationView {
                             active.update(cx, |active, cx| active.handle_thread_error(err, cx));
                         }
                     } else if let Some(connected) = this.as_connected_mut() {
+                        // A sign-out notification may never arrive, so ask the agent again.
+                        connected.connection.refresh_auth_status(cx);
                         connected.auth_state = AuthState::Unauthenticated {
                             description: None,
                             configuration_view: None,
