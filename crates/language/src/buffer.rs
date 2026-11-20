@@ -42,7 +42,7 @@ use smallvec::SmallVec;
 use std::{
     any::Any,
     borrow::Cow,
-    cell::Cell,
+    cell::{Cell, RefCell},
     cmp::{self, Ordering, Reverse},
     collections::{BTreeMap, BTreeSet},
     future::Future,
@@ -134,7 +134,7 @@ pub struct Buffer {
     /// Memoize calls to has_changes_since(saved_version).
     /// The contents of a cell are (self.version, has_changes) at the time of a last call.
     has_unsaved_edits: Cell<(clock::Global, bool)>,
-    change_bits: Vec<rc::Weak<Cell<bool>>>,
+    changed_buffer_sets: Vec<rc::Weak<RefCell<HashSet<BufferId>>>>,
     modeline: Option<Arc<ModelineSettings>>,
     _subscriptions: Vec<gpui::Subscription>,
     tree_sitter_data: Arc<TreeSitterData>,
@@ -1132,7 +1132,7 @@ impl Buffer {
             completion_triggers_timestamp: Lamport::MIN,
             deferred_ops: OperationQueue::new(),
             has_conflict: false,
-            change_bits: Default::default(),
+            changed_buffer_sets: Default::default(),
             modeline: None,
             _subscriptions: Vec::new(),
             encoding: encoding_rs::UTF_8,
@@ -1541,6 +1541,7 @@ impl Buffer {
     pub fn set_capability(&mut self, capability: Capability, cx: &mut Context<Self>) {
         if self.capability != capability {
             self.capability = capability;
+            self.was_changed();
             cx.emit(BufferEvent::CapabilityChanged)
         }
     }
@@ -1682,6 +1683,7 @@ impl Buffer {
             .set((self.saved_version.clone(), false));
         self.text.set_line_ending(line_ending);
         self.saved_mtime = mtime;
+        self.was_changed();
         cx.emit(BufferEvent::Reloaded);
         cx.notify();
     }
@@ -2436,6 +2438,7 @@ impl Buffer {
     /// Marks the buffer as having a conflict regardless of current buffer state.
     pub fn set_conflict(&mut self) {
         self.has_conflict = true;
+        self.was_changed();
     }
 
     /// Checks if the buffer and its file have both changed since the buffer
@@ -2465,26 +2468,27 @@ impl Buffer {
         self.text.subscribe()
     }
 
-    /// Adds a bit to the list of bits that are set when the buffer's text changes.
+    /// Registers a set that receives this buffer's id whenever the buffer changes.
     ///
     /// This allows downstream code to check if the buffer's text has changed without
     /// waiting for an effect cycle, which would be required if using eents.
-    pub fn record_changes(&mut self, bit: rc::Weak<Cell<bool>>) {
+    pub fn record_changes(&mut self, changed_buffers: rc::Weak<RefCell<HashSet<BufferId>>>) {
         if let Err(ix) = self
-            .change_bits
-            .binary_search_by_key(&rc::Weak::as_ptr(&bit), rc::Weak::as_ptr)
+            .changed_buffer_sets
+            .binary_search_by_key(&rc::Weak::as_ptr(&changed_buffers), rc::Weak::as_ptr)
         {
-            self.change_bits.insert(ix, bit);
+            self.changed_buffer_sets.insert(ix, changed_buffers);
         }
     }
 
-    /// Set the change bit for all "listeners".
+    /// Inserts this buffer's id into every set registered with [`Buffer::record_changes`].
     fn was_changed(&mut self) {
-        self.change_bits.retain(|change_bit| {
-            change_bit
+        let buffer_id = self.remote_id();
+        self.changed_buffer_sets.retain(|changed_buffers| {
+            changed_buffers
                 .upgrade()
-                .inspect(|bit| {
-                    _ = bit.replace(true);
+                .inspect(|changed_buffers| {
+                    changed_buffers.borrow_mut().insert(buffer_id);
                 })
                 .is_some()
         });
@@ -2689,6 +2693,7 @@ impl Buffer {
             },
         );
         self.non_text_state_update_count += 1;
+        self.was_changed();
         cx.notify();
     }
 
