@@ -1032,9 +1032,9 @@ mod tests {
     };
     use crate::{
         AnyWindowHandle, AppContext as _, Bounds, Context, FocusHandle, InteractiveElement as _,
-        IntoElement, ParentElement as _, Pixels, Render, RequestFrameOptions, Styled as _,
-        TestAppContext, Window, WindowAppearance, WindowBounds, WindowOptions, canvas, div, px,
-        size,
+        IntoElement, ParentElement as _, Pixels, Render, RequestFrameOptions, Size, Styled as _,
+        TestAppContext, Window, WindowAppearance, WindowBounds, WindowOptions, canvas, div, point,
+        px, size,
     };
     #[cfg(feature = "frame-diagnostics")]
     use scheduler::Instant;
@@ -1169,6 +1169,51 @@ mod tests {
                 assert_eq!(window.interaction.focus, None);
             })
             .expect("window exists");
+    }
+
+    #[gpui::test]
+    fn test_empty_content_masks_remain_empty_when_snapped(cx: &mut TestAppContext) {
+        let window = cx.add_window(|_, _| EmptyView);
+        for scale_factor in [1.0, 1.25, 2.0] {
+            cx.simulate_window_scale_factor_change(window.into(), scale_factor);
+            window
+                .update(cx, |_, window, _| {
+                    let bounds = Bounds::new(point(px(10.3), px(20.7)), size(px(0.), px(0.)));
+                    let snapped = window.cover_bounds(bounds);
+                    assert_eq!(snapped.size, Size::default(), "scale factor {scale_factor}");
+                })
+                .expect("window exists");
+        }
+    }
+
+    #[gpui::test]
+    fn test_nonempty_content_masks_keep_covering_fractional_edges(cx: &mut TestAppContext) {
+        let window = cx.add_window(|_, _| EmptyView);
+        for scale_factor in [1.0, 1.25, 2.0] {
+            cx.simulate_window_scale_factor_change(window.into(), scale_factor);
+            window
+                .update(cx, |_, window, _| {
+                    let bounds = Bounds::new(point(px(10.3), px(20.7)), size(px(5.1), px(3.9)));
+                    let snapped = window.cover_bounds(bounds);
+                    assert!(
+                        snapped.origin.x.0 <= 10.3 * scale_factor,
+                        "left edge not covered at {scale_factor}"
+                    );
+                    assert!(
+                        snapped.origin.y.0 <= 20.7 * scale_factor,
+                        "top edge not covered at {scale_factor}"
+                    );
+                    assert!(
+                        snapped.origin.x.0 + snapped.size.width.0 >= 15.4 * scale_factor,
+                        "right edge not covered at {scale_factor}"
+                    );
+                    assert!(
+                        snapped.origin.y.0 + snapped.size.height.0 >= 24.6 * scale_factor,
+                        "bottom edge not covered at {scale_factor}"
+                    );
+                })
+                .expect("window exists");
+        }
     }
 
     fn reconstructed_coordinate(
