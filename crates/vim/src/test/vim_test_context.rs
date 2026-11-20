@@ -193,6 +193,16 @@ impl VimTestContext {
         })
     }
 
+    pub fn set_use_system_clipboard(&mut self, value: UseSystemClipboard) {
+        self.cx.update(|_, cx| {
+            SettingsStore::update_global(cx, |store, cx| {
+                store.update_user_settings(cx, |s| {
+                    s.vim.get_or_insert_default().use_system_clipboard = Some(value)
+                });
+            })
+        })
+    }
+
     pub fn mode(&mut self) -> Mode {
         self.update_editor(|editor, _, cx| {
             editor
