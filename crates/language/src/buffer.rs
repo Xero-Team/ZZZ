@@ -3371,6 +3371,14 @@ impl Buffer {
         &self.completion_triggers
     }
 
+    /// Returns the completion trigger characters registered by `server_id`.
+    pub fn completion_triggers_for_server(
+        &self,
+        server_id: LanguageServerId,
+    ) -> Option<&BTreeSet<String>> {
+        self.completion_triggers_per_language_server.get(&server_id)
+    }
+
     /// Call this directly after performing edits to prevent the preview tab
     /// from being dismissed by those edits. It causes `should_dismiss_preview`
     /// to return false until there are additional edits.

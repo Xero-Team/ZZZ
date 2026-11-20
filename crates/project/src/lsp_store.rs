@@ -95,13 +95,14 @@ use language::{
 };
 use lsp::{
     AdapterServerCapabilities, CodeActionKind, CompletionContext, CompletionOptions,
-    DEFAULT_LSP_REQUEST_TIMEOUT, DiagnosticServerCapabilities, DiagnosticSeverity, DiagnosticTag,
-    DidChangeWatchedFilesRegistrationOptions, Edit, FileOperationFilter, FileOperationPatternKind,
-    FileOperationRegistrationOptions, FileRename, FileSystemWatcher, LanguageServer,
-    LanguageServerBinary, LanguageServerBinaryOptions, LanguageServerId, LanguageServerName,
-    LanguageServerSelector, LspRequestFuture, MessageActionItem, MessageType, OneOf,
-    RenameFilesParams, SymbolKind, TextDocumentSyncSaveOptions, TextEdit, Uri, WillRenameFiles,
-    WorkDoneProgressCancelParams, notification::DidRenameFiles,
+    CompletionTriggerKind, DEFAULT_LSP_REQUEST_TIMEOUT, DiagnosticServerCapabilities,
+    DiagnosticSeverity, DiagnosticTag, DidChangeWatchedFilesRegistrationOptions, Edit,
+    FileOperationFilter, FileOperationPatternKind, FileOperationRegistrationOptions, FileRename,
+    FileSystemWatcher, LanguageServer, LanguageServerBinary, LanguageServerBinaryOptions,
+    LanguageServerId, LanguageServerName, LanguageServerSelector, LspRequestFuture,
+    MessageActionItem, MessageType, OneOf, RenameFilesParams, SymbolKind,
+    TextDocumentSyncSaveOptions, TextEdit, Uri, WillRenameFiles, WorkDoneProgressCancelParams,
+    notification::DidRenameFiles,
 };
 use node_runtime::read_package_installed_version;
 use parking_lot::Mutex;
@@ -7361,6 +7362,11 @@ impl LspStore {
                 this.update(cx, |lsp_store, cx| {
                     for server_id in server_ids {
                         let lsp_adapter = lsp_store.language_server_adapter_for_id(server_id);
+                        let context = lsp_store.completion_context_for_server(
+                            buffer.read(cx),
+                            server_id,
+                            context.clone(),
+                        );
                         let lsp_timeout = lsp_timeout
                             .map(|lsp_timeout| cx.background_executor().timer(lsp_timeout));
                         let mut timeout = cx.background_spawn(async move {
@@ -7377,7 +7383,7 @@ impl LspStore {
                             LanguageServerToQuery::Other(server_id),
                             GetCompletions {
                                 position,
-                                context: context.clone(),
+                                context,
                                 server_id: Some(server_id),
                             },
                             cx,
@@ -7422,6 +7428,27 @@ impl LspStore {
         } else {
             Task::ready(Err(anyhow!("No upstream client or local language server")))
         }
+    }
+
+    fn completion_context_for_server(
+        &self,
+        buffer: &Buffer,
+        server_id: LanguageServerId,
+        mut context: CompletionContext,
+    ) -> CompletionContext {
+        if context.trigger_kind != CompletionTriggerKind::TRIGGER_CHARACTER {
+            return context;
+        }
+        let has_registered_trigger = context.trigger_character.as_ref().is_some_and(|trigger| {
+            buffer
+                .completion_triggers_for_server(server_id)
+                .is_some_and(|triggers| triggers.contains(trigger))
+        });
+        if !has_registered_trigger {
+            context.trigger_kind = CompletionTriggerKind::INVOKED;
+            context.trigger_character = None;
+        }
+        context
     }
 
     pub fn resolve_completions(

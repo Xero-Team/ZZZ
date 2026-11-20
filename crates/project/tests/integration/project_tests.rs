@@ -6608,6 +6608,150 @@ async fn test_definition(cx: &mut gpui::TestAppContext) {
 }
 
 #[gpui::test]
+async fn test_completion_context_uses_target_server_triggers(cx: &mut gpui::TestAppContext) {
+    init_test(cx);
+
+    for dynamic in [false, true] {
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(path!("/dir"), json!({ "a.ts": "a" })).await;
+        let project = Project::test(fs, [path!("/dir").as_ref()], cx).await;
+        let language_registry = project.read_with(cx, |project, _| project.languages().clone());
+        language_registry.add(typescript_lang());
+        let mut servers = Vec::new();
+        for (name, triggers) in [
+            (
+                "typescript",
+                if dynamic {
+                    None
+                } else {
+                    Some(vec![".".into()])
+                },
+            ),
+            ("emmet", Some(vec!["a".into()])),
+            ("no-triggers", None),
+        ] {
+            servers.push(language_registry.register_fake_lsp(
+                "TypeScript",
+                FakeLspAdapter {
+                    name,
+                    capabilities: lsp::ServerCapabilities {
+                        completion_provider: if dynamic && name == "typescript" {
+                            None
+                        } else {
+                            Some(lsp::CompletionOptions {
+                                trigger_characters: triggers,
+                                ..Default::default()
+                            })
+                        },
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            ));
+        }
+
+        let (buffer, _handle) = project
+            .update(cx, |project, cx| {
+                project.open_local_buffer_with_lsp(path!("/dir/a.ts"), cx)
+            })
+            .await
+            .unwrap();
+        let mut fake_servers = Vec::new();
+        for server in &mut servers {
+            fake_servers.push(server.next().await.unwrap());
+        }
+        cx.run_until_parked();
+
+        if dynamic {
+            fake_servers[0]
+                .request::<lsp::request::RegisterCapability>(
+                    lsp::RegistrationParams {
+                        registrations: vec![lsp::Registration {
+                            id: "completion".into(),
+                            method: "textDocument/completion".into(),
+                            register_options: Some(json!({
+                                "documentSelector": [{ "language": "typescript", "scheme": "file" }],
+                                "triggerCharacters": ["."]
+                            })),
+                        }],
+                    },
+                    DEFAULT_LSP_REQUEST_TIMEOUT,
+                )
+                .await
+                .into_response()
+                .unwrap();
+            cx.run_until_parked();
+        }
+
+        assert_eq!(
+            buffer.read_with(cx, |buffer, _| buffer.completion_triggers().clone()),
+            BTreeSet::from([".".to_string(), "a".to_string()])
+        );
+        let contexts = Arc::new(Mutex::new(HashMap::default()));
+        let _handlers = fake_servers
+            .iter()
+            .enumerate()
+            .map(|(index, server)| {
+                let contexts = contexts.clone();
+                server.set_request_handler::<lsp::request::Completion, _, _>(move |params, _| {
+                    contexts.lock().insert(index, params.context.unwrap());
+                    async move {
+                        Ok(Some(lsp::CompletionResponse::Array(vec![
+                            lsp::CompletionItem {
+                                label: "available".into(),
+                                ..Default::default()
+                            },
+                        ])))
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for (kind, trigger) in [
+            (lsp::CompletionTriggerKind::TRIGGER_CHARACTER, Some("a")),
+            (lsp::CompletionTriggerKind::TRIGGER_CHARACTER, Some(".")),
+            (lsp::CompletionTriggerKind::TRIGGER_CHARACTER, Some("!")),
+            (lsp::CompletionTriggerKind::INVOKED, None),
+            (
+                lsp::CompletionTriggerKind::TRIGGER_FOR_INCOMPLETE_COMPLETIONS,
+                None,
+            ),
+        ] {
+            contexts.lock().clear();
+            let context = lsp::CompletionContext {
+                trigger_kind: kind,
+                trigger_character: trigger.map(str::to_string),
+            };
+            let responses = project
+                .update(cx, |project, cx| {
+                    project.completions(&buffer, 1, context.clone(), cx)
+                })
+                .await
+                .unwrap();
+            assert_eq!(responses.len(), 3);
+            assert!(
+                responses
+                    .iter()
+                    .all(|response| response.completions.len() == 1)
+            );
+
+            let contexts = contexts.lock();
+            assert_eq!(contexts.len(), 3);
+            for (index, own_trigger) in [Some("."), Some("a"), None].into_iter().enumerate() {
+                let expected = if kind == lsp::CompletionTriggerKind::TRIGGER_CHARACTER
+                    && trigger != own_trigger
+                {
+                    DEFAULT_COMPLETION_CONTEXT
+                } else {
+                    context.clone()
+                };
+                assert_eq!(contexts[&index], expected);
+            }
+        }
+    }
+}
+
+#[gpui::test]
 async fn test_completions_with_text_edit(cx: &mut gpui::TestAppContext) {
     init_test(cx);
 
