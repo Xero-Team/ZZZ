@@ -259,6 +259,7 @@ sha	class	reason_code	note	source
 49d01146	C	philosophy	OpenAI 404 retry needs `ProviderRejection`/`is_transient` and native agent `thread.rs`.	upstream-sync-2026-09-04.md
 4a4c8150f0	C	absent-api	Bumps the pinned `tree-sitter` git revision. Local depends on the published `tree-sitter` 0.27.2 instead of the git revision, so the pin it edits has no local counterpart.	upstream-sync-2026-11-20-b.md
 4a6121bb0f	C	diverged	Rewrites Windows COLR emoji compositing from the GPU shader to the CPU (1484 lines) across `direct_write.rs`, `build.rs`, `directx_renderer.rs`, and `platform.rs`. ZZZ's Windows renderer and shader wiring have diverged, and the host is Linux so the Windows target cannot be validated; unisolatable rewrite.	upstream-sync-2026-11-08.md
+4a7d10473a	C	absent-api	Removes the sandbox prompt timeout. Local has no `crates/sandbox_linux`.	upstream-sync-2026-11-20-c.md
 4a9a863c	C	absent-api	Auto-indentation patch requires deleted `editor/src/input.rs`.	upstream-sync-2026-08-27.md
 4aa8ad9742	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 4aad57fd	C	unisolatable	Broad remote workspace lifetime/recent-project flow rewrite.	upstream-sync-2026-08-07.md
@@ -484,6 +485,7 @@ sha	class	reason_code	note	source
 87e698fb	C	philosophy	Native agent-thread UI behavior, outside ACP-only scope.	upstream-sync-2026-08-07.md
 87f65de6	C	untriaged	gpui_web canvas emoji fallback; follows unabsorbed Canvas fallback.	upstream-sync-2026-09-18.md
 881c618a6a	C	philosophy	Removes dead code across `crates/client`, `crates/call`, `crates/channel`, `crates/collab`, `crates/livekit_api`, and `crates/rpc`. Local ships none of `call`, `channel`, `collab`, or `livekit_api`, so the commit targets the rejected collaboration surface.	upstream-sync-2026-11-20.md
+886dab4069	C	philosophy	Removes dead code from the edit-prediction crates. Local ships no `edit_prediction`, `edit_prediction_context`, `edit_prediction_ui`, `edit_prediction_cli`, `edit_prediction_metrics`, or `zeta_prompt`, which the ACP-only cleanup deleted.	upstream-sync-2026-11-20-c.md
 8886dcb0	C	absent-api	Benchmark/test dispatcher plumbing only; no local runtime behavior.	upstream-sync-2026-08-07.md
 8968bf78	C	absent-api	Non-UTF-8 git blobs; staged_diff deleted.	upstream-sync-2026-08-18.md
 897ba9ad	C	diverged	Remote markdown images; preview/agent_ui diverged.	upstream-sync-2026-08-18.md
