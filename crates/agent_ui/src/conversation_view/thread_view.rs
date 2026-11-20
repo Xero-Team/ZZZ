@@ -862,6 +862,10 @@ impl ThreadView {
             }));
         }));
 
+        if let Some(config_options_view) = &config_options_view {
+            subscriptions.push(cx.observe(config_options_view, |_, _, cx| cx.notify()));
+        }
+
         let mut this = Self {
             session_id,
             parent_session_id,
@@ -3786,8 +3790,13 @@ impl ThreadView {
                                     .gap_0p5()
                                     .child(self.render_add_context_button(cx))
                                     .child(self.render_follow_toggle(cx))
-                                    .children(self.render_fast_mode_control(cx))
-                                    .children(self.render_thinking_control(cx)),
+                                    .map(|this| match &self.config_options_view {
+                                        Some(config_view) => this
+                                            .children(config_view.read(cx).response_controls(cx)),
+                                        None => this
+                                            .children(self.render_fast_mode_control(cx))
+                                            .children(self.render_thinking_control(cx)),
+                                    }),
                             )
                             .child(
                                 h_flex()
@@ -9708,7 +9717,12 @@ impl ThreadView {
         });
     }
 
-    fn toggle_fast_mode(&mut self, cx: &mut Context<Self>) {
+    fn toggle_fast_mode(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(config_options_view) = self.config_options_view.clone() {
+            config_options_view.update(cx, |view, cx| view.toggle_fast_mode(window, cx));
+            return;
+        }
+
         if !self.fast_mode_available(cx) {
             return;
         }
@@ -9949,13 +9963,13 @@ impl Render for ThreadView {
             .on_action(cx.listener(Self::scroll_output_to_bottom))
             .on_action(cx.listener(Self::scroll_output_to_previous_message))
             .on_action(cx.listener(Self::scroll_output_to_next_message))
-            .on_action(cx.listener(|this, _: &ToggleFastMode, _window, cx| {
-                this.toggle_fast_mode(cx);
+            .on_action(cx.listener(|this, _: &ToggleFastMode, window, cx| {
+                this.toggle_fast_mode(window, cx);
             }))
             .on_action(cx.listener(|_this, _: &ToggleThinkingMode, _window, _cx| {
                 // Thinking mode toggle was a native-agent-only feature; no-op for external agents.
             }))
-            .on_action(cx.listener(|this, _: &CycleThinkingEffort, _window, cx| {
+            .on_action(cx.listener(|this, _: &CycleThinkingEffort, window, cx| {
                 if this.thread.read(cx).status() != ThreadStatus::Idle {
                     return;
                 }
@@ -9964,6 +9978,7 @@ impl Render for ThreadView {
                         view.cycle_category_option(
                             acp::SessionConfigOptionCategory::ThoughtLevel,
                             false,
+                            window,
                             cx,
                         )
                     });
@@ -10038,6 +10053,7 @@ impl Render for ThreadView {
                         view.cycle_category_option(
                             acp::SessionConfigOptionCategory::Mode,
                             false,
+                            window,
                             cx,
                         )
                     });
@@ -10087,6 +10103,7 @@ impl Render for ThreadView {
                         view.cycle_category_option(
                             acp::SessionConfigOptionCategory::Model,
                             true,
+                            window,
                             cx,
                         )
                     });

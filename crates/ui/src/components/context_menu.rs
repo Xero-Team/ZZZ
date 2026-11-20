@@ -5,9 +5,9 @@ use crate::{
     utils::{RetainedFocusExt as _, WithRemSize},
 };
 use gpui::{
-    Action, Anchor, AnchoredPositionMode, AnyElement, App, Bounds, DismissEvent, Entity,
+    Action, Anchor, AnchoredPositionMode, AnyElement, AnyView, App, Bounds, DismissEvent, Entity,
     EventEmitter, FocusHandle, Focusable, MouseButton, MouseDownEvent, MouseUpEvent, Pixels, Point,
-    Size, Subscription, anchored, canvas, deferred, point, prelude::*, px,
+    Size, Subscription, WeakEntity, anchored, canvas, deferred, point, prelude::*, px,
 };
 use gpui_util::ResultExt as _;
 use menu::{SelectChild, SelectFirst, SelectLast, SelectNext, SelectParent, SelectPrevious};
@@ -59,6 +59,8 @@ pub enum ContextMenuItem {
         selectable: bool,
         documentation_aside: Option<DocumentationAside>,
     },
+    /// A focusable view, such as a searchable picker, hosted inside the menu.
+    EmbeddedView(AnyView),
     Submenu {
         label: SharedString,
         icon: Option<IconName>,
@@ -241,7 +243,7 @@ pub struct ContextMenu {
     on_blur_subscription: Subscription,
     keep_open_on_confirm: bool,
     fixed_width: Option<DefiniteLength>,
-    main_menu: Option<Entity<ContextMenu>>,
+    main_menu: Option<WeakEntity<ContextMenu>>,
     main_menu_observed_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
     // Docs aide-related fields
     documentation_aside: Option<(usize, DocumentationAside)>,
@@ -253,6 +255,9 @@ pub struct ContextMenu {
     submenu_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
     submenu_depth: usize,
     submenu_trigger_mouse_down: bool,
+    /// Focus inside the menu that takes priority over the menu's own handle when
+    /// this menu opens as a submenu.
+    content_focus_handle: Option<FocusHandle>,
     ignore_blur_until: Option<Instant>,
 }
 
@@ -340,6 +345,7 @@ impl ContextMenu {
                 submenu_bounds: Rc::new(Cell::new(None)),
                 submenu_depth: 0,
                 submenu_trigger_mouse_down: false,
+                content_focus_handle: None,
                 ignore_blur_until: None,
             },
             window,
@@ -417,6 +423,7 @@ impl ContextMenu {
                     submenu_bounds: Rc::new(Cell::new(None)),
                     submenu_depth: 0,
                     submenu_trigger_mouse_down: false,
+                    content_focus_handle: None,
                     ignore_blur_until: None,
                 },
                 window,
@@ -485,6 +492,7 @@ impl ContextMenu {
                 submenu_bounds: Rc::new(Cell::new(None)),
                 submenu_depth: 0,
                 submenu_trigger_mouse_down: false,
+                content_focus_handle: None,
                 ignore_blur_until: None,
             },
             window,
@@ -916,6 +924,25 @@ impl ContextMenu {
         handler(None, window, cx);
     }
 
+    /// Adds a view, such as a picker, without the menu's row padding.
+    pub fn embedded_view(mut self, view: impl Into<AnyView>) -> Self {
+        self.items.push(ContextMenuItem::EmbeddedView(view.into()));
+        self
+    }
+
+    /// Focuses this handle instead of the menu when it opens as a submenu.
+    /// The handle must be tracked by an element inside the menu.
+    pub fn focus_content(mut self, focus_handle: FocusHandle) -> Self {
+        self.content_focus_handle = Some(focus_handle);
+        self
+    }
+
+    fn submenu_focus_target(&self) -> FocusHandle {
+        self.content_focus_handle
+            .clone()
+            .unwrap_or_else(|| self.focus_handle.clone())
+    }
+
     pub fn fixed_width(mut self, width: DefiniteLength) -> Self {
         self.fixed_width = Some(width);
         self
@@ -950,8 +977,8 @@ impl ContextMenu {
             );
 
             if let SubmenuState::Open(open_submenu) = &self.submenu_state {
-                let focus_handle = open_submenu.entity.read(cx).focus_handle.clone();
-                window.focus(&focus_handle, cx);
+                let focus_target = open_submenu.entity.read(cx).submenu_focus_target();
+                window.focus(&focus_target, cx);
                 open_submenu.entity.update(cx, |submenu, cx| {
                     submenu.select_first(&SelectFirst, window, cx);
                 });
@@ -1006,8 +1033,8 @@ impl ContextMenu {
             );
 
             if let SubmenuState::Open(open_submenu) = &self.submenu_state {
-                let focus_handle = open_submenu.entity.read(cx).focus_handle.clone();
-                window.focus(&focus_handle, cx);
+                let focus_target = open_submenu.entity.read(cx).submenu_focus_target();
+                window.focus(&focus_target, cx);
                 open_submenu.entity.update(cx, |submenu, cx| {
                     submenu.select_first(&SelectFirst, window, cx);
                 });
@@ -1051,7 +1078,7 @@ impl ContextMenu {
             cx.emit(DismissEvent);
 
             // Restore keyboard focus to the parent menu so arrow keys / Escape / Enter work again.
-            if let Some(parent) = &self.main_menu {
+            if let Some(parent) = self.main_menu.as_ref().and_then(WeakEntity::upgrade) {
                 let parent_focus = parent.read(cx).focus_handle.clone();
 
                 parent.update(cx, |parent, _cx| {
@@ -1167,8 +1194,8 @@ impl ContextMenu {
         );
 
         if let SubmenuState::Open(open_submenu) = &self.submenu_state {
-            let focus_handle = open_submenu.entity.read(cx).focus_handle.clone();
-            window.focus(&focus_handle, cx);
+            let focus_target = open_submenu.entity.read(cx).submenu_focus_target();
+            window.focus(&focus_target, cx);
             open_submenu.entity.update(cx, |submenu, cx| {
                 submenu.select_first(&SelectFirst, window, cx);
             });
@@ -1187,15 +1214,13 @@ impl ContextMenu {
             return;
         }
 
-        if let Some(parent) = &self.main_menu {
-            let parent_clone = parent.clone();
-
+        if let Some(parent) = self.main_menu.as_ref().and_then(WeakEntity::upgrade) {
             let parent_focus = parent.read(cx).focus_handle.clone();
             window.focus(&parent_focus, cx);
 
             cx.emit(DismissEvent);
 
-            parent_clone.update(cx, |parent, cx| {
+            parent.update(cx, |parent, cx| {
                 if let SubmenuState::Open(open_submenu) = &parent.submenu_state {
                     let trigger_index = open_submenu.item_index;
                     parent.close_submenu(false, cx);
@@ -1241,7 +1266,7 @@ impl ContextMenu {
 
     fn create_submenu(
         builder: Rc<dyn Fn(ContextMenu, &mut Window, &mut Context<ContextMenu>) -> ContextMenu>,
-        parent_entity: Entity<ContextMenu>,
+        parent_entity: WeakEntity<ContextMenu>,
         parent_depth: usize,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -1263,7 +1288,7 @@ impl ContextMenu {
 
     fn build_submenu(
         builder: Rc<dyn Fn(ContextMenu, &mut Window, &mut Context<ContextMenu>) -> ContextMenu>,
-        parent_entity: Entity<ContextMenu>,
+        parent_entity: WeakEntity<ContextMenu>,
         parent_depth: usize,
         window: &mut Window,
         cx: &mut App,
@@ -1300,6 +1325,7 @@ impl ContextMenu {
                 submenu_bounds: Rc::new(Cell::new(None)),
                 submenu_depth: parent_depth + 1,
                 submenu_trigger_mouse_down: false,
+                content_focus_handle: None,
                 ignore_blur_until: None,
             };
 
@@ -1337,7 +1363,7 @@ impl ContextMenu {
         }
 
         let (submenu, dismiss_subscription) =
-            Self::create_submenu(builder, cx.entity(), self.submenu_depth, window, cx);
+            Self::create_submenu(builder, cx.weak_entity(), self.submenu_depth, window, cx);
 
         self.submenu_bounds.set(None);
         self.hover_target = HoverTarget::MainMenu;
@@ -1432,6 +1458,7 @@ impl ContextMenu {
     ) -> impl IntoElement + use<> {
         match item {
             ContextMenuItem::Separator => ListSeparator.into_any_element(),
+            ContextMenuItem::EmbeddedView(view) => view.clone().into_any_element(),
             ContextMenuItem::Header(header) => ListSubHeader::new(header.clone())
                 .inset(true)
                 .into_any_element(),
@@ -2005,9 +2032,10 @@ impl ContextMenu {
                                     cx.notify();
                                 }
 
-                                if let Some(parent) = &this.main_menu {
+                                if let Some(parent) =
+                                    this.main_menu.as_ref().and_then(WeakEntity::upgrade)
+                                {
                                     let mouse_pos = window.mouse_position();
-                                    let parent_clone = parent.clone();
 
                                     if *hovered {
                                         parent.update(cx, |parent, _| {
@@ -2015,7 +2043,7 @@ impl ContextMenu {
                                             parent.hover_target = HoverTarget::Submenu;
                                         });
                                     } else {
-                                        parent_clone.update(cx, |parent, cx| {
+                                        parent.update(cx, |parent, cx| {
                                             if matches!(
                                                 &parent.submenu_state,
                                                 SubmenuState::Open(_)
@@ -2162,7 +2190,8 @@ impl ContextMenuItem {
             ContextMenuItem::Header(_)
             | ContextMenuItem::HeaderWithLink(_, _, _)
             | ContextMenuItem::Separator
-            | ContextMenuItem::Label { .. } => false,
+            | ContextMenuItem::Label { .. }
+            | ContextMenuItem::EmbeddedView(_) => false,
             ContextMenuItem::Entry(ContextMenuEntry { disabled, .. }) => !disabled,
             ContextMenuItem::CustomEntry { selectable, .. } => *selectable,
             ContextMenuItem::Submenu { .. } => true,
@@ -2186,7 +2215,8 @@ impl Render for ContextMenu {
                     .borrow()
                     .contains_key(&open_submenu.item_index) =>
             {
-                Some(open_submenu.entity.read(cx).focus_handle.clone())
+                let submenu = open_submenu.entity.read(cx);
+                Some((submenu.focus_handle.clone(), submenu.submenu_focus_target()))
             }
             _ => None,
         };
@@ -2264,7 +2294,9 @@ impl Render for ContextMenu {
                         .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
                             if *hovered {
                                 this.hover_target = HoverTarget::MainMenu;
-                                if let Some(parent) = &this.main_menu {
+                                if let Some(parent) =
+                                    this.main_menu.as_ref().and_then(WeakEntity::upgrade)
+                                {
                                     parent.update(cx, |parent, _| {
                                         parent.hover_target = HoverTarget::Submenu;
                                     });
@@ -2280,7 +2312,9 @@ impl Render for ContextMenu {
                                     return;
                                 }
 
-                                if let Some(parent) = &this.main_menu {
+                                if let Some(parent) =
+                                    this.main_menu.as_ref().and_then(WeakEntity::upgrade)
+                                {
                                     let parent = parent.read(cx);
                                     let overridden_by_parent_trigger = match &parent.submenu_state {
                                         SubmenuState::Open(open_submenu) => parent
@@ -2317,16 +2351,30 @@ impl Render for ContextMenu {
                             }
                             el
                         })
-                        .child(List::new().children(self.items.iter().enumerate().map(
-                            |(ix, item)| {
+                        .map(|this| {
+                            let only_embedded_views = !self.items.is_empty()
+                                && self
+                                    .items
+                                    .iter()
+                                    .all(|item| matches!(item, ContextMenuItem::EmbeddedView(_)));
+                            let items = self.items.iter().enumerate().map(|(ix, item)| {
                                 self.render_menu_item(ix, item, reserve_leading_slot, window, cx)
-                            },
-                        ))),
+                            });
+                            if only_embedded_views {
+                                this.children(items)
+                            } else {
+                                this.child(List::new().children(items))
+                            }
+                        }),
                 )
         };
 
-        if let Some(focus_handle) = focus_submenu.as_ref() {
-            window.focus(focus_handle, cx);
+        // Clicking content that can't take focus leaves focus on the submenu itself.
+        if let Some((submenu_focus_handle, focus_target)) = focus_submenu.as_ref()
+            && (!submenu_focus_handle.contains_focused(window, cx)
+                || submenu_focus_handle.is_focused(window))
+        {
+            window.focus(focus_target, cx);
         }
 
         if is_wide_window {
