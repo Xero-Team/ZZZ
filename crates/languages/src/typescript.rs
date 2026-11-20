@@ -980,9 +980,7 @@ mod tests {
                 .highlight_id_for_name("keyword")
                 .expect("keyword highlight should be defined");
 
-            let highlights = language
-                .highlight_text(&source, 0..source.len())
-                .collect::<Vec<_>>();
+            let highlights = language.highlight_text(&source, 0..source.len());
 
             for expected in [
                 (17..21, builtin_highlight),
@@ -1022,9 +1020,7 @@ mod tests {
                 .expect("function highlight should be defined");
 
             assert_eq!(
-                language
-                    .highlight_text(&source, 0..source.len())
-                    .collect::<Vec<_>>(),
+                language.highlight_text(&source, 0..source.len()),
                 vec![
                     (14..20, type_highlight),
                     (32..40, function_highlight),
