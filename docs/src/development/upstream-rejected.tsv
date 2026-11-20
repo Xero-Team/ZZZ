@@ -94,6 +94,7 @@ sha	class	reason_code	note	source
 1a28cff4b4	C	absent-api	Commit reads off the serial job queue; built on the unabsorbed #62536 `object_read_limiter` architecture, which local `git_store` lacks.	upstream-sync-2026-09-30.md
 1a84d5d9	C	absent-api	Folder-drag highlight fix needs absent external-drag APIs and new `on_file_drop_exit`.	upstream-sync-2026-09-18.md
 1a89a92e	C	unisolatable	Unpaced renderer sessions rewrite a much larger upstream `bench_context`.	upstream-sync-2026-09-18.md
+1ab8b9abfb	C	absent-api	Fixes total token percentiles in `crates/edit_prediction_cli/src/score.rs`. Local `crates/` has no `edit_prediction_cli`; the evaluation CLI was never part of ZZZ.	upstream-sync-2026-11-20.md
 1b572a2bd0	C	philosophy	`hang_telemetry` crate; telemetry is rejected in source.	upstream-sync-2026-09-30.md
 1b7318bf8b	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 1b86941c	C	absent-api	Absorbed by `5240ab9c`; `91a2911a68` deleted the crate.	upstream-sync-2026-08-27.md
@@ -193,6 +194,7 @@ sha	class	reason_code	note	source
 389c22e1c7	C	philosophy	Runtime `PlatformInfo` and `Modifiers::secondary(cx)` rewrite across 73 files, including absent `gpui_ios`, `gpui_apple`, and `collab_ui`.	upstream-sync-2026-10-24-b.md
 38c5dd7c	C	absent-api	Absorbed by `2ac1f5c6`; `91a2911a68` deleted the crate.	upstream-sync-2026-08-27.md
 38df25d5	C	upstream-infra	Benchmark-only dispatcher readiness API; no product behavior.	upstream-sync-2026-08-07.md
+38f5c4af0d	C	absent-api	Folds commit-view buffers as soon as they are inserted and anchors the reveal scroll to `Block::FoldedBuffer`. Local `commit_view.rs` has no reveal-file option, no `add_commit_file` helper, and no `Block::BufferHeader` scroll anchor, so the pre-image does not exist.	upstream-sync-2026-11-20.md
 3914477312	C	absent-api	ACP v2 compaction sharing needs v2 wire handling absent from ZZZ's negotiated v1 sessions.	upstream-sync-2026-10-10.md
 39467cf4b1	C	absent-api	Removes hand-written `IntoElement` impls from 30 files and replaces the blanket impl in `crates/gpui/src/element.rs`. ZZZ's element impls and `element.rs` have diverged, the change alters no local behavior on its own, and the load-bearing part is the trait rewrite rather than any isolatable fix.	upstream-sync-2026-11-10.md
 395def7a	C	absent-api	Upstream merge-queue CI plumbing; workflow files are absent locally.	upstream-sync-2026-09-24.md
@@ -323,6 +325,7 @@ sha	class	reason_code	note	source
 5a773a40	C	absent-api	gpui_web IME autoscroll; `ime_mirror.rs` is absent.	upstream-sync-2026-09-18.md
 5adae449a3	C	absent-api	Fixes duplicated reasoning in the OpenAI-compatible stream mapper that ZZZ's `language_model_core` does not contain.	upstream-sync-2026-10-21.md
 5b055fa7	C	philosophy	Cloud notification websocket plus telemetry `system_id` refresh.	upstream-sync-2026-09-04.md
+5b282ac8bb	C	absent-api	Adds `HeadlessAppContext::simulate_window_scale_factor_change`. Local `TestAppContext` already carries `simulate_window_scale_factor_change`, and no local test needs the headless variant, so the public helper would have no caller.	upstream-sync-2026-11-20.md
 5bd59e2e43	C	absent-api	Adds GPT-6.1 Terra to `crates/open_ai` and `crates/language_models`. ZZZ has neither crate, and `crates/language_model/src` carries only `api_key.rs`, `language_model.rs`, and `request.rs`, so the model catalog has no local home.	upstream-sync-2026-11-16.md
 5c58d5c49a	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
 5ccbbbd8	C	untriaged	Unused GPUI grid API and public enum rename omitted.	upstream-sync-2026-08-07.md
@@ -474,6 +477,7 @@ sha	class	reason_code	note	source
 87ce147829	C	diverged	Gives the git graph refs their own resizable column. It is built on the unabsorbed `fcd0f76952` table refactor (`TableRow<bool>` visibility, `redistribute_hidden_fractions`, `toggle_column_visibility`); a three-way application against `crates/git_graph` produced twenty conflicts, so it is not isolatable.	upstream-sync-2026-10-29.md
 87e698fb	C	philosophy	Native agent-thread UI behavior, outside ACP-only scope.	upstream-sync-2026-08-07.md
 87f65de6	C	untriaged	gpui_web canvas emoji fallback; follows unabsorbed Canvas fallback.	upstream-sync-2026-09-18.md
+881c618a6a	C	philosophy	Removes dead code across `crates/client`, `crates/call`, `crates/channel`, `crates/collab`, `crates/livekit_api`, and `crates/rpc`. Local ships none of `call`, `channel`, `collab`, or `livekit_api`, so the commit targets the rejected collaboration surface.	upstream-sync-2026-11-20.md
 8886dcb0	C	absent-api	Benchmark/test dispatcher plumbing only; no local runtime behavior.	upstream-sync-2026-08-07.md
 8968bf78	C	absent-api	Non-UTF-8 git blobs; staged_diff deleted.	upstream-sync-2026-08-18.md
 897ba9ad	C	diverged	Remote markdown images; preview/agent_ui diverged.	upstream-sync-2026-08-18.md
@@ -826,6 +830,7 @@ f1a10a5227	C	philosophy	Adds checkpoint-action telemetry to the agent panel.	ups
 f1ccf949d5	C	absent-api	Reuses the iOS cached main-thread marker; `gpui_ios` and `gpui_apple` are absent and the host is Linux.	upstream-sync-2026-10-24-b.md
 f26375b83b	C	absent-api	Omits an OpenCode thinking block binding in the absent `crates/opencode`.	upstream-sync-2026-10-21.md
 f2cdf3d5bd	C	absent-api	V2 authoritative terminal display machinery depends on rejected `39b5329322` and adds terminal replacement APIs with no current ZZZ caller.	upstream-sync-2026-10-04.md
+f3626706fa	C	philosophy	Adds a typed OpenAI Ultrafast service tier across `crates/open_ai`, `crates/anthropic`, `crates/language_models`, `crates/language_models_cloud`, and `crates/openai_subscribed`. The ACP-only cleanup deleted every in-tree provider and hosted-model crate, so no local caller exists.	upstream-sync-2026-11-20.md
 f36aec82	C	absent-api	`ask_user` tool/default is absent from ZZZ's ACP surface.	upstream-sync-2026-08-27.md
 f37989fbdf	C	unisolatable	Broad cross-platform headless/windowed GPUI rewrite whose new switching API is called only by its example and platform tests in this commit.	upstream-sync-2026-10-05.md
 f41ac64812	C	diverged	Lazy thread markdown depends on the previous lazy-diff layout and rewrites GPUI list virtualization; the local list and markdown modules have diverged.	upstream-sync-2026-10-24.md
