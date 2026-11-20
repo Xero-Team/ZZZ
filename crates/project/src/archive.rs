@@ -103,6 +103,7 @@ impl LanguageFile for ArchiveMemberFile {
             mtime: None,
             is_deleted: false,
             is_historic: false,
+            is_private: false,
             vfs_path: Some(rpc::proto::VfsPathV2::from_vfs_path(&self.vfs_path)),
             resource_id: Some(rpc::proto::ResourceIdV2::from_resource_id(self.resource_id)),
         }
