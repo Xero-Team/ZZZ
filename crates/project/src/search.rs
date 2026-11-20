@@ -478,7 +478,6 @@ impl SearchQuery {
                 escaped: false,
                 ..
             } => {
-
                 let captures = regex
                     .captures_from_pos(line, hit.start)
                     .ok()

@@ -309,14 +309,10 @@ actions!(
         RemoveSelectedThread,
         /// Starts a chat conversation with follow-up enabled.
         ChatWithFollow,
-        /// Moves focus up in the interface.
-        FocusUp,
-        /// Moves focus down in the interface.
-        FocusDown,
-        /// Moves focus left in the interface.
-        FocusLeft,
-        /// Moves focus right in the interface.
-        FocusRight,
+        /// Cycles to the next inline assist suggestion.
+        CycleNextInlineAssist,
+        /// Cycles to the previous inline assist suggestion.
+        CyclePreviousInlineAssist,
         /// Opens the active thread as a markdown file.
         OpenActiveThreadAsMarkdown,
         /// Opens the agent diff view to review changes.

@@ -104,8 +104,6 @@ actions!(
         Toggle,
         /// Toggles focus on the git panel.
         ToggleFocus,
-        /// Opens the git panel menu.
-        OpenMenu,
         /// Focuses on the commit message editor.
         FocusEditor,
         /// Focuses on the changes list.

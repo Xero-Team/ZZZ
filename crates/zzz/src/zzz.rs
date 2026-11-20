@@ -103,8 +103,6 @@ use zzz_actions::{About, OpenBrowser, OpenServerSettings, OpenSettingsFile, Open
 actions!(
     zzz,
     [
-        /// Opens the element inspector for debugging UI.
-        DebugElements,
         /// Hides the application window.
         Hide,
         /// Hides all other application windows.
@@ -123,8 +121,6 @@ actions!(
         OpenDebugTasks,
         /// Shows the default semantic token rules (read-only).
         ShowDefaultSemanticTokenRules,
-        /// Resets the application database.
-        ResetDatabase,
         /// Shows all hidden windows.
         ShowAll,
         /// Toggles fullscreen mode.
@@ -5786,7 +5782,6 @@ mod tests {
                 "file_finder",
                 "git",
                 "git_graph",
-                "git_onboarding",
                 "git_panel",
                 "git_picker",
                 "go_to_line",

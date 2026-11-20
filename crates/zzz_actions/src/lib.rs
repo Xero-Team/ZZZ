@@ -301,8 +301,6 @@ pub mod git {
             Switch,
             /// Selects a different repository.
             SelectRepo,
-            /// Filter remotes.
-            FilterRemotes,
             /// Create a git remote.
             CreateRemote,
             /// Opens the git branch selector.
@@ -707,11 +705,15 @@ pub mod outline {
 }
 
 actions!(
-    git_onboarding,
+    zed_predict_onboarding,
     [
-        /// Opens the git integration onboarding modal.
-        OpenGitIntegrationOnboarding
+        /// Opens the Zed Predict onboarding modal.
+        OpenZedPredictOnboarding
     ]
+);
+actions!(
+    call_hierarchy,
+    [ShowIncomingCalls, ShowOutgoingCalls, ToggleDirection]
 );
 
 pub mod debug_panel {
