@@ -59,3 +59,19 @@ new helpers keep that shape.
 | ---------------------------------------------------------- | ------ | -------------------------------------- |
 | `cargo check --offline -p project -p search --all-targets` | PASS   |                                        |
 | `cargo test -p project --lib search::tests`                | PASS   | 5 passed, including the non-ASCII case |
+
+## Known defect found while porting
+
+`cargo check -p title_bar --all-targets` fails with
+`E0004: non-exhaustive patterns: RemoteConnectionOptions::Mock(_) not covered`.
+The variant is gated on `remote`'s own `cfg(any(test, feature = "test-support"))`
+(`crates/remote/src/remote_client.rs:1363`), while the arm in
+`crates/title_bar/src/title_bar.rs:543` is gated on `title_bar`'s own copy of
+the same predicate. Feature unification under `--all-targets` enables
+`remote/test-support` through a dev-dependency without enabling
+`title_bar/test-support`, so the variant exists while the arm is compiled out.
+The two predicates can never line up. This predates the sync — it reproduces at
+`484eb80cc5` and earlier — and `cargo check --workspace` without `--all-targets`
+does not see it. Fixing it means either an `#[allow(unreachable_patterns)]`
+fallback arm, which would mask future variants, or moving the connection
+display data onto `RemoteConnectionOptions` so `title_bar` stops matching.
