@@ -1527,7 +1527,7 @@ fn all_language_names(cx: &App) -> Vec<SharedString> {
 enum SettingsUiFile {
     User,
     Project((WorktreeId, Arc<RelPath>)),
-    Server(&'static str),
+    Server,
 }
 
 impl SettingsUiFile {
@@ -1535,19 +1535,19 @@ impl SettingsUiFile {
         match self {
             SettingsUiFile::User => "user",
             SettingsUiFile::Project(_) => "project",
-            SettingsUiFile::Server(_) => "server",
+            SettingsUiFile::Server => "server",
         }
     }
 
     fn is_server(&self) -> bool {
-        matches!(self, SettingsUiFile::Server(_))
+        matches!(self, SettingsUiFile::Server)
     }
 
     fn worktree_id(&self) -> Option<WorktreeId> {
         match self {
             SettingsUiFile::User => None,
             SettingsUiFile::Project((worktree_id, _)) => Some(*worktree_id),
-            SettingsUiFile::Server(_) => None,
+            SettingsUiFile::Server => None,
         }
     }
 
@@ -1555,7 +1555,7 @@ impl SettingsUiFile {
         Some(match file {
             settings::SettingsFile::User => SettingsUiFile::User,
             settings::SettingsFile::Project(location) => SettingsUiFile::Project(location),
-            settings::SettingsFile::Server => SettingsUiFile::Server("todo: server name"),
+            settings::SettingsFile::Server => SettingsUiFile::Server,
             settings::SettingsFile::Default => return None,
             settings::SettingsFile::Global => return None,
         })
@@ -1565,7 +1565,7 @@ impl SettingsUiFile {
         match self {
             SettingsUiFile::User => settings::SettingsFile::User,
             SettingsUiFile::Project(location) => settings::SettingsFile::Project(location.clone()),
-            SettingsUiFile::Server(_) => settings::SettingsFile::Server,
+            SettingsUiFile::Server => settings::SettingsFile::Server,
         }
     }
 
@@ -1573,7 +1573,7 @@ impl SettingsUiFile {
         match self {
             SettingsUiFile::User => USER,
             SettingsUiFile::Project(_) => PROJECT,
-            SettingsUiFile::Server(_) => SERVER,
+            SettingsUiFile::Server => SERVER,
         }
     }
 }
@@ -2763,7 +2763,11 @@ impl SettingsWindow {
                         )
                     }
                 }),
-            SettingsUiFile::Server(file) => Some(file.to_string()),
+            SettingsUiFile::Server => Some(app_i18n::tr(
+                cx,
+                "settings_ui.common.scope.server",
+                "Server",
+            )),
         }
     }
 
@@ -3642,7 +3646,7 @@ impl SettingsWindow {
                                 "settings_ui.warning.auto_migration_available",
                                 "They can be automatically migrated to the latest version.",
                             ),
-                            SettingsUiFile::Server(_) | SettingsUiFile::Project(_)  => app_i18n::tr(
+                            SettingsUiFile::Server | SettingsUiFile::Project(_) => app_i18n::tr(
                                 cx,
                                 "settings_ui.warning.manual_migration_required",
                                 "They must be manually migrated to the latest version."
@@ -3882,7 +3886,7 @@ impl SettingsWindow {
 
                 window.remove_window();
             }
-            SettingsUiFile::Server(_) => {
+            SettingsUiFile::Server => {
                 // Server files are not editable
                 return;
             }
@@ -4272,7 +4276,7 @@ fn update_settings_file(
             SettingsStore::global(cx).update_settings_file(<dyn fs::Fs>::global(cx), update);
             Ok(())
         }
-        SettingsUiFile::Server(_) => unimplemented!(),
+        SettingsUiFile::Server => anyhow::bail!("server settings files are not editable"),
     }
 }
 
