@@ -1336,7 +1336,7 @@ impl MultiBuffer {
     pub fn clone(&self, new_cx: &mut Context<Self>) -> Self {
         let mut buffers = BTreeMap::default();
         let changed_buffers = Rc::new(RefCell::new(self.changed_buffers.borrow().clone()));
-        for (buffer_id, buffer_state) in self.buffers.iter() {
+        for (buffer_id, buffer_state) in &self.buffers {
             buffer_state.buffer.update(new_cx, |buffer, _| {
                 buffer.record_changes(Rc::downgrade(&changed_buffers));
             });
