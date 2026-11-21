@@ -76,7 +76,7 @@ Do not use this skill for absorbing Zed `main` (use
   download. `crates/context_server/src/oauth.rs` `CIMD_URL` is loopback.
 - `telemetry::event!` and `Item::telemetry_event_text` are gone. Do not
   reintroduce a telemetry crate, trait method, or event sender.
-- `script/check-philosophy` is the regression net: it has 76 assertions
+- `script/check-philosophy` is the regression net: it has 77 assertions
   and is invoked by both `cargo xtask check` (`check all`) and the
   `cargo xtask clippy` preflight. Do not weaken a check to make a change
   pass; fix the change or add a targeted assertion.
