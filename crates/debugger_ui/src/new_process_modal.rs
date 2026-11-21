@@ -1409,7 +1409,7 @@ impl PickerDelegate for DebugDelegate {
                     delegate.prompt = query;
 
                     delegate.divider_index = delegate.last_used_candidate_index.and_then(|index| {
-                        delegate
+                        let index = delegate
                             .matches
                             .partition_point(|matching_task| matching_task.candidate_id <= index);
                         (index != 0).then(|| index - 1)
