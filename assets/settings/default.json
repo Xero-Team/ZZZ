@@ -140,6 +140,10 @@
     // Whether to render LaTeX math (`$...$`, `$$...$$`, `\(...\)`, `\[...\]`,
     // and fenced `math` blocks) as typeset formulas in the markdown preview.
     "render_math": true,
+    // Whether the preview may fetch images over the network. Opening a preview of
+    // an untrusted document must not reveal the reader's address to the image
+    // host, so remote images render as a placeholder unless this is enabled.
+    "allow_remote_images": false,
   },
   // Determines the modifier to be used to add multiple cursors with the mouse. The open hover link mouse gestures will adapt such that it do not conflict with the multicursor modifier.
   //

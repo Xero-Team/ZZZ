@@ -1315,6 +1315,14 @@ pub struct MarkdownPreviewSettingsContent {
     ///
     /// Default: true
     pub render_math: Option<bool>,
+    /// Whether the preview may fetch images over the network. A Markdown
+    /// document is untrusted input, so with this disabled (the default) an
+    /// `http(s)` image is never requested and a placeholder is rendered
+    /// instead; that keeps opening a preview from revealing the reader's
+    /// address, and when it was opened, to the image host.
+    ///
+    /// Default: false
+    pub allow_remote_images: Option<bool>,
 }
 
 /// The settings for the image viewer.
