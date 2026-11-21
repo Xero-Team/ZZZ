@@ -128,8 +128,9 @@ impl FossilPanel {
         self.entries = self
             .active_repository
             .as_ref()
-            .map(|repository| entries_for_repository(&repository.read(cx)))
-            .unwrap_or_default();
+            .map_or_else(Default::default, |repository| {
+                entries_for_repository(&repository.read(cx))
+            });
 
         if self
             .selected_entry
@@ -182,36 +183,33 @@ impl FossilPanel {
             matches!(self.entries.get(index), Some(FossilListEntry::File(_)))
         };
 
-        let next = match self.selected_entry {
-            Some(current) => {
-                let mut index = current;
-                loop {
-                    if forward {
-                        index += 1;
-                        if index >= self.entries.len() {
-                            return;
-                        }
-                    } else {
-                        if index == 0 {
-                            return;
-                        }
-                        index -= 1;
+        let next = if let Some(current) = self.selected_entry {
+            let mut index = current;
+            loop {
+                if forward {
+                    index += 1;
+                    if index >= self.entries.len() {
+                        return;
                     }
-                    if is_selectable(index) {
-                        break index;
+                } else {
+                    if index == 0 {
+                        return;
                     }
+                    index -= 1;
+                }
+                if is_selectable(index) {
+                    break index;
                 }
             }
-            None => {
-                let indices: Box<dyn Iterator<Item = usize>> = if forward {
-                    Box::new(0..self.entries.len())
-                } else {
-                    Box::new((0..self.entries.len()).rev())
-                };
-                match indices.into_iter().find(|index| is_selectable(*index)) {
-                    Some(index) => index,
-                    None => return,
-                }
+        } else {
+            let indices: Box<dyn Iterator<Item = usize>> = if forward {
+                Box::new(0..self.entries.len())
+            } else {
+                Box::new((0..self.entries.len()).rev())
+            };
+            match indices.into_iter().find(|index| is_selectable(*index)) {
+                Some(index) => index,
+                None => return,
             }
         };
 
