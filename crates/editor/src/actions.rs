@@ -721,8 +721,6 @@ actions!(
         OpenExcerpts,
         /// Opens excerpts in a split pane.
         OpenExcerptsSplit,
-        /// Opens the proposed changes editor.
-        OpenProposedChangesEditor,
         /// Opens documentation for the symbol at cursor.
         OpenDocs,
         /// Opens a permalink to the current line.

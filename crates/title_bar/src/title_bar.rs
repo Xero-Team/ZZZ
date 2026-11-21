@@ -52,14 +52,6 @@ const MAX_BRANCH_NAME_LENGTH: usize = 40;
 const MAX_SHORT_SHA_LENGTH: usize = 8;
 
 actions!(
-    collab,
-    [
-        /// A debug action to simulate an update being available to test the update banner UI.
-        SimulateUpdateAvailable
-    ]
-);
-
-actions!(
     workspace,
     [
         /// Switches to the classic, editor-focused panel layout.

@@ -309,10 +309,6 @@ actions!(
         RemoveSelectedThread,
         /// Starts a chat conversation with follow-up enabled.
         ChatWithFollow,
-        /// Cycles to the next inline assist suggestion.
-        CycleNextInlineAssist,
-        /// Cycles to the previous inline assist suggestion.
-        CyclePreviousInlineAssist,
         /// Opens the active thread as a markdown file.
         OpenActiveThreadAsMarkdown,
         /// Opens the agent diff view to review changes.

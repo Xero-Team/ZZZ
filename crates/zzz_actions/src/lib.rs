@@ -55,8 +55,6 @@ actions!(
         /// Opens the keymap editor.
         #[action(deprecated_aliases = ["zzz_actions::OpenKeymapEditor"])]
         OpenKeymap,
-        /// Opens account settings.
-        OpenAccountSettings,
         /// Opens server settings.
         OpenServerSettings,
         /// Quits the application.
@@ -502,8 +500,6 @@ pub mod agent {
             /// Opens the agent settings panel.
             #[action(deprecated_aliases = ["agent::OpenConfiguration"])]
             OpenSettings,
-            /// Opens the agent onboarding modal.
-            OpenOnboardingModal,
             /// Starts a chat conversation with the agent.
             Chat,
             /// Toggles the language model selector dropdown.
@@ -703,18 +699,6 @@ pub mod outline {
     /// breadcrumbs <-> outline dependency cycle.
     pub static TOGGLE_OUTLINE: OnceLock<fn(AnyView, &mut Window, &mut App)> = OnceLock::new();
 }
-
-actions!(
-    zed_predict_onboarding,
-    [
-        /// Opens the Zed Predict onboarding modal.
-        OpenZedPredictOnboarding
-    ]
-);
-actions!(
-    call_hierarchy,
-    [ShowIncomingCalls, ShowOutgoingCalls, ToggleDirection]
-);
 
 pub mod debug_panel {
     use gpui::actions;
