@@ -51,7 +51,7 @@ const PICKER_THRESHOLD: usize = 5;
 fn toolbar_category(
     option: &acp::SessionConfigOption,
 ) -> Option<&acp::SessionConfigOptionCategory> {
-    use acp::SessionConfigOptionCategory::*;
+    use acp::SessionConfigOptionCategory::{Mode, Model, Speed, ThoughtLevel};
 
     let category = option.category.as_ref()?;
     match (&option.kind, category) {
@@ -69,7 +69,7 @@ fn split_config_options(
     options: Vec<acp::SessionConfigOption>,
     render_boolean_config_options: bool,
 ) -> (Vec<acp::SessionConfigOption>, Vec<acp::SessionConfigOption>) {
-    use acp::SessionConfigOptionCategory::*;
+    use acp::SessionConfigOptionCategory::{Mode, Model, Speed, ThoughtLevel};
 
     let mut options: Vec<_> = options
         .into_iter()
@@ -1651,7 +1651,7 @@ mod tests {
 
     #[test]
     fn composer_uses_the_first_matching_option_for_each_toolbar_control() {
-        use acp::SessionConfigOptionCategory::*;
+        use acp::SessionConfigOptionCategory::{Mode, Model, Speed, ThoughtLevel};
 
         let select = |id, category| {
             acp::SessionConfigOption::select(
