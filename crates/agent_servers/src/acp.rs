@@ -1027,7 +1027,9 @@ impl AcpConnection {
             .update(|cx| cx.has_flag::<AcpBetaFeatureFlag>())
             .then(auth_status::ConnectionAuthStatus::new);
         let dispatch_context = ClientContext {
-            auth_status: auth_status.as_ref().map(Rc::downgrade).unwrap_or_default(),
+            auth_status: auth_status
+                .as_ref()
+                .map_or_else(Default::default, Rc::downgrade),
             sessions: sessions.clone(),
             pending_sessions: pending_sessions.clone(),
             session_list: client_session_list.clone(),
