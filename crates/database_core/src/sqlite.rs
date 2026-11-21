@@ -69,18 +69,24 @@ impl Drop for SqliteHandle {
 }
 
 struct ConnectionInterrupt {
-    interrupt_ptr: usize,
+    handle: Arc<SqliteHandle>,
 }
 
 impl Interrupt for ConnectionInterrupt {
     fn interrupt(&self) {
-        if self.interrupt_ptr != 0 {
-            // SAFETY: the address came from `expose_provenance` on the connection owned by the
-            // same `SqliteHandle`, which is still alive because it holds this copy; SQLite
-            // permits calling interrupt from any thread.
+        if self.handle.closed.load(Ordering::Acquire) {
+            return;
+        }
+        let interrupt_ptr = self.handle.interrupt_ptr;
+        if interrupt_ptr != 0 {
+            // SAFETY: the `Arc<SqliteHandle>` keeps the handle's allocation alive for as long as
+            // this value exists, so the address cannot outlive it. `interrupt()` returns early
+            // once `closed` is set, and every caller that closes the connection cancels its
+            // tracked queries first, so a closed handle is never interrupted; SQLite permits
+            // calling `sqlite3_interrupt` from any thread while the connection is open.
             unsafe {
                 sqlite3_interrupt(std::ptr::with_exposed_provenance_mut::<sqlite3>(
-                    self.interrupt_ptr,
+                    interrupt_ptr,
                 ));
             }
         }
@@ -442,7 +448,7 @@ impl DriverConnection for SqliteConnection {
         let (sender, stream) = RowStream::new(ROW_STREAM_CAPACITY);
         let cancelled = Arc::new(AtomicBool::new(false));
         let interrupt = Arc::new(ConnectionInterrupt {
-            interrupt_ptr: self.handle.interrupt_ptr,
+            handle: self.handle.clone(),
         });
         let handle = QueryHandle::new(cancelled.clone(), Some(interrupt));
 
