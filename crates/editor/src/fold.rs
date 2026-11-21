@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use super::*;
 
 impl GutterDimensions {
@@ -364,22 +366,26 @@ impl Editor {
                 Some(crease) => {
                     let crease_range = crease.range();
 
-                    if row.0 > crease_range.end.row {
-                        current_row = (current_row + 1).max(crease_range.end.row);
-                    } else if row.0 < crease_range.end.row {
-                        current_row += 1;
-                        current_level += 1;
-                    } else {
-                        let row_indent = buffer_snapshot.line_indent_for_row(row).raw_len();
-                        let crease_indent = buffer_snapshot
-                            .line_indent_for_row(MultiBufferRow(crease_range.start.row))
-                            .raw_len();
-
-                        if row_indent > crease_indent {
+                    match row.0.cmp(&crease_range.end.row) {
+                        Ordering::Greater => {
+                            current_row = (current_row + 1).max(crease_range.end.row);
+                        }
+                        Ordering::Less => {
                             current_row += 1;
                             current_level += 1;
-                        } else {
-                            current_row = (current_row + 1).max(crease_range.end.row);
+                        }
+                        Ordering::Equal => {
+                            let row_indent = buffer_snapshot.line_indent_for_row(row).raw_len();
+                            let crease_indent = buffer_snapshot
+                                .line_indent_for_row(MultiBufferRow(crease_range.start.row))
+                                .raw_len();
+
+                            if row_indent > crease_indent {
+                                current_row += 1;
+                                current_level += 1;
+                            } else {
+                                current_row = (current_row + 1).max(crease_range.end.row);
+                            }
                         }
                     }
                 }
