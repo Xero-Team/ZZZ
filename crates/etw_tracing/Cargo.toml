@@ -11,7 +11,10 @@ path = "etw_tracing.rs"
 [lints]
 workspace = true
 
-[dependencies]
+# The library is `#![cfg(target_os = "windows")]`, so every dependency is a
+# Windows dependency; declaring them here keeps a Linux host from reporting each
+# one as unused.
+[target.'cfg(target_os = "windows")'.dependencies]
 anyhow.workspace = true
 gpui.workspace = true
 net.workspace = true
@@ -19,8 +22,6 @@ serde.workspace = true
 serde_json.workspace = true
 util.workspace = true
 workspace.workspace = true
-
-[target.'cfg(target_os = "windows")'.dependencies]
 # Vendored from https://github.com/zed-industries/wprcontrol @ cd811f7d744f65291e13131b1d907fda63ed91a1
 wprcontrol = { path = "../../vendor/wprcontrol" }
 windows-core = "0.62"
