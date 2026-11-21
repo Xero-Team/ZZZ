@@ -13,18 +13,18 @@ path = "src/vim.rs"
 doctest = false
 
 [features]
-neovim = ["nvim-rs", "async-compat", "async-trait", "tokio"]
+# Marker for the neovim-backed tests. They drive a real `nvim` process, so they stay off
+# by default; the dependencies they need are dev-dependencies and are always available to
+# the test targets.
+neovim = []
 
 [dependencies]
 anyhow.workspace = true
-async-compat = { workspace = true, "optional" = true }
-async-trait = { workspace = true, "optional" = true }
 collections.workspace = true
 command_palette.workspace = true
 command_palette_hooks.workspace = true
 db.workspace = true
 editor.workspace = true
-env_logger.workspace = true
 futures.workspace = true
 fuzzy.workspace = true
 gpui.workspace = true
@@ -33,8 +33,6 @@ itertools.workspace = true
 language.workspace = true
 log.workspace = true
 multi_buffer.workspace = true
-# Vendored from https://github.com/KillTheMule/nvim-rs @ 764dd270c642f77f10f3e19d05cc178a6cbe69f3
-nvim-rs = { path = "../../vendor/nvim-rs", features = ["use_tokio"], optional = true }
 picker.workspace = true
 project.workspace = true
 regex.workspace = true
@@ -48,7 +46,6 @@ text.workspace = true
 theme.workspace = true
 theme_settings.workspace = true
 menu.workspace = true
-tokio = { version = "1.54", features = ["full"], optional = true }
 ui.workspace = true
 util.workspace = true
 util_macros.workspace = true
@@ -57,6 +54,12 @@ workspace.workspace = true
 zzz_actions.workspace = true
 
 [dev-dependencies]
+async-compat.workspace = true
+async-trait.workspace = true
+env_logger.workspace = true
+# Vendored from https://github.com/KillTheMule/nvim-rs @ 764dd270c642f77f10f3e19d05cc178a6cbe69f3
+nvim-rs = { path = "../../vendor/nvim-rs", features = ["use_tokio"] }
+tokio = { version = "1.54", features = ["full"] }
 command_palette = { workspace = true, features = ["test-support"] }
 editor = { workspace = true, features = ["test-support"] }
 git_ui = { workspace = true, features = ["test-support"] }
