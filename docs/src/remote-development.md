@@ -87,7 +87,7 @@ There is one additional ZZZ-specific option per connection, `nickname`:
 
 If you use the command line to open a connection to a host by doing `zzz ssh://192.168.1.10/~/.vimrc`, then extra options are read from your settings file by finding the first connection that matches the host/username/port of the URL on the command line.
 
-Additionally it's worth noting that while you can pass a password on the command line `zzz ssh://user:password@host/~`, we do not support writing a password to your settings file. If you're connecting repeatedly to the same host, you should configure key-based authentication.
+Additionally it's worth noting that while you can pass a password on the command line `zzz ssh://user:password@host/~`, ZZZ never writes a password to your settings file or to its application database; a restored connection prompts again. If you're connecting repeatedly to the same host, you should configure key-based authentication.
 
 ## Remote Development on Windows (SSH)
 
