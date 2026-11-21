@@ -21,7 +21,6 @@ test-support = ["git2", "rand", "util_macros"]
 anyhow.workspace = true
 async_zip.workspace = true
 collections.workspace = true
-dunce.workspace = true
 futures-lite.workspace = true
 futures.workspace = true
 globset.workspace = true
@@ -45,7 +44,6 @@ gpui_util.workspace = true
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 smol.workspace = true
-which.workspace = true
 git2 = { workspace = true, optional = true }
 async-fs.workspace = true
 walkdir.workspace = true
@@ -59,7 +57,16 @@ nix = { workspace = true, features = ["resource", "user"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 mach2.workspace = true
 
+# `which` backs the Windows shell discovery and the macOS spawn path; the unix
+# test target uses it too, which is why the dev-dependency exists separately.
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+which.workspace = true
+
+[target.'cfg(unix)'.dev-dependencies]
+which.workspace = true
+
 [target.'cfg(windows)'.dependencies]
+dunce.workspace = true
 tendril = "0.5.1"
 windows.workspace = true
 
