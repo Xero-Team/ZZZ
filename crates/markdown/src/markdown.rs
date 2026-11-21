@@ -4592,12 +4592,11 @@ impl RenderedLine {
             return self.source_end;
         }
 
-        let ix = match self
+        let Ok(ix) = self
             .source_mappings
             .binary_search_by_key(&rendered_index, |probe| probe.rendered_index)
-        {
-            Ok(ix) => ix,
-            Err(_) => return self.source_index_for_rendered_index(rendered_index),
+        else {
+            return self.source_index_for_rendered_index(rendered_index);
         };
 
         // Exact match at the start of a segment. Check if there's a gap from the previous segment.
