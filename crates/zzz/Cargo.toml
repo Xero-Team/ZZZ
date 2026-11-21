@@ -240,6 +240,7 @@ ui = { workspace = true, features = ["accessibility"] }
 ui_input = { workspace = true, features = ["accessibility"] }
 
 [build-dependencies]
+sha2.workspace = true
 windows_resources = { path = "../windows_resources" }
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]

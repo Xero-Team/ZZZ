@@ -113,6 +113,10 @@ fn fetch_conpty(target_arch: &str) {
 
     // TODO: Switch back to the stable channel once Microsoft finally decides to publish v1.26
     let conpty_url = "https://github.com/microsoft/terminal/releases/download/v1.25.1912.0/Microsoft.Windows.Console.ConPTY.1.25.260710002-preview.nupkg";
+    // GitHub release assets are mutable, so the tag in `conpty_url` alone does not pin the
+    // bytes. Build scripts install `conpty.dll` and `OpenConsole.exe` straight out of this
+    // archive, so the digest is pinned here and checked before anything is extracted.
+    let conpty_sha256 = "05fe9b571ea4fb198f5012405cb39a132cf23eee50feaa496524c149b2502692";
     let nupkg_path = out_dir.join("conpty.nupkg.zip");
     let extract_dir = out_dir.join("conpty");
 
@@ -136,6 +140,10 @@ fn fetch_conpty(target_arch: &str) {
         match download_result {
             Ok(output) if output.status.success() => {
                 println!("Downloaded conpty nupkg successfully");
+
+                if !verify_sha256(&nupkg_path, conpty_sha256) {
+                    return;
+                }
 
                 let extract_script = format!(
                     "$ProgressPreference = 'SilentlyContinue'; Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
@@ -206,10 +214,48 @@ fn fetch_conpty(target_arch: &str) {
             }
         };
 
-        if download_ok && extract_zip(&nupkg_path, &extract_dir) {
+        if download_ok
+            && verify_sha256(&nupkg_path, conpty_sha256)
+            && extract_zip(&nupkg_path, &extract_dir)
+        {
             install_conpty_artifacts(&extract_dir, target_dir, target_arch);
         }
     }
+}
+
+/// Checks a downloaded archive against the pinned digest and removes it on mismatch, so a
+/// corrupt or substituted download cannot be extracted and a cached bad copy is not reused.
+fn verify_sha256(path: &std::path::Path, expected: &str) -> bool {
+    use sha2::{Digest as _, Sha256};
+
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            println!(
+                "cargo::warning=Failed to read conpty nupkg {}: {e}",
+                path.display()
+            );
+            return false;
+        }
+    };
+    let actual = Sha256::digest(&bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    if actual.eq_ignore_ascii_case(expected) {
+        return true;
+    }
+    println!(
+        "cargo::warning=conpty nupkg SHA-256 mismatch for {}: expected {expected}, got {actual}",
+        path.display()
+    );
+    if let Err(e) = std::fs::remove_file(path) {
+        println!(
+            "cargo::warning=Failed to remove mismatched conpty nupkg {}: {e}",
+            path.display()
+        );
+    }
+    false
 }
 
 fn install_conpty_artifacts(

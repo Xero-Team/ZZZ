@@ -5136,6 +5136,7 @@ dependencies = [
  "wasmparser 0.263.0",
  "wasmtime 50.0.2",
  "wasmtime-wasi",
+ "which",
  "zlog",
  "ztracing",
 ]
@@ -22618,6 +22619,7 @@ dependencies = [
  "settings",
  "settings_profile_selector",
  "settings_ui",
+ "sha2 0.11.1",
  "shellexpand",
  "sidebar",
  "smol",
