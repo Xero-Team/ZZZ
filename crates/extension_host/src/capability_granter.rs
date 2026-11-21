@@ -111,6 +111,31 @@ impl CapabilityGranter {
         Ok(())
     }
 
+    /// Approves an outbound HTTP request made by `http_client.fetch`.
+    ///
+    /// The same `download_file` capability governs both network paths: fetching bytes into
+    /// memory and downloading them to disk are the same access to the same URL, so an
+    /// extension that cannot download from a host cannot read from it either. The binary
+    /// download options are deliberately not consulted here; they gate installing
+    /// executables, not ordinary network access.
+    pub fn grant_fetch(&self, desired_url: &Url) -> Result<()> {
+        let is_allowed = self
+            .granted_capabilities
+            .iter()
+            .any(|capability| match capability {
+                ExtensionCapability::DownloadFile(capability) => capability.allows(desired_url),
+                _ => false,
+            });
+
+        if !is_allowed {
+            bail!(
+                "capability for http_client.fetch {desired_url} is not granted by the extension host",
+            );
+        }
+
+        Ok(())
+    }
+
     pub fn grant_npm_install_package(&self, package_name: &str) -> Result<()> {
         if !self.binary_options.read().allow_binary_download {
             bail!("binary download not allowed for {package_name}");

@@ -58,6 +58,16 @@ To allow a specific command (e.g., `gem`) to be executed with any arguments:
 { kind = "process:exec", command = "gem", args = ["**"] }
 ```
 
+#### Environment variables
+
+The grant covers the program and its arguments, not the code that program loads.
+The host resolves the granted command to an absolute path using its own `PATH`
+before running it, and the child inherits the host environment. An extension may
+add environment variables for the command, but it may not set `PATH`,
+`LD_PRELOAD`, `LD_AUDIT`, `LD_LIBRARY_PATH`, `DYLD_INSERT_LIBRARIES`,
+`DYLD_LIBRARY_PATH`, `DYLD_FRAMEWORK_PATH`, or `NODE_OPTIONS`; a command that
+needs one of those values must be referenced as an absolute path instead.
+
 ### `download_file`
 
 The `download_file` capability grants extensions the ability to download files using [`zzz_extension_api::download_file`](https://docs.rs/zzz_extension_api/latest/zzz_extension_api/fn.download_file.html).

@@ -635,6 +635,8 @@ impl http_client::Host for WasmState {
     ) -> wasmtime::Result<Result<http_client::HttpResponse, String>> {
         maybe!(async {
             let url = &request.url;
+            let parsed_url = Url::parse(url)?;
+            self.capability_granter.grant_fetch(&parsed_url)?;
             let request = convert_request(&request)?;
             let mut response = self.host.http_client.send(request).await?;
 
@@ -651,11 +653,11 @@ impl http_client::Host for WasmState {
         &mut self,
         request: http_client::HttpRequest,
     ) -> wasmtime::Result<Result<Resource<ExtensionHttpResponseStream>, String>> {
-        let request =
-            convert_request(&request).map_err(|error| wasmtime::Error::msg(error.to_string()))?;
-        let response = self.host.http_client.send(request);
         maybe!(async {
-            let response = response.await?;
+            let parsed_url = Url::parse(&request.url)?;
+            self.capability_granter.grant_fetch(&parsed_url)?;
+            let request = convert_request(&request)?;
+            let response = self.host.http_client.send(request).await?;
             let stream = Arc::new(Mutex::new(response));
             let resource = self.table.push(stream)?;
             Ok(resource)
@@ -904,9 +906,15 @@ impl process::Host for WasmState {
             self.capability_granter
                 .grant_exec(&command.command, &command.args)?;
 
-            let output = util::command::new_command(command.command.as_str())
+            // The grant approves a program by name, so resolve the name against the host's
+            // `PATH` and run that path. Letting the child resolve it would let the guest pick
+            // which binary answers to the granted name.
+            let program = resolve_granted_program(&command.command)?;
+            let env = checked_child_env(&command.env)?;
+
+            let output = util::command::new_command(program)
                 .args(&command.args)
-                .envs(command.env)
+                .envs(env)
                 .output()
                 .await?;
 
@@ -915,6 +923,48 @@ impl process::Host for WasmState {
         .await
         .to_wasmtime_result()
     }
+}
+
+/// Environment variables that make the dynamic loader, a shell, or an interpreter load code
+/// the extension supplies. A `process:exec` grant approves the program, not what it loads, so
+/// a guest may not set these on a granted command.
+const DENIED_EXEC_ENV: &[&str] = &[
+    "PATH",
+    "LD_PRELOAD",
+    "LD_AUDIT",
+    "LD_LIBRARY_PATH",
+    "DYLD_INSERT_LIBRARIES",
+    "DYLD_LIBRARY_PATH",
+    "DYLD_FRAMEWORK_PATH",
+    "NODE_OPTIONS",
+];
+
+/// Rejects guest-supplied environment variables that would let the extension choose code the
+/// granted command loads, and returns the variables that may be passed through.
+fn checked_child_env(env: &[(String, String)]) -> Result<Vec<(String, String)>> {
+    for (key, _) in env {
+        if DENIED_EXEC_ENV
+            .iter()
+            .any(|denied| key.eq_ignore_ascii_case(denied))
+        {
+            bail!("extensions may not set {key} on a process:exec command");
+        }
+    }
+    Ok(env.to_vec())
+}
+
+/// Resolves a granted command to an absolute path using the host environment, so a guest
+/// cannot influence which binary runs by supplying `PATH` or by racing the working directory.
+fn resolve_granted_program(command: &str) -> Result<PathBuf> {
+    let requested = Path::new(command);
+    if requested.is_absolute() {
+        return Ok(requested.to_path_buf());
+    }
+
+    let search_path = env::var_os("PATH").context("the host PATH is not set")?;
+    let current_dir = env::current_dir().context("reading the working directory")?;
+    which::which_in(requested, Some(search_path), current_dir)
+        .with_context(|| format!("resolving {command} on the host PATH"))
 }
 
 #[async_trait]

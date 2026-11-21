@@ -546,7 +546,15 @@ pub struct WasmState {
     ctx: WasiCtx,
     pub host: Arc<WasmHost>,
     pub(crate) capability_granter: CapabilityGranter,
+    /// Caps the guest's linear memory. Without it a guest that grows memory without
+    /// awaiting is never interrupted, and the editor process runs out of memory.
+    limits: wasmtime::StoreLimits,
 }
+
+/// The most linear memory a single extension component may allocate. Extensions are small
+/// parse-and-spawn components; the largest bundled one uses a few megabytes, so this leaves
+/// ample headroom while keeping a runaway allocation from taking down the editor.
+const EXTENSION_MEMORY_LIMIT_BYTES: usize = 256 * 1024 * 1024;
 
 type MainThreadCall = Box<dyn Send + for<'a> FnOnce(&'a mut AsyncApp) -> LocalBoxFuture<'a, ()>>;
 
@@ -678,8 +686,12 @@ impl WasmHost {
                         this.granted_capabilities.clone(),
                         manifest.clone(),
                     ),
+                    limits: wasmtime::StoreLimitsBuilder::new()
+                        .memory_size(EXTENSION_MEMORY_LIMIT_BYTES)
+                        .build(),
                 },
             );
+            store.limiter(|state| &mut state.limits);
             // Store will yield after 1 tick, and get a new deadline of 1 tick after each yield.
             store.set_epoch_deadline(1);
             store.epoch_deadline_async_yield_and_update(1);
