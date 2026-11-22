@@ -4,7 +4,7 @@
 //! 解析该文件，把标题、段落、粗斜体、换行、表格映射为 Markdown；
 //! 图片暂不支持，带编号列表统一按无序列表输出。
 
-use std::io::{Cursor, Read};
+use std::io::Cursor;
 
 use anyhow::{Result, anyhow};
 use quick_xml::events::{BytesStart, Event};
@@ -15,11 +15,10 @@ use crate::markup::{escape_markdown, wrap_run_style};
 /// 将 docx 文件字节流转换为 Markdown 文本
 pub fn docx_to_markdown(bytes: Vec<u8>) -> Result<String> {
     let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
-    let mut entry = archive
+    let entry = archive
         .by_name("word/document.xml")
         .map_err(|_| anyhow!("invalid docx: missing word/document.xml"))?;
-    let mut xml = String::new();
-    entry.read_to_string(&mut xml)?;
+    let xml = crate::ooxml::read_ooxml_entry(entry)?;
     Ok(convert_document_xml(&xml))
 }
 
