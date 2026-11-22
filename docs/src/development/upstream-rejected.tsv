@@ -210,6 +210,7 @@ sha	class	reason_code	note	source
 39b5329322	C	absent-api	Cross-layer ACP v2 submission-receipt and activity rewrite with no current ZZZ transport caller; it also touches native-agent and absent `eval_cli` consumers.	upstream-sync-2026-10-04.md
 3ab0b5df18	C	philosophy	ACP pending-session rework conflicts with ZZZ's own ref-count design from #54009.	upstream-sync-2026-09-24.md
 3b2acfe0ad	C	untriaged	Rejected in this sync; see the report for the section-level rationale.	upstream-sync-2026-07-03.md
+3b71d0c834	C	absent-api	`crates/sandbox_linux` and its broker are absent locally, so the permissive `mkdir` rule has no target.	upstream-sync-2026-11-22.md
 3b90a9be	C	absent-api	Timed RPC log groups need absent elapsed tracker.	upstream-sync-2026-08-18.md
 3c11d49cbf	C	absent-api	Needs the structured `DiffPatch`/`PatchFile` parser that ZZZ's simplified `acp_thread/src/diff.rs` does not carry.	upstream-sync-2026-10-21.md
 3c2118dd69	C	philosophy	Corrects hosted model pricing and availability. Local ships no hosted-model catalog; the surface is the one the ACP-only cleanup removed.	upstream-sync-2026-11-20-b.md
@@ -288,6 +289,7 @@ sha	class	reason_code	note	source
 4ebf3eac14	C	absent-api	Adds list/get/update crates.io endpoints and types to the new client crate. Depends on `ccb25cbc63`, which is absent locally; no ZZZ caller.	upstream-sync-2026-11-04.md
 4ec98df500	C	absent-api	Moves `agent-client-protocol` from 3.6.0 to 5.0.0 and rewrites the v1/v2 clients for the new schema layout. ZZZ pins `=3.5.0` and lacks the unabsorbed v1/v2 compatibility layer the patch builds on; the cherry-pick conflicted across 37 files and also touches native-agent tool files ZZZ deleted.	upstream-sync-2026-11-02.md
 4f047acc	C	absent-api	V4 cursor-marker route is absent from ZZZ's edit_prediction API.	upstream-sync-2026-08-07.md
+4f5e323e25	C	absent-api	Needs `tooling/crates_io_client` and wires up crates.io publishing, which is absent here: every crate sets `publish = false`.	upstream-sync-2026-11-22.md
 4f6d97b9de	C	philosophy	Frame and hang telemetry measured against per-window refresh rates; needs the absent `hang_telemetry` crate and emits telemetry.	upstream-sync-2026-10-10.md
 4f70271800	C	absent-api	Adds v2 session resume and replay (901 lines in `acp/v2.rs`); absent ACP v2.	upstream-sync-2026-10-16.md
 4f862ffbc6	C	upstream-infra	Deletes upstream workflows, prompt files, and docs/CI scripts. Community and docs automation is out of scope.	upstream-sync-2026-10-24-c.md
@@ -507,6 +509,7 @@ sha	class	reason_code	note	source
 8a41a5cc04	C	absent-api	Adds GitHub Trusted Publishing endpoints to `tooling/crates_io_client`. Depends on the absent client crate; upstream-only infrastructure.	upstream-sync-2026-11-04.md
 8a4bd132	C	upstream-infra	Release-bundle symbol stripping and Sentry/debug-file packaging are upstream release infrastructure.	upstream-sync-2026-09-02.md
 8a5cf7e23a	C	diverged	Swaps the Wallace shadow blur for Levien's approximation. A dry-run cherry-pick conflicts in all three shader files; the local shadow shader has neither `load_shadow` nor the inset-shadow fields the patch edits.	upstream-sync-2026-11-12.md
+8ad65dee1c	C	absent-api	`crates/google_ai` is absent locally, and no local provider shares the tool-call id generator the patch edits.	upstream-sync-2026-11-22.md
 8b1497db	C	untriaged	Unused spring animation API.	upstream-sync-2026-08-18.md
 8b31ad99b8	C	absent-api	Adjusts the triage-queue board automation. Upstream triage and board workflow infra has no ZZZ counterpart.	upstream-sync-2026-11-11.md
 8bbcd83968	C	diverged	Unisolatable file-content/search rewrite: it conflicts across 10 files with ZZZ's worktree-owned decoding, custom encoding policy, and `LineHint` search API.	upstream-sync-2026-10-04.md
@@ -864,6 +867,7 @@ f36aec82	C	absent-api	`ask_user` tool/default is absent from ZZZ's ACP surface.	
 f37989fbdf	C	unisolatable	Broad cross-platform headless/windowed GPUI rewrite whose new switching API is called only by its example and platform tests in this commit.	upstream-sync-2026-10-05.md
 f41ac64812	C	diverged	Lazy thread markdown depends on the previous lazy-diff layout and rewrites GPUI list virtualization; the local list and markdown modules have diverged.	upstream-sync-2026-10-24.md
 f495dd0f77	C	absent-api	Adds a broad connected-display API across every GPUI platform backend with no ZZZ caller.	upstream-sync-2026-10-10.md
+f4fe0be1f8	C	absent-api	Adds GPUI `NativeView`; it needs `crates/gpui_apple`, which local does not have, and no local caller would use the new element.	upstream-sync-2026-11-22.md
 f50ebf29	C	untriaged	Tool-name fallbacks depend on unabsorbed first-class ACP names.	upstream-sync-2026-09-18.md
 f52fd9ac	C	untriaged	Broad macOS outbound-drag framework cannot be safely isolated.	upstream-sync-2026-08-07.md
 f54e09c151	C	philosophy	Publishes native slash commands as ACP v2 values; native agent plus the absent v2 transport.	upstream-sync-2026-10-10.md

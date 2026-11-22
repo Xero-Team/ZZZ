@@ -918,7 +918,10 @@ console_error_panic_hook = "0.1.7"
 web-time = "1.1.0"
 # Vendored from https://github.com/gfx-rs/wgpu v29 @ e99f5305ded96ff7006f0714d043a7f735bd45c2
 wgpu = { path = "vendor/wgpu/wgpu" }
-windows-core = "0.100"
+# `windows` 0.62 is still the newest umbrella crate, so windows-core must stay
+# on the same generation: `#[implement]` expands to `::windows_core::imp` paths
+# that resolve to whatever windows-core the calling crate depends on directly.
+windows-core = "0.62"
 yaml-rust2 = "0.13"
 zeroize = "1.9"
 zstd = "0.14"
