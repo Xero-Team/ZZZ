@@ -552,36 +552,15 @@ impl ImageStore {
                 return;
             }
 
-            let snapshot_entry = old_file
-                .entry_id
-                .and_then(|entry_id| snapshot.entry_for_id(entry_id))
-                .or_else(|| snapshot.entry_for_path(old_file.path.as_ref()));
-
-            let mut new_file = if let Some(entry) = snapshot_entry {
-                let mut file = worktree::File::from_entry(entry.clone(), worktree.clone(), cx);
-                if entry.mtime.is_none() {
-                    file.disk_state = old_file.disk_state;
-                }
-                file
-            } else {
-                worktree::File {
-                    disk_state: DiskState::Deleted,
-                    is_local: old_file.is_local,
-                    entry_id: old_file.entry_id,
-                    path: old_file.path.clone(),
-                    worktree: worktree.clone(),
-                    is_private: old_file.is_private,
-                    resource_id: old_file.resource_id,
-                    vfs_path: old_file.vfs_path.clone(),
-                }
-            };
-
-            if new_file.entry_id == old_file.entry_id
-                && new_file.path != old_file.path
-                && old_file.resource_id.is_some()
-            {
-                new_file.resource_id = old_file.resource_id;
-            }
+            // Unlike the buffer store, this store also observes remote worktrees, where the
+            // file is not local; a deleted entry must keep the locality it was opened with.
+            let new_file = worktree::File::refreshed_from_snapshot(
+                old_file,
+                snapshot,
+                worktree.clone(),
+                old_file.is_local,
+                cx,
+            );
 
             if new_file != **old_file {
                 image.file_updated(Arc::new(new_file), cx);

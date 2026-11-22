@@ -4710,6 +4710,55 @@ impl File {
         Self::from_entry_with_snapshot(entry, worktree, vfs_snapshot.as_ref())
     }
 
+    /// Rebuilds a file handle from `snapshot`, keeping what a snapshot alone cannot
+    /// answer about `old_file`: the disk state when the entry has no `mtime` yet,
+    /// and the resource id when the entry survived a path change.
+    ///
+    /// `is_local` is a parameter instead of a guess because it depends on which
+    /// worktrees the calling store observes. A store that only subscribes to local
+    /// worktrees can pass `true`; one that also observes remote worktrees must pass
+    /// `old_file.is_local` so a remote file does not start claiming to be local.
+    pub fn refreshed_from_snapshot(
+        old_file: &File,
+        snapshot: &Snapshot,
+        worktree: Entity<Worktree>,
+        is_local: bool,
+        cx: &App,
+    ) -> File {
+        let snapshot_entry = old_file
+            .entry_id
+            .and_then(|entry_id| snapshot.entry_for_id(entry_id))
+            .or_else(|| snapshot.entry_for_path(old_file.path.as_ref()));
+
+        let mut new_file = if let Some(entry) = snapshot_entry {
+            let mut file = Self::from_entry(entry.clone(), worktree.clone(), cx);
+            if entry.mtime.is_none() {
+                file.disk_state = old_file.disk_state;
+            }
+            file
+        } else {
+            Self {
+                disk_state: DiskState::Deleted,
+                is_local,
+                entry_id: old_file.entry_id,
+                path: old_file.path.clone(),
+                worktree,
+                is_private: old_file.is_private,
+                resource_id: old_file.resource_id,
+                vfs_path: old_file.vfs_path.clone(),
+            }
+        };
+
+        if new_file.entry_id == old_file.entry_id
+            && new_file.path != old_file.path
+            && old_file.resource_id.is_some()
+        {
+            new_file.resource_id = old_file.resource_id;
+        }
+
+        new_file
+    }
+
     pub fn vfs_identity_for_path(
         path: &RelPath,
         worktree: &Entity<Worktree>,

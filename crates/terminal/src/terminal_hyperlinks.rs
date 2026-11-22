@@ -15,7 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 use url::Url;
-use util::paths::{PathStyle, UrlExt};
+use util::paths::{PathStyle, UrlExt, first_unbalanced_open_paren};
 
 const URL_REGEX: &str = r#"(ipfs:|ipns:|magnet:|mailto:|gemini://|gopher://|https://|http://|news:|file://|git://|ssh:|ftp://|zzz://)[^\u{0000}-\u{001F}\u{007F}-\u{009F}<>"\s{-}\^⟨⟩`']+"#;
 
@@ -219,33 +219,6 @@ fn sanitize_url_punctuation<T: EventListener>(
     } else {
         (sanitized_url, url_match)
     }
-}
-
-/// Returns the byte offset just past the first unbalanced `(` in `s`, or `None`
-/// if all parentheses are balanced. Used to strip prefixes like `Update(` from
-/// path matches while preserving balanced parens in filenames like `file(copy).txt`.
-fn first_unbalanced_open_paren(s: &str) -> Option<usize> {
-    let mut balance: i32 = 0;
-    let mut first_unmatched = None;
-    for (i, c) in s.char_indices() {
-        match c {
-            '(' => {
-                if balance == 0 {
-                    first_unmatched = Some(i + c.len_utf8());
-                }
-                balance += 1;
-            }
-            ')' => {
-                balance -= 1;
-                if balance <= 0 {
-                    balance = 0;
-                    first_unmatched = None;
-                }
-            }
-            _ => {}
-        }
-    }
-    first_unmatched.filter(|_| balance > 0)
 }
 
 fn path_match<T>(
