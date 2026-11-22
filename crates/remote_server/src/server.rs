@@ -226,11 +226,80 @@ struct ServerListeners {
 impl ServerListeners {
     pub fn new(stdin_path: PathBuf, stdout_path: PathBuf, stderr_path: PathBuf) -> Result<Self> {
         Ok(Self {
-            stdin: UnixListener::bind(stdin_path).context("failed to bind stdin socket")?,
-            stdout: UnixListener::bind(stdout_path).context("failed to bind stdout socket")?,
-            stderr: UnixListener::bind(stderr_path).context("failed to bind stderr socket")?,
+            stdin: bind_private_socket(stdin_path).context("failed to bind stdin socket")?,
+            stdout: bind_private_socket(stdout_path).context("failed to bind stdout socket")?,
+            stderr: bind_private_socket(stderr_path).context("failed to bind stderr socket")?,
         })
     }
+}
+
+/// Binds a socket with the default mode `umask` gives it, then narrows it to the
+/// owner: the three sockets carry the project's file and terminal surface, so a
+/// second account on the same host must not be able to connect to them.
+fn bind_private_socket(path: PathBuf) -> std::io::Result<UnixListener> {
+    let listener = UnixListener::bind(&path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    Ok(listener)
+}
+
+/// Refuses a connection whose peer is not the user running the server.
+///
+/// The socket mode already keeps other accounts out on a host with a private
+/// `$HOME`, but ZZZ does not control that, so the uid is checked as well.
+#[cfg(unix)]
+fn ensure_peer_is_owner(streams: [&UnixStream; 3]) -> Result<()> {
+    use std::os::fd::AsRawFd as _;
+
+    // SAFETY: `geteuid` takes no arguments, dereferences nothing, and cannot fail.
+    let owner_uid = unsafe { libc::geteuid() };
+    for stream in streams {
+        let uid = peer_uid(stream.as_raw_fd()).context("reading the peer's uid")?;
+        if uid != owner_uid {
+            anyhow::bail!(
+                "the connecting user (uid {uid}) is not the server's owner (uid {owner_uid})"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn peer_uid(fd: std::os::fd::RawFd) -> std::io::Result<u32> {
+    let mut credentials = std::mem::MaybeUninit::<libc::ucred>::uninit();
+    let mut length = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
+    // SAFETY: `fd` is a live unix socket owned by the caller, and the option writes
+    // at most `length` bytes into the `ucred` allocated above.
+    let result = unsafe {
+        libc::getsockopt(
+            fd,
+            libc::SOL_SOCKET,
+            libc::SO_PEERCRED,
+            credentials.as_mut_ptr().cast(),
+            &raw mut length,
+        )
+    };
+    if result != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    // SAFETY: `getsockopt` reported success, so it initialized the `ucred`.
+    Ok(unsafe { credentials.assume_init() }.uid)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+fn peer_uid(fd: std::os::fd::RawFd) -> std::io::Result<u32> {
+    let mut uid = 0;
+    let mut gid = 0;
+    // SAFETY: `fd` is a live unix socket owned by the caller, and both out-parameters
+    // are local bindings.
+    let result = unsafe { libc::getpeereid(fd, &raw mut uid, &raw mut gid) };
+    if result != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(uid)
 }
 
 fn start_server(
@@ -292,6 +361,14 @@ fn start_server(
             let Ok((mut stdin_stream, mut stdout_stream, mut stderr_stream)) = result else {
                 break;
             };
+
+            #[cfg(unix)]
+            if let Err(error) =
+                ensure_peer_is_owner([&stdin_stream, &stdout_stream, &stderr_stream])
+            {
+                log::warn!("refusing remote server connection: {error:#}");
+                continue;
+            }
 
             let _log_task = cx.background_spawn({
                 let log_rx = log_rx.clone();
@@ -570,6 +647,12 @@ pub enum ServerPathError {
         source: std::io::Error,
         path: PathBuf,
     },
+    #[error("Failed to restrict server_dir `{path}` to the owner")]
+    RestrictServerDir {
+        #[source]
+        source: std::io::Error,
+        path: PathBuf,
+    },
     #[error("Failed to create logs_dir `{path}`")]
     CreateLogsDir {
         #[source]
@@ -596,6 +679,19 @@ impl ServerPaths {
                 path: server_dir.clone(),
             }
         })?;
+        // The sockets inside this directory grant the project's file and terminal
+        // surface, so the directory is narrowed to the owner as well: with the usual
+        // `umask 022` it would otherwise be world-traversable.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            std::fs::set_permissions(&server_dir, std::fs::Permissions::from_mode(0o700)).map_err(
+                |source| ServerPathError::RestrictServerDir {
+                    source,
+                    path: server_dir.clone(),
+                },
+            )?;
+        }
         let log_dir = logs_dir();
         std::fs::create_dir_all(&log_dir).map_err(|source| ServerPathError::CreateLogsDir {
             source,
@@ -1275,6 +1371,27 @@ mod tests {
         use super::*;
         use gpui::TestAppContext;
         use proto::EnvelopedMessage as _;
+
+        #[test]
+        fn server_sockets_are_owner_only() {
+            use std::os::unix::fs::PermissionsExt as _;
+
+            let temp_dir = tempfile::tempdir().expect("create socket directory");
+            let paths =
+                ["stdin.sock", "stdout.sock", "stderr.sock"].map(|name| temp_dir.path().join(name));
+            let [stdin_path, stdout_path, stderr_path] = paths.clone();
+            let _listeners =
+                ServerListeners::new(stdin_path, stdout_path, stderr_path).expect("bind sockets");
+
+            for path in paths {
+                let mode = std::fs::metadata(&path)
+                    .expect("socket metadata")
+                    .permissions()
+                    .mode()
+                    & 0o777;
+                assert_eq!(mode, 0o600, "{} must be owner-only", path.display());
+            }
+        }
 
         #[gpui::test]
         async fn rpc_responds_when_stderr_is_blocked(cx: &mut TestAppContext) {
