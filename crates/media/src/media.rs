@@ -116,22 +116,6 @@ pub mod core_media {
     impl_CFTypeDescription!(CMFormatDescription);
 
     impl CMFormatDescription {
-        pub fn h264_parameter_set_count(&self) -> usize {
-            let mut count = 0;
-            let result = unsafe {
-                CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
-                    self.as_concrete_TypeRef(),
-                    0,
-                    ptr::null_mut(),
-                    ptr::null_mut(),
-                    &raw mut count,
-                    ptr::null_mut(),
-                )
-            };
-            assert_eq!(result, 0);
-            count
-        }
-
         pub fn h264_parameter_set_at_index(&self, index: usize) -> Result<&[u8]> {
             let mut bytes = ptr::null();
             let mut len = 0;

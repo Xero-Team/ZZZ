@@ -14988,7 +14988,7 @@ fn lsp_workspace_diagnostics_refresh(
     Some(WorkspaceRefreshTask {
         refresh_tx,
         progress_tx,
-        task: workspace_query_language_server,
+        _task: workspace_query_language_server,
     })
 }
 
@@ -15507,8 +15507,9 @@ impl LanguageServerLogType {
 pub struct WorkspaceRefreshTask {
     refresh_tx: mpsc::Sender<Option<oneshot::Sender<bool>>>,
     progress_tx: mpsc::Sender<()>,
-    #[allow(dead_code)]
-    task: Task<()>,
+    /// Dropping this cancels the refresh, which is the only thing this field is
+    /// for, so it is named with the `_` prefix that says so.
+    _task: Task<()>,
 }
 
 pub enum LanguageServerState {

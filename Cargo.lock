@@ -9689,7 +9689,6 @@ dependencies = [
  "bindgen 0.73.2",
  "core-foundation 0.10.1",
  "core-video",
- "ctor",
  "foreign-types 0.5.0",
  "metal",
  "objc",

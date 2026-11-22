@@ -625,7 +625,6 @@ itertools = "0.15.0"
 jiff = { version = "1.0.2", features = ["serde"] }
 json_dotpath = "1.1"
 jsonschema = "0.62.0"
-jsonwebtoken = "12"
 jupyter-protocol = "2.0.3"
 jupyter-websocket-client = "3.0.1"
 libc = "0.2"

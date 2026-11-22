@@ -255,8 +255,6 @@ pub struct Project {
     remote_client: Option<Entity<RemoteClient>>,
     git_store: Entity<GitStore>,
     collaborators: HashMap<proto::PeerId, Collaborator>,
-    #[allow(dead_code)]
-    client_subscriptions: Vec<client::Subscription>,
     worktree_store: Entity<WorktreeStore>,
     buffer_store: Entity<BufferStore>,
     context_server_store: Entity<ContextServerStore>,
@@ -1426,7 +1424,6 @@ impl Project {
                 context_server_store,
                 join_project_response_message_id: 0,
                 git_store,
-                client_subscriptions: Vec::new(),
                 _subscriptions: vec![cx.on_release(Self::release)],
                 active_entry: None,
                 snippets,
@@ -1644,7 +1641,6 @@ impl Project {
                 join_project_response_message_id: 0,
                 git_store,
                 agent_server_store,
-                client_subscriptions: Vec::new(),
                 _subscriptions: vec![
                     cx.on_release(Self::release),
                     cx.on_app_quit(|this, cx| {
@@ -1757,11 +1753,6 @@ impl Project {
             })
             .detach()
         }
-    }
-
-    #[cfg(feature = "test-support")]
-    pub fn client_subscriptions(&self) -> &[client::Subscription] {
-        &self.client_subscriptions
     }
 
     #[cfg(feature = "test-support")]
