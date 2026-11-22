@@ -281,59 +281,47 @@ impl LspStore {
         buffer: &Entity<Buffer>,
         cx: &mut Context<Self>,
     ) -> Task<anyhow::Result<Option<HashMap<LanguageServerId, HashSet<DocumentColor>>>>> {
-        if let Some((client, project_id)) = self.upstream_client() {
+        if self.upstream_client().is_some() {
             let request = GetDocumentColor {};
-            if !self.is_capable_for_proto_request(buffer, &request, cx) {
+            let Some(request_task) = self.upstream_request_task(buffer, request, None, cx) else {
                 return Task::ready(Ok(None));
-            }
+            };
 
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-            let request_task = client.request_lsp(
-                project_id,
-                None,
-                request_timeout,
-                cx.background_executor().clone(),
-                request.to_proto(project_id, buffer.read(cx)),
-            );
-            let buffer = buffer.clone();
             cx.spawn(async move |lsp_store, cx| {
                 let Some(lsp_store) = lsp_store.upgrade() else {
                     return Ok(None);
                 };
-                let colors: HashMap<LanguageServerId, HashSet<DocumentColor>> = join_all(
-                    request_task
-                        .await
-                        .log_err()
-                        .flatten()
-                        .map_or_default(|response| response.payload)
-                        .into_iter()
-                        .map(|color_response| {
-                            let response = request.response_from_proto(
-                                color_response.response,
-                                lsp_store.clone(),
-                                buffer.clone(),
-                                cx.clone(),
-                            );
-                            async move {
-                                let colors: Vec<DocumentColor> =
-                                    response.await.log_err().unwrap_or_default();
-                                (
-                                    LanguageServerId::from_proto(color_response.server_id),
-                                    colors,
-                                )
-                            }
-                        }),
-                )
-                .await
-                .into_iter()
-                .fold(HashMap::default(), |mut acc, (server_id, colors)| {
-                    acc.entry(server_id)
-                        .or_insert_with(HashSet::default)
-                        .extend(colors);
-                    acc
-                });
+                let Some((buffer, responses)) = request_task.await.log_err().flatten() else {
+                    return Ok(Some(HashMap::default()));
+                };
+                let colors: HashMap<LanguageServerId, HashSet<DocumentColor>> =
+                    join_all(responses.into_iter().map(|color_response| {
+                        let response = GetDocumentColor {}.response_from_proto(
+                            color_response.response,
+                            lsp_store.clone(),
+                            buffer.clone(),
+                            cx.clone(),
+                        );
+                        async move {
+                            let colors: Vec<DocumentColor> =
+                                response.await.log_err().unwrap_or_default();
+                            (
+                                LanguageServerId::from_proto(color_response.server_id),
+                                colors,
+                            )
+                        }
+                    }))
+                    .await
+                    .into_iter()
+                    .fold(
+                        HashMap::default(),
+                        |mut acc, (server_id, colors)| {
+                            acc.entry(server_id)
+                                .or_insert_with(HashSet::default)
+                                .extend(colors);
+                            acc
+                        },
+                    );
                 Ok(Some(colors))
             })
         } else {

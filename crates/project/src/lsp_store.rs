@@ -4617,6 +4617,22 @@ pub struct LspStore {
     next_hint_id: Arc<AtomicUsize>,
 }
 
+/// An upstream LSP request in flight: the proto responses from each language
+/// server on the host, paired with the buffer the request was issued for, which
+/// mapping those responses back into `LspCommand::Response` needs.
+type UpstreamLspTask<R> = Task<
+    anyhow::Result<
+        Option<(
+            Entity<Buffer>,
+            Vec<
+                proto::ProtoLspResponse<
+                    <<R as LspCommand>::ProtoRequest as proto::LspRequestMessage>::Response,
+                >,
+            >,
+        )>,
+    >,
+>;
+
 #[derive(Debug)]
 pub struct BufferLspData {
     buffer_version: Global,
@@ -5013,7 +5029,10 @@ impl LspStore {
             return Task::ready(Ok(R::Response::default()));
         }
 
-        let message = request.to_proto(upstream_project_id, buffer.read(cx));
+        let message = match request.to_proto(upstream_project_id, buffer.read(cx)) {
+            Ok(message) => message,
+            Err(error) => return Task::ready(Err(error)),
+        };
         cx.spawn(async move |this, cx| {
             let response = client.request(message).await?;
             let this = this.upgrade().context("project dropped")?;
@@ -5021,6 +5040,51 @@ impl LspStore {
                 .response_from_proto(response, this, buffer, cx.clone())
                 .await
         })
+    }
+
+    /// Forwards `request` to the upstream host, resolving to the proto response
+    /// of every language server that handled it there.
+    ///
+    /// Returns `None` when this store has no upstream host, when the host does
+    /// not know `buffer`, or when no server on the host advertises the request's
+    /// capabilities; callers turn that into their own empty response.
+    ///
+    /// Mapping each proto response into `R::Response` stays with the caller,
+    /// because the requests disagree on how to combine the per-server results.
+    fn upstream_request_task<R: LspCommand>(
+        &self,
+        buffer: &Entity<Buffer>,
+        request: R,
+        server: Option<LanguageServerId>,
+        cx: &mut Context<Self>,
+    ) -> Option<UpstreamLspTask<R>>
+    where
+        R::ProtoRequest: proto::LspRequestMessage,
+    {
+        let (upstream_client, upstream_project_id) = self.upstream_client()?;
+        if !self.is_capable_for_proto_request(buffer, &request, cx) {
+            return None;
+        }
+
+        let message = match request.to_proto(upstream_project_id, buffer.read(cx)) {
+            Ok(message) => message,
+            Err(error) => return Some(Task::ready(Err(error))),
+        };
+        let request_timeout = ProjectSettings::get_global(cx)
+            .global_lsp_settings
+            .get_request_timeout();
+        let request_task = upstream_client.request_lsp(
+            upstream_project_id,
+            server.map(|server| server.to_proto()),
+            request_timeout,
+            cx.background_executor().clone(),
+            message,
+        );
+        let buffer = buffer.clone();
+        Some(cx.background_spawn(async move {
+            let responses = request_task.await?;
+            Ok(responses.map(|responses| (buffer, responses.payload)))
+        }))
     }
 
     pub(super) fn new_remote(
@@ -6785,35 +6849,23 @@ impl LspStore {
         workspace_only: bool,
         cx: &mut Context<Self>,
     ) -> Task<Result<Option<Vec<LocationLink>>>> {
-        if let Some((upstream_client, project_id)) = self.upstream_client() {
+        if self.upstream_client().is_some() {
             let request = GetDefinitions {
                 position,
                 workspace_only,
             };
-            if !self.is_capable_for_proto_request(buffer, &request, cx) {
+            let Some(request_task) = self.upstream_request_task(buffer, request, None, cx) else {
                 return Task::ready(Ok(None));
-            }
+            };
 
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-
-            let request_task = upstream_client.request_lsp(
-                project_id,
-                None,
-                request_timeout,
-                cx.background_executor().clone(),
-                request.to_proto(project_id, buffer.read(cx)),
-            );
-            let buffer = buffer.clone();
             cx.spawn(async move |weak_lsp_store, cx| {
                 let Some(lsp_store) = weak_lsp_store.upgrade() else {
                     return Ok(None);
                 };
-                let Some(responses) = request_task.await? else {
+                let Some((buffer, responses)) = request_task.await? else {
                     return Ok(None);
                 };
-                let actions = join_all(responses.payload.into_iter().map(|response| {
+                let actions = join_all(responses.into_iter().map(|response| {
                     GetDefinitions {
                         position,
                         workspace_only,
@@ -6866,30 +6918,19 @@ impl LspStore {
         position: PointUtf16,
         cx: &mut Context<Self>,
     ) -> Task<Result<Option<Vec<LocationLink>>>> {
-        if let Some((upstream_client, project_id)) = self.upstream_client() {
+        if self.upstream_client().is_some() {
             let request = GetDeclarations { position };
-            if !self.is_capable_for_proto_request(buffer, &request, cx) {
+            let Some(request_task) = self.upstream_request_task(buffer, request, None, cx) else {
                 return Task::ready(Ok(None));
-            }
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-            let request_task = upstream_client.request_lsp(
-                project_id,
-                None,
-                request_timeout,
-                cx.background_executor().clone(),
-                request.to_proto(project_id, buffer.read(cx)),
-            );
-            let buffer = buffer.clone();
+            };
             cx.spawn(async move |weak_lsp_store, cx| {
                 let Some(lsp_store) = weak_lsp_store.upgrade() else {
                     return Ok(None);
                 };
-                let Some(responses) = request_task.await? else {
+                let Some((buffer, responses)) = request_task.await? else {
                     return Ok(None);
                 };
-                let actions = join_all(responses.payload.into_iter().map(|response| {
+                let actions = join_all(responses.into_iter().map(|response| {
                     GetDeclarations { position }.response_from_proto(
                         response.response,
                         lsp_store.clone(),
@@ -6954,33 +6995,22 @@ impl LspStore {
         workspace_only: bool,
         cx: &mut Context<Self>,
     ) -> Task<Result<Option<Vec<LocationLink>>>> {
-        if let Some((upstream_client, project_id)) = self.upstream_client() {
+        if self.upstream_client().is_some() {
             let request = GetTypeDefinitions {
                 position,
                 workspace_only,
             };
-            if !self.is_capable_for_proto_request(buffer, &request, cx) {
+            let Some(request_task) = self.upstream_request_task(buffer, request, None, cx) else {
                 return Task::ready(Ok(None));
-            }
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-            let request_task = upstream_client.request_lsp(
-                project_id,
-                None,
-                request_timeout,
-                cx.background_executor().clone(),
-                request.to_proto(project_id, buffer.read(cx)),
-            );
-            let buffer = buffer.clone();
+            };
             cx.spawn(async move |weak_lsp_store, cx| {
                 let Some(lsp_store) = weak_lsp_store.upgrade() else {
                     return Ok(None);
                 };
-                let Some(responses) = request_task.await? else {
+                let Some((buffer, responses)) = request_task.await? else {
                     return Ok(None);
                 };
-                let actions = join_all(responses.payload.into_iter().map(|response| {
+                let actions = join_all(responses.into_iter().map(|response| {
                     GetTypeDefinitions {
                         position,
                         workspace_only,
@@ -7033,31 +7063,20 @@ impl LspStore {
         position: PointUtf16,
         cx: &mut Context<Self>,
     ) -> Task<Result<Option<Vec<LocationLink>>>> {
-        if let Some((upstream_client, project_id)) = self.upstream_client() {
+        if self.upstream_client().is_some() {
             let request = GetImplementations { position };
-            if !self.is_capable_for_proto_request(buffer, &request, cx) {
+            let Some(request_task) = self.upstream_request_task(buffer, request, None, cx) else {
                 return Task::ready(Ok(None));
-            }
+            };
 
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-            let request_task = upstream_client.request_lsp(
-                project_id,
-                None,
-                request_timeout,
-                cx.background_executor().clone(),
-                request.to_proto(project_id, buffer.read(cx)),
-            );
-            let buffer = buffer.clone();
             cx.spawn(async move |weak_lsp_store, cx| {
                 let Some(lsp_store) = weak_lsp_store.upgrade() else {
                     return Ok(None);
                 };
-                let Some(responses) = request_task.await? else {
+                let Some((buffer, responses)) = request_task.await? else {
                     return Ok(None);
                 };
-                let actions = join_all(responses.payload.into_iter().map(|response| {
+                let actions = join_all(responses.into_iter().map(|response| {
                     GetImplementations { position }.response_from_proto(
                         response.response,
                         lsp_store.clone(),
@@ -7103,32 +7122,21 @@ impl LspStore {
         position: PointUtf16,
         cx: &mut Context<Self>,
     ) -> Task<Result<Option<Vec<Location>>>> {
-        if let Some((upstream_client, project_id)) = self.upstream_client() {
+        if self.upstream_client().is_some() {
             let request = GetReferences { position };
-            if !self.is_capable_for_proto_request(buffer, &request, cx) {
+            let Some(request_task) = self.upstream_request_task(buffer, request, None, cx) else {
                 return Task::ready(Ok(None));
-            }
+            };
 
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-            let request_task = upstream_client.request_lsp(
-                project_id,
-                None,
-                request_timeout,
-                cx.background_executor().clone(),
-                request.to_proto(project_id, buffer.read(cx)),
-            );
-            let buffer = buffer.clone();
             cx.spawn(async move |weak_lsp_store, cx| {
                 let Some(lsp_store) = weak_lsp_store.upgrade() else {
                     return Ok(None);
                 };
-                let Some(responses) = request_task.await? else {
+                let Some((buffer, responses)) = request_task.await? else {
                     return Ok(None);
                 };
 
-                let locations = join_all(responses.payload.into_iter().map(|lsp_response| {
+                let locations = join_all(responses.into_iter().map(|lsp_response| {
                     GetReferences { position }.response_from_proto(
                         lsp_response.response,
                         lsp_store.clone(),
@@ -7172,33 +7180,22 @@ impl LspStore {
         kinds: Option<Vec<CodeActionKind>>,
         cx: &mut Context<Self>,
     ) -> Task<Result<Option<Vec<CodeAction>>>> {
-        if let Some((upstream_client, project_id)) = self.upstream_client() {
+        if self.upstream_client().is_some() {
             let request = GetCodeActions {
                 range: range.clone(),
                 kinds: kinds.clone(),
             };
-            if !self.is_capable_for_proto_request(buffer, &request, cx) {
+            let Some(request_task) = self.upstream_request_task(buffer, request, None, cx) else {
                 return Task::ready(Ok(None));
-            }
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-            let request_task = upstream_client.request_lsp(
-                project_id,
-                None,
-                request_timeout,
-                cx.background_executor().clone(),
-                request.to_proto(project_id, buffer.read(cx)),
-            );
-            let buffer = buffer.clone();
+            };
             cx.spawn(async move |weak_lsp_store, cx| {
                 let Some(lsp_store) = weak_lsp_store.upgrade() else {
                     return Ok(None);
                 };
-                let Some(responses) = request_task.await? else {
+                let Some((buffer, responses)) = request_task.await? else {
                     return Ok(None);
                 };
-                let actions = join_all(responses.payload.into_iter().map(|response| {
+                let actions = join_all(responses.into_iter().map(|response| {
                     GetCodeActions {
                         range: range.clone(),
                         kinds: kinds.clone(),
@@ -8016,6 +8013,10 @@ impl LspStore {
                 identifier,
                 registration_id: None,
             };
+            let message = match request.to_proto(upstream_project_id, buffer.read(cx)) {
+                Ok(message) => message,
+                Err(error) => return Task::ready(Err(error)),
+            };
             let request_timeout = ProjectSettings::get_global(cx)
                 .global_lsp_settings
                 .get_request_timeout();
@@ -8024,7 +8025,7 @@ impl LspStore {
                 None,
                 request_timeout,
                 cx.background_executor().clone(),
-                request.to_proto(upstream_project_id, buffer.read(cx)),
+                message,
             );
             cx.background_spawn(async move {
                 // Proto requests cause the diagnostics to be pulled from language server(s) on the local side
@@ -8351,30 +8352,21 @@ impl LspStore {
         let request = InlayHints {
             range: range.clone(),
         };
-        if let Some((upstream_client, project_id)) = self.upstream_client() {
-            if !self.is_capable_for_proto_request(buffer, &request, cx) {
+        if self.upstream_client().is_some() {
+            let Some(request_task) =
+                self.upstream_request_task(buffer, request.clone(), for_server, cx)
+            else {
                 return Task::ready(Ok(HashMap::default()));
-            }
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-            let request_task = upstream_client.request_lsp(
-                project_id,
-                for_server.map(|id| id.to_proto()),
-                request_timeout,
-                cx.background_executor().clone(),
-                request.to_proto(project_id, buffer.read(cx)),
-            );
-            let buffer = buffer.clone();
+            };
             cx.spawn(async move |weak_lsp_store, cx| {
                 let Some(lsp_store) = weak_lsp_store.upgrade() else {
                     return Ok(HashMap::default());
                 };
-                let Some(responses) = request_task.await? else {
+                let Some((buffer, responses)) = request_task.await? else {
                     return Ok(HashMap::default());
                 };
 
-                let inlay_hints = join_all(responses.payload.into_iter().map(|response| {
+                let inlay_hints = join_all(responses.into_iter().map(|response| {
                     let lsp_store = lsp_store.clone();
                     let buffer = buffer.clone();
                     let cx = cx.clone();
@@ -8591,41 +8583,25 @@ impl LspStore {
     ) -> Task<Option<Vec<SignatureHelp>>> {
         let position = position.to_point_utf16(buffer.read(cx));
 
-        if let Some((client, upstream_project_id)) = self.upstream_client() {
+        if self.upstream_client().is_some() {
             let request = GetSignatureHelp { position };
-            if !self.is_capable_for_proto_request(buffer, &request, cx) {
+            let Some(request_task) = self.upstream_request_task(buffer, request, None, cx) else {
                 return Task::ready(None);
-            }
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-            let request_task = client.request_lsp(
-                upstream_project_id,
-                None,
-                request_timeout,
-                cx.background_executor().clone(),
-                request.to_proto(upstream_project_id, buffer.read(cx)),
-            );
-            let buffer = buffer.clone();
+            };
             cx.spawn(async move |weak_lsp_store, cx| {
                 let lsp_store = weak_lsp_store.upgrade()?;
-                let signatures = join_all(
-                    request_task
-                        .await
-                        .log_err()
-                        .flatten()
-                        .map_or_default(|response| response.payload)
-                        .into_iter()
-                        .map(|response| {
-                            let response = GetSignatureHelp { position }.response_from_proto(
-                                response.response,
-                                lsp_store.clone(),
-                                buffer.clone(),
-                                cx.clone(),
-                            );
-                            async move { response.await.log_err().flatten() }
-                        }),
-                )
+                let Some((buffer, responses)) = request_task.await.log_err().flatten() else {
+                    return Some(Vec::new());
+                };
+                let signatures = join_all(responses.into_iter().map(|response| {
+                    let response = GetSignatureHelp { position }.response_from_proto(
+                        response.response,
+                        lsp_store.clone(),
+                        buffer.clone(),
+                        cx.clone(),
+                    );
+                    async move { response.await.log_err().flatten() }
+                }))
                 .await
                 .into_iter()
                 .flatten()
@@ -8657,47 +8633,31 @@ impl LspStore {
         position: PointUtf16,
         cx: &mut Context<Self>,
     ) -> Task<Option<Vec<Hover>>> {
-        if let Some((client, upstream_project_id)) = self.upstream_client() {
+        if self.upstream_client().is_some() {
             let request = GetHover { position };
-            if !self.is_capable_for_proto_request(buffer, &request, cx) {
+            let Some(request_task) = self.upstream_request_task(buffer, request, None, cx) else {
                 return Task::ready(None);
-            }
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-            let request_task = client.request_lsp(
-                upstream_project_id,
-                None,
-                request_timeout,
-                cx.background_executor().clone(),
-                request.to_proto(upstream_project_id, buffer.read(cx)),
-            );
-            let buffer = buffer.clone();
+            };
             cx.spawn(async move |weak_lsp_store, cx| {
                 let lsp_store = weak_lsp_store.upgrade()?;
-                let hovers = join_all(
-                    request_task
-                        .await
-                        .log_err()
-                        .flatten()
-                        .map_or_default(|response| response.payload)
-                        .into_iter()
-                        .map(|response| {
-                            let response = GetHover { position }.response_from_proto(
-                                response.response,
-                                lsp_store.clone(),
-                                buffer.clone(),
-                                cx.clone(),
-                            );
-                            async move {
-                                response
-                                    .await
-                                    .log_err()
-                                    .flatten()
-                                    .and_then(remove_empty_hover_blocks)
-                            }
-                        }),
-                )
+                let Some((buffer, responses)) = request_task.await.log_err().flatten() else {
+                    return Some(Vec::new());
+                };
+                let hovers = join_all(responses.into_iter().map(|response| {
+                    let response = GetHover { position }.response_from_proto(
+                        response.response,
+                        lsp_store.clone(),
+                        buffer.clone(),
+                        cx.clone(),
+                    );
+                    async move {
+                        response
+                            .await
+                            .log_err()
+                            .flatten()
+                            .and_then(remove_empty_hover_blocks)
+                    }
+                }))
                 .await
                 .into_iter()
                 .flatten()

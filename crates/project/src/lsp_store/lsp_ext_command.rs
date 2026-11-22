@@ -100,14 +100,14 @@ impl LspCommand for ExpandMacro {
         }))
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::LspExtExpandMacro {
-        proto::LspExtExpandMacro {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::LspExtExpandMacro> {
+        Ok(proto::LspExtExpandMacro {
             project_id,
             buffer_id: buffer.remote_id().into(),
             position: Some(language::proto::serialize_anchor(
                 &buffer.anchor_before(self.position),
             )),
-        }
+        })
     }
 
     async fn from_proto(
@@ -233,14 +233,14 @@ impl LspCommand for OpenDocs {
         }))
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::LspExtOpenDocs {
-        proto::LspExtOpenDocs {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::LspExtOpenDocs> {
+        Ok(proto::LspExtOpenDocs {
             project_id,
             buffer_id: buffer.remote_id().into(),
             position: Some(language::proto::serialize_anchor(
                 &buffer.anchor_before(self.position),
             )),
-        }
+        })
     }
 
     async fn from_proto(
@@ -360,11 +360,15 @@ impl LspCommand for SwitchSourceHeader {
         Ok(message.map_or_default(|message| SwitchSourceHeaderResult(message.0)))
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::LspExtSwitchSourceHeader {
-        proto::LspExtSwitchSourceHeader {
+    fn to_proto(
+        &self,
+        project_id: u64,
+        buffer: &Buffer,
+    ) -> Result<proto::LspExtSwitchSourceHeader> {
+        Ok(proto::LspExtSwitchSourceHeader {
             project_id,
             buffer_id: buffer.remote_id().into(),
-        }
+        })
     }
 
     async fn from_proto(
@@ -446,14 +450,14 @@ impl LspCommand for GoToParentModule {
         .await
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::LspExtGoToParentModule {
-        proto::LspExtGoToParentModule {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::LspExtGoToParentModule> {
+        Ok(proto::LspExtGoToParentModule {
             project_id,
             buffer_id: buffer.remote_id().to_proto(),
             position: Some(language::proto::serialize_anchor(
                 &buffer.anchor_before(self.position),
             )),
-        }
+        })
     }
 
     async fn from_proto(
@@ -715,12 +719,12 @@ impl LspCommand for GetLspRunnables {
         Ok(LspRunnables { runnables })
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::LspExtRunnables {
-        proto::LspExtRunnables {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::LspExtRunnables> {
+        Ok(proto::LspExtRunnables {
             project_id,
             buffer_id: buffer.remote_id().to_proto(),
             position: self.position.as_ref().map(serialize_anchor),
-        }
+        })
     }
 
     async fn from_proto(

@@ -12,13 +12,11 @@ use gpui::{AppContext as _, Context, Entity, SharedString, Task};
 use itertools::Itertools;
 use language::Buffer;
 use lsp::LanguageServerId;
-use settings::Settings as _;
 use text::Anchor;
 use util::ResultExt as _;
 
 use crate::lsp_command::{GetFoldingRanges, LspCommand as _};
 use crate::lsp_store::LspStore;
-use crate::project_settings::ProjectSettings;
 
 #[derive(Clone, Debug)]
 pub struct LspFoldingRange {
@@ -170,32 +168,21 @@ impl LspStore {
         buffer: &Entity<Buffer>,
         cx: &mut Context<Self>,
     ) -> Task<anyhow::Result<Option<HashMap<LanguageServerId, Vec<LspFoldingRange>>>>> {
-        if let Some((client, project_id)) = self.upstream_client() {
+        if self.upstream_client().is_some() {
             let request = GetFoldingRanges;
-            if !self.is_capable_for_proto_request(buffer, &request, cx) {
+            let Some(request_task) = self.upstream_request_task(buffer, request, None, cx) else {
                 return Task::ready(Ok(None));
-            }
+            };
 
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-            let request_task = client.request_lsp(
-                project_id,
-                None,
-                request_timeout,
-                cx.background_executor().clone(),
-                request.to_proto(project_id, buffer.read(cx)),
-            );
-            let buffer = buffer.clone();
             cx.spawn(async move |weak_lsp_store, cx| {
                 let Some(lsp_store) = weak_lsp_store.upgrade() else {
                     return Ok(None);
                 };
-                let Some(responses) = request_task.await? else {
+                let Some((buffer, responses)) = request_task.await? else {
                     return Ok(None);
                 };
 
-                let folding_ranges = join_all(responses.payload.into_iter().map(|response| {
+                let folding_ranges = join_all(responses.into_iter().map(|response| {
                     let lsp_store = lsp_store.clone();
                     let buffer = buffer.clone();
                     let cx = cx.clone();
