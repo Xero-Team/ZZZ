@@ -12,11 +12,11 @@ use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::path::Path;
 use std::ptr;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 
 use async_trait::async_trait;
 use libsqlite3_sys::*;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 
 use crate::driver::{
     DatabaseDriver, DriverConnection, DriverResult, ExecutedQuery, ExplainNode, ExplainPlan,
@@ -39,31 +39,43 @@ pub const SQLITE_DRIVER_ID: &str = "sqlite";
 /// calls go through the mutex; only `interrupt` uses the stored pointer.
 struct SqliteHandle {
     connection: Mutex<*mut sqlite3>,
+    /// Serializes `sqlite3_interrupt` against the close: a reader takes it before
+    /// turning `interrupt_ptr` into a pointer, a writer clears the pointer and frees
+    /// the connection. It is a second lock rather than the `connection` mutex because
+    /// `interrupt` exists to run while a query holds that mutex.
+    interrupt_lock: RwLock<()>,
     /// The same pointer as an exposed-provenance address, used only by `sqlite3_interrupt`.
-    interrupt_ptr: usize,
+    interrupt_ptr: AtomicUsize,
     transaction_counter: AtomicU64,
     closed: AtomicBool,
 }
 
-// SAFETY: every access to `connection` is serialized by the mutex. The
-// `interrupt_ptr` is an `expose_provenance` address of that same connection, and is
-// only turned back into a pointer for `sqlite3_interrupt`, which SQLite documents
-// as safe to invoke from another thread on a running connection.
+// SAFETY: every access to `connection` is serialized by the mutex, and every access
+// to `interrupt_ptr` happens under `interrupt_lock`. The `interrupt_ptr` is an
+// `expose_provenance` address of that same connection, and is only turned back into a
+// pointer for `sqlite3_interrupt`, which SQLite documents as safe to invoke from
+// another thread on a running connection.
 unsafe impl Send for SqliteHandle {}
 unsafe impl Sync for SqliteHandle {}
 
 impl Drop for SqliteHandle {
     fn drop(&mut self) {
-        if self.closed.swap(true, Ordering::SeqCst) {
+        self.closed.store(true, Ordering::SeqCst);
+        // `get_mut` needs no lock: `Drop` has exclusive access.
+        let raw = std::mem::replace(self.connection.get_mut(), ptr::null_mut());
+        self.interrupt_ptr.store(0, Ordering::SeqCst);
+        if raw.is_null() {
             return;
         }
-        let connection = *self.connection.lock();
-        if !connection.is_null() {
-            // SAFETY: this handle has exactly one owner, `Drop` runs once, and the mutex makes
-            // this take exclusive, so no other use of the handle can overlap the close.
-            unsafe {
-                sqlite3_close(connection);
-            }
+        // SAFETY: this handle has exactly one owner, `Drop` runs once, the stored
+        // pointer was just cleared so no later call can reuse it, and nothing else
+        // can reach this connection through the handle.
+        let code = unsafe { sqlite3_close(raw) };
+        if code != SQLITE_OK {
+            log::warn!(
+                "sqlite3_close returned {code} while dropping the handle; \
+                 the connection stays allocated until the process exits"
+            );
         }
     }
 }
@@ -74,21 +86,20 @@ struct ConnectionInterrupt {
 
 impl Interrupt for ConnectionInterrupt {
     fn interrupt(&self) {
-        if self.handle.closed.load(Ordering::Acquire) {
+        // The read lock keeps the close from freeing the connection between reading
+        // the pointer and calling `sqlite3_interrupt` on it.
+        let _interrupt = self.handle.interrupt_lock.read();
+        let interrupt_ptr = self.handle.interrupt_ptr.load(Ordering::Acquire);
+        if interrupt_ptr == 0 || self.handle.closed.load(Ordering::Acquire) {
             return;
         }
-        let interrupt_ptr = self.handle.interrupt_ptr;
-        if interrupt_ptr != 0 {
-            // SAFETY: the `Arc<SqliteHandle>` keeps the handle's allocation alive for as long as
-            // this value exists, so the address cannot outlive it. `interrupt()` returns early
-            // once `closed` is set, and every caller that closes the connection cancels its
-            // tracked queries first, so a closed handle is never interrupted; SQLite permits
-            // calling `sqlite3_interrupt` from any thread while the connection is open.
-            unsafe {
-                sqlite3_interrupt(std::ptr::with_exposed_provenance_mut::<sqlite3>(
-                    interrupt_ptr,
-                ));
-            }
+        // SAFETY: the `Arc<SqliteHandle>` keeps the handle's allocation alive for as long as
+        // this value exists, and the read lock above excludes the writer that clears the
+        // pointer and frees the connection, so the address is still the live connection.
+        unsafe {
+            sqlite3_interrupt(std::ptr::with_exposed_provenance_mut::<sqlite3>(
+                interrupt_ptr,
+            ));
         }
     }
 }
@@ -171,7 +182,8 @@ fn open_connection(config: &ConnectionConfig) -> DriverResult<Arc<SqliteHandle>>
     }
     Ok(Arc::new(SqliteHandle {
         connection: Mutex::new(raw),
-        interrupt_ptr: raw.expose_provenance(),
+        interrupt_lock: RwLock::new(()),
+        interrupt_ptr: AtomicUsize::new(raw.expose_provenance()),
         transaction_counter: AtomicU64::new(0),
         closed: AtomicBool::new(false),
     }))
@@ -205,10 +217,14 @@ pub struct SqliteConnection {
 
 impl SqliteConnection {
     fn guard(&self) -> DriverResult<parking_lot::MutexGuard<'_, *mut sqlite3>> {
-        if self.handle.closed.load(Ordering::SeqCst) {
+        // The flag is checked under the lock that guards the pointer: `close` frees the
+        // connection while holding this same lock and nulls the slot, so a check outside
+        // it can pass and then hand a freed pointer to the caller.
+        let guard = self.handle.connection.lock();
+        if self.handle.closed.load(Ordering::SeqCst) || Self::raw(&guard).is_null() {
             return Err(DatabaseError::connection("connection is closed"));
         }
-        Ok(self.handle.connection.lock())
+        Ok(guard)
     }
 
     fn raw(guard: &parking_lot::MutexGuard<'_, *mut sqlite3>) -> *mut sqlite3 {
@@ -532,17 +548,27 @@ impl DriverConnection for SqliteConnection {
     }
 
     async fn close(&self) -> DriverResult<()> {
-        // Dropping the last Arc closes the connection via SqliteHandle::Drop.
-        // Mark closed first so subsequent guard() calls fail with a clear error.
+        // Dropping the last Arc closes the connection via SqliteHandle::Drop; this
+        // path frees it early so an explicit disconnect releases the file handle.
+        let _interrupt = self.handle.interrupt_lock.write();
+        let mut connection = self.handle.connection.lock();
         if self.handle.closed.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
-        let raw = *self.handle.connection.lock();
+        // Clear both stored copies of the pointer before freeing the connection, so a
+        // caller that already passed the guard cannot reach it afterwards.
+        self.handle.interrupt_ptr.store(0, Ordering::SeqCst);
+        let raw = std::mem::replace(&mut *connection, ptr::null_mut());
         if !raw.is_null() {
-            // SAFETY: `closed` was just swapped to true, so no later use is possible, and the
-            // lock taken above makes this close exclusive against in-flight queries.
-            unsafe {
-                sqlite3_close(raw);
+            // SAFETY: the `connection` lock makes this exclusive against in-flight
+            // queries, and `closed` plus `interrupt_ptr` were just cleared so no
+            // later call can use the pointer.
+            let code = unsafe { sqlite3_close(raw) };
+            if code != SQLITE_OK {
+                log::warn!(
+                    "sqlite3_close returned {code}; the connection stays allocated until \
+                     the process exits"
+                );
             }
         }
         Ok(())
@@ -1157,5 +1183,42 @@ mod tests {
             // The table still exists: the payload was bound as data, not SQL.
             assert!(connection.test().await.is_ok());
         });
+    }
+
+    #[test]
+    fn a_query_racing_close_never_reaches_a_freed_handle() {
+        let config = in_memory_config();
+        let handle = open_connection(&config).expect("open");
+        let connection = Arc::new(SqliteConnection { handle });
+        connection
+            .exec_simple("CREATE TABLE t (value INTEGER)")
+            .expect("create");
+
+        let stop = Arc::new(AtomicBool::new(false));
+
+        // Four threads stay inside `with_raw` while this one closes the connection.
+        // The closed flag used to be read before the connection lock was taken, so a
+        // query could pass the check and then prepare a statement on the freed handle;
+        // running this test under `cargo +nightly miri test -p database_core` is what
+        // turns the overlap into a diagnosable error.
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                let connection = Arc::clone(&connection);
+                let stop = Arc::clone(&stop);
+                scope.spawn(move || {
+                    while !stop.load(Ordering::Relaxed) {
+                        let _ = connection.exec_simple("SELECT 1");
+                    }
+                });
+            }
+
+            futures::executor::block_on(connection.close()).expect("close");
+            stop.store(true, Ordering::Relaxed);
+        });
+
+        let error = connection
+            .exec_simple("SELECT 1")
+            .expect_err("a closed connection must refuse queries");
+        assert_eq!(error.kind, DatabaseErrorKind::Connection);
     }
 }
