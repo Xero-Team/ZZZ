@@ -4892,7 +4892,7 @@ dependencies = [
  "serde_json",
  "util",
  "windows 0.62.2",
- "windows-core 0.100.0",
+ "windows-core 0.62.2",
  "workspace",
  "wprcontrol",
 ]
@@ -4957,8 +4957,8 @@ name = "explorer_command_injector"
 version = "0.1.0"
 dependencies = [
  "windows 0.62.2",
- "windows-core 0.100.0",
- "windows-registry 0.100.0",
+ "windows-core 0.62.2",
+ "windows-registry",
 ]
 
 [[package]]
@@ -6629,9 +6629,9 @@ dependencies = [
  "util",
  "uuid 1.29.3",
  "windows 0.62.2",
- "windows-core 0.100.0",
- "windows-numerics 0.100.0",
- "windows-registry 0.100.0",
+ "windows-core 0.62.2",
+ "windows-numerics",
+ "windows-registry",
 ]
 
 [[package]]
@@ -7541,7 +7541,7 @@ dependencies = [
  "tokio",
  "tower-service",
  "tracing",
- "windows-registry 0.6.1",
+ "windows-registry",
 ]
 
 [[package]]
@@ -8131,7 +8131,7 @@ checksum = "4d40460c0ce33d6ce4b0630ad68ff63d6661961c48b6dba35e5a4d81cfb48222"
 dependencies = [
  "socket2",
  "widestring",
- "windows-registry 0.6.1",
+ "windows-registry",
  "windows-result 0.4.1",
  "windows-sys 0.61.2",
 ]
@@ -14026,7 +14026,7 @@ dependencies = [
  "ui",
  "ui_input",
  "util",
- "windows-registry 0.100.0",
+ "windows-registry",
  "workspace",
  "worktree",
  "zzz_actions",
@@ -20716,7 +20716,7 @@ dependencies = [
  "windows-collections",
  "windows-core 0.62.2",
  "windows-future",
- "windows-numerics 0.3.1",
+ "windows-numerics",
 ]
 
 [[package]]
@@ -20894,15 +20894,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "windows-numerics"
-version = "0.100.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9c5500bf6a9098f27922953422ae7324cdd330c868e945801593455a6832701"
-dependencies = [
- "windows-core 0.100.0",
-]
-
-[[package]]
 name = "windows-registry"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -20911,17 +20902,6 @@ dependencies = [
  "windows-link 0.2.1",
  "windows-result 0.4.1",
  "windows-strings 0.5.1",
-]
-
-[[package]]
-name = "windows-registry"
-version = "0.100.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a14b75dbbc0f2bb1ebbf6dcb6dc0035ae17f10ec280045d10fa27ad8874903b2"
-dependencies = [
- "windows-link 0.100.0",
- "windows-result 0.100.0",
- "windows-strings 0.100.0",
 ]
 
 [[package]]
