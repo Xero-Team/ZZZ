@@ -90,6 +90,7 @@ unsafe extern "C" {
     fn CVPixelBufferUnlockBaseAddress(pixel_buffer: Id, flags: u64) -> i32;
     fn CVPixelBufferGetBaseAddress(pixel_buffer: Id) -> *const u8;
     fn CVPixelBufferGetBytesPerRow(pixel_buffer: Id) -> usize;
+    fn CVPixelBufferGetPixelFormatType(pixel_buffer: Id) -> u32;
     fn CVPixelBufferGetWidth(pixel_buffer: Id) -> usize;
     fn CVPixelBufferGetHeight(pixel_buffer: Id) -> usize;
 }
@@ -267,6 +268,12 @@ impl AvFoundationDecoder {
         Ok(())
     }
 
+    /// # Safety
+    ///
+    /// `image_buffer` must be a live `CVPixelBufferRef` whose pixel format is
+    /// `kCVPixelFormatType_32BGRA`, which is what `create_reader` pins. The format
+    /// and the stride are checked below, so a buffer that violates the invariant is
+    /// rejected instead of being copied out of bounds.
     unsafe fn copy_pixel_buffer(
         &self,
         image_buffer: Id,
@@ -278,15 +285,34 @@ impl AvFoundationDecoder {
             "locking pixel buffer failed: {lock_status}"
         );
 
+        let pixel_format = unsafe { CVPixelBufferGetPixelFormatType(image_buffer) };
+        if pixel_format != K_CV_PIXEL_FORMAT_TYPE_32_BGRA {
+            unsafe { CVPixelBufferUnlockBaseAddress(image_buffer, 0) };
+            return Err(anyhow!(
+                "pixel buffer is not 32BGRA (format {pixel_format:#x})"
+            ));
+        }
+
         let width = unsafe { CVPixelBufferGetWidth(image_buffer) };
         let height = unsafe { CVPixelBufferGetHeight(image_buffer) };
         let stride = unsafe { CVPixelBufferGetBytesPerRow(image_buffer) };
         let base = unsafe { CVPixelBufferGetBaseAddress(image_buffer) };
 
         let row_bytes = width * 4;
+        // A stride shorter than one row would make each row read past the plane, and
+        // CoreVideo only guarantees `stride >= width * 4` for the format checked above.
+        if stride < row_bytes {
+            unsafe { CVPixelBufferUnlockBaseAddress(image_buffer, 0) };
+            return Err(anyhow!(
+                "pixel buffer stride {stride} is shorter than a 32BGRA row ({row_bytes})"
+            ));
+        }
         let mut bgra = vec![0u8; row_bytes * height];
         if !base.is_null() {
             for row in 0..height {
+                // SAFETY: the buffer is 32BGRA and the stride is at least one row, so
+                // bytes `row * stride .. row * stride + row_bytes` are inside the plane,
+                // and `bgra` has room for every row.
                 unsafe {
                     ptr::copy_nonoverlapping(
                         base.add(row * stride),
