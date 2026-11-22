@@ -1,7 +1,7 @@
 use editor::scroll::Autoscroll;
 use editor::{Editor, SelectionEffects};
 use gpui::{App, AppContext as _, Context, Window, actions};
-use jiff::{Zoned, civil};
+use jiff::{ZonedDateTime, civil};
 pub use settings::HourFormat;
 use settings::{RegisterSetting, Settings};
 use std::{
@@ -60,7 +60,7 @@ pub fn new_journal_entry(workspace: &Workspace, window: &mut Window, cx: &mut Ap
         log::error!("Can't determine journal directory");
         return;
     };
-    let now = Zoned::now();
+    let now = ZonedDateTime::now();
     let month_dir = journal_dir
         .join(format!("{:04}", now.year()))
         .join(format!("{:02}", now.month()));

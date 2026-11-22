@@ -1,10 +1,10 @@
 use std::ops::{Deref, DerefMut};
 
 #[cfg(feature = "web-time")]
-use web_time::Instant;
+pub use web_time::Instant;
 
 #[cfg(not(feature = "web-time"))]
-use std::time::Instant;
+pub use std::time::Instant;
 
 use crate::event::Event;
 
@@ -19,6 +19,7 @@ pub struct DebouncedEvent {
 }
 
 impl DebouncedEvent {
+    #[must_use]
     pub fn new(event: Event, time: Instant) -> Self {
         Self { event, time }
     }

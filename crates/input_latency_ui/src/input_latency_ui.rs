@@ -1,6 +1,6 @@
 use gpui::{App, Global, InputLatencySnapshot, Window, WindowId, actions};
 use hdrhistogram::Histogram;
-use jiff::Zoned;
+use jiff::ZonedDateTime;
 
 actions!(
     dev,
@@ -21,7 +21,7 @@ pub fn format_input_latency_report(window: &Window, cx: &mut App) -> String {
     let report = format_report(&snapshot, window_id, state);
 
     state.previous_snapshot = Some(snapshot);
-    state.previous_timestamp = Some(Zoned::now());
+    state.previous_timestamp = Some(ZonedDateTime::now());
     state.previous_window_id = Some(window_id);
 
     report
@@ -30,7 +30,7 @@ pub fn format_input_latency_report(window: &Window, cx: &mut App) -> String {
 #[derive(Default)]
 struct ReporterState {
     previous_snapshot: Option<InputLatencySnapshot>,
-    previous_timestamp: Option<Zoned>,
+    previous_timestamp: Option<ZonedDateTime>,
     previous_window_id: Option<WindowId>,
 }
 
@@ -59,7 +59,7 @@ fn format_report(
         ("max  ", 1.0),
     ];
 
-    let now = Zoned::now();
+    let now = ZonedDateTime::now();
 
     let mut report = String::new();
     report.push_str("Input Latency Histogram\n");
@@ -241,7 +241,7 @@ mod tests {
         let window_id = WindowId::from(1);
         let previous = ReporterState {
             previous_snapshot: Some(previous_snapshot),
-            previous_timestamp: Some(Zoned::now()),
+            previous_timestamp: Some(ZonedDateTime::now()),
             previous_window_id: Some(window_id),
         };
 
@@ -255,7 +255,7 @@ mod tests {
     fn omits_delta_for_snapshot_from_another_window() {
         let previous = ReporterState {
             previous_snapshot: Some(snapshot(&[1_000_000])),
-            previous_timestamp: Some(Zoned::now()),
+            previous_timestamp: Some(ZonedDateTime::now()),
             previous_window_id: Some(WindowId::from(1)),
         };
 
@@ -269,7 +269,7 @@ mod tests {
         let window_id = WindowId::from(1);
         let previous = ReporterState {
             previous_snapshot: Some(snapshot(&[1_000_000, 3_000_000])),
-            previous_timestamp: Some(Zoned::now()),
+            previous_timestamp: Some(ZonedDateTime::now()),
             previous_window_id: Some(window_id),
         };
 

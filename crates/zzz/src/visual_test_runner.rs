@@ -148,7 +148,7 @@ use constants::*;
 fn utc(year: i16, month: i8, day: i8, hour: i8, minute: i8, second: i8) -> jiff::Timestamp {
     jiff::civil::date(year, month, day)
         .at(hour, minute, second, 0)
-        .to_zoned(jiff::tz::TimeZone::UTC)
+        .to_zoned_datetime(jiff::tz::TimeZone::UTC)
         .expect("UTC has no ambiguous civil datetimes")
         .timestamp()
 }

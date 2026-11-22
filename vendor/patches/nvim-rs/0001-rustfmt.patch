@@ -1,18 +1,18 @@
 diff --git a/Cargo.toml b/Cargo.toml
-index 97679f5ecb0de6fd3ecc51e531ceb753afb29360..49892290bae42ec7cd3cd480d2972aee56d368f6 100644
+index f1dc595..564fc05 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
 @@ -1,7 +1,7 @@
  [package]
  name = "nvim-rs"
- version = "0.9.2"
+ version = "0.10.0"
 -license = "LGPL-3.0"
 +license = "LGPL-3.0-only"
  authors = ["KillTheMule <KillTheMule@users.noreply.github.com"]
  description = "A library for writing neovim rpc clients"
  repository = "https://github.com/KillTheMule/nvim-rs"
 diff --git a/benches/rpc_tokio.rs b/benches/rpc_tokio.rs
-index 7eaa42701d7847a64473472160d877de84f76806..8d201dbf544c00417c89fbd5e7aef4981e89c83f 100644
+index 7eaa427..8d201db 100644
 --- a/benches/rpc_tokio.rs
 +++ b/benches/rpc_tokio.rs
 @@ -1,9 +1,9 @@
@@ -152,7 +152,7 @@ index 7eaa42701d7847a64473472160d877de84f76806..8d201dbf544c00417c89fbd5e7aef498
  
  criterion_group!(name = requests; config = Criterion::default().without_plots(); targets = simple_requests, request_file);
 diff --git a/build.rs b/build.rs
-index 3e0b7d09e9d4a7424c36682b073927b9003e89bf..7185138acde131a2104f3ea803afee1efc790356 100644
+index 7cc5d13..7918b4d 100644
 --- a/build.rs
 +++ b/build.rs
 @@ -1,13 +1,11 @@
@@ -164,24 +164,29 @@ index 3e0b7d09e9d4a7424c36682b073927b9003e89bf..7185138acde131a2104f3ea803afee1e
  fn main() {
 -  println!(
 -    "cargo:rustc-env=EXAMPLES_PATH={}",
--    PathBuf::from(env::var("OUT_DIR").unwrap())
--    .join("../../../examples")
+-    PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
+-    .join("target/debug/examples")
 -    .to_str()
 -    .unwrap()
 -  );
 +    println!(
 +        "cargo:rustc-env=EXAMPLES_PATH={}",
-+        PathBuf::from(env::var("OUT_DIR").unwrap())
-+            .join("../../../examples")
++        PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
++            .join("target/debug/examples")
 +            .to_str()
 +            .unwrap()
 +    );
  }
 diff --git a/examples/basic.rs b/examples/basic.rs
-index 25f2a5991d5f875071aa28f4899a17d7ba12e290..e7714540f4eea48a931ac01212d6ef8e1401a076 100644
+index 4f1da51..5122e97 100644
 --- a/examples/basic.rs
 +++ b/examples/basic.rs
-@@ -8,75 +8,72 @@ use rmpv::Value;
+@@ -2,79 +2,75 @@
+ //! functionality.
+ use std::{env, error::Error, fs};
+ 
+-
+ use rmpv::Value;
  
  use tokio::fs::File as TokioFile;
  
@@ -193,7 +198,6 @@ index 25f2a5991d5f875071aa28f4899a17d7ba12e290..e7714540f4eea48a931ac01212d6ef8e
  #[derive(Clone)]
  struct NeovimHandler {}
  
- #[async_trait]
  impl Handler for NeovimHandler {
 -  type Writer = Compat<TokioFile>;
 +    type Writer = Compat<TokioFile>;
@@ -305,30 +309,36 @@ index 25f2a5991d5f875071aa28f4899a17d7ba12e290..e7714540f4eea48a931ac01212d6ef8e
 -    Ok(Ok(())) => {}
 -  }
  }
-diff --git a/examples/bench_async-std.rs b/examples/bench_async-std.rs
-index a72ce444da7df19584d46ba956a29acddb659fe9..be33fb8a9cc7a9f8e2cf71f2f6e401da0d3e2cef 100644
---- a/examples/bench_async-std.rs
-+++ b/examples/bench_async-std.rs
-@@ -6,84 +6,83 @@ use rmpv::Value;
+diff --git a/examples/bench_smol.rs b/examples/bench_smol.rs
+index 5113b4d..fa3871f 100644
+--- a/examples/bench_smol.rs
++++ b/examples/bench_smol.rs
+@@ -3,11 +3,9 @@ use std::fs::File;
  
- use async_std::{self, fs::File as ASFile};
+ use rmpv::Value;
  
--use nvim_rs::{create::async_std as create, Handler, Neovim};
-+use nvim_rs::{Handler, Neovim, create::async_std as create};
+-use smol::{
+-  Unblock,
+-};
++use smol::Unblock;
  
- #[derive(Clone)]
+-use nvim_rs::{create::smol as create, Handler, Neovim};
++use nvim_rs::{Handler, Neovim, create::smol as create};
+ 
+ use smol_macros::main;
+ 
+@@ -15,40 +13,40 @@ use smol_macros::main;
  struct NeovimHandler {}
  
- #[async_trait]
  impl Handler for NeovimHandler {
--  type Writer = ASFile;
-+    type Writer = ASFile;
+-  type Writer = Unblock<File>;
++    type Writer = Unblock<File>;
  
 -  async fn handle_request(
 -    &self,
 -    name: String,
 -    _args: Vec<Value>,
--    neovim: Neovim<ASFile>,
+-    neovim: Neovim<Unblock<File>>,
 -  ) -> Result<Value, Value> {
 -    match name.as_ref() {
 -      "file" => {
@@ -339,7 +349,7 @@ index a72ce444da7df19584d46ba956a29acddb659fe9..be33fb8a9cc7a9f8e2cf71f2f6e401da
 +        &self,
 +        name: String,
 +        _args: Vec<Value>,
-+        neovim: Neovim<ASFile>,
++        neovim: Neovim<Unblock<File>>,
 +    ) -> Result<Value, Value> {
 +        match name.as_ref() {
 +            "file" => {
@@ -382,79 +392,13 @@ index a72ce444da7df19584d46ba956a29acddb659fe9..be33fb8a9cc7a9f8e2cf71f2f6e401da
 -  }
  }
  
- #[async_std::main]
+-main!{
++main! {
  async fn main() {
--  let handler: NeovimHandler = NeovimHandler {};
-+    let handler: NeovimHandler = NeovimHandler {};
+   let handler: NeovimHandler = NeovimHandler {};
  
--  let (nvim, io_handler) = create::new_parent(handler).await.unwrap();
-+    let (nvim, io_handler) = create::new_parent(handler).await.unwrap();
- 
--  // Any error should probably be logged, as stderr is not visible to users.
--  match io_handler.await {
--    Err(err) => {
--      if !err.is_reader_error() {
--        // One last try, since there wasn't an error with writing to the
--        // stream
--        nvim
--          .err_writeln(&format!("Error: '{}'", err))
--          .await
--          .unwrap_or_else(|e| {
--            // We could inspect this error to see what was happening, and
--            // maybe retry, but at this point it's probably best
--            // to assume the worst and print a friendly and
--            // supportive message to our users
--            eprintln!("Well, dang... '{}'", e);
--          });
--      }
-+    // Any error should probably be logged, as stderr is not visible to users.
-+    match io_handler.await {
-+        Err(err) => {
-+            if !err.is_reader_error() {
-+                // One last try, since there wasn't an error with writing to the
-+                // stream
-+                nvim.err_writeln(&format!("Error: '{}'", err))
-+                    .await
-+                    .unwrap_or_else(|e| {
-+                        // We could inspect this error to see what was happening, and
-+                        // maybe retry, but at this point it's probably best
-+                        // to assume the worst and print a friendly and
-+                        // supportive message to our users
-+                        eprintln!("Well, dang... '{}'", e);
-+                    });
-+            }
- 
--      if !err.is_channel_closed() {
--        // Closed channel usually means neovim quit itself, or this plugin was
--        // told to quit by closing the channel, so it's not always an error
--        // condition.
--        eprintln!("Error: '{}'", err);
-+            if !err.is_channel_closed() {
-+                // Closed channel usually means neovim quit itself, or this plugin was
-+                // told to quit by closing the channel, so it's not always an error
-+                // condition.
-+                eprintln!("Error: '{}'", err);
- 
--        let mut source = err.source();
-+                let mut source = err.source();
- 
--        while let Some(e) = source {
--          eprintln!("Caused by: '{}'", e);
--          source = e.source();
-+                while let Some(e) = source {
-+                    eprintln!("Caused by: '{}'", e);
-+                    source = e.source();
-+                }
-+            }
-         }
--      }
-+        Ok(()) => {}
-     }
--    Ok(()) => {}
--  }
- }
 diff --git a/examples/bench_sync.rs b/examples/bench_sync.rs
-index 97cff1542f0db9d5e92af66a24892c3a987af1d9..505c49923b857ddf040d338d7240f93ddc8b0f99 100644
+index 97cff15..505c499 100644
 --- a/examples/bench_sync.rs
 +++ b/examples/bench_sync.rs
 @@ -1,42 +1,37 @@
@@ -531,10 +475,10 @@ index 97cff1542f0db9d5e92af66a24892c3a987af1d9..505c49923b857ddf040d338d7240f93d
 -  }
  }
 diff --git a/examples/bench_tokio.rs b/examples/bench_tokio.rs
-index 86897ad6114f74aca312df499dd88ec5e4d92600..dd25ff09bde01403572d59afef164ee8a853a6f3 100644
+index 0a946cc..a9201ac 100644
 --- a/examples/bench_tokio.rs
 +++ b/examples/bench_tokio.rs
-@@ -6,87 +6,84 @@ use rmpv::Value;
+@@ -4,86 +4,83 @@ use rmpv::Value;
  
  use tokio::fs::File as TokioFile;
  
@@ -546,7 +490,6 @@ index 86897ad6114f74aca312df499dd88ec5e4d92600..dd25ff09bde01403572d59afef164ee8
  #[derive(Clone)]
  struct NeovimHandler {}
  
- #[async_trait]
  impl Handler for NeovimHandler {
 -  type Writer = Compat<TokioFile>;
 +    type Writer = Compat<TokioFile>;
@@ -683,10 +626,10 @@ index 86897ad6114f74aca312df499dd88ec5e4d92600..dd25ff09bde01403572d59afef164ee8
 -  }
  }
 diff --git a/examples/handler_drop.rs b/examples/handler_drop.rs
-index 8b5dbadf9d4b9591fa20c535bbafae2b40ec2ce5..616f518cb1c124c6d22e0b793470f6d17e96096c 100644
+index 0e3ea98..36d7f21 100644
 --- a/examples/handler_drop.rs
 +++ b/examples/handler_drop.rs
-@@ -1,18 +1,16 @@
+@@ -1,16 +1,14 @@
  //! How to handle cleanup logic with access to the handler's data. See
  //! src/examples/handler_drop.rs for documentation.
 -use nvim_rs::{
@@ -695,8 +638,6 @@ index 8b5dbadf9d4b9591fa20c535bbafae2b40ec2ce5..616f518cb1c124c6d22e0b793470f6d1
 +use nvim_rs::{Handler, Neovim, Value, compat::tokio::Compat, create::tokio as create};
  
  use tokio::process::{ChildStdin, Command};
- 
- use async_trait::async_trait;
  
  use std::{
 -  fs::File,
@@ -710,7 +651,7 @@ index 8b5dbadf9d4b9591fa20c535bbafae2b40ec2ce5..616f518cb1c124c6d22e0b793470f6d1
  };
  
  const OUTPUT_FILE: &str = "handler_drop.txt";
-@@ -20,78 +18,72 @@ const NVIMPATH: &str = "neovim/build/bin/nvim";
+@@ -18,77 +16,71 @@ const NVIMPATH: &str = "neovim/build/bin/nvim";
  
  #[derive(Clone)]
  struct NeovimHandler {
@@ -718,7 +659,6 @@ index 8b5dbadf9d4b9591fa20c535bbafae2b40ec2ce5..616f518cb1c124c6d22e0b793470f6d1
 +    buf: Arc<Mutex<Vec<String>>>,
  }
  
- #[async_trait]
  impl Handler for NeovimHandler {
 -  type Writer = Compat<ChildStdin>;
 +    type Writer = Compat<ChildStdin>;
@@ -838,10 +778,10 @@ index 8b5dbadf9d4b9591fa20c535bbafae2b40ec2ce5..616f518cb1c124c6d22e0b793470f6d1
 +    let _ = io_handle.await;
  }
 diff --git a/examples/nested_requests.rs b/examples/nested_requests.rs
-index 6cee921cff58ffb684fb159521c532ef0e717a0c..575d0a15aea678b61406c3aa494a8fe0e8974670 100644
+index bf55caf..71024de 100644
 --- a/examples/nested_requests.rs
 +++ b/examples/nested_requests.rs
-@@ -1,175 +1,159 @@
+@@ -1,172 +1,156 @@
 -use nvim_rs::{
 -  compat::tokio::Compat,
 -  create::tokio as create,
@@ -849,8 +789,6 @@ index 6cee921cff58ffb684fb159521c532ef0e717a0c..575d0a15aea678b61406c3aa494a8fe0
 -  Handler,
 -};
 +use nvim_rs::{Handler, compat::tokio::Compat, create::tokio as create, neovim::Neovim};
- 
- use async_trait::async_trait;
  
  use rmpv::Value;
  
@@ -891,10 +829,10 @@ index 6cee921cff58ffb684fb159521c532ef0e717a0c..575d0a15aea678b61406c3aa494a8fe0
 +    froodle: Arc<Mutex<String>>,
  }
  
- #[async_trait]
  impl Handler for NeovimHandler {
 -  type Writer = Compat<ChildStdin>;
--
++    type Writer = Compat<ChildStdin>;
+ 
 -  async fn handle_request(
 -    &self,
 -    name: String,
@@ -905,7 +843,17 @@ index 6cee921cff58ffb684fb159521c532ef0e717a0c..575d0a15aea678b61406c3aa494a8fe0
 -      "dummy" => Ok(Value::from("o")),
 -      "req" => {
 -        let v = args[0].as_str().unwrap();
--
++    async fn handle_request(
++        &self,
++        name: String,
++        args: Vec<Value>,
++        neovim: Neovim<Compat<ChildStdin>>,
++    ) -> Result<Value, Value> {
++        match name.as_ref() {
++            "dummy" => Ok(Value::from("o")),
++            "req" => {
++                let v = args[0].as_str().unwrap();
+ 
 -        let neovim = neovim.clone();
 -        match v {
 -          "y" => {
@@ -951,19 +899,6 @@ index 6cee921cff58ffb684fb159521c532ef0e717a0c..575d0a15aea678b61406c3aa494a8fe0
 -            Ok(Value::from(x))
 -          }
 -          &_ => Err(Value::from("wrong argument to req")),
-+    type Writer = Compat<ChildStdin>;
-+
-+    async fn handle_request(
-+        &self,
-+        name: String,
-+        args: Vec<Value>,
-+        neovim: Neovim<Compat<ChildStdin>>,
-+    ) -> Result<Value, Value> {
-+        match name.as_ref() {
-+            "dummy" => Ok(Value::from("o")),
-+            "req" => {
-+                let v = args[0].as_str().unwrap();
-+
 +                let neovim = neovim.clone();
 +                match v {
 +                    "y" => {
@@ -1015,7 +950,7 @@ index 6cee921cff58ffb684fb159521c532ef0e717a0c..575d0a15aea678b61406c3aa494a8fe0
 -      &_ => Err(Value::from("wrong method name for request")),
      }
 -  }
--
+ 
 -  async fn handle_notify(
 -    &self,
 -    name: String,
@@ -1029,7 +964,6 @@ index 6cee921cff58ffb684fb159521c532ef0e717a0c..575d0a15aea678b61406c3aa494a8fe0
 -      _ => {}
 -    };
 -  }
-+
 +    async fn handle_notify(
 +        &self,
 +        name: String,
@@ -1058,7 +992,11 @@ index 6cee921cff58ffb684fb159521c532ef0e717a0c..575d0a15aea678b61406c3aa494a8fe0
 -  let handler = NeovimHandler {
 -    froodle: froodle.clone(),
 -  };
--
++    let froodle = Arc::new(Mutex::new(String::new()));
++    let handler = NeovimHandler {
++        froodle: froodle.clone(),
++    };
+ 
 -  let path = if Path::new(NVIM_PATH).exists() {
 -    NVIM_PATH
 -  } else {
@@ -1083,20 +1021,6 @@ index 6cee921cff58ffb684fb159521c532ef0e717a0c..575d0a15aea678b61406c3aa494a8fe0
 -  )
 -  .await
 -  .unwrap();
--
--  let nv = nvim.clone();
--  spawn(async move { nv.set_var("oogle", Value::from("doodle")).await });
--
--  // The 2nd timer closes the channel, which will be returned as an error from
--  // the io handler. We only fail the test if we got another error
--  if let Err(err) = io.await.unwrap() {
--    if !err.is_channel_closed() {
--      panic!("Error in io: '{:?}'", err);
-+    let froodle = Arc::new(Mutex::new(String::new()));
-+    let handler = NeovimHandler {
-+        froodle: froodle.clone(),
-+    };
-+
 +    let path = if Path::new(NVIM_PATH).exists() {
 +        NVIM_PATH
 +    } else {
@@ -1121,10 +1045,17 @@ index 6cee921cff58ffb684fb159521c532ef0e717a0c..575d0a15aea678b61406c3aa494a8fe0
 +    )
 +    .await
 +    .unwrap();
-+
+ 
+-  let nv = nvim.clone();
+-  spawn(async move { nv.set_var("oogle", Value::from("doodle")).await });
 +    let nv = nvim.clone();
 +    spawn(async move { nv.set_var("oogle", Value::from("doodle")).await });
-+
+ 
+-  // The 2nd timer closes the channel, which will be returned as an error from
+-  // the io handler. We only fail the test if we got another error
+-  if let Err(err) = io.await.unwrap() {
+-    if !err.is_channel_closed() {
+-      panic!("Error in io: '{:?}'", err);
 +    // The 2nd timer closes the channel, which will be returned as an error from
 +    // the io handler. We only fail the test if we got another error
 +    if let Err(err) = io.await.unwrap() {
@@ -1144,7 +1075,7 @@ index 6cee921cff58ffb684fb159521c532ef0e717a0c..575d0a15aea678b61406c3aa494a8fe0
 +    );
  }
 diff --git a/examples/quitting.rs b/examples/quitting.rs
-index 475d7a0317252e1e54264064dd7b0bd610f53b2e..e594cd9ba43d7f86ef438f8f3d6f91e9b952d03d 100644
+index 475d7a0..e594cd9 100644
 --- a/examples/quitting.rs
 +++ b/examples/quitting.rs
 @@ -9,28 +9,28 @@ const NVIMPATH: &str = "neovim/build/bin/nvim";
@@ -1200,10 +1131,10 @@ index 475d7a0317252e1e54264064dd7b0bd610f53b2e..e594cd9ba43d7f86ef438f8f3d6f91e9
 -  }
  }
 diff --git a/examples/scorched_earth.rs b/examples/scorched_earth.rs
-index ef9a78ccee054a361b982b4324bd597a8fb26a53..971ac988626ced678ad5dbc64f59688a17f07176 100644
+index 291e12b..4a0aa03 100644
 --- a/examples/scorched_earth.rs
 +++ b/examples/scorched_earth.rs
-@@ -8,35 +8,27 @@ use rmpv::Value;
+@@ -6,134 +6,125 @@ use rmpv::Value;
  use futures::lock::Mutex;
  use tokio::fs::File as TokioFile;
  
@@ -1254,9 +1185,8 @@ index ef9a78ccee054a361b982b4324bd597a8fb26a53..971ac988626ced678ad5dbc64f59688a
  }
  
  #[derive(Clone)]
-@@ -44,99 +36,98 @@ struct NeovimHandler(Arc<Mutex<Posis>>);
+ struct NeovimHandler(Arc<Mutex<Posis>>);
  
- #[async_trait]
  impl Handler for NeovimHandler {
 -  type Writer = Compat<TokioFile>;
 -
@@ -1441,18 +1371,29 @@ index ef9a78ccee054a361b982b4324bd597a8fb26a53..971ac988626ced678ad5dbc64f59688a
 -    Ok(Ok(())) => {}
 -  }
  }
-diff --git a/examples/scorched_earth_as.rs b/examples/scorched_earth_as.rs
-index 50d505c1ef3a0a17e34ed0fdb833de82ecef0348..201a59899ee2765fdcbd4e82602142361a5af590 100644
---- a/examples/scorched_earth_as.rs
-+++ b/examples/scorched_earth_as.rs
-@@ -7,35 +7,29 @@ use rmpv::Value;
+diff --git a/examples/scorched_earth_smol.rs b/examples/scorched_earth_smol.rs
+index 26c0fde..4bd8ef7 100644
+--- a/examples/scorched_earth_smol.rs
++++ b/examples/scorched_earth_smol.rs
+@@ -1,5 +1,5 @@
+ //! Scorched earth. See src/examples/scorched_earth.rs for documentation
+-use std::{error::Error, sync::Arc, fs::File};
++use std::{error::Error, fs::File, sync::Arc};
  
- use futures::lock::Mutex;
+ use rmpv::Value;
  
--use nvim_rs::{create::async_std as create, Handler, Neovim};
-+use nvim_rs::{Handler, Neovim, create::async_std as create};
+@@ -7,92 +7,78 @@ use futures::lock::Mutex;
  
- use async_std::{self, fs::File as ASFile};
+ use smol_macros::main;
+ 
+-use smol::{
+-  Unblock,
+-};
+-
+-use nvim_rs::{create::smol as create, Handler, Neovim};
++use smol::Unblock;
+ 
++use nvim_rs::{Handler, Neovim, create::smol as create};
  
  struct Posis {
 -  cursor_start: Option<(u64, u64)>,
@@ -1496,17 +1437,16 @@ index 50d505c1ef3a0a17e34ed0fdb833de82ecef0348..201a59899ee2765fdcbd4e8260214236
  }
  
  #[derive(Clone)]
-@@ -43,98 +37,92 @@ struct NeovimHandler(Arc<Mutex<Posis>>);
+ struct NeovimHandler(Arc<Mutex<Posis>>);
  
- #[async_trait]
  impl Handler for NeovimHandler {
--  type Writer = ASFile;
+-  type Writer = Unblock<File>;
 -
 -  async fn handle_notify(
 -    &self,
 -    name: String,
 -    args: Vec<Value>,
--    neovim: Neovim<ASFile>,
+-    neovim: Neovim<Unblock<File>>,
 -  ) {
 -    match name.as_ref() {
 -      "cursor-moved-i" => {
@@ -1546,9 +1486,9 @@ index 50d505c1ef3a0a17e34ed0fdb833de82ecef0348..201a59899ee2765fdcbd4e8260214236
 -        neovim.command("syntax clear ScorchedEarth").await.unwrap();
 -      }
 -      _ => {}
-+    type Writer = ASFile;
++    type Writer = Unblock<File>;
 +
-+    async fn handle_notify(&self, name: String, args: Vec<Value>, neovim: Neovim<ASFile>) {
++    async fn handle_notify(&self, name: String, args: Vec<Value>, neovim: Neovim<Unblock<File>>) {
 +        match name.as_ref() {
 +            "cursor-moved-i" => {
 +                let line = args[0].as_u64().unwrap();
@@ -1592,92 +1532,9 @@ index 50d505c1ef3a0a17e34ed0fdb833de82ecef0348..201a59899ee2765fdcbd4e8260214236
 -  }
  }
  
- #[async_std::main]
- async fn main() {
--  let p = Posis {
--    cursor_start: None,
--    cursor_end: None,
--  };
--  let handler: NeovimHandler = NeovimHandler(Arc::new(Mutex::new(p)));
--
--  let (nvim, io_handler) = create::new_parent(handler).await.unwrap();
--
--  // Any error should probably be logged, as stderr is not visible to users.
--  match io_handler.await {
--    Err(err) => {
--      if !err.is_reader_error() {
--        // One last try, since there wasn't an error with writing to the
--        // stream
--        nvim
--          .err_writeln(&format!("Error: '{}'", err))
--          .await
--          .unwrap_or_else(|e| {
--            // We could inspect this error to see what was happening, and
--            // maybe retry, but at this point it's probably best
--            // to assume the worst and print a friendly and
--            // supportive message to our users
--            eprintln!("Well, dang... '{}'", e);
--          });
--      }
--
--      if !err.is_channel_closed() {
--        // Closed channel usually means neovim quit itself, or this plugin was
--        // told to quit by closing the channel, so it's not always an error
--        // condition.
--        eprintln!("Error: '{}'", err);
--
--        let mut source = err.source();
--
--        while let Some(e) = source {
--          eprintln!("Caused by: '{}'", e);
--          source = e.source();
-+    let p = Posis {
-+        cursor_start: None,
-+        cursor_end: None,
-+    };
-+    let handler: NeovimHandler = NeovimHandler(Arc::new(Mutex::new(p)));
-+
-+    let (nvim, io_handler) = create::new_parent(handler).await.unwrap();
-+
-+    // Any error should probably be logged, as stderr is not visible to users.
-+    match io_handler.await {
-+        Err(err) => {
-+            if !err.is_reader_error() {
-+                // One last try, since there wasn't an error with writing to the
-+                // stream
-+                nvim.err_writeln(&format!("Error: '{}'", err))
-+                    .await
-+                    .unwrap_or_else(|e| {
-+                        // We could inspect this error to see what was happening, and
-+                        // maybe retry, but at this point it's probably best
-+                        // to assume the worst and print a friendly and
-+                        // supportive message to our users
-+                        eprintln!("Well, dang... '{}'", e);
-+                    });
-+            }
-+
-+            if !err.is_channel_closed() {
-+                // Closed channel usually means neovim quit itself, or this plugin was
-+                // told to quit by closing the channel, so it's not always an error
-+                // condition.
-+                eprintln!("Error: '{}'", err);
-+
-+                let mut source = err.source();
-+
-+                while let Some(e) = source {
-+                    eprintln!("Caused by: '{}'", e);
-+                    source = e.source();
-+                }
-+            }
-         }
--      }
-+        Ok(()) => {}
-     }
--    Ok(()) => {}
--  }
- }
+ main! {
 diff --git a/src/bin/linebuffercrash.rs b/src/bin/linebuffercrash.rs
-index 9c9fa56a287014c47d6d8d42289f7c3d2b645843..98ce1d0480f5e2b2cc7747ea3f5894409d98c97b 100644
+index 9c9fa56..98ce1d0 100644
 --- a/src/bin/linebuffercrash.rs
 +++ b/src/bin/linebuffercrash.rs
 @@ -1,24 +1,18 @@
@@ -1710,29 +1567,25 @@ index 9c9fa56a287014c47d6d8d42289f7c3d2b645843..98ce1d0480f5e2b2cc7747ea3f589440
      let _ = nvim.command("quit!").await;
 -
  }
-diff --git a/src/bin/linebuffercrash_as.rs b/src/bin/linebuffercrash_as.rs
-index 10c13008220ff2c082b51199fab9e89af595b4ba..655ef00bc8f91a6f72ff1bda2d09812ad4b844f8 100644
---- a/src/bin/linebuffercrash_as.rs
-+++ b/src/bin/linebuffercrash_as.rs
-@@ -1,24 +1,18 @@
+diff --git a/src/bin/linebuffercrash_smol.rs b/src/bin/linebuffercrash_smol.rs
+index 2df24c5..bb0db8f 100644
+--- a/src/bin/linebuffercrash_smol.rs
++++ b/src/bin/linebuffercrash_smol.rs
+@@ -1,12 +1,7 @@
 -
 -use nvim_rs::{
--  create::async_std as create, 
+-  create::smol as create, 
 -  rpc::handler::Dummy as DummyHandler
 -};
++use nvim_rs::{create::smol as create, rpc::handler::Dummy as DummyHandler};
+ 
+ use smol_macros::main;
+ 
 -
-+use nvim_rs::{create::async_std as create, rpc::handler::Dummy as DummyHandler};
- 
- #[async_std::main]
- async fn main() {
--  let handler = DummyHandler::new();
--  let (nvim, _io_handler) = create::new_parent(handler).await.unwrap();
--  let curbuf = nvim.get_current_buf().await.unwrap();
-+    let handler = DummyHandler::new();
-+    let (nvim, _io_handler) = create::new_parent(handler).await.unwrap();
-+    let curbuf = nvim.get_current_buf().await.unwrap();
- 
-     // If our Stdout is linebuffered, this has a high chance of crashing neovim
+ main! { async fn main() {
+   let handler = DummyHandler::new();
+   let (nvim, _io_handler) = create::new_parent(handler).await.unwrap();
+@@ -16,7 +11,7 @@ main! { async fn main() {
      // Should probably befixed in neovim itself, but for now, let's just make
      // sure we're not using linebuffering, or at least don't crash neovim with
      // this.
@@ -1741,161 +1594,22 @@ index 10c13008220ff2c082b51199fab9e89af595b4ba..655ef00bc8f91a6f72ff1bda2d09812a
          curbuf.set_name(&format!("a{i}")).await.unwrap();
      }
  
-     let _ = nvim.command("quit!").await;
--
- }
-diff --git a/src/create/async_std.rs b/src/create/async_std.rs
-index 378b5557b6c70916f76b68968fbb4d06010271ae..c7b5b9e0c7846355c52aed2ad69f159d5083d00b 100644
---- a/src/create/async_std.rs
-+++ b/src/create/async_std.rs
-@@ -6,10 +6,10 @@ use std::{future::Future, io};
- use async_std::os::unix::net::UnixStream;
- 
- use async_std::{
--  fs::File as ASFile,
--  io::stdin,
--  net::{TcpStream, ToSocketAddrs},
--  task::{spawn, JoinHandle},
-+    fs::File as ASFile,
-+    io::stdin,
-+    net::{TcpStream, ToSocketAddrs},
-+    task::{JoinHandle, spawn},
- };
- 
- #[cfg(unix)]
-@@ -18,79 +18,77 @@ use async_std::path::Path;
- use futures::io::{AsyncReadExt, WriteHalf};
- 
- use crate::{
--  create::{unbuffered_stdout, Spawner},
--  error::LoopError,
--  neovim::Neovim,
--  Handler,
-+    Handler,
-+    create::{Spawner, unbuffered_stdout},
-+    error::LoopError,
-+    neovim::Neovim,
- };
- 
- impl<H> Spawner for H
- where
--  H: Handler,
-+    H: Handler,
- {
--  type Handle = JoinHandle<()>;
-+    type Handle = JoinHandle<()>;
- 
--  fn spawn<Fut>(&self, future: Fut) -> Self::Handle
--  where
--    Fut: Future<Output = ()> + Send + 'static,
--  {
--    spawn(future)
--  }
-+    fn spawn<Fut>(&self, future: Fut) -> Self::Handle
-+    where
-+        Fut: Future<Output = ()> + Send + 'static,
-+    {
-+        spawn(future)
-+    }
- }
- 
- /// Connect to a neovim instance via tcp
- pub async fn new_tcp<A, H>(
--  addr: A,
--  handler: H,
-+    addr: A,
-+    handler: H,
- ) -> io::Result<(
--  Neovim<WriteHalf<TcpStream>>,
--  JoinHandle<Result<(), Box<LoopError>>>,
-+    Neovim<WriteHalf<TcpStream>>,
-+    JoinHandle<Result<(), Box<LoopError>>>,
- )>
- where
--  H: Handler<Writer = WriteHalf<TcpStream>>,
--  A: ToSocketAddrs,
-+    H: Handler<Writer = WriteHalf<TcpStream>>,
-+    A: ToSocketAddrs,
- {
--  let stream = TcpStream::connect(addr).await?;
--  let (reader, writer) = stream.split();
--  let (neovim, io) =
--    Neovim::<WriteHalf<TcpStream>>::new(reader, writer, handler);
--  let io_handle = spawn(io);
-+    let stream = TcpStream::connect(addr).await?;
-+    let (reader, writer) = stream.split();
-+    let (neovim, io) = Neovim::<WriteHalf<TcpStream>>::new(reader, writer, handler);
-+    let io_handle = spawn(io);
- 
--  Ok((neovim, io_handle))
-+    Ok((neovim, io_handle))
- }
- 
- #[cfg(unix)]
- /// Connect to a neovim instance via unix socket by path. This is currently
- /// only available on Unix for async-std.
- pub async fn new_path<H, P: AsRef<Path> + Clone>(
--  path: P,
--  handler: H,
-+    path: P,
-+    handler: H,
- ) -> io::Result<(
--  Neovim<WriteHalf<UnixStream>>,
--  JoinHandle<Result<(), Box<LoopError>>>,
-+    Neovim<WriteHalf<UnixStream>>,
-+    JoinHandle<Result<(), Box<LoopError>>>,
- )>
- where
--  H: Handler<Writer = WriteHalf<UnixStream>> + Send + 'static,
-+    H: Handler<Writer = WriteHalf<UnixStream>> + Send + 'static,
- {
--  let stream = UnixStream::connect(path).await?;
--  let (reader, writer) = stream.split();
--  let (neovim, io) =
--    Neovim::<WriteHalf<UnixStream>>::new(reader, writer, handler);
--  let io_handle = spawn(io);
-+    let stream = UnixStream::connect(path).await?;
-+    let (reader, writer) = stream.split();
-+    let (neovim, io) = Neovim::<WriteHalf<UnixStream>>::new(reader, writer, handler);
-+    let io_handle = spawn(io);
- 
--  Ok((neovim, io_handle))
-+    Ok((neovim, io_handle))
- }
- 
- /// Connect to the neovim instance that spawned this process over stdin/stdout
- pub async fn new_parent<H>(
--  handler: H,
-+    handler: H,
- ) -> io::Result<(Neovim<ASFile>, JoinHandle<Result<(), Box<LoopError>>>)>
- where
--  H: Handler<Writer = ASFile>,
-+    H: Handler<Writer = ASFile>,
- {
--  let sout: ASFile = unbuffered_stdout()?.into();
--  let (neovim, io) = Neovim::<ASFile>::new(stdin(), sout, handler);
--  let io_handle = spawn(io);
-+    let sout: ASFile = unbuffered_stdout()?.into();
-+    let (neovim, io) = Neovim::<ASFile>::new(stdin(), sout, handler);
-+    let io_handle = spawn(io);
- 
--  Ok((neovim, io_handle))
-+    Ok((neovim, io_handle))
- }
 diff --git a/src/create/mod.rs b/src/create/mod.rs
-index 95e4891fc7d30fb9c90a622c1de7125a2d10e623..4f1c756012c0f1e1ee9ec50bcbda7d62976973e7 100644
+index fb19ccb..bd4267b 100644
 --- a/src/create/mod.rs
 +++ b/src/create/mod.rs
-@@ -31,26 +31,26 @@ use crate::rpc::handler::Handler;
+@@ -31,27 +31,27 @@ use crate::rpc::handler::Handler;
  /// on your [`Handler`](crate::rpc::handler::Handler) and use
  /// [`Neovim::new`](crate::neovim::Neovim::new) to connect to neovim.
  pub trait Spawner: Handler {
 -  type Handle;
 +    type Handle;
  
+-  /// Spawn a task that continues running when its returned handle is dropped.
 -  fn spawn<Fut>(&self, future: Fut) -> Self::Handle
 -  where
 -    Fut: Future<Output = ()> + Send + 'static;
++    /// Spawn a task that continues running when its returned handle is dropped.
 +    fn spawn<Fut>(&self, future: Fut) -> Self::Handle
 +    where
 +        Fut: Future<Output = ()> + Send + 'static;
@@ -1923,8 +1637,383 @@ index 95e4891fc7d30fb9c90a622c1de7125a2d10e623..4f1c756012c0f1e1ee9ec50bcbda7d62
 +    let owned_sout_handle = stdout().as_handle().try_clone_to_owned()?;
 +    Ok(File::from(owned_sout_handle))
  }
+diff --git a/src/create/smol.rs b/src/create/smol.rs
+index b633250..8435f58 100644
+--- a/src/create/smol.rs
++++ b/src/create/smol.rs
+@@ -1,217 +1,201 @@
+ //! Functions to spawn a [`neovim`](crate::neovim::Neovim) session using
+ //! [`smol`](smol)
+-use std::{future::Future, io, fs::File, path::Path};
++use std::{fs::File, future::Future, io, path::Path};
+ 
+ #[cfg(unix)]
+ use smol::net::unix::UnixStream;
+ 
+ use smol::{
+-  Unblock,
+-  net::{TcpStream, AsyncToSocketAddrs},
+-  spawn, Task,
++    Task, Unblock,
++    net::{AsyncToSocketAddrs, TcpStream},
++    spawn,
+ };
+ 
+ use crate::{
+-  create::{unbuffered_stdout, Spawner},
+-  error::LoopError,
+-  neovim::Neovim,
+-  Handler,
++    Handler,
++    create::{Spawner, unbuffered_stdout},
++    error::LoopError,
++    neovim::Neovim,
+ };
+ 
+ impl<H> Spawner for H
+ where
+-  H: Handler,
++    H: Handler,
+ {
+-  type Handle = ();
+-
+-  fn spawn<Fut>(&self, future: Fut) -> Self::Handle
+-  where
+-    Fut: Future<Output = ()> + Send + 'static,
+-  {
+-    spawn(future).detach();
+-  }
++    type Handle = ();
++
++    fn spawn<Fut>(&self, future: Fut) -> Self::Handle
++    where
++        Fut: Future<Output = ()> + Send + 'static,
++    {
++        spawn(future).detach();
++    }
+ }
+ 
+ /// Connect to a neovim instance via tcp
+ pub async fn new_tcp<A, H>(
+-  addr: A,
+-  handler: H,
+-) -> io::Result<(
+-  Neovim<TcpStream>,
+-  Task<Result<(), Box<LoopError>>>,
+-)>
++    addr: A,
++    handler: H,
++) -> io::Result<(Neovim<TcpStream>, Task<Result<(), Box<LoopError>>>)>
+ where
+-  H: Handler<Writer = TcpStream>,
+-  A: AsyncToSocketAddrs,
++    H: Handler<Writer = TcpStream>,
++    A: AsyncToSocketAddrs,
+ {
+-  let stream = TcpStream::connect(addr).await?;
+-  let (reader, writer) = (stream.clone(), stream);
+-  let (neovim, io) =
+-    Neovim::<TcpStream>::new(reader, writer, handler);
+-  let io_handle = spawn(io);
++    let stream = TcpStream::connect(addr).await?;
++    let (reader, writer) = (stream.clone(), stream);
++    let (neovim, io) = Neovim::<TcpStream>::new(reader, writer, handler);
++    let io_handle = spawn(io);
+ 
+-  Ok((neovim, io_handle))
++    Ok((neovim, io_handle))
+ }
+ 
+ #[cfg(unix)]
+ /// Connect to a neovim instance via unix socket by path. This is currently
+ /// only available on Unix for smol.
+ pub async fn new_path<H, P: AsRef<Path> + Clone>(
+-  path: P,
+-  handler: H,
+-) -> io::Result<(
+-  Neovim<UnixStream>,
+-  Task<Result<(), Box<LoopError>>>,
+-)>
++    path: P,
++    handler: H,
++) -> io::Result<(Neovim<UnixStream>, Task<Result<(), Box<LoopError>>>)>
+ where
+-  H: Handler<Writer = UnixStream> + Send + 'static,
++    H: Handler<Writer = UnixStream> + Send + 'static,
+ {
+-  let stream = UnixStream::connect(path).await?;
+-  let (reader, writer) = (stream.clone(), stream);
+-  let (neovim, io) =
+-    Neovim::<UnixStream>::new(reader, writer, handler);
+-  let io_handle = spawn(io);
++    let stream = UnixStream::connect(path).await?;
++    let (reader, writer) = (stream.clone(), stream);
++    let (neovim, io) = Neovim::<UnixStream>::new(reader, writer, handler);
++    let io_handle = spawn(io);
+ 
+-  Ok((neovim, io_handle))
++    Ok((neovim, io_handle))
+ }
+ 
+ /// Connect to the neovim instance that spawned this process over stdin/stdout
+ pub async fn new_parent<H>(
+-  handler: H,
++    handler: H,
+ ) -> io::Result<(Neovim<Unblock<File>>, Task<Result<(), Box<LoopError>>>)>
+ where
+-  H: Handler<Writer = Unblock<File>>,
++    H: Handler<Writer = Unblock<File>>,
+ {
+-  let sout = Unblock::new(unbuffered_stdout()?);
+-  let sin = Unblock::new(std::io::stdin());
+-  let (neovim, io) = Neovim::<Unblock<File>>::new(sin, sout, handler);
+-  let io_handle = spawn(io);
++    let sout = Unblock::new(unbuffered_stdout()?);
++    let sin = Unblock::new(std::io::stdin());
++    let (neovim, io) = Neovim::<Unblock<File>>::new(sin, sout, handler);
++    let io_handle = spawn(io);
+ 
+-  Ok((neovim, io_handle))
++    Ok((neovim, io_handle))
+ }
+ 
+ #[cfg(test)]
+ mod tests {
+-  use super::*;
+-  use crate::rpc::model::{self, RpcMessage};
+-  use futures::{
+-    StreamExt,
+-    channel::{mpsc, oneshot},
+-    future::{Either, select},
+-    io::AsyncWriteExt,
+-    lock::Mutex,
+-  };
+-  use rmpv::Value;
+-  use std::{sync::Arc, time::Duration};
+-
+-  #[derive(Clone)]
+-  struct WaitingHandler {
+-    started_tx: mpsc::UnboundedSender<String>,
+-    release_rx: Arc<Mutex<oneshot::Receiver<()>>>,
+-    response: Result<Value, Value>,
+-  }
+-
+-  impl Handler for WaitingHandler {
+-    type Writer = TcpStream;
+-
+-    async fn handle_request(
+-      &self,
+-      method: String,
+-      _args: Vec<Value>,
+-      _neovim: Neovim<Self::Writer>,
+-    ) -> Result<Value, Value> {
+-      self.started_tx.unbounded_send(method).unwrap();
+-      let mut release_rx = self.release_rx.lock().await;
+-      (&mut *release_rx).await.unwrap();
+-      self.response.clone()
++    use super::*;
++    use crate::rpc::model::{self, RpcMessage};
++    use futures::{
++        StreamExt,
++        channel::{mpsc, oneshot},
++        future::{Either, select},
++        io::AsyncWriteExt,
++        lock::Mutex,
++    };
++    use rmpv::Value;
++    use std::{sync::Arc, time::Duration};
++
++    #[derive(Clone)]
++    struct WaitingHandler {
++        started_tx: mpsc::UnboundedSender<String>,
++        release_rx: Arc<Mutex<oneshot::Receiver<()>>>,
++        response: Result<Value, Value>,
+     }
+-  }
+-
+-  async fn within_timeout<T>(
+-    future: impl Future<Output = T>,
+-    operation: &str,
+-  ) -> T {
+-    match select(
+-      Box::pin(future),
+-      Box::pin(smol::Timer::after(Duration::from_secs(2))),
+-    )
+-    .await
+-    {
+-      Either::Left((result, _)) => result,
+-      Either::Right(_) => panic!("Timed out waiting for {operation}"),
++
++    impl Handler for WaitingHandler {
++        type Writer = TcpStream;
++
++        async fn handle_request(
++            &self,
++            method: String,
++            _args: Vec<Value>,
++            _neovim: Neovim<Self::Writer>,
++        ) -> Result<Value, Value> {
++            self.started_tx.unbounded_send(method).unwrap();
++            let mut release_rx = self.release_rx.lock().await;
++            (&mut *release_rx).await.unwrap();
++            self.response.clone()
++        }
+     }
+-  }
+-
+-  #[test]
+-  fn request_handlers_survive_dropped_spawn_handles() {
+-    smol::block_on(async {
+-      for response in [Ok(Value::from(42)), Err(Value::from("handler error"))] {
+-        let listener =
+-          smol::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+-        let (started_tx, mut started_rx) = mpsc::unbounded();
+-        let (release_tx, release_rx) = oneshot::channel();
+-        let (nvim, io) = new_tcp(
+-          listener.local_addr().unwrap(),
+-          WaitingHandler {
+-            started_tx,
+-            release_rx: Arc::new(Mutex::new(release_rx)),
+-            response: response.clone(),
+-          },
+-        )
+-        .await
+-        .unwrap();
+-        let (mut peer, _) = listener.accept().await.unwrap();
+-        let mut wire = Vec::new();
+-        model::encode_sync(
+-          &mut wire,
+-          RpcMessage::RpcRequest {
+-            msgid: 7,
+-            method: "delayed".into(),
+-            params: vec![],
+-          },
+-        )
+-        .unwrap();
+-        peer.write_all(&wire).await.unwrap();
+-
+-        // handler_loop drops the returned spawn handle.
+-        assert_eq!(
+-          within_timeout(started_rx.next(), "the request handler to start")
+-            .await
+-            .as_deref(),
+-          Some("delayed")
+-        );
+-        release_tx
+-          .send(())
+-          .expect("The request handler must not be cancelled");
+-        let mut rest = Vec::new();
+-        let reply = within_timeout(
+-          model::decode(&mut peer, &mut rest),
+-          "the RPC reply",
++
++    async fn within_timeout<T>(future: impl Future<Output = T>, operation: &str) -> T {
++        match select(
++            Box::pin(future),
++            Box::pin(smol::Timer::after(Duration::from_secs(2))),
+         )
+         .await
+-        .unwrap();
+-        let (result, error) = match response {
+-          Ok(result) => (result, Value::Nil),
+-          Err(error) => (Value::Nil, error),
+-        };
+-        assert_eq!(
+-          reply,
+-          RpcMessage::RpcResponse {
+-            msgid: 7,
+-            result,
+-            error
+-          }
+-        );
+-        // Only request tasks are detached; the session remains cancellable.
+-        io.cancel().await;
+-        assert!(
+-          nvim
+-            .call("after_close", vec![])
+-            .await
+-            .unwrap_err()
+-            .is_channel_closed()
+-        );
+-      }
+-    });
+-  }
++        {
++            Either::Left((result, _)) => result,
++            Either::Right(_) => panic!("Timed out waiting for {operation}"),
++        }
++    }
++
++    #[test]
++    fn request_handlers_survive_dropped_spawn_handles() {
++        smol::block_on(async {
++            for response in [Ok(Value::from(42)), Err(Value::from("handler error"))] {
++                let listener = smol::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
++                let (started_tx, mut started_rx) = mpsc::unbounded();
++                let (release_tx, release_rx) = oneshot::channel();
++                let (nvim, io) = new_tcp(
++                    listener.local_addr().unwrap(),
++                    WaitingHandler {
++                        started_tx,
++                        release_rx: Arc::new(Mutex::new(release_rx)),
++                        response: response.clone(),
++                    },
++                )
++                .await
++                .unwrap();
++                let (mut peer, _) = listener.accept().await.unwrap();
++                let mut wire = Vec::new();
++                model::encode_sync(
++                    &mut wire,
++                    RpcMessage::RpcRequest {
++                        msgid: 7,
++                        method: "delayed".into(),
++                        params: vec![],
++                    },
++                )
++                .unwrap();
++                peer.write_all(&wire).await.unwrap();
++
++                // handler_loop drops the returned spawn handle.
++                assert_eq!(
++                    within_timeout(started_rx.next(), "the request handler to start")
++                        .await
++                        .as_deref(),
++                    Some("delayed")
++                );
++                release_tx
++                    .send(())
++                    .expect("The request handler must not be cancelled");
++                let mut rest = Vec::new();
++                let reply = within_timeout(model::decode(&mut peer, &mut rest), "the RPC reply")
++                    .await
++                    .unwrap();
++                let (result, error) = match response {
++                    Ok(result) => (result, Value::Nil),
++                    Err(error) => (Value::Nil, error),
++                };
++                assert_eq!(
++                    reply,
++                    RpcMessage::RpcResponse {
++                        msgid: 7,
++                        result,
++                        error
++                    }
++                );
++                // Only request tasks are detached; the session remains cancellable.
++                io.cancel().await;
++                assert!(
++                    nvim.call("after_close", vec![])
++                        .await
++                        .unwrap_err()
++                        .is_channel_closed()
++                );
++            }
++        });
++    }
+ }
 diff --git a/src/create/tokio.rs b/src/create/tokio.rs
-index f540267922ec454396dfb84353a76f283d48b882..ddbf746ffca51fc60bcd25577b3fb3237c9859e7 100644
+index f540267..ddbf746 100644
 --- a/src/create/tokio.rs
 +++ b/src/create/tokio.rs
 @@ -1,19 +1,19 @@
@@ -2344,10 +2433,10 @@ index f540267922ec454396dfb84353a76f283d48b882..ddbf746ffca51fc60bcd25577b3fb323
 +    Ok((neovim, io_handle, child))
  }
 diff --git a/src/error.rs b/src/error.rs
-index 8ac4f555ec297fce2515c1022ba87f2cc0e12f18..084884bffb10d408fa18cedb2c420a2a09a118eb 100644
+index 573687a..ab7b3d0 100644
 --- a/src/error.rs
 +++ b/src/error.rs
-@@ -35,15 +35,10 @@
+@@ -35,26 +35,21 @@
  //! either neovim closed the channel actively, or neovim was closed. Often, this
  //! is not seen as a real error, but the signal for the plugin to quit. Again,
  //! see the [example](crate::examples::scorched_earth).
@@ -2363,9 +2452,28 @@ index 8ac4f555ec297fce2515c1022ba87f2cc0e12f18..084884bffb10d408fa18cedb2c420a2a
 -};
 +use rmpv::{Value, decode::Error as RmpvDecodeError, encode::Error as RmpvEncodeError};
  
+ // Transport shutdown is reported differently by pipes and sockets.
+ fn is_closed_io_error(kind: ErrorKind) -> bool {
+-  matches!(
+-    kind,
+-    ErrorKind::UnexpectedEof
+-      | ErrorKind::BrokenPipe
+-      | ErrorKind::ConnectionReset
+-      | ErrorKind::ConnectionAborted
+-      | ErrorKind::NotConnected
+-  )
++    matches!(
++        kind,
++        ErrorKind::UnexpectedEof
++            | ErrorKind::BrokenPipe
++            | ErrorKind::ConnectionReset
++            | ErrorKind::ConnectionAborted
++            | ErrorKind::NotConnected
++    )
+ }
+ 
  /// A message from neovim had an invalid format
- ///
-@@ -51,156 +46,156 @@ use rmpv::{
+@@ -63,156 +58,156 @@ fn is_closed_io_error(kind: ErrorKind) -> bool {
  /// neovim.
  #[derive(Debug, PartialEq, Clone)]
  pub enum InvalidMessage {
@@ -2594,15 +2702,14 @@ index 8ac4f555ec297fce2515c1022ba87f2cc0e12f18..084884bffb10d408fa18cedb2c420a2a
 -      Self::BufferError(_) => "Error writing to buffer",
 -      Self::WriterError(_) => "Error writing to the Writer",
 -    };
--
--    fmt.write_str(s)
--  }
 +    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 +        let s = match *self {
 +            Self::BufferError(_) => "Error writing to buffer",
 +            Self::WriterError(_) => "Error writing to the Writer",
 +        };
-+
+ 
+-    fmt.write_str(s)
+-  }
 +        fmt.write_str(s)
 +    }
  }
@@ -2626,7 +2733,7 @@ index 8ac4f555ec297fce2515c1022ba87f2cc0e12f18..084884bffb10d408fa18cedb2c420a2a
  }
  
  /// A [`call`](crate::neovim::Neovim::call) to neovim failed
-@@ -209,298 +204,292 @@ impl From<io::Error> for Box<EncodeError> {
+@@ -221,327 +216,324 @@ impl From<io::Error> for Box<EncodeError> {
  /// proxies for [`call`](crate::neovim::Neovim::call).
  #[derive(Debug)]
  pub enum CallError {
@@ -2728,13 +2835,13 @@ index 8ac4f555ec297fce2515c1022ba87f2cc0e12f18..084884bffb10d408fa18cedb2c420a2a
 -  pub fn is_channel_closed(&self) -> bool {
 -    match *self {
 -      CallError::SendError(EncodeError::WriterError(ref e), _)
--        if e.kind() == ErrorKind::UnexpectedEof =>
+-        if is_closed_io_error(e.kind()) =>
 -      {
 -        return true
 -      }
 -      CallError::DecodeError(ref err, _) => {
--        if let DecodeError::ReaderError(ref e) = err.as_ref() {
--          if e.kind() == ErrorKind::UnexpectedEof {
+-        if let DecodeError::ReaderError(e) = err.as_ref() {
+-          if is_closed_io_error(e.kind()) {
 -            return true;
 -          }
 +    /// Determine if the error originated from a closed channel. This is generally
@@ -2744,13 +2851,13 @@ index 8ac4f555ec297fce2515c1022ba87f2cc0e12f18..084884bffb10d408fa18cedb2c420a2a
 +    pub fn is_channel_closed(&self) -> bool {
 +        match *self {
 +            CallError::SendError(EncodeError::WriterError(ref e), _)
-+                if e.kind() == ErrorKind::UnexpectedEof =>
++                if is_closed_io_error(e.kind()) =>
 +            {
 +                return true;
 +            }
 +            CallError::DecodeError(ref err, _) => {
-+                if let DecodeError::ReaderError(ref e) = err.as_ref() {
-+                    if e.kind() == ErrorKind::UnexpectedEof {
++                if let DecodeError::ReaderError(e) = err.as_ref() {
++                    if is_closed_io_error(e.kind()) {
 +                        return true;
 +                    }
 +                }
@@ -2779,14 +2886,8 @@ index 8ac4f555ec297fce2515c1022ba87f2cc0e12f18..084884bffb10d408fa18cedb2c420a2a
 -      }
 -      Self::NeovimError(ref i, ref s) => match i {
 -        Some(i) => write!(fmt, "Error processing request: {i} - '{s}')"),
--        None => write!(
--          fmt,
--          "Error processing request, unknown error format: '{s}'"
--        ),
--      },
--      CallError::WrongValueType(ref val) => {
--        write!(fmt, "Wrong value type: '{val}'")
--      }
+-        None => {
+-          write!(fmt, "Error processing request, unknown error format: '{s}'")
 +    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 +        match *self {
 +            Self::SendError(_, ref s) => write!(fmt, "Error sending request '{s}'"),
@@ -2798,12 +2899,18 @@ index 8ac4f555ec297fce2515c1022ba87f2cc0e12f18..084884bffb10d408fa18cedb2c420a2a
 +            }
 +            Self::NeovimError(ref i, ref s) => match i {
 +                Some(i) => write!(fmt, "Error processing request: {i} - '{s}')"),
-+                None => write!(fmt, "Error processing request, unknown error format: '{s}'"),
++                None => {
++                    write!(fmt, "Error processing request, unknown error format: '{s}'")
++                }
 +            },
 +            CallError::WrongValueType(ref val) => {
 +                write!(fmt, "Wrong value type: '{val}'")
 +            }
-+        }
+         }
+-      },
+-      CallError::WrongValueType(ref val) => {
+-        write!(fmt, "Wrong value type: '{val}'")
+-      }
      }
 -  }
  }
@@ -2904,14 +3011,14 @@ index 8ac4f555ec297fce2515c1022ba87f2cc0e12f18..084884bffb10d408fa18cedb2c420a2a
 -  #[must_use]
 -  pub fn is_channel_closed(&self) -> bool {
 -    if let LoopError::DecodeError(ref err, _) = *self {
--      if let DecodeError::ReaderError(ref e) = err.as_ref() {
--        if e.kind() == ErrorKind::UnexpectedEof {
+-      if let DecodeError::ReaderError(e) = err.as_ref() {
+-        if is_closed_io_error(e.kind()) {
 -          return true;
 +    #[must_use]
 +    pub fn is_channel_closed(&self) -> bool {
 +        if let LoopError::DecodeError(ref err, _) = *self {
-+            if let DecodeError::ReaderError(ref e) = err.as_ref() {
-+                if e.kind() == ErrorKind::UnexpectedEof {
++            if let DecodeError::ReaderError(e) = err.as_ref() {
++                if is_closed_io_error(e.kind()) {
 +                    return true;
 +                }
 +            }
@@ -3145,8 +3252,63 @@ index 8ac4f555ec297fce2515c1022ba87f2cc0e12f18..084884bffb10d408fa18cedb2c420a2a
      }
 -  }
  }
+ 
+ #[cfg(test)]
+ mod shutdown_tests {
+-  use super::*;
+-
+-  #[test]
+-  fn classify_transport_shutdown_without_hiding_other_errors() {
+-    for (kind, closed) in [
+-      (ErrorKind::UnexpectedEof, true),
+-      (ErrorKind::BrokenPipe, true),
+-      (ErrorKind::ConnectionReset, true),
+-      (ErrorKind::ConnectionAborted, true),
+-      (ErrorKind::NotConnected, true),
+-      (ErrorKind::TimedOut, false),
+-      (ErrorKind::PermissionDenied, false),
+-      (ErrorKind::InvalidData, false),
+-    ] {
+-      let send = CallError::SendError(
+-        EncodeError::WriterError(io::Error::from(kind)),
+-        "test".into(),
+-      );
+-      let decode = Arc::new(DecodeError::ReaderError(io::Error::from(kind)));
+-      let call = CallError::DecodeError(decode.clone(), "test".into());
+-      let receive = LoopError::DecodeError(decode, None);
+-      assert_eq!(send.is_channel_closed(), closed, "{kind:?}");
+-      assert_eq!(call.is_channel_closed(), closed, "{kind:?}");
+-      assert_eq!(receive.is_channel_closed(), closed, "{kind:?}");
++    use super::*;
++
++    #[test]
++    fn classify_transport_shutdown_without_hiding_other_errors() {
++        for (kind, closed) in [
++            (ErrorKind::UnexpectedEof, true),
++            (ErrorKind::BrokenPipe, true),
++            (ErrorKind::ConnectionReset, true),
++            (ErrorKind::ConnectionAborted, true),
++            (ErrorKind::NotConnected, true),
++            (ErrorKind::TimedOut, false),
++            (ErrorKind::PermissionDenied, false),
++            (ErrorKind::InvalidData, false),
++        ] {
++            let send = CallError::SendError(
++                EncodeError::WriterError(io::Error::from(kind)),
++                "test".into(),
++            );
++            let decode = Arc::new(DecodeError::ReaderError(io::Error::from(kind)));
++            let call = CallError::DecodeError(decode.clone(), "test".into());
++            let receive = LoopError::DecodeError(decode, None);
++            assert_eq!(send.is_channel_closed(), closed, "{kind:?}");
++            assert_eq!(call.is_channel_closed(), closed, "{kind:?}");
++            assert_eq!(receive.is_channel_closed(), closed, "{kind:?}");
++        }
+     }
+-  }
+ }
 diff --git a/src/exttypes/buffer.rs b/src/exttypes/buffer.rs
-index 13bd59d4440e7278809414711dbf5dbb5a1b6748..60887b2958ac793971267f7b8a50f07d0552117d 100644
+index 13bd59d..60887b2 100644
 --- a/src/exttypes/buffer.rs
 +++ b/src/exttypes/buffer.rs
 @@ -1,16 +1,16 @@
@@ -3171,7 +3333,7 @@ index 13bd59d4440e7278809414711dbf5dbb5a1b6748..60887b2958ac793971267f7b8a50f07d
  
  impl_exttype_traits!(Buffer);
 diff --git a/src/exttypes/mod.rs b/src/exttypes/mod.rs
-index fbe511b0e8588db180003c720295171deb50df28..e0a968d2e0e9820bec17dfa9d95c56c35709fc9f 100644
+index fbe511b..e0a968d 100644
 --- a/src/exttypes/mod.rs
 +++ b/src/exttypes/mod.rs
 @@ -10,36 +10,36 @@ pub use window::Window;
@@ -3241,7 +3403,7 @@ index fbe511b0e8588db180003c720295171deb50df28..e0a968d2e0e9820bec17dfa9d95c56c3
 +    };
  }
 diff --git a/src/exttypes/tabpage.rs b/src/exttypes/tabpage.rs
-index de15c114ce31977facf03255c2acd744e136a249..9de3a5edb036166a883aaa21c2e99bf1690e6317 100644
+index de15c11..9de3a5e 100644
 --- a/src/exttypes/tabpage.rs
 +++ b/src/exttypes/tabpage.rs
 @@ -1,52 +1,45 @@
@@ -3324,7 +3486,7 @@ index de15c114ce31977facf03255c2acd744e136a249..9de3a5edb036166a883aaa21c2e99bf1
 -  }
  }
 diff --git a/src/exttypes/window.rs b/src/exttypes/window.rs
-index cbfbac00b17547a2d28db8c751b15f5774aae79e..2a4a10c4a2db8317d5b4224ca163fcf94289ec47 100644
+index cbfbac0..2a4a10c 100644
 --- a/src/exttypes/window.rs
 +++ b/src/exttypes/window.rs
 @@ -2,45 +2,39 @@ use futures::io::AsyncWrite;
@@ -3395,7 +3557,7 @@ index cbfbac00b17547a2d28db8c751b15f5774aae79e..2a4a10c4a2db8317d5b4224ca163fcf9
 +    }
  }
 diff --git a/src/lib.rs b/src/lib.rs
-index a1b0f8c826dbd8059035e20e79f86df54b791643..afe9969c6f1688a768c6f84cb4bd991c3e777278 100644
+index a1b0f8c..afe9969 100644
 --- a/src/lib.rs
 +++ b/src/lib.rs
 @@ -41,18 +41,18 @@ pub mod uioptions;
@@ -3426,20 +3588,20 @@ index a1b0f8c826dbd8059035e20e79f86df54b791643..afe9969c6f1688a768c6f84cb4bd991c
  
  pub use rmpv::Value;
 diff --git a/src/neovim.rs b/src/neovim.rs
-index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f7c95df48 100644
+index 671650d..341ec82 100644
 --- a/src/neovim.rs
 +++ b/src/neovim.rs
-@@ -1,34 +1,34 @@
+@@ -1,33 +1,33 @@
  //! An active neovim session.
  use std::{
 -  future::Future,
 -  sync::{
 -    atomic::{AtomicU64, Ordering},
--    Arc,
+-    Arc, Mutex as SyncMutex,
 -  },
 +    future::Future,
 +    sync::{
-+        Arc,
++        Arc, Mutex as SyncMutex,
 +        atomic::{AtomicU64, Ordering},
 +    },
  };
@@ -3449,19 +3611,17 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 -    mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
 -    oneshot,
 -  },
--  future,
--  io::{AsyncRead, AsyncReadExt, AsyncWrite},
+-  future::join,
+-  io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
 -  lock::Mutex,
 -  sink::SinkExt,
 -  stream::StreamExt,
--  TryFutureExt,
-+    TryFutureExt,
 +    channel::{
 +        mpsc::{UnboundedReceiver, UnboundedSender, unbounded},
 +        oneshot,
 +    },
-+    future,
-+    io::{AsyncRead, AsyncReadExt, AsyncWrite},
++    future::join,
++    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
 +    lock::Mutex,
 +    sink::SinkExt,
 +    stream::StreamExt,
@@ -3487,7 +3647,79 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
  };
  use rmpv::Value;
  
-@@ -53,363 +53,361 @@ type Queue = Arc<Mutex<Vec<(u64, oneshot::Sender<ResponseResult>)>>>;
+@@ -49,29 +49,29 @@ type ResponseResult = Result<Result<Value, Value>, Arc<DecodeError>>;
+ 
+ #[derive(Default)]
+ struct Queue {
+-  requests: Vec<(u64, oneshot::Sender<ResponseResult>)>,
+-  closed: bool,
++    requests: Vec<(u64, oneshot::Sender<ResponseResult>)>,
++    closed: bool,
+ }
+ 
+ impl Queue {
+-  fn ensure_open(&self) -> Result<(), std::io::Error> {
+-    if self.closed {
+-      return Err(std::io::Error::new(
+-        std::io::ErrorKind::BrokenPipe,
+-        "RPC connection queue is closed",
+-      ));
++    fn ensure_open(&self) -> Result<(), std::io::Error> {
++        if self.closed {
++            return Err(std::io::Error::new(
++                std::io::ErrorKind::BrokenPipe,
++                "RPC connection queue is closed",
++            ));
++        }
++        Ok(())
++    }
++
++    fn try_push(
++        &mut self,
++        request: (u64, oneshot::Sender<ResponseResult>),
++    ) -> Result<(), std::io::Error> {
++        self.ensure_open()?;
++        self.requests.push(request);
++        Ok(())
+     }
+-    Ok(())
+-  }
+-
+-  fn try_push(
+-    &mut self,
+-    request: (u64, oneshot::Sender<ResponseResult>),
+-  ) -> Result<(), std::io::Error> {
+-    self.ensure_open()?;
+-    self.requests.push(request);
+-    Ok(())
+-  }
+ }
+ 
+ // Locked sections only access queue state; they never run user code or await.
+@@ -79,448 +79,445 @@ type SharedQueue = Arc<SyncMutex<Queue>>;
+ 
+ // Never hold this synchronous lock across IO or an await point.
+ fn close_queue(queue: &SharedQueue, error: Arc<DecodeError>) {
+-  let requests = {
+-    let mut pending = queue.lock().expect("Queue lock must not be poisoned");
+-    pending.closed = true;
+-    std::mem::take(&mut pending.requests)
+-  };
+-  for (_, sender) in requests {
+-    // Cancellation of an individual caller must not hide the connection error.
+-    let _ = sender.send(Err(error.clone()));
+-  }
++    let requests = {
++        let mut pending = queue.lock().expect("Queue lock must not be poisoned");
++        pending.closed = true;
++        std::mem::take(&mut pending.requests)
++    };
++    for (_, sender) in requests {
++        // Cancellation of an individual caller must not hide the connection error.
++        let _ = sender.send(Err(error.clone()));
++    }
+ }
+ 
  /// An active Neovim session.
  pub struct Neovim<W>
  where
@@ -3495,10 +3727,10 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 +    W: AsyncWrite + Send + Unpin + 'static,
  {
 -  pub(crate) writer: Arc<Mutex<W>>,
--  pub(crate) queue: Queue,
+-  queue: SharedQueue,
 -  pub(crate) msgid_counter: Arc<AtomicU64>,
 +    pub(crate) writer: Arc<Mutex<W>>,
-+    pub(crate) queue: Queue,
++    queue: SharedQueue,
 +    pub(crate) msgid_counter: Arc<AtomicU64>,
  }
  
@@ -3557,13 +3789,8 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 -    let req = Neovim {
 -      writer: Arc::new(Mutex::new(writer)),
 -      msgid_counter: Arc::new(AtomicU64::new(0)),
--      queue: Arc::new(Mutex::new(Vec::new())),
+-      queue: Arc::new(SyncMutex::new(Queue::default())),
 -    };
--
--    let (sender, receiver) = unbounded();
--    let fut = future::try_join(
--      req.clone().io_loop(reader, sender),
--      req.clone().handler_loop(handler, receiver),
 +    #[allow(clippy::new_ret_no_self)]
 +    pub fn new<H, R>(
 +        reader: R,
@@ -3572,9 +3799,40 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 +    ) -> (
 +        Neovim<<H as Handler>::Writer>,
 +        impl Future<Output = Result<(), Box<LoopError>>>,
-     )
--    .map_ok(|_| ());
--
++    )
++    where
++        R: AsyncRead + Send + Unpin + 'static,
++        H: Handler<Writer = W> + Spawner,
++    {
++        let req = Neovim {
++            writer: Arc::new(Mutex::new(writer)),
++            msgid_counter: Arc::new(AtomicU64::new(0)),
++            queue: Arc::new(SyncMutex::new(Queue::default())),
++        };
+ 
+-    let (sender, receiver) = unbounded();
+-    let io = req.clone().io_loop(reader, sender);
+-    let handling = req.clone().handler_loop(handler, receiver);
+-    let fut = async move {
+-      // Let the handler drain notifications already queued by io_loop before
+-      // returning its result. Wrapping that result prevents try_join from
+-      // canceling the handler when io_loop fails.
+-      let (io_res, handler_res) = join(io, handling).await;
+-      handler_res?;
+-      io_res
+-    };
++        let (sender, receiver) = unbounded();
++        let io = req.clone().io_loop(reader, sender);
++        let handling = req.clone().handler_loop(handler, receiver);
++        let fut = async move {
++            // Let the handler drain notifications already queued by io_loop before
++            // returning its result. Wrapping that result prevents try_join from
++            // canceling the handler when io_loop fails.
++            let (io_res, handler_res) = join(io, handling).await;
++            handler_res?;
++            io_res
++        };
+ 
 -    (req, fut)
 -  }
 -
@@ -3594,7 +3852,7 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 -  ) -> Result<
 -    (
 -      Neovim<<H as Handler>::Writer>,
--      impl Future<Output = Result<(), Box<LoopError>>>,
+-      impl Future<Output = Result<(), Box<LoopError>>> + use<H, R, W>,
 -    ),
 -    Box<HandshakeError>,
 -  >
@@ -3605,25 +3863,8 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 -    let instance = Neovim {
 -      writer: Arc::new(Mutex::new(writer)),
 -      msgid_counter: Arc::new(AtomicU64::new(0)),
--      queue: Arc::new(Mutex::new(Vec::new())),
+-      queue: Arc::new(SyncMutex::new(Queue::default())),
 -    };
-+    where
-+        R: AsyncRead + Send + Unpin + 'static,
-+        H: Handler<Writer = W> + Spawner,
-+    {
-+        let req = Neovim {
-+            writer: Arc::new(Mutex::new(writer)),
-+            msgid_counter: Arc::new(AtomicU64::new(0)),
-+            queue: Arc::new(Mutex::new(Vec::new())),
-+        };
-+
-+        let (sender, receiver) = unbounded();
-+        let fut = future::try_join(
-+            req.clone().io_loop(reader, sender),
-+            req.clone().handler_loop(handler, receiver),
-+        )
-+        .map_ok(|_| ());
-+
 +        (req, fut)
 +    }
  
@@ -3650,7 +3891,7 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 +    ) -> Result<
 +        (
 +            Neovim<<H as Handler>::Writer>,
-+            impl Future<Output = Result<(), Box<LoopError>>>,
++            impl Future<Output = Result<(), Box<LoopError>>> + use<H, R, W>,
 +        ),
 +        Box<HandshakeError>,
 +    >
@@ -3661,7 +3902,7 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 +        let instance = Neovim {
 +            writer: Arc::new(Mutex::new(writer)),
 +            msgid_counter: Arc::new(AtomicU64::new(0)),
-+            queue: Arc::new(Mutex::new(Vec::new())),
++            queue: Arc::new(SyncMutex::new(Queue::default())),
 +        };
 +
 +        let msgid = instance.msgid_counter.fetch_add(1, Ordering::SeqCst);
@@ -3674,14 +3915,55 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
        long, but the length is {msg_len}."
 -    );
 +        );
-+
+ 
+-    let req = RpcMessage::RpcRequest {
+-      msgid,
+-      method: "nvim_exec_lua".to_owned(),
+-      params: call_args![format!("return '{message}'"), Vec::<Value>::new()],
+-    };
+-    instance.write_message(req, None).await?;
 +        let req = RpcMessage::RpcRequest {
 +            msgid,
 +            method: "nvim_exec_lua".to_owned(),
 +            params: call_args![format!("return '{message}'"), Vec::<Value>::new()],
 +        };
-+        model::encode(instance.writer.clone(), req).await?;
-+
++        instance.write_message(req, None).await?;
+ 
+-    let expected_resp = RpcMessage::RpcResponse {
+-      msgid,
+-      error: rmpv::Value::Nil,
+-      result: rmpv::Value::String(message.into()),
+-    };
+-    let mut expected_data = Vec::new();
+-    model::encode_sync(&mut expected_data, expected_resp)
+-      .expect("Encoding static data can't fail");
+-    let mut actual_data = Vec::new();
+-    let mut start = 0;
+-    let mut end = 0;
+-    while end - start != expected_data.len() {
+-      actual_data.resize(start + expected_data.len(), 0);
+-
+-      let bytes_read =
+-        reader
+-          .read(&mut actual_data[start..])
+-          .await
+-          .map_err(|err| {
+-            (
+-              err,
+-              String::from_utf8_lossy(&actual_data[..end]).to_string(),
+-            )
+-          })?;
+-      if bytes_read == 0 {
+-        // The end of the stream has been reached when the reader returns Ok(0).
+-        // Since we haven't detected a suitable response yet, return an error.
+-        return Err(Box::new(HandshakeError::UnexpectedResponse(
+-          String::from_utf8_lossy(&actual_data[..end]).to_string(),
+-        )));
+-      }
+-      end += bytes_read;
+-      while end - start > 0 {
+-        if actual_data[start..end] == expected_data[..end - start] {
+-          break;
 +        let expected_resp = RpcMessage::RpcResponse {
 +            msgid,
 +            error: rmpv::Value::Nil,
@@ -3719,99 +4001,196 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 +                }
 +                start += 1;
 +            }
-+        }
- 
--    let req = RpcMessage::RpcRequest {
--      msgid,
--      method: "nvim_exec_lua".to_owned(),
--      params: call_args![format!("return '{message}'"), Vec::<Value>::new()],
--    };
--    model::encode(instance.writer.clone(), req).await?;
-+        let (sender, receiver) = unbounded();
-+        let fut = future::try_join(
-+            instance.clone().io_loop(reader, sender),
-+            instance.clone().handler_loop(handler, receiver),
-+        )
-+        .map_ok(|_| ());
- 
--    let expected_resp = RpcMessage::RpcResponse {
--      msgid,
--      error: rmpv::Value::Nil,
--      result: rmpv::Value::String(message.into()),
--    };
--    let mut expected_data = Vec::new();
--    model::encode_sync(&mut expected_data, expected_resp)
--      .expect("Encoding static data can't fail");
--    let mut actual_data = Vec::new();
--    let mut start = 0;
--    let mut end = 0;
--    while end - start != expected_data.len() {
--      actual_data.resize(start + expected_data.len(), 0);
--
--      let bytes_read =
--        reader
--          .read(&mut actual_data[start..])
--          .await
--          .map_err(|err| {
--            (
--              err,
--              String::from_utf8_lossy(&actual_data[..end]).to_string(),
--            )
--          })?;
--      if bytes_read == 0 {
--        // The end of the stream has been reached when the reader returns Ok(0).
--        // Since we haven't detected a suitable response yet, return an error.
--        return Err(Box::new(HandshakeError::UnexpectedResponse(
--          String::from_utf8_lossy(&actual_data[..end]).to_string(),
--        )));
--      }
--      end += bytes_read;
--      while end - start > 0 {
--        if actual_data[start..end] == expected_data[..end - start] {
--          break;
--        }
+         }
 -        start += 1;
 -      }
-+        Ok((instance, fut))
-     }
+-    }
  
 -    let (sender, receiver) = unbounded();
--    let fut = future::try_join(
--      instance.clone().io_loop(reader, sender),
--      instance.clone().handler_loop(handler, receiver),
--    )
--    .map_ok(|_| ());
--
+-    let io = instance.clone().io_loop(reader, sender);
+-    let handling = instance.clone().handler_loop(handler, receiver);
+-    let fut = async move {
+-      // Let the handler drain notifications already queued by io_loop before
+-      // returning its result. Wrapping that result prevents try_join from
+-      // canceling the handler when io_loop fails.
+-      let (io_res, handler_res) = join(io, handling).await;
+-      handler_res?;
+-      io_res
+-    };
++        let (sender, receiver) = unbounded();
++        let io = instance.clone().io_loop(reader, sender);
++        let handling = instance.clone().handler_loop(handler, receiver);
++        let fut = async move {
++            // Let the handler drain notifications already queued by io_loop before
++            // returning its result. Wrapping that result prevents try_join from
++            // canceling the handler when io_loop fails.
++            let (io_res, handler_res) = join(io, handling).await;
++            handler_res?;
++            io_res
++        };
+ 
 -    Ok((instance, fut))
 -  }
--
++        Ok((instance, fut))
++    }
+ 
 -  async fn send_msg(
 -    &self,
 -    method: &str,
 -    args: Vec<Value>,
 -  ) -> Result<oneshot::Receiver<ResponseResult>, Box<EncodeError>> {
 -    let msgid = self.msgid_counter.fetch_add(1, Ordering::SeqCst);
--
--    let req = RpcMessage::RpcRequest {
--      msgid,
--      method: method.to_owned(),
--      params: args,
--    };
 +    async fn send_msg(
 +        &self,
 +        method: &str,
 +        args: Vec<Value>,
 +    ) -> Result<oneshot::Receiver<ResponseResult>, Box<EncodeError>> {
 +        let msgid = self.msgid_counter.fetch_add(1, Ordering::SeqCst);
++
++        let req = RpcMessage::RpcRequest {
++            msgid,
++            method: method.to_owned(),
++            params: args,
++        };
+ 
+-    let req = RpcMessage::RpcRequest {
+-      msgid,
+-      method: method.to_owned(),
+-      params: args,
+-    };
++        let (sender, receiver) = oneshot::channel();
  
 -    let (sender, receiver) = oneshot::channel();
--
--    self.queue.lock().await.push((msgid, sender));
--
--    let writer = self.writer.clone();
--    model::encode(writer, req).await?;
--
++        self.write_message(req, Some((msgid, sender))).await?;
++        Ok(receiver)
++    }
+ 
+-    self.write_message(req, Some((msgid, sender))).await?;
 -    Ok(receiver)
+-  }
++    async fn write_message(
++        &self,
++        message: RpcMessage,
++        pending_request: Option<(u64, oneshot::Sender<ResponseResult>)>,
++    ) -> Result<(), Box<EncodeError>> {
++        let mut bytes = Vec::new();
++        model::encode_sync(&mut bytes, message)?;
+ 
+-  async fn write_message(
+-    &self,
+-    message: RpcMessage,
+-    pending_request: Option<(u64, oneshot::Sender<ResponseResult>)>,
+-  ) -> Result<(), Box<EncodeError>> {
+-    let mut bytes = Vec::new();
+-    model::encode_sync(&mut bytes, message)?;
++        // Cancellation while waiting for the writer has not touched the stream.
++        let mut writer = self.writer.lock().await;
++        {
++            let mut queue = self.queue.lock().expect("Queue lock must not be poisoned");
++            if let Some(request) = pending_request {
++                queue.try_push(request)?;
++            } else {
++                // Replies do not enter the pending queue, but must also reject a
++                // closed session.
++                queue.ensure_open()?;
++            }
++        }
+ 
+-    // Cancellation while waiting for the writer has not touched the stream.
+-    let mut writer = self.writer.lock().await;
+-    {
+-      let mut queue =
+-        self.queue.lock().expect("Queue lock must not be poisoned");
+-      if let Some(request) = pending_request {
+-        queue.try_push(request)?;
+-      } else {
+-        // Replies do not enter the pending queue, but must also reject a
+-        // closed session.
+-        queue.ensure_open()?;
+-      }
+-    }
++        struct WriteGuard<'a> {
++            queue: &'a SharedQueue,
++            complete: bool,
++        }
++
++        impl Drop for WriteGuard<'_> {
++            fn drop(&mut self) {
++                if !self.complete {
++                    close_queue(
++                        self.queue,
++                        Arc::new(DecodeError::ReaderError(std::io::Error::new(
++                            std::io::ErrorKind::BrokenPipe,
++                            "RPC write failed or was cancelled",
++                        ))),
++                    );
++                }
++            }
++        }
+ 
+-    struct WriteGuard<'a> {
+-      queue: &'a SharedQueue,
+-      complete: bool,
++        // Declare after the writer lock so cancellation invalidates the session
++        // before another request or response can acquire the writer.
++        let mut guard = WriteGuard {
++            queue: &self.queue,
++            complete: false,
++        };
++        writer.write_all(&bytes).await?;
++        writer.flush().await?;
++        guard.complete = true;
++        Ok(())
+     }
+ 
+-    impl Drop for WriteGuard<'_> {
+-      fn drop(&mut self) {
+-        if !self.complete {
+-          close_queue(
+-            self.queue,
+-            Arc::new(DecodeError::ReaderError(std::io::Error::new(
+-              std::io::ErrorKind::BrokenPipe,
+-              "RPC write failed or was cancelled",
+-            ))),
+-          );
++    pub async fn call(
++        &self,
++        method: &str,
++        args: Vec<Value>,
++    ) -> Result<Result<Value, Value>, Box<CallError>> {
++        let receiver = self
++            .send_msg(method, args)
++            .await
++            .map_err(|e| CallError::SendError(*e, method.to_string()))?;
++
++        match receiver.await {
++            // Result<Result<Result<Value, Value>, Arc<DecodeError>>, RecvError>
++            Ok(Ok(r)) => Ok(r), // r is Result<Value, Value>, i.e. we got an answer
++            Ok(Err(err)) => {
++                // err is a Decode Error, i.e. the answer wasn't decodable
++                Err(Box::new(CallError::DecodeError(err, method.to_string())))
++            }
++            Err(err) => {
++                // err is RecvError
++                Err(Box::new(CallError::InternalReceiveError(
++                    err,
++                    method.to_string(),
++                )))
++            }
+         }
+-      }
+     }
+ 
+-    // Declare after the writer lock so cancellation invalidates the session
+-    // before another request or response can acquire the writer.
+-    let mut guard = WriteGuard {
+-      queue: &self.queue,
+-      complete: false,
+-    };
+-    writer.write_all(&bytes).await?;
+-    writer.flush().await?;
+-    guard.complete = true;
+-    Ok(())
 -  }
 -
 -  pub async fn call(
@@ -3838,36 +4217,6 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 -          method.to_string(),
 -        )))
 -      }
--    }
--  }
-+        let req = RpcMessage::RpcRequest {
-+            msgid,
-+            method: method.to_owned(),
-+            params: args,
-+        };
- 
--  async fn send_error_to_callers(
--    &self,
--    queue: &Queue,
--    err: DecodeError,
--  ) -> Result<Arc<DecodeError>, Box<LoopError>> {
--    let err = Arc::new(err);
--    let mut v: Vec<u64> = vec![];
-+        let (sender, receiver) = oneshot::channel();
- 
--    let mut queue = queue.lock().await;
--    queue.drain(0..).for_each(|sender| {
--      let msgid = sender.0;
--      sender
--        .1
--        .send(Err(err.clone()))
--        .unwrap_or_else(|_| v.push(msgid));
--    });
--
--    if v.is_empty() {
--      Ok(err)
--    } else {
--      Err((err, v).into())
 -    }
 -  }
 -
@@ -3897,127 +4246,22 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 -        } => {
 -          let handler_c = handler.clone();
 -          let neovim = self.clone();
--          let writer = self.writer.clone();
 -
 -          handler.spawn(async move {
 -            let response = match handler_c
--              .handle_request(method, params, neovim)
+-              .handle_request(method, params, neovim.clone())
 -              .await
--              {
--                Ok(result) => RpcMessage::RpcResponse {
--                  msgid,
--                  result,
--                  error: Value::Nil,
--                },
--                Err(error) => RpcMessage::RpcResponse {
--                  msgid,
--                  result: Value::Nil,
--                  error,
--                },
--              };
--
--            model::encode(writer, response)
--              .await
--              .unwrap_or_else(|e| {
--                error!("Error sending response to request {}: '{}'", msgid, e);
--              });
--          });
--        },
--        RpcMessage::RpcNotification {
--          method,
--          params
--        } => handler.handle_notify(method, params, self.clone()).await,
--        RpcMessage::RpcResponse { .. } => unreachable!(),
--      }
-+        self.queue.lock().await.push((msgid, sender));
-+
-+        let writer = self.writer.clone();
-+        model::encode(writer, req).await?;
-+
-+        Ok(receiver)
-     }
--  }
--
--  async fn io_loop<R>(
--    self,
--    mut reader: R,
--    mut sender: UnboundedSender<RpcMessage>,
--  ) -> Result<(), Box<LoopError>>
--  where
--    R: AsyncRead + Send + Unpin + 'static,
--  {
--    let mut rest: Vec<u8> = vec![];
--
--    loop {
--      let msg = match model::decode(&mut reader, &mut rest).await {
--        Ok(msg) => msg,
--        Err(err) => {
--          let e = self.send_error_to_callers(&self.queue, *err).await?;
--          return Err(Box::new(LoopError::DecodeError(e, None)));
-+
-+    pub async fn call(
-+        &self,
-+        method: &str,
-+        args: Vec<Value>,
-+    ) -> Result<Result<Value, Value>, Box<CallError>> {
-+        let receiver = self
-+            .send_msg(method, args)
-+            .await
-+            .map_err(|e| CallError::SendError(*e, method.to_string()))?;
-+
-+        match receiver.await {
-+            // Result<Result<Result<Value, Value>, Arc<DecodeError>>, RecvError>
-+            Ok(Ok(r)) => Ok(r), // r is Result<Value, Value>, i.e. we got an answer
-+            Ok(Err(err)) => {
-+                // err is a Decode Error, i.e. the answer wasn't decodable
-+                Err(Box::new(CallError::DecodeError(err, method.to_string())))
-+            }
-+            Err(err) => {
-+                // err is RecvError
-+                Err(Box::new(CallError::InternalReceiveError(
-+                    err,
-+                    method.to_string(),
-+                )))
-+            }
-         }
--      };
--
--      debug!("Get message {:?}", msg);
--      if let RpcMessage::RpcResponse { msgid, result, error, } = msg {
--        let sender = find_sender(&self.queue, msgid).await?;
--        if error == Value::Nil {
--          sender
--            .send(Ok(Ok(result)))
--            .map_err(|r| (msgid, r.expect("This was an OK(_)")))?;
-+    }
-+
-+    async fn send_error_to_callers(
-+        &self,
-+        queue: &Queue,
-+        err: DecodeError,
-+    ) -> Result<Arc<DecodeError>, Box<LoopError>> {
-+        let err = Arc::new(err);
-+        let mut v: Vec<u64> = vec![];
-+
-+        let mut queue = queue.lock().await;
-+        queue.drain(0..).for_each(|sender| {
-+            let msgid = sender.0;
-+            sender
-+                .1
-+                .send(Err(err.clone()))
-+                .unwrap_or_else(|_| v.push(msgid));
-+        });
-+
-+        if v.is_empty() {
-+            Ok(err)
-         } else {
--          sender
--            .send(Ok(Err(error)))
--            .map_err(|r| (msgid, r.expect("This was an OK(_)")))?;
-+            Err((err, v).into())
-+        }
-+    }
-+
+-            {
+-              Ok(result) => RpcMessage::RpcResponse {
+-                msgid,
+-                result,
+-                error: Value::Nil,
+-              },
+-              Err(error) => RpcMessage::RpcResponse {
+-                msgid,
+-                result: Value::Nil,
+-                error,
+-              },
 +    async fn handler_loop<H>(
 +        self,
 +        handler: H,
@@ -4034,8 +4278,15 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 +                 * report an error
 +                 */
 +                None => break Ok(()),
-+            };
-+
+             };
+ 
+-            neovim
+-              .write_message(response, None)
+-              .await
+-              .unwrap_or_else(|e| {
+-                error!("Error sending response to request {}: '{}'", msgid, e);
+-              });
+-          });
 +            match msg {
 +                RpcMessage::RpcRequest {
 +                    msgid,
@@ -4044,10 +4295,11 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 +                } => {
 +                    let handler_c = handler.clone();
 +                    let neovim = self.clone();
-+                    let writer = self.writer.clone();
 +
 +                    handler.spawn(async move {
-+                        let response = match handler_c.handle_request(method, params, neovim).await
++                        let response = match handler_c
++                            .handle_request(method, params, neovim.clone())
++                            .await
 +                        {
 +                            Ok(result) => RpcMessage::RpcResponse {
 +                                msgid,
@@ -4061,9 +4313,12 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 +                            },
 +                        };
 +
-+                        model::encode(writer, response).await.unwrap_or_else(|e| {
-+                            error!("Error sending response to request {}: '{}'", msgid, e);
-+                        });
++                        neovim
++                            .write_message(response, None)
++                            .await
++                            .unwrap_or_else(|e| {
++                                error!("Error sending response to request {}: '{}'", msgid, e);
++                            });
 +                    });
 +                }
 +                RpcMessage::RpcNotification { method, params } => {
@@ -4072,9 +4327,156 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 +                RpcMessage::RpcResponse { .. } => unreachable!(),
 +            }
          }
--      } else {
--        // Send message to handler_loop()
--        sender.send(msg).await.unwrap();
+-        RpcMessage::RpcNotification { method, params } => {
+-          handler.handle_notify(method, params, self.clone()).await
+-        }
+-        RpcMessage::RpcResponse { .. } => unreachable!(),
+-      }
+-    }
+-  }
+-
+-  fn io_loop<R>(
+-    self,
+-    mut reader: R,
+-    mut sender: UnboundedSender<RpcMessage>,
+-  ) -> impl Future<Output = Result<(), Box<LoopError>>>
+-  where
+-    R: AsyncRead + Send + Unpin + 'static,
+-  {
+-    struct ConnectionGuard(SharedQueue);
+-
+-    impl Drop for ConnectionGuard {
+-      fn drop(&mut self) {
+-        // This is a synthetic shutdown error: the RPC response producer is gone,
+-        // even if the transport itself is still open. BrokenPipe denotes that
+-        // unusable channel; it does not claim that a peer sent EOF.
+-        // Decode failures already release callers with their original error.
+-        close_queue(
+-          &self.0,
+-          Arc::new(DecodeError::ReaderError(std::io::Error::new(
+-            std::io::ErrorKind::BrokenPipe,
+-            "RPC IO loop stopped",
+-          ))),
+-        );
+-      }
+     }
+ 
+-    // An async fn would construct the guard only on its first poll.
+-    // Construct the guard before polling so dropping an unpolled IO future
+-    // also closes the session and wakes pending calls.
+-    let guard = ConnectionGuard(self.queue.clone());
+-    async move {
+-      let _guard = guard;
+-      let mut rest: Vec<u8> = vec![];
+-
+-      loop {
+-        let msg = match model::decode(&mut reader, &mut rest).await {
+-          Ok(msg) => msg,
+-          Err(err) => {
+-            let e = Arc::new(*err);
+-            close_queue(&self.queue, e.clone());
+-            return Err(Box::new(LoopError::DecodeError(e, None)));
+-          }
+-        };
++    fn io_loop<R>(
++        self,
++        mut reader: R,
++        mut sender: UnboundedSender<RpcMessage>,
++    ) -> impl Future<Output = Result<(), Box<LoopError>>>
++    where
++        R: AsyncRead + Send + Unpin + 'static,
++    {
++        struct ConnectionGuard(SharedQueue);
++
++        impl Drop for ConnectionGuard {
++            fn drop(&mut self) {
++                // This is a synthetic shutdown error: the RPC response producer is gone,
++                // even if the transport itself is still open. BrokenPipe denotes that
++                // unusable channel; it does not claim that a peer sent EOF.
++                // Decode failures already release callers with their original error.
++                close_queue(
++                    &self.0,
++                    Arc::new(DecodeError::ReaderError(std::io::Error::new(
++                        std::io::ErrorKind::BrokenPipe,
++                        "RPC IO loop stopped",
++                    ))),
++                );
++            }
++        }
+ 
+-        debug!("Get message {:?}", msg);
+-        if let RpcMessage::RpcResponse {
+-          msgid,
+-          result,
+-          error,
+-        } = msg
+-        {
+-          let sender = find_sender(&self.queue, msgid)?;
+-          let response = if error == Value::Nil {
+-            Ok(result)
+-          } else {
+-            Err(error)
+-          };
+-          // A caller may have timed out after sending its request. Consume the
+-          // late response without disconnecting other callers or notifications.
+-          if sender.send(Ok(response)).is_err() {
+-            debug!("Discarding response to cancelled request {}", msgid);
+-          }
+-        } else {
+-          // Send message to handler_loop()
+-          //
+-          // TODO: This unwrap makes me uncomfortable. Let's extend LoopError and
+-          // return it here. There's not much to do after the handler_loop went
+-          // away (which is the only error condition here), but let's not tear
+-          // down stuff we don't need to.
+-          sender.send(msg).await.unwrap();
++        // An async fn would construct the guard only on its first poll.
++        // Construct the guard before polling so dropping an unpolled IO future
++        // also closes the session and wakes pending calls.
++        let guard = ConnectionGuard(self.queue.clone());
++        async move {
++            let _guard = guard;
++            let mut rest: Vec<u8> = vec![];
++
++            loop {
++                let msg = match model::decode(&mut reader, &mut rest).await {
++                    Ok(msg) => msg,
++                    Err(err) => {
++                        let e = Arc::new(*err);
++                        close_queue(&self.queue, e.clone());
++                        return Err(Box::new(LoopError::DecodeError(e, None)));
++                    }
++                };
++
++                debug!("Get message {:?}", msg);
++                if let RpcMessage::RpcResponse {
++                    msgid,
++                    result,
++                    error,
++                } = msg
++                {
++                    let sender = find_sender(&self.queue, msgid)?;
++                    let response = if error == Value::Nil {
++                        Ok(result)
++                    } else {
++                        Err(error)
++                    };
++                    // A caller may have timed out after sending its request. Consume the
++                    // late response without disconnecting other callers or notifications.
++                    if sender.send(Ok(response)).is_err() {
++                        debug!("Discarding response to cancelled request {}", msgid);
++                    }
++                } else {
++                    // Send message to handler_loop()
++                    //
++                    // TODO: This unwrap makes me uncomfortable. Let's extend LoopError and
++                    // return it here. There's not much to do after the handler_loop went
++                    // away (which is the only error condition here), but let's not tear
++                    // down stuff we don't need to.
++                    sender.send(msg).await.unwrap();
++                }
++            }
+         }
 -      }
      }
 -  }
@@ -4104,49 +4506,6 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 -    self.command("qa!").await
 -  }
 +
-+    async fn io_loop<R>(
-+        self,
-+        mut reader: R,
-+        mut sender: UnboundedSender<RpcMessage>,
-+    ) -> Result<(), Box<LoopError>>
-+    where
-+        R: AsyncRead + Send + Unpin + 'static,
-+    {
-+        let mut rest: Vec<u8> = vec![];
-+
-+        loop {
-+            let msg = match model::decode(&mut reader, &mut rest).await {
-+                Ok(msg) => msg,
-+                Err(err) => {
-+                    let e = self.send_error_to_callers(&self.queue, *err).await?;
-+                    return Err(Box::new(LoopError::DecodeError(e, None)));
-+                }
-+            };
-+
-+            debug!("Get message {:?}", msg);
-+            if let RpcMessage::RpcResponse {
-+                msgid,
-+                result,
-+                error,
-+            } = msg
-+            {
-+                let sender = find_sender(&self.queue, msgid).await?;
-+                if error == Value::Nil {
-+                    sender
-+                        .send(Ok(Ok(result)))
-+                        .map_err(|r| (msgid, r.expect("This was an OK(_)")))?;
-+                } else {
-+                    sender
-+                        .send(Ok(Err(error)))
-+                        .map_err(|r| (msgid, r.expect("This was an OK(_)")))?;
-+                }
-+            } else {
-+                // Send message to handler_loop()
-+                sender.send(msg).await.unwrap();
-+            }
-+        }
-+    }
-+
 +    /// Register as a remote UI.
 +    ///
 +    /// After this method is called, the client will receive redraw notifications.
@@ -4173,23 +4532,26 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
  }
  
  /* The idea to use Vec here instead of HashMap
-@@ -417,51 +415,49 @@ where
+@@ -528,486 +525,487 @@ where
   * in most cases Vec.len = 1 so we just take first item in iteration.
   */
- async fn find_sender(
--  queue: &Queue,
+ fn find_sender(
+-  queue: &SharedQueue,
 -  msgid: u64,
-+    queue: &Queue,
++    queue: &SharedQueue,
 +    msgid: u64,
  ) -> Result<oneshot::Sender<ResponseResult>, Box<LoopError>> {
--  let mut queue = queue.lock().await;
-+    let mut queue = queue.lock().await;
- 
+-  let mut pending = queue.lock().expect("Queue lock must not be poisoned");
+-  let queue = &mut pending.requests;
+-
 -  let pos = match queue.iter().position(|req| req.0 == msgid) {
 -    Some(p) => p,
 -    None => return Err(msgid.into()),
 -  };
 -  Ok(queue.remove(pos).1)
++    let mut pending = queue.lock().expect("Queue lock must not be poisoned");
++    let queue = &mut pending.requests;
++
 +    let pos = match queue.iter().position(|req| req.0 == msgid) {
 +        Some(p) => p,
 +        None => return Err(msgid.into()),
@@ -4200,59 +4562,918 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
  #[cfg(all(test, feature = "use_tokio"))]
  mod tests {
 -  use super::*;
+-
+-  fn session<R: AsyncRead + Send + Unpin + 'static>(
+-    reader: R,
+-  ) -> (
+-    Neovim<futures::io::Sink>,
+-    impl Future<Output = Result<(), Box<LoopError>>>,
+-  ) {
+-    Neovim::new(
+-      reader,
+-      futures::io::sink(),
+-      crate::rpc::handler::Dummy::<futures::io::Sink>::new(),
+-    )
+-  }
+-
+-  async fn assert_disconnected(
+-    nvim: &Neovim<futures::io::Sink>,
+-    mut pending: oneshot::Receiver<ResponseResult>,
+-  ) {
+-    // Shutdown has completed, so notification must already be available.
+-    let result = pending
+-      .try_recv()
+-      .expect("Shutdown must send an error before dropping the sender")
+-      .expect("Shutdown must release pending calls synchronously");
+-    assert!(result.is_err());
+-    assert!(nvim
+-      .queue
+-      .lock()
+-      .expect("Queue lock must not be poisoned")
+-      .requests
+-      .is_empty());
+-    let error = nvim
+-      .call("after_close", vec![])
+-      .await
+-      .expect_err("RPC shutdown must return an error");
+-    assert!(error.is_channel_closed());
+-  }
+-
+-  #[tokio::test]
+-  async fn dropping_unpolled_io_releases_callers() {
+-    let (nvim, io) = session(futures::io::Cursor::new(Vec::<u8>::new()));
+-    let pending = nvim
+-      .send_msg("pending", vec![])
+-      .await
+-      .expect("Test request must be written to the sink");
+-    drop(io);
+-    assert_disconnected(&nvim, pending).await;
+-  }
+-
+-  #[tokio::test]
+-  async fn aborting_io_releases_callers() {
+-    use tokio_util::compat::TokioAsyncReadCompatExt;
+-    let (reader, _peer) = tokio::io::duplex(1024);
+-    let (nvim, io) = session(reader.compat());
+-    let mut io = Box::pin(io);
+-    let pending = nvim
+-      .send_msg("pending", vec![])
+-      .await
+-      .expect("Test request must be written to the sink");
+-    // Ensure this tests cancellation after polling, not an unpolled future.
+-    assert!(futures::poll!(io.as_mut()).is_pending());
+-    let task = tokio::spawn(io);
+-    task.abort();
+-    assert!(task
+-      .await
+-      .expect_err("Aborted task must report cancellation")
+-      .is_cancelled());
+-    assert_disconnected(&nvim, pending).await;
+-  }
+-
+-  #[tokio::test]
+-  async fn eof_with_cancelled_call_preserves_original_error() {
+-    let (nvim, io) = session(futures::io::Cursor::new(Vec::<u8>::new()));
+-    drop(
+-      nvim
+-        .send_msg("cancelled", vec![])
+-        .await
+-        .expect("Test request must be written to the sink"),
+-    );
+-    let pending = nvim
+-      .send_msg("pending", vec![])
+-      .await
+-      .expect("Test request must be written to the sink");
+-    let error = io.await.expect_err("RPC shutdown must return an error");
+-    assert!(matches!(*error, LoopError::DecodeError(_, None)));
+-    assert!(error.is_channel_closed());
+-    assert_disconnected(&nvim, pending).await;
+-  }
+-
+-  #[tokio::test]
+-  async fn unknown_response_releases_other_callers() {
+-    let mut wire = Vec::new();
+-    model::encode_sync(
+-      &mut wire,
+-      RpcMessage::RpcResponse {
+-        msgid: 999,
+-        error: Value::Nil,
+-        result: Value::Nil,
+-      },
+-    )
+-    .expect("Test response must encode into memory");
+-    let (nvim, io) = session(futures::io::Cursor::new(wire));
+-    let pending = nvim
+-      .send_msg("pending", vec![])
+-      .await
+-      .expect("Test request must be written to the sink");
+-    assert!(matches!(
+-      *io.await.expect_err("RPC shutdown must return an error"),
+-      LoopError::MsgidNotFound(999)
+-    ));
+-    assert_disconnected(&nvim, pending).await;
+-  }
+-
+-  #[tokio::test]
+-  async fn write_failure_closes_pending_requests() {
+-    // Opening a file read-only gives a deterministic failing writer.
+-    let file = tempfile::NamedTempFile::new()
+-      .expect("Temporary test file must be created");
+-    let writer = futures::io::AllowStdIo::new(
+-      std::fs::File::open(file.path())
+-        .expect("Existing test file must open read-only"),
+-    );
+-    let (nvim, _io) = Neovim::new(
+-      futures::io::Cursor::new(Vec::<u8>::new()),
+-      writer,
+-      crate::rpc::handler::Dummy::<futures::io::AllowStdIo<std::fs::File>>::new(
+-      ),
+-    );
+-    let (tx, mut rx) = oneshot::channel();
+-    nvim
+-      .queue
+-      .lock()
+-      .expect("Queue lock must not be poisoned")
+-      .requests
+-      .push((999, tx));
+-    assert!(nvim.call("write", vec![]).await.is_err());
+-    assert!(rx
+-      .try_recv()
+-      .expect("Write failure must notify pending callers")
+-      .expect("Failed write must release pending calls synchronously")
+-      .is_err());
+-    assert!(nvim
+-      .queue
+-      .lock()
+-      .expect("Queue lock must not be poisoned")
+-      .requests
+-      .is_empty());
+-    assert!(nvim
+-      .call("after_close", vec![])
+-      .await
+-      .expect_err("RPC shutdown must return an error")
+-      .is_channel_closed());
+-  }
+-
+-  #[tokio::test]
+-  async fn late_responses_after_timeout_preserve_connection() {
+-    use std::time::Duration;
+-
+-    for error in [Value::Nil, Value::from("late error")] {
+-      let nvim = Neovim {
+-        writer: Arc::new(Mutex::new(futures::io::sink())),
+-        queue: Arc::new(SyncMutex::new(Queue::default())),
+-        msgid_counter: Arc::new(AtomicU64::new(0)),
+-      };
+-      // Time out only after the complete request has been written.
+-      let cancelled = nvim.send_msg("slow", vec![]).await.unwrap();
+-      assert!(tokio::time::timeout(Duration::from_millis(1), cancelled)
+-        .await
+-        .is_err());
+-      let active = nvim.send_msg("next", vec![]).await.unwrap();
+-      let mut wire = Vec::new();
+-      for message in [
+-        RpcMessage::RpcResponse {
+-          msgid: 0,
+-          error,
+-          result: Value::Nil,
+-        },
+-        RpcMessage::RpcResponse {
+-          msgid: 1,
+-          error: Value::Nil,
+-          result: Value::from(42),
+-        },
+-        RpcMessage::RpcNotification {
+-          method: "redraw".into(),
+-          params: vec![],
+-        },
+-      ] {
+-        model::encode_sync(&mut wire, message).unwrap();
+-      }
+-      let (tx, mut rx) = unbounded();
+-      // EOF ends this finite stream, but both replies and the notification
+-      // must have been processed before the connection reports EOF.
+-      let end = nvim
+-        .clone()
+-        .io_loop(futures::io::Cursor::new(wire), tx)
+-        .await;
+-      assert!(matches!(*end.unwrap_err(), LoopError::DecodeError(..)));
+-      assert_eq!(active.await.unwrap().unwrap().unwrap(), Value::from(42));
+-      assert!(matches!(rx.next().await,
+-        Some(RpcMessage::RpcNotification { method, .. }) if method == "redraw"));
+-      assert!(nvim
+-        .queue
+-        .lock()
+-        .expect("Queue lock must not be poisoned")
+-        .requests
+-        .is_empty());
 +    use super::*;
++
++    fn session<R: AsyncRead + Send + Unpin + 'static>(
++        reader: R,
++    ) -> (
++        Neovim<futures::io::Sink>,
++        impl Future<Output = Result<(), Box<LoopError>>>,
++    ) {
++        Neovim::new(
++            reader,
++            futures::io::sink(),
++            crate::rpc::handler::Dummy::<futures::io::Sink>::new(),
++        )
+     }
+-  }
  
+-  #[derive(Clone)]
+-  struct RecordingHandler {
+-    sender: tokio::sync::mpsc::UnboundedSender<(String, Vec<Value>)>,
+-  }
++    async fn assert_disconnected(
++        nvim: &Neovim<futures::io::Sink>,
++        mut pending: oneshot::Receiver<ResponseResult>,
++    ) {
++        // Shutdown has completed, so notification must already be available.
++        let result = pending
++            .try_recv()
++            .expect("Shutdown must send an error before dropping the sender")
++            .expect("Shutdown must release pending calls synchronously");
++        assert!(result.is_err());
++        assert!(
++            nvim.queue
++                .lock()
++                .expect("Queue lock must not be poisoned")
++                .requests
++                .is_empty()
++        );
++        let error = nvim
++            .call("after_close", vec![])
++            .await
++            .expect_err("RPC shutdown must return an error");
++        assert!(error.is_channel_closed());
++    }
+ 
+-  impl Handler for RecordingHandler {
+-    type Writer = futures::io::Sink;
++    #[tokio::test]
++    async fn dropping_unpolled_io_releases_callers() {
++        let (nvim, io) = session(futures::io::Cursor::new(Vec::<u8>::new()));
++        let pending = nvim
++            .send_msg("pending", vec![])
++            .await
++            .expect("Test request must be written to the sink");
++        drop(io);
++        assert_disconnected(&nvim, pending).await;
++    }
+ 
+-    async fn handle_notify(
+-      &self,
+-      method: String,
+-      args: Vec<Value>,
+-      _neovim: Neovim<Self::Writer>,
+-    ) {
+-      self.sender.send((method, args)).unwrap();
++    #[tokio::test]
++    async fn aborting_io_releases_callers() {
++        use tokio_util::compat::TokioAsyncReadCompatExt;
++        let (reader, _peer) = tokio::io::duplex(1024);
++        let (nvim, io) = session(reader.compat());
++        let mut io = Box::pin(io);
++        let pending = nvim
++            .send_msg("pending", vec![])
++            .await
++            .expect("Test request must be written to the sink");
++        // Ensure this tests cancellation after polling, not an unpolled future.
++        assert!(futures::poll!(io.as_mut()).is_pending());
++        let task = tokio::spawn(io);
++        task.abort();
++        assert!(
++            task.await
++                .expect_err("Aborted task must report cancellation")
++                .is_cancelled()
++        );
++        assert_disconnected(&nvim, pending).await;
+     }
+-  }
+-
+-  #[tokio::test]
+-  async fn final_notification_is_handled_before_eof() {
+-    let mut wire = Vec::new();
+-    model::encode_sync(
+-      &mut wire,
+-      RpcMessage::RpcNotification {
+-        method: "redraw".into(),
+-        params: vec![],
+-      },
+-    )
+-    .unwrap();
+-
+-    let (sender, mut notifications) = tokio::sync::mpsc::unbounded_channel();
+-    let (_, session) = Neovim::new(
+-      futures::io::Cursor::new(wire),
+-      futures::io::sink(),
+-      RecordingHandler { sender },
+-    );
+-
+-    let error = session.await.unwrap_err();
+-    assert!(matches!(*error, LoopError::DecodeError(..)));
+-    assert_eq!(notifications.try_recv().unwrap(), ("redraw".into(), vec![]));
+-  }
+-
+-  #[tokio::test]
+-  async fn handshake_delivers_connect_before_eof() {
+-    let handshake = "HandshakeMessage";
+-    let connect = Value::Array(vec![
+-      Value::from("connect"),
+-      Value::Array(vec![Value::from("hey")]),
+-    ]);
+-    let redraw = vec![connect];
+-    let mut wire = Vec::new();
+-    model::encode_sync(
+-      &mut wire,
+-      RpcMessage::RpcResponse {
+-        msgid: 0,
+-        error: Value::Nil,
+-        result: Value::String(handshake.into()),
+-      },
+-    )
+-    .unwrap();
+-    model::encode_sync(
+-      &mut wire,
+-      RpcMessage::RpcNotification {
+-        method: "redraw".into(),
+-        params: redraw.clone(),
+-      },
+-    )
+-    .unwrap();
+-
+-    let (sender, mut notifications) = tokio::sync::mpsc::unbounded_channel();
+-    let (_, session) = Neovim::handshake(
+-      futures::io::Cursor::new(wire),
+-      futures::io::sink(),
+-      RecordingHandler { sender },
+-      handshake,
+-    )
+-    .await
+-    .unwrap();
+-
+-    let error = session.await.unwrap_err();
+-    assert!(matches!(*error, LoopError::DecodeError(..)));
+-    assert_eq!(notifications.try_recv().unwrap(), ("redraw".into(), redraw));
+-  }
+-
+-  #[tokio::test]
+-  async fn large_buffer_survives_backpressure() {
+-    check_large_buffer_write(false).await;
+-  }
+-
+-  #[tokio::test]
+-  async fn cancellation_while_waiting_for_writer_preserves_connection() {
+-    let (nvim, _io) = session(futures::io::Cursor::new(Vec::<u8>::new()));
+-    let writer = nvim.writer.lock().await;
+-    let mut sending = Box::pin(nvim.send_msg("cancelled", vec![]));
+-    assert!(futures::poll!(sending.as_mut()).is_pending());
+-    drop(sending);
+-    drop(writer);
+-    assert!(nvim.queue.lock().unwrap().requests.is_empty());
+-    drop(nvim.send_msg("next", vec![]).await.unwrap());
+-    assert!(!nvim.queue.lock().unwrap().closed);
+-  }
+-
+-  #[tokio::test]
+-  async fn cancelled_large_buffer_does_not_corrupt_next_request() {
+-    check_large_buffer_write(true).await;
+-  }
+-
+-  async fn check_large_buffer_write(cancel: bool) {
+-    use std::time::Duration;
+-    use tokio::io::AsyncReadExt as _;
+-    use tokio_util::compat::TokioAsyncWriteCompatExt;
+-
+-    // Model a local pipe whose peer temporarily stops reading. The payload
+-    // exceeds its capacity, so a write must yield after sending a prefix.
+-    const CAPACITY: usize = 4096;
+-    let (client, mut peer) = tokio::io::duplex(CAPACITY);
+-    let writer = client.compat_write();
+-    let (nvim, io) = Neovim::new(
+-      futures::io::Cursor::new(Vec::<u8>::new()),
+-      writer,
+-      crate::rpc::handler::Dummy::new(),
+-    );
+-    let lines = Value::Array(vec![Value::from("x".repeat(1024)); 1024]);
+-    let params = vec![
+-      Value::from("return _G.godot_neovim.sync_external_lines(...)"),
+-      Value::Array(vec![Value::from(0), lines, Value::Map(vec![])]),
+-    ];
+-    let first = RpcMessage::RpcRequest {
+-      msgid: 0,
+-      method: "nvim_exec_lua".into(),
+-      params: params.clone(),
+-    };
+-    let second = RpcMessage::RpcRequest {
+-      msgid: 1,
+-      method: "nvim_eval".into(),
+-      params: vec![Value::from("1")],
+-    };
+-    let mut first_wire = Vec::new();
+-    model::encode_sync(&mut first_wire, first.clone()).unwrap();
+-    assert!(first_wire.len() > CAPACITY);
+-
+-    let mut sending = Box::pin(nvim.send_msg("nvim_exec_lua", params));
+-    assert!(futures::poll!(sending.as_mut()).is_pending());
+-    // A request already waiting for the writer must also honor invalidation.
+-    let mut next_write =
+-      Box::pin(nvim.send_msg("nvim_eval", vec![Value::from("1")]));
+-    assert!(futures::poll!(next_write.as_mut()).is_pending());
+-    if cancel {
+-      // Match godot-neovim's timeout around the entire RPC, including sending.
+-      assert!(tokio::time::timeout(
+-        Duration::from_millis(500),
+-        sending.as_mut()
+-      )
+-      .await
+-      .is_err());
++
++    #[tokio::test]
++    async fn eof_with_cancelled_call_preserves_original_error() {
++        let (nvim, io) = session(futures::io::Cursor::new(Vec::<u8>::new()));
++        drop(
++            nvim.send_msg("cancelled", vec![])
++                .await
++                .expect("Test request must be written to the sink"),
++        );
++        let pending = nvim
++            .send_msg("pending", vec![])
++            .await
++            .expect("Test request must be written to the sink");
++        let error = io.await.expect_err("RPC shutdown must return an error");
++        assert!(matches!(*error, LoopError::DecodeError(_, None)));
++        assert!(error.is_channel_closed());
++        assert_disconnected(&nvim, pending).await;
++    }
++
++    #[tokio::test]
++    async fn unknown_response_releases_other_callers() {
++        let mut wire = Vec::new();
++        model::encode_sync(
++            &mut wire,
++            RpcMessage::RpcResponse {
++                msgid: 999,
++                error: Value::Nil,
++                result: Value::Nil,
++            },
++        )
++        .expect("Test response must encode into memory");
++        let (nvim, io) = session(futures::io::Cursor::new(wire));
++        let pending = nvim
++            .send_msg("pending", vec![])
++            .await
++            .expect("Test request must be written to the sink");
++        assert!(matches!(
++            *io.await.expect_err("RPC shutdown must return an error"),
++            LoopError::MsgidNotFound(999)
++        ));
++        assert_disconnected(&nvim, pending).await;
++    }
++
++    #[tokio::test]
++    async fn write_failure_closes_pending_requests() {
++        // Opening a file read-only gives a deterministic failing writer.
++        let file = tempfile::NamedTempFile::new().expect("Temporary test file must be created");
++        let writer = futures::io::AllowStdIo::new(
++            std::fs::File::open(file.path()).expect("Existing test file must open read-only"),
++        );
++        let (nvim, _io) = Neovim::new(
++            futures::io::Cursor::new(Vec::<u8>::new()),
++            writer,
++            crate::rpc::handler::Dummy::<futures::io::AllowStdIo<std::fs::File>>::new(),
++        );
++        let (tx, mut rx) = oneshot::channel();
++        nvim.queue
++            .lock()
++            .expect("Queue lock must not be poisoned")
++            .requests
++            .push((999, tx));
++        assert!(nvim.call("write", vec![]).await.is_err());
++        assert!(
++            rx.try_recv()
++                .expect("Write failure must notify pending callers")
++                .expect("Failed write must release pending calls synchronously")
++                .is_err()
++        );
++        assert!(
++            nvim.queue
++                .lock()
++                .expect("Queue lock must not be poisoned")
++                .requests
++                .is_empty()
++        );
++        assert!(
++            nvim.call("after_close", vec![])
++                .await
++                .expect_err("RPC shutdown must return an error")
++                .is_channel_closed()
++        );
++    }
++
++    #[tokio::test]
++    async fn late_responses_after_timeout_preserve_connection() {
++        use std::time::Duration;
++
++        for error in [Value::Nil, Value::from("late error")] {
++            let nvim = Neovim {
++                writer: Arc::new(Mutex::new(futures::io::sink())),
++                queue: Arc::new(SyncMutex::new(Queue::default())),
++                msgid_counter: Arc::new(AtomicU64::new(0)),
++            };
++            // Time out only after the complete request has been written.
++            let cancelled = nvim.send_msg("slow", vec![]).await.unwrap();
++            assert!(
++                tokio::time::timeout(Duration::from_millis(1), cancelled)
++                    .await
++                    .is_err()
++            );
++            let active = nvim.send_msg("next", vec![]).await.unwrap();
++            let mut wire = Vec::new();
++            for message in [
++                RpcMessage::RpcResponse {
++                    msgid: 0,
++                    error,
++                    result: Value::Nil,
++                },
++                RpcMessage::RpcResponse {
++                    msgid: 1,
++                    error: Value::Nil,
++                    result: Value::from(42),
++                },
++                RpcMessage::RpcNotification {
++                    method: "redraw".into(),
++                    params: vec![],
++                },
++            ] {
++                model::encode_sync(&mut wire, message).unwrap();
++            }
++            let (tx, mut rx) = unbounded();
++            // EOF ends this finite stream, but both replies and the notification
++            // must have been processed before the connection reports EOF.
++            let end = nvim
++                .clone()
++                .io_loop(futures::io::Cursor::new(wire), tx)
++                .await;
++            assert!(matches!(*end.unwrap_err(), LoopError::DecodeError(..)));
++            assert_eq!(active.await.unwrap().unwrap().unwrap(), Value::from(42));
++            assert!(matches!(rx.next().await,
++        Some(RpcMessage::RpcNotification { method, .. }) if method == "redraw"));
++            assert!(
++                nvim.queue
++                    .lock()
++                    .expect("Queue lock must not be poisoned")
++                    .requests
++                    .is_empty()
++            );
++        }
++    }
++
++    #[derive(Clone)]
++    struct RecordingHandler {
++        sender: tokio::sync::mpsc::UnboundedSender<(String, Vec<Value>)>,
++    }
++
++    impl Handler for RecordingHandler {
++        type Writer = futures::io::Sink;
++
++        async fn handle_notify(
++            &self,
++            method: String,
++            args: Vec<Value>,
++            _neovim: Neovim<Self::Writer>,
++        ) {
++            self.sender.send((method, args)).unwrap();
++        }
+     }
+ 
+-    let mut prefix = vec![0; CAPACITY];
+-    peer.read_exact(&mut prefix).await.unwrap();
+-    assert_eq!(prefix, first_wire[..CAPACITY]);
+-    let drain = tokio::spawn(async move {
+-      let mut wire = prefix;
+-      peer.read_to_end(&mut wire).await.unwrap();
+-      wire
+-    });
+-    if !cancel {
+-      drop(sending.as_mut().await.unwrap());
++    #[tokio::test]
++    async fn final_notification_is_handled_before_eof() {
++        let mut wire = Vec::new();
++        model::encode_sync(
++            &mut wire,
++            RpcMessage::RpcNotification {
++                method: "redraw".into(),
++                params: vec![],
++            },
++        )
++        .unwrap();
++
++        let (sender, mut notifications) = tokio::sync::mpsc::unbounded_channel();
++        let (_, session) = Neovim::new(
++            futures::io::Cursor::new(wire),
++            futures::io::sink(),
++            RecordingHandler { sender },
++        );
++
++        let error = session.await.unwrap_err();
++        assert!(matches!(*error, LoopError::DecodeError(..)));
++        assert_eq!(notifications.try_recv().unwrap(), ("redraw".into(), vec![]));
+     }
+-    drop(sending);
+ 
+-    let next =
+-      tokio::time::timeout(Duration::from_secs(2), next_write.as_mut())
++    #[tokio::test]
++    async fn handshake_delivers_connect_before_eof() {
++        let handshake = "HandshakeMessage";
++        let connect = Value::Array(vec![
++            Value::from("connect"),
++            Value::Array(vec![Value::from("hey")]),
++        ]);
++        let redraw = vec![connect];
++        let mut wire = Vec::new();
++        model::encode_sync(
++            &mut wire,
++            RpcMessage::RpcResponse {
++                msgid: 0,
++                error: Value::Nil,
++                result: Value::String(handshake.into()),
++            },
++        )
++        .unwrap();
++        model::encode_sync(
++            &mut wire,
++            RpcMessage::RpcNotification {
++                method: "redraw".into(),
++                params: redraw.clone(),
++            },
++        )
++        .unwrap();
++
++        let (sender, mut notifications) = tokio::sync::mpsc::unbounded_channel();
++        let (_, session) = Neovim::handshake(
++            futures::io::Cursor::new(wire),
++            futures::io::sink(),
++            RecordingHandler { sender },
++            handshake,
++        )
+         .await
+-        .expect("The next write must finish or reject the closed connection");
+-    drop(next_write);
+-    drop(io);
+-    drop(nvim);
+-    let wire = tokio::time::timeout(Duration::from_secs(2), drain)
+-      .await
+-      .unwrap()
+-      .unwrap();
+-
+-    if next.is_err() {
+-      // Closing the connection after cancellation is also a safe outcome.
+-      assert!(cancel);
+-      assert!(first_wire.starts_with(&wire));
+-      return;
++        .unwrap();
++
++        let error = session.await.unwrap_err();
++        assert!(matches!(*error, LoopError::DecodeError(..)));
++        assert_eq!(notifications.try_recv().unwrap(), ("redraw".into(), redraw));
+     }
+-    let mut reader = futures::io::Cursor::new(wire);
+-    let mut rest = Vec::new();
+-    let decoded = model::decode(&mut reader, &mut rest)
+-      .await
+-      .expect("Accepting another request must not leave a truncated RPC frame");
+-    assert_eq!(decoded, first);
+-    assert_eq!(model::decode(&mut reader, &mut rest).await.unwrap(), second);
+-    assert!(rest.is_empty());
+-  }
+-
 -  #[tokio::test]
 -  async fn test_find_sender() {
--    let queue = Arc::new(Mutex::new(Vec::new()));
+-    let queue = Arc::new(SyncMutex::new(Queue::default()));
+ 
+-    {
+-      let (sender, _receiver) = oneshot::channel();
+-      queue
+-        .lock()
+-        .expect("Queue lock must not be poisoned")
+-        .requests
+-        .push((1, sender));
 +    #[tokio::test]
-+    async fn test_find_sender() {
-+        let queue = Arc::new(Mutex::new(Vec::new()));
- 
++    async fn large_buffer_survives_backpressure() {
++        check_large_buffer_write(false).await;
+     }
 -    {
 -      let (sender, _receiver) = oneshot::channel();
--      queue.lock().await.push((1, sender));
--    }
+-      queue
+-        .lock()
+-        .expect("Queue lock must not be poisoned")
+-        .requests
+-        .push((2, sender));
++
++    #[tokio::test]
++    async fn cancellation_while_waiting_for_writer_preserves_connection() {
++        let (nvim, _io) = session(futures::io::Cursor::new(Vec::<u8>::new()));
++        let writer = nvim.writer.lock().await;
++        let mut sending = Box::pin(nvim.send_msg("cancelled", vec![]));
++        assert!(futures::poll!(sending.as_mut()).is_pending());
++        drop(sending);
++        drop(writer);
++        assert!(nvim.queue.lock().unwrap().requests.is_empty());
++        drop(nvim.send_msg("next", vec![]).await.unwrap());
++        assert!(!nvim.queue.lock().unwrap().closed);
+     }
 -    {
 -      let (sender, _receiver) = oneshot::channel();
--      queue.lock().await.push((2, sender));
--    }
--    {
--      let (sender, _receiver) = oneshot::channel();
--      queue.lock().await.push((3, sender));
--    }
-+        {
-+            let (sender, _receiver) = oneshot::channel();
-+            queue.lock().await.push((1, sender));
-+        }
-+        {
-+            let (sender, _receiver) = oneshot::channel();
-+            queue.lock().await.push((2, sender));
-+        }
-+        {
-+            let (sender, _receiver) = oneshot::channel();
-+            queue.lock().await.push((3, sender));
-+        }
+-      queue
+-        .lock()
+-        .expect("Queue lock must not be poisoned")
+-        .requests
+-        .push((3, sender));
++
++    #[tokio::test]
++    async fn cancelled_large_buffer_does_not_corrupt_next_request() {
++        check_large_buffer_write(true).await;
+     }
  
--    find_sender(&queue, 1).await.unwrap();
--    assert_eq!(2, queue.lock().await.len());
--    find_sender(&queue, 2).await.unwrap();
--    assert_eq!(1, queue.lock().await.len());
--    find_sender(&queue, 3).await.unwrap();
--    assert!(queue.lock().await.is_empty());
-+        find_sender(&queue, 1).await.unwrap();
-+        assert_eq!(2, queue.lock().await.len());
-+        find_sender(&queue, 2).await.unwrap();
-+        assert_eq!(1, queue.lock().await.len());
-+        find_sender(&queue, 3).await.unwrap();
-+        assert!(queue.lock().await.is_empty());
- 
--    if let LoopError::MsgidNotFound(17) =
--      *find_sender(&queue, 17).await.unwrap_err()
+-    find_sender(&queue, 1).unwrap();
+-    assert_eq!(
+-      2,
+-      queue
+-        .lock()
+-        .expect("Queue lock must not be poisoned")
+-        .requests
+-        .len()
+-    );
+-    find_sender(&queue, 2).unwrap();
+-    assert_eq!(
+-      1,
+-      queue
+-        .lock()
+-        .expect("Queue lock must not be poisoned")
+-        .requests
+-        .len()
+-    );
+-    find_sender(&queue, 3).unwrap();
+-    assert!(queue
+-      .lock()
+-      .expect("Queue lock must not be poisoned")
+-      .requests
+-      .is_empty());
+-
+-    if let LoopError::MsgidNotFound(17) = *find_sender(&queue, 17).unwrap_err()
 -    {
 -    } else {
 -      panic!()
-+        if let LoopError::MsgidNotFound(17) = *find_sender(&queue, 17).await.unwrap_err() {
++    async fn check_large_buffer_write(cancel: bool) {
++        use std::time::Duration;
++        use tokio::io::AsyncReadExt as _;
++        use tokio_util::compat::TokioAsyncWriteCompatExt;
++
++        // Model a local pipe whose peer temporarily stops reading. The payload
++        // exceeds its capacity, so a write must yield after sending a prefix.
++        const CAPACITY: usize = 4096;
++        let (client, mut peer) = tokio::io::duplex(CAPACITY);
++        let writer = client.compat_write();
++        let (nvim, io) = Neovim::new(
++            futures::io::Cursor::new(Vec::<u8>::new()),
++            writer,
++            crate::rpc::handler::Dummy::new(),
++        );
++        let lines = Value::Array(vec![Value::from("x".repeat(1024)); 1024]);
++        let params = vec![
++            Value::from("return _G.godot_neovim.sync_external_lines(...)"),
++            Value::Array(vec![Value::from(0), lines, Value::Map(vec![])]),
++        ];
++        let first = RpcMessage::RpcRequest {
++            msgid: 0,
++            method: "nvim_exec_lua".into(),
++            params: params.clone(),
++        };
++        let second = RpcMessage::RpcRequest {
++            msgid: 1,
++            method: "nvim_eval".into(),
++            params: vec![Value::from("1")],
++        };
++        let mut first_wire = Vec::new();
++        model::encode_sync(&mut first_wire, first.clone()).unwrap();
++        assert!(first_wire.len() > CAPACITY);
++
++        let mut sending = Box::pin(nvim.send_msg("nvim_exec_lua", params));
++        assert!(futures::poll!(sending.as_mut()).is_pending());
++        // A request already waiting for the writer must also honor invalidation.
++        let mut next_write = Box::pin(nvim.send_msg("nvim_eval", vec![Value::from("1")]));
++        assert!(futures::poll!(next_write.as_mut()).is_pending());
++        if cancel {
++            // Match godot-neovim's timeout around the entire RPC, including sending.
++            assert!(
++                tokio::time::timeout(Duration::from_millis(500), sending.as_mut())
++                    .await
++                    .is_err()
++            );
++        }
++
++        let mut prefix = vec![0; CAPACITY];
++        peer.read_exact(&mut prefix).await.unwrap();
++        assert_eq!(prefix, first_wire[..CAPACITY]);
++        let drain = tokio::spawn(async move {
++            let mut wire = prefix;
++            peer.read_to_end(&mut wire).await.unwrap();
++            wire
++        });
++        if !cancel {
++            drop(sending.as_mut().await.unwrap());
++        }
++        drop(sending);
++
++        let next = tokio::time::timeout(Duration::from_secs(2), next_write.as_mut())
++            .await
++            .expect("The next write must finish or reject the closed connection");
++        drop(next_write);
++        drop(io);
++        drop(nvim);
++        let wire = tokio::time::timeout(Duration::from_secs(2), drain)
++            .await
++            .unwrap()
++            .unwrap();
++
++        if next.is_err() {
++            // Closing the connection after cancellation is also a safe outcome.
++            assert!(cancel);
++            assert!(first_wire.starts_with(&wire));
++            return;
++        }
++        let mut reader = futures::io::Cursor::new(wire);
++        let mut rest = Vec::new();
++        let decoded = model::decode(&mut reader, &mut rest)
++            .await
++            .expect("Accepting another request must not leave a truncated RPC frame");
++        assert_eq!(decoded, first);
++        assert_eq!(model::decode(&mut reader, &mut rest).await.unwrap(), second);
++        assert!(rest.is_empty());
++    }
++
++    #[tokio::test]
++    async fn test_find_sender() {
++        let queue = Arc::new(SyncMutex::new(Queue::default()));
++
++        {
++            let (sender, _receiver) = oneshot::channel();
++            queue
++                .lock()
++                .expect("Queue lock must not be poisoned")
++                .requests
++                .push((1, sender));
++        }
++        {
++            let (sender, _receiver) = oneshot::channel();
++            queue
++                .lock()
++                .expect("Queue lock must not be poisoned")
++                .requests
++                .push((2, sender));
++        }
++        {
++            let (sender, _receiver) = oneshot::channel();
++            queue
++                .lock()
++                .expect("Queue lock must not be poisoned")
++                .requests
++                .push((3, sender));
++        }
++
++        find_sender(&queue, 1).unwrap();
++        assert_eq!(
++            2,
++            queue
++                .lock()
++                .expect("Queue lock must not be poisoned")
++                .requests
++                .len()
++        );
++        find_sender(&queue, 2).unwrap();
++        assert_eq!(
++            1,
++            queue
++                .lock()
++                .expect("Queue lock must not be poisoned")
++                .requests
++                .len()
++        );
++        find_sender(&queue, 3).unwrap();
++        assert!(
++            queue
++                .lock()
++                .expect("Queue lock must not be poisoned")
++                .requests
++                .is_empty()
++        );
++
++        if let LoopError::MsgidNotFound(17) = *find_sender(&queue, 17).unwrap_err() {
 +        } else {
 +            panic!()
 +        }
@@ -4260,7 +5481,7 @@ index d421b696ca316ab0021125a4701489e96df52dc2..08b2b76f04ed2caf9111640a46e5c05f
 -  }
  }
 diff --git a/src/neovim_api.rs b/src/neovim_api.rs
-index e2070276a6f1233cc89008d811720d66d8732980..624dc6e98b64f59d4fd4a1c9a2a30f7eb2444199 100644
+index e207027..624dc6e 100644
 --- a/src/neovim_api.rs
 +++ b/src/neovim_api.rs
 @@ -4,2027 +4,1699 @@
@@ -7967,7 +9188,7 @@ index e2070276a6f1233cc89008d811720d66d8732980..624dc6e98b64f59d4fd4a1c9a2a30f7e
 +    }
  }
 diff --git a/src/neovim_api_manual.rs b/src/neovim_api_manual.rs
-index 9a5d4019dc95b95257d6d096d107b0c1b1167e3c..65c89fac92c3b2fe624c36b4a9beb244289a6b1f 100644
+index 9a5d401..65c89fa 100644
 --- a/src/neovim_api_manual.rs
 +++ b/src/neovim_api_manual.rs
 @@ -2,104 +2,83 @@
@@ -8141,12 +9362,12 @@ index 9a5d4019dc95b95257d6d096d107b0c1b1167e3c..65c89fac92c3b2fe624c36b4a9beb244
 +    }
  }
 diff --git a/src/rpc/handler.rs b/src/rpc/handler.rs
-index 691171517a28eb204db0180a68fe71e92a0559e7..35e3431230731df4e5b15eb37e451478cdbcebdc 100644
+index 9e5a3b2..3f46db9 100644
 --- a/src/rpc/handler.rs
 +++ b/src/rpc/handler.rs
-@@ -15,32 +15,32 @@ use crate::Neovim;
+@@ -13,33 +13,33 @@ use crate::Neovim;
+ /// asynchronous task can receive a copy of the handler, so some state can be
  /// shared.
- #[async_trait]
  pub trait Handler: Send + Sync + Clone + 'static {
 -  /// The type where we write our responses to requests. Handling of incoming
 -  /// requests/notifications is done on the io loop, which passes the parsed
@@ -8159,49 +9380,51 @@ index 691171517a28eb204db0180a68fe71e92a0559e7..35e3431230731df4e5b15eb37e451478
  
 -  /// Handling an rpc request. The ID's of requests are handled by the
 -  /// [`neovim`](crate::neovim::Neovim) instance.
--  async fn handle_request(
+-  fn handle_request(
 -    &self,
 -    _name: String,
 -    _args: Vec<Value>,
 -    _neovim: Neovim<Self::Writer>,
--  ) -> Result<Value, Value> {
--    Err(Value::from("Not implemented"))
+-  ) -> impl Future<Output = Result<Value, Value>> + Send {
+-    async { Err(Value::from("Not implemented")) }
 -  }
 +    /// Handling an rpc request. The ID's of requests are handled by the
 +    /// [`neovim`](crate::neovim::Neovim) instance.
-+    async fn handle_request(
++    fn handle_request(
 +        &self,
 +        _name: String,
 +        _args: Vec<Value>,
 +        _neovim: Neovim<Self::Writer>,
-+    ) -> Result<Value, Value> {
-+        Err(Value::from("Not implemented"))
++    ) -> impl Future<Output = Result<Value, Value>> + Send {
++        async { Err(Value::from("Not implemented")) }
 +    }
  
 -  /// Handling an rpc notification. Notifications are handled one at a time in
 -  /// the order in which they were received, and will block new requests from
 -  /// being received until handle_notify returns.
--  async fn handle_notify(
+-  fn handle_notify(
 -    &self,
 -    _name: String,
 -    _args: Vec<Value>,
 -    _neovim: Neovim<<Self as Handler>::Writer>,
--  ) {
+-  ) -> impl Future<Output = ()> + Send {
+-    async {}
 -  }
 +    /// Handling an rpc notification. Notifications are handled one at a time in
 +    /// the order in which they were received, and will block new requests from
 +    /// being received until handle_notify returns.
-+    async fn handle_notify(
++    fn handle_notify(
 +        &self,
 +        _name: String,
 +        _args: Vec<Value>,
 +        _neovim: Neovim<<Self as Handler>::Writer>,
-+    ) {
++    ) -> impl Future<Output = ()> + Send {
++        async {}
 +    }
  }
  
  /// The dummy handler defaults to doing nothing with a notification, and
-@@ -50,35 +50,35 @@ pub trait Handler: Send + Sync + Clone + 'static {
+@@ -49,35 +49,35 @@ pub trait Handler: Send + Sync + Clone + 'static {
  #[derive(Default)]
  pub struct Dummy<Q>
  where
@@ -8252,7 +9475,7 @@ index 691171517a28eb204db0180a68fe71e92a0559e7..35e3431230731df4e5b15eb37e451478
 -  }
  }
 diff --git a/src/rpc/model.rs b/src/rpc/model.rs
-index a97c0eb63cb24d57bfb92825980e2a55bba3af00..a884cef2927d44398b1fe18db8240ec4d44cf0a1 100644
+index ceb30f9..106f287 100644
 --- a/src/rpc/model.rs
 +++ b/src/rpc/model.rs
 @@ -1,16 +1,16 @@
@@ -8835,7 +10058,7 @@ index a97c0eb63cb24d57bfb92825980e2a55bba3af00..a884cef2927d44398b1fe18db8240ec4
 +    }
  }
 diff --git a/src/rpc/unpack.rs b/src/rpc/unpack.rs
-index 6b5681eb0f0cfbd3cb36e1ca33bb6d488540b4dc..e2fabf8431cf8a9f6733b1b3ee918a7e1e71b742 100644
+index 6b5681e..e2fabf8 100644
 --- a/src/rpc/unpack.rs
 +++ b/src/rpc/unpack.rs
 @@ -21,56 +21,50 @@ use rmpv::Value;
@@ -8992,7 +10215,7 @@ index 6b5681eb0f0cfbd3cb36e1ca33bb6d488540b4dc..e2fabf8431cf8a9f6733b1b3ee918a7e
  
  impl_try_unpack_tryfrom!(i64);
 diff --git a/src/uioptions.rs b/src/uioptions.rs
-index 157d4d39d1a3b4b35df2b59e394e8f942ec3d6da..8cb8ecdfb7f48e9821299a7f1cd65b90a69699d2 100644
+index 1d75039..8c0c688 100644
 --- a/src/uioptions.rs
 +++ b/src/uioptions.rs
 @@ -5,57 +5,57 @@
@@ -9180,7 +10403,7 @@ index 157d4d39d1a3b4b35df2b59e394e8f942ec3d6da..8cb8ecdfb7f48e9821299a7f1cd65b90
 +    }
  }
 diff --git a/tests/basic.rs b/tests/basic.rs
-index 73ed6117a8066f02196211412c2756f92536c9dd..c25f77cfb0ffa7667c3eb4630f37ee2ff87bd0cb 100644
+index 73ed611..c25f77c 100644
 --- a/tests/basic.rs
 +++ b/tests/basic.rs
 @@ -6,55 +6,55 @@ use std::{fs, path::PathBuf, process::Command};
@@ -9287,7 +10510,7 @@ index 73ed6117a8066f02196211412c2756f92536c9dd..c25f77cfb0ffa7667c3eb4630f37ee2f
 +    assert_eq!("Ext(0, [1])", buf.trim());
  }
 diff --git a/tests/common/mod.rs b/tests/common/mod.rs
-index 5924d2a7ebfd77588fa69a10b5891dbfa599ece7..b661f3fca7b60eb9dbcb61b8a67d0f0a6afcf774 100644
+index 5924d2a..b661f3f 100644
 --- a/tests/common/mod.rs
 +++ b/tests/common/mod.rs
 @@ -1,37 +1,33 @@
@@ -9351,11 +10574,11 @@ index 5924d2a7ebfd77588fa69a10b5891dbfa599ece7..b661f3fca7b60eb9dbcb61b8a67d0f0a
 +    path
  }
 diff --git a/tests/connecting/conns.rs b/tests/connecting/conns.rs
-index e2ceba73a654e81874628e685151dd71affca5b6..3bd3e6935b40485ab19722228fe44100a66f60c1 100644
+index 8529175..f8ee3a5 100644
 --- a/tests/connecting/conns.rs
 +++ b/tests/connecting/conns.rs
-@@ -12,10 +12,10 @@ use async_std::test as atest;
- use nvim_rs::create::async_std as create;
+@@ -10,10 +10,10 @@ use nvim_rs::create::smol as create;
+ use super::atest;
  
  use std::{
 -  path::Path,
@@ -9369,66 +10592,16 @@ index e2ceba73a654e81874628e685151dd71affca5b6..3bd3e6935b40485ab19722228fe44100
  };
  
  #[cfg(unix)]
-@@ -30,102 +30,102 @@ const PORT: u16 = 6666;
+@@ -26,7 +26,7 @@ use common::*;
+ const HOST: &str = "127.0.0.1";
+ const PORT: u16 = 6666;
  
- #[atest]
+-atest!{
++atest! {
  async fn can_connect_via_tcp() {
--  let listen = HOST.to_string() + ":" + &PORT.to_string();
-+    let listen = HOST.to_string() + ":" + &PORT.to_string();
+   let listen = HOST.to_string() + ":" + &PORT.to_string();
  
--  let mut child = Command::new(nvim_path())
--    .args(&["-u", "NONE", "--headless", "--listen", &listen])
--    .spawn()
--    .expect("Cannot start neovim");
-+    let mut child = Command::new(nvim_path())
-+        .args(&["-u", "NONE", "--headless", "--listen", &listen])
-+        .spawn()
-+        .expect("Cannot start neovim");
- 
--  // wait at most 1 second for neovim to start and create the tcp socket
--  let start = Instant::now();
-+    // wait at most 1 second for neovim to start and create the tcp socket
-+    let start = Instant::now();
- 
--  let (nvim, _io_handle) = loop {
--    sleep(Duration::from_millis(100));
-+    let (nvim, _io_handle) = loop {
-+        sleep(Duration::from_millis(100));
- 
--    let handler = DummyHandler::new();
--    if let Ok(r) = create::new_tcp(&listen, handler).await {
--      break r;
--    } else {
--      if Duration::from_secs(1) <= start.elapsed() {
--        panic!("Unable to connect to neovim via tcp at {}", listen);
--      }
--    }
--  };
-+        let handler = DummyHandler::new();
-+        if let Ok(r) = create::new_tcp(&listen, handler).await {
-+            break r;
-+        } else {
-+            if Duration::from_secs(1) <= start.elapsed() {
-+                panic!("Unable to connect to neovim via tcp at {}", listen);
-+            }
-+        }
-+    };
- 
--  let servername = nvim
--    .get_vvar("servername")
--    .await
--    .expect("Error retrieving servername from neovim");
-+    let servername = nvim
-+        .get_vvar("servername")
-+        .await
-+        .expect("Error retrieving servername from neovim");
- 
--  child.kill().expect("Could not kill neovim");
-+    child.kill().expect("Could not kill neovim");
- 
--  assert_eq!(&listen, servername.as_str().unwrap());
-+    assert_eq!(&listen, servername.as_str().unwrap());
- }
+@@ -64,23 +64,23 @@ async fn can_connect_via_tcp() {
  
  #[cfg(unix)]
  fn get_socket_path() -> (std::path::PathBuf, TempDir) {
@@ -9455,230 +10628,75 @@ index e2ceba73a654e81874628e685151dd71affca5b6..3bd3e6935b40485ab19722228fe44100
 +    (name.into(), ())
  }
  
- #[cfg(not(all(feature = "use_async-std", windows)))]
- #[atest]
+ #[cfg(not(all(feature = "use_smol", windows)))]
+-atest!{
++atest! {
  async fn can_connect_via_path() {
--  let (socket_path, _guard) = get_socket_path();
--
--  let mut child = Command::new(nvim_path())
--    .args(&["-u", "NONE", "--headless"])
--    .env("NVIM_LISTEN_ADDRESS", &socket_path)
--    .spawn()
--    .expect("Cannot start neovim");
--
--  // wait at most 1 second for neovim to start and create the socket
--  {
--    let start = Instant::now();
--    let one_second = Duration::from_secs(1);
--    loop {
--      sleep(Duration::from_millis(100));
--
--      if let Ok(_) = std::fs::metadata(&socket_path) {
--        break;
--      }
--
--      if one_second <= start.elapsed() {
--        panic!("neovim socket not found at '{:?}'", &socket_path);
--      }
-+    let (socket_path, _guard) = get_socket_path();
-+
-+    let mut child = Command::new(nvim_path())
-+        .args(&["-u", "NONE", "--headless"])
-+        .env("NVIM_LISTEN_ADDRESS", &socket_path)
-+        .spawn()
-+        .expect("Cannot start neovim");
-+
-+    // wait at most 1 second for neovim to start and create the socket
-+    {
-+        let start = Instant::now();
-+        let one_second = Duration::from_secs(1);
-+        loop {
-+            sleep(Duration::from_millis(100));
-+
-+            if let Ok(_) = std::fs::metadata(&socket_path) {
-+                break;
-+            }
-+
-+            if one_second <= start.elapsed() {
-+                panic!("neovim socket not found at '{:?}'", &socket_path);
-+            }
-+        }
-     }
--  }
+   let (socket_path, _guard) = get_socket_path();
  
--  let handler = DummyHandler::new();
-+    let handler = DummyHandler::new();
- 
--  let (nvim, _io_handle) = create::new_path(&socket_path, handler)
--    .await
--    .expect(&format!(
--      "Unable to connect to neovim's unix socket at {:?}",
--      &socket_path
--    ));
-+    let (nvim, _io_handle) = create::new_path(&socket_path, handler)
-+        .await
-+        .expect(&format!(
-+            "Unable to connect to neovim's unix socket at {:?}",
-+            &socket_path
-+        ));
- 
--  let servername = nvim
--    .get_vvar("servername")
--    .await
--    .expect("Error retrieving servername from neovim")
--    .as_str()
--    .unwrap()
--    .to_string();
-+    let servername = nvim
-+        .get_vvar("servername")
-+        .await
-+        .expect("Error retrieving servername from neovim")
-+        .as_str()
-+        .unwrap()
-+        .to_string();
- 
--  child.kill().expect("Could not kill neovim");
-+    child.kill().expect("Could not kill neovim");
- 
--  assert_eq!(socket_path, Path::new(&servername));
-+    assert_eq!(socket_path, Path::new(&servername));
- }
 diff --git a/tests/connecting/handshake.rs b/tests/connecting/handshake.rs
-index 2d29263eeb10deaae306471b69a8daf735efee22..b57873869a62a1d21cba9790b4834e53bd266b86 100644
+index 9d64fe6..0e7b974 100644
 --- a/tests/connecting/handshake.rs
 +++ b/tests/connecting/handshake.rs
-@@ -22,67 +22,70 @@ use nvim_rs::error::HandshakeError;
+@@ -18,7 +18,7 @@ use common::*;
  
- #[atest]
+ use nvim_rs::error::HandshakeError;
+ 
+-atest!{
++atest! {
  async fn successful_handshake() {
--  let handler = DummyHandler::new();
-+    let handler = DummyHandler::new();
+   let handler = DummyHandler::new();
  
--  create::new_child_handshake_cmd(
--    Command::new(nvim_path()).args(&["-u", "NONE", "--embed"]),
--    handler,
--    "handshake_message",
--  )
--  .await
--  .expect("Should launch correctly");
-+    create::new_child_handshake_cmd(
-+        Command::new(nvim_path()).args(&["-u", "NONE", "--embed"]),
-+        handler,
-+        "handshake_message",
-+    )
-+    .await
-+    .expect("Should launch correctly");
+@@ -33,7 +33,7 @@ async fn successful_handshake() {
  }
  
  #[cfg(unix)]
- #[atest]
+-atest!{
++atest! {
  async fn successful_handshake_with_extra_output() {
--  let handler = DummyHandler::new();
--  let nvim = nvim_path();
-+    let handler = DummyHandler::new();
-+    let nvim = nvim_path();
- 
--  create::new_child_handshake_cmd(
--    Command::new("/bin/sh").args(&[
--      "-c",
--      &format!(
--        "echo 'extra output';{} -u NONE --embed",
--        nvim.to_string_lossy()
--      ),
--    ]),
--    handler,
--    "handshake_message",
--  )
--  .await
--  .expect("Should launch correctly");
-+    create::new_child_handshake_cmd(
-+        Command::new("/bin/sh").args(&[
-+            "-c",
-+            &format!(
-+                "echo 'extra output';{} -u NONE --embed",
-+                nvim.to_string_lossy()
-+            ),
-+        ]),
-+        handler,
-+        "handshake_message",
-+    )
-+    .await
-+    .expect("Should launch correctly");
+   let handler = DummyHandler::new();
+   let nvim = nvim_path();
+@@ -55,7 +55,7 @@ async fn successful_handshake_with_extra_output() {
  }
  
  #[cfg(unix)]
- #[atest]
+-atest!{
++atest! {
  async fn unsuccessful_handshake_with_wrong_output() {
--  let handler = DummyHandler::new();
-+    let handler = DummyHandler::new();
+   let handler = DummyHandler::new();
  
--  // NOTE: This has to match the exact length of the message sent
--  let expected_request_len = 46;
-+    // NOTE: This has to match the exact length of the message sent
-+    let expected_request_len = 46;
+diff --git a/tests/connecting/mod.rs b/tests/connecting/mod.rs
+index fc382f4..14c0d0f 100644
+--- a/tests/connecting/mod.rs
++++ b/tests/connecting/mod.rs
+@@ -23,7 +23,7 @@ macro_rules! atest { // taken from smol::lib.rs
+         async fn $name:ident ($($pname:ident : $pty:ty),* $(,)?)
+         $(-> $ret:ty)? $bl:block
+     ) => {
+-        #[tokio::test] 
++        #[tokio::test]
+         $(#[$post_attr])*
+         async fn $name($($pname: $pty),*) $(-> $ret)? $bl
+     };
+@@ -31,6 +31,5 @@ macro_rules! atest { // taken from smol::lib.rs
+ #[cfg(feature = "use_tokio")]
+ pub(crate) use atest;
  
--  // Make sure that the command is alive for long enough by reading the request
--  // message from stdin with dd
--  let res = create::new_child_handshake_cmd(
--    Command::new("/bin/sh").args(&[
--        "-c",
--        &format!("echo 'wrong output';
--                  timeout 5 dd bs=1 count={expected_request_len} > /dev/null 2>&1")]),
--    handler,
--    "handshake_message",
--  )
--  .await;
-+    // Make sure that the command is alive for long enough by reading the request
-+    // message from stdin with dd
-+    let res = create::new_child_handshake_cmd(
-+        Command::new("/bin/sh").args(&[
-+            "-c",
-+            &format!(
-+                "echo 'wrong output';
-+                  timeout 5 dd bs=1 count={expected_request_len} > /dev/null 2>&1"
-+            ),
-+        ]),
-+        handler,
-+        "handshake_message",
-+    )
-+    .await;
- 
--  match res {
--    Err(err) => match *err {
--      HandshakeError::UnexpectedResponse(output) => {
--        assert_eq!(output, "wrong output\n");
--      }
--      _ => {
--        panic!("Unexpected error returned {}", err);
--      }
--    },
--    _ => panic!("No error returned"),
--  }
-+    match res {
-+        Err(err) => match *err {
-+            HandshakeError::UnexpectedResponse(output) => {
-+                assert_eq!(output, "wrong output\n");
-+            }
-+            _ => {
-+                panic!("Unexpected error returned {}", err);
-+            }
-+        },
-+        _ => panic!("No error returned"),
-+    }
- }
+-
+ #[cfg(feature = "use_smol")]
+ use smol_macros::test as atest;
 diff --git a/tests/nested_requests.rs b/tests/nested_requests.rs
-index 6ea12ffa67ed8064a8d4e6f384b8b57baa2e69b1..4d18111724b4b6060c055276c00d9cf5a80ffff5 100644
+index 7d43a13..53d7c42 100644
 --- a/tests/nested_requests.rs
 +++ b/tests/nested_requests.rs
-@@ -1,6 +1,4 @@
+@@ -1,15 +1,13 @@
 -use nvim_rs::{
 -  compat::tokio::Compat, create::tokio as create, neovim::Neovim, Handler,
 -};
 +use nvim_rs::{Handler, compat::tokio::Compat, create::tokio as create, neovim::Neovim};
  
- use async_trait::async_trait;
+ use rmpv::Value;
  
-@@ -9,9 +7,9 @@ use rmpv::Value;
  use std::sync::Arc;
  
  use tokio::{
@@ -9691,7 +10709,7 @@ index 6ea12ffa67ed8064a8d4e6f384b8b57baa2e69b1..4d18111724b4b6060c055276c00d9cf5
  };
  
  use futures::lock::Mutex;
-@@ -21,137 +19,133 @@ use common::*;
+@@ -19,136 +17,132 @@ use common::*;
  
  #[derive(Clone)]
  struct NeovimHandler {
@@ -9699,7 +10717,6 @@ index 6ea12ffa67ed8064a8d4e6f384b8b57baa2e69b1..4d18111724b4b6060c055276c00d9cf5
 +    froodle: Arc<Mutex<String>>,
  }
  
- #[async_trait]
  impl Handler for NeovimHandler {
 -  type Writer = Compat<ChildStdin>;
 -
@@ -9942,17 +10959,15 @@ index 6ea12ffa67ed8064a8d4e6f384b8b57baa2e69b1..4d18111724b4b6060c055276c00d9cf5
 +    );
  }
 diff --git a/tests/notifications.rs b/tests/notifications.rs
-index a897066d28d9f1d13402dfc7b5196a1ebe81d9bd..5e1e8bdb1b7c9e6a831c29fabf5cf00a49be0839 100644
+index 5b257e3..86424f9 100644
 --- a/tests/notifications.rs
 +++ b/tests/notifications.rs
-@@ -1,28 +1,19 @@
+@@ -1,26 +1,17 @@
 -use std::{
 -  sync::Arc,
 -  time::Duration,
 -};
 +use std::{sync::Arc, time::Duration};
- 
- use async_trait::async_trait;
  
  use tokio::{
 -  sync::{
@@ -9982,7 +10997,7 @@ index a897066d28d9f1d13402dfc7b5196a1ebe81d9bd..5e1e8bdb1b7c9e6a831c29fabf5cf00a
  
  mod common;
  use common::*;
-@@ -31,97 +22,88 @@ const ITERS: usize = 25;
+@@ -29,96 +20,87 @@ const ITERS: usize = 25;
  const TIMEOUT: Duration = Duration::from_secs(60);
  
  macro_rules! timeout {
@@ -10005,7 +11020,6 @@ index a897066d28d9f1d13402dfc7b5196a1ebe81d9bd..5e1e8bdb1b7c9e6a831c29fabf5cf00a
 +    notifiers: Arc<Vec<Notify>>,
  }
  
- #[async_trait]
  impl nvim_rs::Handler for Handler {
 -  type Writer = Compat<ChildStdin>;
 -
@@ -10151,7 +11165,7 @@ index a897066d28d9f1d13402dfc7b5196a1ebe81d9bd..5e1e8bdb1b7c9e6a831c29fabf5cf00a
 +    }
  }
 diff --git a/tests/regression/buffering.rs b/tests/regression/buffering.rs
-index 8e2a695a98c9c313746c9701e80a61bb701094a7..e022c943e81cfd945014da9f735c53ad1083bf78 100644
+index fb62836..4d9e031 100644
 --- a/tests/regression/buffering.rs
 +++ b/tests/regression/buffering.rs
 @@ -5,41 +5,34 @@ use common::*;
@@ -10165,12 +11179,12 @@ index 8e2a695a98c9c313746c9701e80a61bb701094a7..e022c943e81cfd945014da9f735c53ad
  fn linebuffercrashbin() -> &'static str {
 -  #[cfg(feature = "use_tokio")]
 -  return "linebuffercrash";
--  #[cfg(feature = "use_async-std")]
--  return "linebuffercrash_as";
+-  #[cfg(feature = "use_smol")]
+-  return "linebuffercrash_smol";
 +    #[cfg(feature = "use_tokio")]
 +    return "linebuffercrash";
-+    #[cfg(feature = "use_async-std")]
-+    return "linebuffercrash_as";
++    #[cfg(feature = "use_smol")]
++    return "linebuffercrash_smol";
  }
  
  #[test]

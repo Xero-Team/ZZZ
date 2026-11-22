@@ -1,7 +1,5 @@
 use std::{sync::Arc, time::Duration};
 
-use async_trait::async_trait;
-
 use tokio::{
     process::{ChildStdin, Command},
     sync::{
@@ -34,7 +32,6 @@ struct Handler {
     notifiers: Arc<Vec<Notify>>,
 }
 
-#[async_trait]
 impl nvim_rs::Handler for Handler {
     type Writer = Compat<ChildStdin>;
 

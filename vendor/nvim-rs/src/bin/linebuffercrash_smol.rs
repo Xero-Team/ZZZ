@@ -1,10 +1,11 @@
-use nvim_rs::{create::async_std as create, rpc::handler::Dummy as DummyHandler};
+use nvim_rs::{create::smol as create, rpc::handler::Dummy as DummyHandler};
 
-#[async_std::main]
-async fn main() {
-    let handler = DummyHandler::new();
-    let (nvim, _io_handler) = create::new_parent(handler).await.unwrap();
-    let curbuf = nvim.get_current_buf().await.unwrap();
+use smol_macros::main;
+
+main! { async fn main() {
+  let handler = DummyHandler::new();
+  let (nvim, _io_handler) = create::new_parent(handler).await.unwrap();
+  let curbuf = nvim.get_current_buf().await.unwrap();
 
     // If our Stdout is linebuffered, this has a high chance of crashing neovim
     // Should probably befixed in neovim itself, but for now, let's just make
@@ -15,4 +16,6 @@ async fn main() {
     }
 
     let _ = nvim.command("quit!").await;
+
+  }
 }

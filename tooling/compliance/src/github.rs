@@ -422,7 +422,7 @@ pub mod graph_ql {
 mod octo_client {
     use anyhow::{Context, Result};
     use futures::TryStreamExt as _;
-    use jsonwebtoken::EncodingKey;
+    use octocrab::EncodingKey;
     use octocrab::{
         Octocrab, Page,
         models::{

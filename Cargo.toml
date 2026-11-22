@@ -494,7 +494,7 @@ accesskit = { version = "0.25.2", features = ["enumn"] }
 accesskit_macos = "0.27.2"
 accesskit_unix = "0.24.1"
 accesskit_windows = "0.35.2"
-agent-client-protocol = { version = "=5.3.0", features = ["unstable"] }
+agent-client-protocol = { version = "=5.5.1", features = ["unstable"] }
 aho-corasick = "1.1"
 alacritty_terminal = "0.26.0"
 any_vec = "0.15"
@@ -586,7 +586,7 @@ globset = "0.4"
 grammers-client = { version = "0.12", default-features = false, features = ["fs", "markdown", "proxy"] }
 grammers-session = { version = "0.12", default-features = false, features = ["serde"] }
 grammers-tl-types = "0.12"
-heapless = "0.9.3"
+heapless = "0.9.4"
 handlebars = "6.4"
 heck = "0.5"
 hdrhistogram = "7"
@@ -622,15 +622,15 @@ indexmap = { version = "2.14.2", features = ["serde"] }
 indoc = "2"
 inventory = "0.3.25"
 itertools = "0.15.0"
-jiff = { version = "0.2.46", features = ["serde"] }
+jiff = { version = "1.0.2", features = ["serde"] }
 json_dotpath = "1.1"
-jsonschema = "0.61.2"
-jsonwebtoken = "10"
+jsonschema = "0.62.0"
+jsonwebtoken = "12"
 jupyter-protocol = "2.0.3"
 jupyter-websocket-client = "3.0.1"
 libc = "0.2"
 libsqlite3-sys = { version = "0.40.0", features = ["bundled"] }
-linkify = "0.11.0"
+linkify = "0.12.0"
 lofty = "0.25"
 log = { version = "0.4.35", features = ["kv_unstable_serde", "serde"] }
 lru = "0.19"
@@ -712,7 +712,7 @@ proptest = { git = "https://github.com/proptest-rs/proptest", rev = "3dca198a8fe
 proptest-derive = "0.9.0"
 prost = "0.14"
 prost-build = "0.14"
-pollster = "1.0.1"
+pollster = "1.0.3"
 pulldown-cmark = { version = "0.13.6", default-features = false }
 qrcodegen = "1.8"
 quick-xml = "0.42"
@@ -899,7 +899,7 @@ uuid = { version = "1.29.3", features = ["v4", "v5", "v7", "serde"] }
 walkdir = "2.5"
 wasm-encoder = "0.263"
 wasmparser = "0.263"
-wasmtime = { version = "50", default-features = false, features = [
+wasmtime = { version = "51", default-features = false, features = [
     "async",
     "demangle",
     "runtime",
@@ -908,7 +908,7 @@ wasmtime = { version = "50", default-features = false, features = [
     "incremental-cache",
     "parallel-compilation",
 ] }
-wasmtime-wasi = "50"
+wasmtime-wasi = "51"
 wax = "0.7"
 which = "8.0.6"
 wasm-bindgen = "0.2.130"
@@ -918,7 +918,7 @@ console_error_panic_hook = "0.1.7"
 web-time = "1.1.0"
 # Vendored from https://github.com/gfx-rs/wgpu v29 @ e99f5305ded96ff7006f0714d043a7f735bd45c2
 wgpu = { path = "vendor/wgpu/wgpu" }
-windows-core = "0.62"
+windows-core = "0.100"
 yaml-rust2 = "0.13"
 zeroize = "1.9"
 zstd = "0.14"
@@ -1000,10 +1000,10 @@ block = { path = "vendor/block" }
 # citationberg API and raises quick-xml to the patched 0.41 series.
 citationberg = { git = "https://github.com/typst/citationberg", rev = "8966cf7c178b38b621d297c9eb6d0bb81e14be5e" }
 reqwest = { path = "vendor/reqwest" }
-# Vendored from https://github.com/notify-rs/notify @ 603674a8c7b7dfa396b2cc9925f75606a18bf295
+# Vendored from https://github.com/notify-rs/notify @ 7edda71990a9c7f05c3e5e64cf873e1f0652d858
 notify = { path = "vendor/notify/notify" }
 notify-types = { path = "vendor/notify/notify-types" }
-# Vendored from https://github.com/rust-lang/stacker @ 6ae722ada24abfbf1c085a4335424a68b4064336
+# Vendored from https://github.com/rust-lang/stacker @ f289c05e5a5f16bc667c48f63a2aa7b4cfb764f5
 # `psm` (which `stacker` needs) selects GAS assembly for MSVC targets built off
 # a Windows host, but `clang-cl` cannot preprocess a `.s` file, so the Windows
 # cross build fails in its `build.rs`. Stage the source as `.S` so the driver

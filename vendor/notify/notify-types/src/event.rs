@@ -6,6 +6,8 @@ use std::{
     path::PathBuf,
 };
 
+use bitflags::bitflags;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -247,28 +249,173 @@ pub enum EventKind {
 
 impl EventKind {
     /// Indicates whether an event is an Access variant.
+    #[must_use]
     pub fn is_access(&self) -> bool {
         matches!(self, EventKind::Access(_))
     }
 
     /// Indicates whether an event is a Create variant.
+    #[must_use]
     pub fn is_create(&self) -> bool {
         matches!(self, EventKind::Create(_))
     }
 
     /// Indicates whether an event is a Modify variant.
+    #[must_use]
     pub fn is_modify(&self) -> bool {
         matches!(self, EventKind::Modify(_))
     }
 
     /// Indicates whether an event is a Remove variant.
+    #[must_use]
     pub fn is_remove(&self) -> bool {
         matches!(self, EventKind::Remove(_))
     }
 
     /// Indicates whether an event is an Other variant.
+    #[must_use]
     pub fn is_other(&self) -> bool {
         matches!(self, EventKind::Other)
+    }
+}
+
+bitflags! {
+    /// A bitmask specifying which event kinds to monitor.
+    ///
+    /// This type allows fine-grained control over which filesystem events are reported.
+    /// On backends that support kernel-level filtering (inotify), the mask is
+    /// translated to native flags for optimal performance. On other backends (kqueue,
+    /// Windows, FSEvents, PollWatcher), filtering is applied in userspace.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use notify_types::event::EventKindMask;
+    ///
+    /// // Monitor only file creations and deletions
+    /// let mask = EventKindMask::CREATE | EventKindMask::REMOVE;
+    ///
+    /// // Monitor everything including access events
+    /// let all = EventKindMask::ALL;
+    ///
+    /// // The mask defaults to all events, including ACCESS_CLOSE_NOWRITE.
+    /// // notify's Config::default() excludes ACCESS_CLOSE_NOWRITE.
+    /// let default = EventKindMask::default();
+    /// assert_eq!(default, EventKindMask::ALL);
+    /// ```
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct EventKindMask: u32 {
+        /// Monitor file/folder creation events.
+        const CREATE = 0b0000_0001;
+
+        /// Monitor file/folder removal events.
+        const REMOVE = 0b0000_0010;
+
+        /// Monitor data modification events (content/size changes).
+        const MODIFY_DATA = 0b0000_0100;
+
+        /// Monitor metadata modification events (permissions, timestamps, etc).
+        const MODIFY_META = 0b0000_1000;
+
+        /// Monitor name/rename events.
+        const MODIFY_NAME = 0b0001_0000;
+
+        /// Monitor file open events.
+        const ACCESS_OPEN = 0b0010_0000;
+
+        /// Monitor file close events after writing.
+        /// This fires when a file opened for writing is closed.
+        const ACCESS_CLOSE = 0b0100_0000;
+
+        /// Monitor file close events after read-only access.
+        /// This fires when a file opened for reading (not writing) is closed.
+        /// Note: This can be very noisy and may cause queue overflow on busy systems.
+        const ACCESS_CLOSE_NOWRITE = 0b1000_0000;
+
+        /// All modify events (data, metadata, and name changes).
+        const ALL_MODIFY = Self::MODIFY_DATA.bits() | Self::MODIFY_META.bits() | Self::MODIFY_NAME.bits();
+
+        /// All access events (open, close-write, and close-nowrite).
+        const ALL_ACCESS = Self::ACCESS_OPEN.bits() | Self::ACCESS_CLOSE.bits() | Self::ACCESS_CLOSE_NOWRITE.bits();
+
+        /// Core events: create, remove, and all modify events.
+        const CORE = Self::CREATE.bits() | Self::REMOVE.bits() | Self::ALL_MODIFY.bits();
+
+        /// All events including access events.
+        /// This is the default for `EventKindMask`; notify's `Config` excludes
+        /// `ACCESS_CLOSE_NOWRITE` by default.
+        const ALL = Self::CORE.bits() | Self::ALL_ACCESS.bits();
+    }
+}
+
+impl Default for EventKindMask {
+    fn default() -> Self {
+        EventKindMask::ALL
+    }
+}
+
+impl EventKindMask {
+    /// Returns whether the given event kind matches this mask.
+    ///
+    /// `EventKind::Any` and `EventKind::Other` always pass regardless of the mask,
+    /// as they represent meta-events that should not be filtered.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use notify_types::event::{EventKindMask, EventKind, CreateKind, AccessKind, AccessMode};
+    ///
+    /// let mask = EventKindMask::CREATE;
+    /// assert!(mask.matches(&EventKind::Create(CreateKind::File)));
+    /// assert!(!mask.matches(&EventKind::Access(AccessKind::Open(AccessMode::Read))));
+    ///
+    /// // Any and Other always pass
+    /// let empty = EventKindMask::empty();
+    /// assert!(empty.matches(&EventKind::Any));
+    /// assert!(empty.matches(&EventKind::Other));
+    /// ```
+    #[must_use]
+    pub fn matches(&self, kind: &EventKind) -> bool {
+        match kind {
+            // Meta-events always pass
+            EventKind::Any | EventKind::Other => true,
+
+            // Create events
+            EventKind::Create(_) => self.intersects(EventKindMask::CREATE),
+
+            // Remove events
+            EventKind::Remove(_) => self.intersects(EventKindMask::REMOVE),
+
+            // Modify events - check subkind
+            EventKind::Modify(modify_kind) => match modify_kind {
+                ModifyKind::Data(_) => self.intersects(EventKindMask::MODIFY_DATA),
+                ModifyKind::Metadata(_) => self.intersects(EventKindMask::MODIFY_META),
+                ModifyKind::Name(_) => self.intersects(EventKindMask::MODIFY_NAME),
+                // ModifyKind::Any and ModifyKind::Other pass if any modify flag is set
+                ModifyKind::Any | ModifyKind::Other => self.intersects(EventKindMask::ALL_MODIFY),
+            },
+
+            // Access events - check subkind
+            EventKind::Access(access_kind) => match access_kind {
+                AccessKind::Open(_) => self.intersects(EventKindMask::ACCESS_OPEN),
+                // Close after write
+                AccessKind::Close(AccessMode::Write) => {
+                    self.intersects(EventKindMask::ACCESS_CLOSE)
+                }
+                // Close after read-only (no write)
+                AccessKind::Close(AccessMode::Read) => {
+                    self.intersects(EventKindMask::ACCESS_CLOSE_NOWRITE)
+                }
+                // Close with unknown mode - match if either close flag is set
+                AccessKind::Close(_) => self
+                    .intersects(EventKindMask::ACCESS_CLOSE | EventKindMask::ACCESS_CLOSE_NOWRITE),
+                // AccessKind::Read, Any, and Other pass if any access flag is set
+                AccessKind::Read | AccessKind::Any | AccessKind::Other => {
+                    self.intersects(EventKindMask::ALL_ACCESS)
+                }
+            },
+        }
     }
 }
 
@@ -290,13 +437,12 @@ pub struct Event {
     /// all we know.
     ///
     /// `Other` should be used when more detail _is_ available, but cannot be encoded as one of the
-    /// defined variants. When specifying `Other`, the event attributes should contain an `Info`
-    /// entry with a short string identifying this detail. That string is to be considered part of
-    /// the interface of the backend (i.e. a change should probably be breaking).
+    /// defined variants. When specifying `Other`, the [`info`](EventAttributes::info) attribute
+    /// should contain a short string identifying this detail.
     ///
-    /// For example, `CreateKind::Other` with an `Info("mount")` may indicate the binding of a
-    /// mount. The documentation of the particular backend should indicate if any `Other` events
-    /// are generated, and what their description means.
+    /// For example, `CreateKind::Other` with `info()` returning `Some("mount")` may indicate the
+    /// binding of a mount. The documentation of the particular backend should indicate if any
+    /// `Other` events are generated, and what their description means.
     ///
     /// The `EventKind::Any` variant should be used as the "else" case when mapping native kernel
     /// bitmasks or bitmaps, such that if the mask is ever extended with new event types the
@@ -313,9 +459,13 @@ pub struct Event {
 
     /// Paths the event is about, if known.
     ///
+    /// Notify backends report paths using the same root representation that was passed to
+    /// `Watcher::watch`. For example, watching `src` reports paths like `src/lib.rs`, while
+    /// watching an absolute path reports absolute event paths.
+    ///
     /// If an event concerns two or more paths, and the paths are known at the time of event
-    /// creation, they should all go in this `Vec`. Otherwise, using the `Tracker` attr may be more
-    /// appropriate.
+    /// creation, they should all go in this `Vec`. Otherwise, using the
+    /// [`tracker`](EventAttributes::tracker) attribute may be more appropriate.
     ///
     /// The order of the paths is likely to be significant! For example, renames where both ends of
     /// the name change are known will have the "source" path first, and the "target" path last.
@@ -346,27 +496,33 @@ pub struct Event {
     ///
     /// Arbitrary data may be added to this field, without restriction beyond the `Sync` and
     /// `Clone` properties. Some data added here is considered for comparing and hashing, but not
-    /// all: at this writing this is `Tracker`, `Flag`, `Info`, and `Source`.
+    /// all: at this writing this is `Tracker`, `Flag`, `Info`, `Source`, and `UserData`.
     #[cfg_attr(feature = "serde", serde(default))]
     pub attrs: EventAttributes,
 }
 
 /// Additional attributes of the event.
+///
+/// Attributes are optional and their availability depends on the backend and event. See
+/// [`tracker`](Self::tracker), [`info`](Self::info), and [`source`](Self::source) for details.
 #[derive(Clone, Default, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct EventAttributes {
     #[cfg_attr(feature = "serde", serde(flatten))]
     inner: Option<Box<EventAttributesInner>>,
+
+    // Keep this inline so attaching a watch's value does not require an allocation.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
+    user_data: Option<u64>,
 }
 
 #[derive(Clone, Default, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 struct EventAttributesInner {
-    /// Tracking ID for events that are related.
-    ///
-    /// For events generated by backends with the `TrackRelated` capability. Those backends _may_
-    /// emit events that are related to each other, and tag those with an identical "tracking id"
-    /// or "cookie". The value is normalised to `usize`.
+    /// See [`EventAttributes::tracker`].
     #[cfg_attr(
         feature = "serde",
         serde(default, skip_serializing_if = "Option::is_none")
@@ -380,28 +536,14 @@ struct EventAttributesInner {
     )]
     flag: Option<Flag>,
 
-    /// Additional information on the event.
-    ///
-    /// This is to be used for all `Other` variants of the event kind hierarchy. The variant
-    /// indicates that a consumer should look into the `attrs` for an `Info` value; if that value
-    /// is missing it should be considered a backend bug.
-    ///
-    /// This attribute may also be present for non-`Other` variants of the event kind, if doing so
-    /// provides useful precision. For example, the `Modify(Metadata(Extended))` kind suggests
-    /// using this attribute when information about _what_ extended metadata changed is available.
-    ///
-    /// This should be a short string, and changes may be considered breaking.
+    /// See [`EventAttributes::info`].
     #[cfg_attr(
         feature = "serde",
         serde(default, skip_serializing_if = "Option::is_none")
     )]
     info: Option<String>,
 
-    /// The source of the event.
-    ///
-    /// In most cases this should be a short string, identifying the backend unambiguously. In some
-    /// cases this may be dynamically generated, but should contain a prefix to make it unambiguous
-    /// between backends.
+    /// See [`EventAttributes::source`].
     #[cfg_attr(
         feature = "serde",
         serde(default, skip_serializing_if = "Option::is_none")
@@ -421,26 +563,108 @@ struct EventAttributesInner {
 
 impl EventAttributes {
     /// Creates a new `EventAttributes`.
+    #[must_use]
     pub fn new() -> Self {
-        Self { inner: None }
+        Self {
+            inner: None,
+            user_data: None,
+        }
     }
 
-    /// Retrieves the tracker ID for an event directly, if present.
+    /// Returns the application-defined value of the watch that reported this event.
+    ///
+    /// The value is set when registering the watch. It participates in [`Event`]'s equality
+    /// and hashing, so otherwise identical events with different values remain distinct.
+    /// Values need not be unique. `None` means this attribute does not identify the reporting
+    /// watch, either because no value was configured or because the event has no specific watch.
+    ///
+    /// For renames, [`RenameMode::From`] carries the source watch's value, while
+    /// [`RenameMode::To`] and [`RenameMode::Both`] carry the destination watch's value.
+    ///
+    /// On a [`Flag::Rescan`] event, `Some(value)` identifies the reporting watch by its
+    /// configured value. It does not guarantee that other watches are unaffected; the recovery
+    /// requirements of [`Flag::Rescan`] still apply.
+    #[must_use]
+    pub fn user_data(&self) -> Option<u64> {
+        self.user_data
+    }
+
+    /// Sets [`EventAttributes::user_data`].
+    pub fn set_user_data(&mut self, user_data: u64) {
+        self.user_data = Some(user_data);
+    }
+
+    /// Returns a tracking ID (also called a cookie) for related events, if present.
+    ///
+    /// A backend may assign the same ID to multiple events that describe a single operation.
+    /// For example, the inotify backend uses a rename cookie to associate [`RenameMode::From`]
+    /// and [`RenameMode::To`] events for the same rename. If it also emits a [`RenameMode::Both`]
+    /// event, that event has the same ID.
+    /// When several watches reach the renamed file under different paths, for example through a
+    /// symbolic link, inotify reports the rename once for each of those watches, with the same ID.
+    /// Pair a [`RenameMode::From`] event with the [`RenameMode::To`] event below the same watch,
+    /// if there is one.
+    ///
+    /// Use this value to match related events from the same watcher. Treat it as an opaque value:
+    /// its meaning and lifetime depend on the backend, and it is not a persistent file identifier
+    /// or a globally unique event ID.
+    ///
+    /// Returns `None` when the backend or event does not provide a tracking ID.
+    #[must_use]
     pub fn tracker(&self) -> Option<usize> {
         self.inner.as_ref().and_then(|inner| inner.tracker)
     }
 
     /// Retrieves the Notify flag for an event directly, if present.
+    #[must_use]
     pub fn flag(&self) -> Option<Flag> {
         self.inner.as_ref().and_then(|inner| inner.flag)
     }
 
-    /// Retrieves the additional info for an event directly, if present.
+    /// Returns additional, backend-provided information about this event, if present.
+    ///
+    /// This attribute is primarily used to disambiguate the various `Other` variants in the
+    /// [`EventKind`] hierarchy (for example [`EventKind::Other`], [`CreateKind::Other`],
+    /// [`ModifyKind::Other`], [`RemoveKind::Other`], [`MetadataKind::Other`], ...).
+    ///
+    /// When a backend emits an `Other` kind, it should also set this attribute to a short,
+    /// human-readable string explaining what happened. If an event kind indicates `Other` but
+    /// this value is missing, treat it as a backend bug.
+    ///
+    /// Backends may also set this attribute for non-`Other` kinds, if doing so provides useful
+    /// precision. For example, the `Modify(Metadata(Extended))` kind suggests using this
+    /// attribute when information about _what_ extended metadata changed is available.
+    ///
+    /// # Stability
+    ///
+    /// The exact string values are backend-defined. They are intended as a hint for consumers and
+    /// may change between notify versions.
+    ///
+    /// # Examples
+    ///
+    /// `notify` backends and debouncers currently use values such as:
+    ///
+    /// - `unmount` (inotify unmount events)
+    /// - `rescan: user dropped` / `rescan: kernel dropped` (FSEvents queue overflow hints)
+    /// - `root changed` (FSEvents watched root renamed or removed)
+    /// - `mount` (FSEvents mount or unmount events)
+    /// - `is: symlink`, `is: hardlink`, `is: clone` (FSEvents item type hints)
+    /// - `meta: finder info` (FSEvents Finder metadata changes)
+    /// - `override` (a synthetic removal from `notify-debouncer-full` when a rename replaces an
+    ///   existing target)
+    #[must_use]
     pub fn info(&self) -> Option<&str> {
         self.inner.as_ref().and_then(|inner| inner.info.as_deref())
     }
 
-    /// Retrieves the source for an event directly, if present.
+    /// Returns a string identifying the backend that produced the event, if present.
+    ///
+    /// This is intended to be a short, unambiguous backend name. A dynamically generated value
+    /// should include a prefix that identifies the backend.
+    ///
+    /// The built-in `notify` backends currently leave this attribute unset, so their events return
+    /// `None`. A value can be present in events deserialized with the `serde` feature.
+    #[must_use]
     pub fn source(&self) -> Option<&str> {
         self.inner
             .as_ref()
@@ -451,11 +675,12 @@ impl EventAttributes {
     ///
     /// This attribute is experimental and, while included in Notify itself, is not considered
     /// stable or standard enough to be part of the serde, eq, hash, and debug representations.
+    #[must_use]
     pub fn process_id(&self) -> Option<u32> {
         self.inner.as_ref().and_then(|inner| inner.process_id)
     }
 
-    /// Sets the tracker.
+    /// Sets [`EventAttributes::tracker`].
     pub fn set_tracker(&mut self, tracker: usize) {
         self.inner_mut().tracker = Some(tracker);
     }
@@ -465,7 +690,9 @@ impl EventAttributes {
         self.inner_mut().flag = Some(flag);
     }
 
-    /// Sets additional info onto the event.
+    /// Sets [`EventAttributes::info`].
+    ///
+    /// This should be a short, human-readable string.
     pub fn set_info(&mut self, info: &str) {
         self.inner_mut().info = Some(info.to_string());
     }
@@ -506,30 +733,42 @@ impl Event {
     /// folder might have been modified.
     ///
     /// See [`Flag::Rescan`] for more information.
+    #[must_use]
     pub fn need_rescan(&self) -> bool {
         matches!(self.flag(), Some(Flag::Rescan))
     }
-    /// Retrieves the tracker ID for an event directly, if present.
+    /// Returns [`EventAttributes::tracker`].
+    #[must_use]
     pub fn tracker(&self) -> Option<usize> {
         self.attrs.tracker()
     }
 
+    /// Returns [`EventAttributes::user_data`].
+    #[must_use]
+    pub fn user_data(&self) -> Option<u64> {
+        self.attrs.user_data()
+    }
+
     /// Retrieves the Notify flag for an event directly, if present.
+    #[must_use]
     pub fn flag(&self) -> Option<Flag> {
         self.attrs.flag()
     }
 
-    /// Retrieves the additional info for an event directly, if present.
+    /// Returns [`EventAttributes::info`].
+    #[must_use]
     pub fn info(&self) -> Option<&str> {
         self.attrs.info()
     }
 
-    /// Retrieves the source for an event directly, if present.
+    /// Returns [`EventAttributes::source`].
+    #[must_use]
     pub fn source(&self) -> Option<&str> {
         self.attrs.source()
     }
 
     /// Creates a new `Event` given a kind.
+    #[must_use]
     pub fn new(kind: EventKind) -> Self {
         Self {
             kind,
@@ -539,18 +778,21 @@ impl Event {
     }
 
     /// Sets the kind.
+    #[must_use]
     pub fn set_kind(mut self, kind: EventKind) -> Self {
         self.kind = kind;
         self
     }
 
     /// Adds a path to the event.
+    #[must_use]
     pub fn add_path(mut self, path: PathBuf) -> Self {
         self.paths.push(path);
         self
     }
 
     /// Adds a path to the event if the argument is Some.
+    #[must_use]
     pub fn add_some_path(self, path: Option<PathBuf>) -> Self {
         if let Some(path) = path {
             self.add_path(path)
@@ -559,25 +801,36 @@ impl Event {
         }
     }
 
-    /// Sets the tracker.
+    /// Sets [`EventAttributes::tracker`].
+    #[must_use]
     pub fn set_tracker(mut self, tracker: usize) -> Self {
         self.attrs.set_tracker(tracker);
         self
     }
 
-    /// Sets additional info onto the event.
+    /// Sets [`EventAttributes::user_data`].
+    #[must_use]
+    pub fn set_user_data(mut self, user_data: u64) -> Self {
+        self.attrs.set_user_data(user_data);
+        self
+    }
+
+    /// Sets [`EventAttributes::info`].
+    #[must_use]
     pub fn set_info(mut self, info: &str) -> Self {
         self.attrs.set_info(info);
         self
     }
 
     /// Sets the Notify flag onto the event.
+    #[must_use]
     pub fn set_flag(mut self, flag: Flag) -> Self {
         self.attrs.set_flag(flag);
         self
     }
 
     /// Sets the process id onto the event.
+    #[must_use]
     pub fn set_process_id(mut self, process_id: u32) -> Self {
         self.attrs.set_process_id(process_id);
         self
@@ -593,6 +846,7 @@ impl fmt::Debug for Event {
             .field("attr:flag", &self.flag())
             .field("attr:info", &self.info())
             .field("attr:source", &self.source())
+            .field("attr:user_data", &self.user_data())
             .finish()
     }
 }
@@ -615,6 +869,7 @@ impl PartialEq for Event {
             && self.flag().eq(&other.flag())
             && self.info().eq(&other.info())
             && self.source().eq(&other.source())
+            && self.user_data().eq(&other.user_data())
     }
 }
 
@@ -626,6 +881,232 @@ impl Hash for Event {
         self.flag().hash(state);
         self.info().hash(state);
         self.source().hash(state);
+        self.user_data().hash(state);
+    }
+}
+
+#[cfg(test)]
+mod event_kind_mask_tests {
+    use super::*;
+
+    #[test]
+    fn default_is_all() {
+        assert_eq!(EventKindMask::default(), EventKindMask::ALL);
+    }
+
+    #[test]
+    fn matches_create_events() {
+        let mask = EventKindMask::CREATE;
+        assert!(mask.matches(&EventKind::Create(CreateKind::File)));
+        assert!(mask.matches(&EventKind::Create(CreateKind::Folder)));
+        assert!(mask.matches(&EventKind::Create(CreateKind::Any)));
+        assert!(mask.matches(&EventKind::Create(CreateKind::Other)));
+        assert!(!mask.matches(&EventKind::Remove(RemoveKind::File)));
+    }
+
+    #[test]
+    fn matches_remove_events() {
+        let mask = EventKindMask::REMOVE;
+        assert!(mask.matches(&EventKind::Remove(RemoveKind::File)));
+        assert!(mask.matches(&EventKind::Remove(RemoveKind::Folder)));
+        assert!(mask.matches(&EventKind::Remove(RemoveKind::Any)));
+        assert!(!mask.matches(&EventKind::Create(CreateKind::File)));
+    }
+
+    #[test]
+    fn matches_access_open_events() {
+        let mask = EventKindMask::ACCESS_OPEN;
+        assert!(mask.matches(&EventKind::Access(AccessKind::Open(AccessMode::Any))));
+        assert!(mask.matches(&EventKind::Access(AccessKind::Open(AccessMode::Read))));
+        assert!(mask.matches(&EventKind::Access(AccessKind::Open(AccessMode::Write))));
+        assert!(!mask.matches(&EventKind::Access(AccessKind::Close(AccessMode::Write))));
+        assert!(!mask.matches(&EventKind::Create(CreateKind::File)));
+    }
+
+    #[test]
+    fn matches_access_close_events() {
+        // ACCESS_CLOSE only matches Close(Write), not Close(Read)
+        let mask = EventKindMask::ACCESS_CLOSE;
+        assert!(mask.matches(&EventKind::Access(AccessKind::Close(AccessMode::Write))));
+        assert!(mask.matches(&EventKind::Access(AccessKind::Close(AccessMode::Any)))); // Any could be write
+        assert!(!mask.matches(&EventKind::Access(AccessKind::Close(AccessMode::Read)))); // Read goes to NOWRITE
+        assert!(!mask.matches(&EventKind::Access(AccessKind::Open(AccessMode::Any))));
+    }
+
+    #[test]
+    fn matches_access_close_nowrite_events() {
+        // ACCESS_CLOSE_NOWRITE matches Close(Read) - files opened read-only
+        let mask = EventKindMask::ACCESS_CLOSE_NOWRITE;
+        assert!(mask.matches(&EventKind::Access(AccessKind::Close(AccessMode::Read))));
+        assert!(mask.matches(&EventKind::Access(AccessKind::Close(AccessMode::Any)))); // Any could be read
+        assert!(!mask.matches(&EventKind::Access(AccessKind::Close(AccessMode::Write)))); // Write goes to ACCESS_CLOSE
+        assert!(!mask.matches(&EventKind::Access(AccessKind::Open(AccessMode::Any))));
+    }
+
+    #[test]
+    fn combined_close_masks_match_both() {
+        // When both ACCESS_CLOSE and ACCESS_CLOSE_NOWRITE are set, match both
+        let mask = EventKindMask::ACCESS_CLOSE | EventKindMask::ACCESS_CLOSE_NOWRITE;
+        assert!(mask.matches(&EventKind::Access(AccessKind::Close(AccessMode::Write))));
+        assert!(mask.matches(&EventKind::Access(AccessKind::Close(AccessMode::Read))));
+        assert!(mask.matches(&EventKind::Access(AccessKind::Close(AccessMode::Any))));
+    }
+
+    #[test]
+    fn all_access_matches_open_close_read_any_other() {
+        let mask = EventKindMask::ALL_ACCESS;
+        assert!(mask.matches(&EventKind::Access(AccessKind::Open(AccessMode::Read))));
+        assert!(mask.matches(&EventKind::Access(AccessKind::Close(AccessMode::Write))));
+        assert!(mask.matches(&EventKind::Access(AccessKind::Read)));
+        assert!(mask.matches(&EventKind::Access(AccessKind::Any)));
+        assert!(mask.matches(&EventKind::Access(AccessKind::Other)));
+    }
+
+    #[test]
+    fn matches_modify_data_events() {
+        let mask = EventKindMask::MODIFY_DATA;
+        assert!(mask.matches(&EventKind::Modify(ModifyKind::Data(DataChange::Any))));
+        assert!(mask.matches(&EventKind::Modify(ModifyKind::Data(DataChange::Size))));
+        assert!(mask.matches(&EventKind::Modify(ModifyKind::Data(DataChange::Content))));
+        assert!(!mask.matches(&EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any))));
+        assert!(!mask.matches(&EventKind::Modify(ModifyKind::Name(RenameMode::From))));
+    }
+
+    #[test]
+    fn matches_modify_metadata_events() {
+        let mask = EventKindMask::MODIFY_META;
+        assert!(mask.matches(&EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any))));
+        assert!(mask.matches(&EventKind::Modify(ModifyKind::Metadata(
+            MetadataKind::Permissions
+        ))));
+        assert!(!mask.matches(&EventKind::Modify(ModifyKind::Data(DataChange::Any))));
+    }
+
+    #[test]
+    fn matches_modify_name_events() {
+        let mask = EventKindMask::MODIFY_NAME;
+        assert!(mask.matches(&EventKind::Modify(ModifyKind::Name(RenameMode::From))));
+        assert!(mask.matches(&EventKind::Modify(ModifyKind::Name(RenameMode::To))));
+        assert!(mask.matches(&EventKind::Modify(ModifyKind::Name(RenameMode::Both))));
+        assert!(!mask.matches(&EventKind::Modify(ModifyKind::Data(DataChange::Any))));
+    }
+
+    #[test]
+    fn all_modify_matches_data_meta_name() {
+        let mask = EventKindMask::ALL_MODIFY;
+        assert!(mask.matches(&EventKind::Modify(ModifyKind::Data(DataChange::Any))));
+        assert!(mask.matches(&EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any))));
+        assert!(mask.matches(&EventKind::Modify(ModifyKind::Name(RenameMode::From))));
+        assert!(mask.matches(&EventKind::Modify(ModifyKind::Any)));
+        assert!(mask.matches(&EventKind::Modify(ModifyKind::Other)));
+    }
+
+    #[test]
+    fn any_and_other_always_pass() {
+        let empty = EventKindMask::empty();
+        assert!(empty.matches(&EventKind::Any));
+        assert!(empty.matches(&EventKind::Other));
+    }
+
+    #[test]
+    fn core_excludes_access() {
+        let core = EventKindMask::CORE;
+        assert!(core.matches(&EventKind::Create(CreateKind::File)));
+        assert!(core.matches(&EventKind::Remove(RemoveKind::File)));
+        assert!(core.matches(&EventKind::Modify(ModifyKind::Data(DataChange::Any))));
+        assert!(core.matches(&EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any))));
+        assert!(core.matches(&EventKind::Modify(ModifyKind::Name(RenameMode::From))));
+        assert!(!core.matches(&EventKind::Access(AccessKind::Open(AccessMode::Any))));
+        assert!(!core.matches(&EventKind::Access(AccessKind::Close(AccessMode::Write))));
+    }
+
+    #[test]
+    fn empty_mask_only_passes_any_other() {
+        let empty = EventKindMask::empty();
+        assert!(empty.matches(&EventKind::Any));
+        assert!(empty.matches(&EventKind::Other));
+        assert!(!empty.matches(&EventKind::Create(CreateKind::File)));
+        assert!(!empty.matches(&EventKind::Remove(RemoveKind::File)));
+        assert!(!empty.matches(&EventKind::Modify(ModifyKind::Data(DataChange::Any))));
+        assert!(!empty.matches(&EventKind::Access(AccessKind::Open(AccessMode::Any))));
+    }
+
+    #[test]
+    fn bitwise_or_combines_masks() {
+        let mask = EventKindMask::CREATE | EventKindMask::REMOVE;
+        assert!(mask.matches(&EventKind::Create(CreateKind::File)));
+        assert!(mask.matches(&EventKind::Remove(RemoveKind::Folder)));
+        assert!(!mask.matches(&EventKind::Modify(ModifyKind::Data(DataChange::Any))));
+        assert!(!mask.matches(&EventKind::Access(AccessKind::Open(AccessMode::Any))));
+    }
+
+    #[test]
+    fn all_matches_everything() {
+        let all = EventKindMask::ALL;
+        assert!(all.matches(&EventKind::Any));
+        assert!(all.matches(&EventKind::Other));
+        assert!(all.matches(&EventKind::Create(CreateKind::File)));
+        assert!(all.matches(&EventKind::Remove(RemoveKind::File)));
+        assert!(all.matches(&EventKind::Modify(ModifyKind::Data(DataChange::Any))));
+        assert!(all.matches(&EventKind::Access(AccessKind::Open(AccessMode::Any))));
+        assert!(all.matches(&EventKind::Access(AccessKind::Close(AccessMode::Write))));
+    }
+
+    #[test]
+    fn access_read_and_any_match_with_all_access() {
+        // Edge case: AccessKind::Read and AccessKind::Any should match if ALL_ACCESS is set
+        let mask = EventKindMask::ALL_ACCESS;
+        assert!(mask.matches(&EventKind::Access(AccessKind::Read)));
+        assert!(mask.matches(&EventKind::Access(AccessKind::Any)));
+        assert!(mask.matches(&EventKind::Access(AccessKind::Other)));
+    }
+}
+
+#[cfg(test)]
+mod user_data_tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn user_data_distinguishes_otherwise_identical_events() {
+        let event = Event::new(EventKind::Create(CreateKind::File)).add_path("file".into());
+        let zero = event.clone().set_user_data(0);
+        let max = event.clone().set_user_data(u64::MAX);
+        assert_eq!(zero.user_data(), Some(0));
+        assert_eq!(zero.attrs.user_data(), Some(0));
+        assert!(
+            zero.attrs.inner.is_none(),
+            "user data should not allocate attributes"
+        );
+        assert_eq!(zero, zero.clone());
+        assert_ne!(zero, max);
+        assert_ne!(zero, event);
+        assert_eq!(HashSet::from([event, zero.clone(), zero, max]).len(), 3);
+        assert!(
+            format!("{:?}", Event::default().set_user_data(42))
+                .contains("attr:user_data: Some(42)")
+        );
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn user_data_serialization_preserves_existing_attributes() {
+        let base = Event::default().set_tracker(123).set_info("test");
+        let old = serde_json::to_value(&base).unwrap();
+        assert!(old["attrs"].get("user_data").is_none());
+        assert_eq!(serde_json::from_value::<Event>(old.clone()).unwrap(), base);
+        for value in [0, u64::MAX] {
+            let event = base.clone().set_user_data(value);
+            let mut expected = old.clone();
+            expected["attrs"]["user_data"] = value.into();
+            assert_eq!(serde_json::to_value(&event).unwrap(), expected);
+            assert_eq!(serde_json::from_value::<Event>(expected).unwrap(), event);
+            let event = Event::default().set_user_data(value);
+            assert_eq!(
+                serde_json::from_value::<Event>(serde_json::to_value(&event).unwrap()).unwrap(),
+                event
+            );
+        }
     }
 }
 

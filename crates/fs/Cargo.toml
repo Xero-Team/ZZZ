@@ -43,8 +43,8 @@ text.workspace = true
 time.workspace = true
 util.workspace = true
 vfs.workspace = true
-notify = "8.2.2"
-# Vendored from https://github.com/ArturKovacs/trash @ 0fdaf8dfea62d0d5270a918d160dfb58cb76eb3f
+notify = "9.0.0"
+# Vendored from https://github.com/ArturKovacs/trash @ eaaccd3a0bffb02177ba4720ba09bb8d545e6afe
 trash = { path = "../../vendor/trash" }
 
 [target.'cfg(unix)'.dependencies]

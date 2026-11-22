@@ -1,6 +1,7 @@
 #![allow(dead_code)] // not all helpers are used for all targets
 
 use std::{
+    collections::HashSet,
     fmt::Debug,
     ops::Deref,
     path::{Path, PathBuf},
@@ -10,8 +11,11 @@ use std::{
 };
 
 use notify_types::event::Event;
+use walkdir::WalkDir;
 
-use crate::{Config, Error, PollWatcher, RecommendedWatcher, RecursiveMode, Watcher, WatcherKind};
+use crate::{
+    Config, Error, ErrorKind, PollWatcher, RecommendedWatcher, RecursiveMode, Watcher, WatcherKind,
+};
 use pretty_assertions::assert_eq;
 
 pub use expect::*;
@@ -43,10 +47,25 @@ impl Receiver {
                         trackers.try_push(&event);
                         state.check(event)
                     }
-                    Err(err) => panic!(
-                        "Got an error from the watcher {:?}: {err:?}. State: {state:#?}",
-                        self.kind
-                    ),
+                    Err(err) => {
+                        let is_bad_file_descriptor = self.kind == WatcherKind::PollWatcher
+                            && matches!(
+                                &err.kind,
+                                ErrorKind::Io(io_err)
+                                    if io_err
+                                        .to_string()
+                                        .contains("Bad file descriptor (os error 9)")
+                            );
+
+                        if is_bad_file_descriptor {
+                            continue;
+                        }
+
+                        panic!(
+                            "Got an error from the watcher {:?}: {err:?}. State: {state:#?}",
+                            self.kind
+                        )
+                    }
                 },
                 Err(e) => panic!(
                     "Recv error: {e:?}. Watcher: {:?}. State: {state:#?}",
@@ -122,7 +141,7 @@ impl Receiver {
     ///
     /// It doesn't fail on timeout, instead it returns None
     ///
-    /// This behaviour is better for tests, because allows us to determine which events was received
+    /// This behavior is better for tests, because it allows us to determine which events were received
     pub fn iter(&mut self) -> impl Iterator<Item = Event> + '_ {
         struct Iter<'a> {
             rx: &'a mut Receiver,
@@ -155,6 +174,39 @@ impl Receiver {
     #[must_use]
     pub fn sleep_until<F: FnMut() -> bool>(&self, check: F) -> bool {
         sleep_until(check, self.timeout)
+    }
+
+    pub fn sleep_until_walkdir_returns_set<Q>(
+        &self,
+        root: impl AsRef<Path>,
+        paths: impl IntoIterator<Item = Q>,
+    ) where
+        Q: AsRef<Path>,
+    {
+        let mut actual = HashSet::new();
+        let expected: HashSet<PathBuf> = paths
+            .into_iter()
+            .map(|p| p.as_ref().to_path_buf())
+            .collect();
+        let walkdir_set_eq = self.sleep_until(|| {
+            actual.clear();
+            WalkDir::new(root.as_ref())
+                .follow_links(true)
+                .min_depth(1)
+                .into_iter()
+                .filter_map(|v| v.ok())
+                .map(|v| v.into_path())
+                .for_each(|path| {
+                    actual.insert(path);
+                });
+
+            actual == expected
+        });
+
+        assert!(
+            walkdir_set_eq,
+            "Walkdir returns unexpected result: {actual:?}"
+        )
     }
 
     pub fn sleep_until_exists(&self, path: impl AsRef<Path>) {
@@ -267,11 +319,23 @@ pub struct ChannelConfig {
     watcher_config: Config,
 }
 
+impl ChannelConfig {
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    pub fn with_watcher_config(mut self, config: Config) -> Self {
+        self.watcher_config = config;
+        self
+    }
+}
+
 impl Default for ChannelConfig {
     fn default() -> Self {
         Self {
             timeout: Receiver::DEFAULT_TIMEOUT,
-            watcher_config: Default::default(),
+            watcher_config: Config::default(),
         }
     }
 }
@@ -293,9 +357,65 @@ impl<W: Watcher> TestWatcher<W> {
 
     pub fn watch(&mut self, path: impl AsRef<Path>, recursive_mode: RecursiveMode) {
         let path = path.as_ref();
-        self.watcher
-            .watch(path, recursive_mode)
-            .unwrap_or_else(|e| panic!("Unable to watch {path:?}: {e:#?}"))
+
+        const FSEVENT_WATCH_RETRIES: usize = 5;
+        const FSEVENT_WATCH_RETRY_BASE_DELAY: Duration = Duration::from_millis(50);
+        for attempt in 0..=FSEVENT_WATCH_RETRIES {
+            match self.watcher.watch(path, recursive_mode) {
+                Ok(()) => return,
+                Err(err) => {
+                    if self.kind == WatcherKind::Fsevent
+                        && matches!(err.kind, ErrorKind::WatchStartFailed)
+                        && attempt < FSEVENT_WATCH_RETRIES
+                    {
+                        let _ = self.watcher.unwatch(path);
+                        let delay_factor = 1u32 << attempt;
+                        thread::sleep(FSEVENT_WATCH_RETRY_BASE_DELAY * delay_factor);
+                        continue;
+                    }
+
+                    panic!("Unable to watch {path:?}: {err:#?}")
+                }
+            }
+        }
+
+        unreachable!("watch() retries must return or panic")
+    }
+}
+
+/// Lowers the soft file descriptor limit of the process until dropped.
+///
+/// The limit is process-wide, so a test that uses this has to run alone.
+#[cfg(unix)]
+pub struct RestoreLimit(libc::rlimit);
+
+#[cfg(unix)]
+impl RestoreLimit {
+    pub fn lower(soft_limit: libc::rlim_t) -> Self {
+        let mut original = libc::rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
+        // SAFETY: original points to writable storage for the returned limit.
+        assert_eq!(
+            unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut original) },
+            0
+        );
+        let lowered = libc::rlimit {
+            rlim_cur: original.rlim_cur.min(soft_limit),
+            ..original
+        };
+        // SAFETY: only the soft limit of this process is lowered.
+        assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &lowered) }, 0);
+        Self(original)
+    }
+}
+
+#[cfg(unix)]
+impl Drop for RestoreLimit {
+    fn drop(&mut self) {
+        // SAFETY: the saved limit was obtained from getrlimit for this process.
+        assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &self.0) }, 0);
     }
 }
 
@@ -376,7 +496,7 @@ pub fn poll_watcher_channel() -> (TestWatcher<PollWatcher>, Receiver) {
         timeout: Receiver::DEFAULT_TIMEOUT,
         detect_changes: Some(Box::new(move || {
             sender
-                .send(())
+                .send(crate::poll::PollMessage::Poll)
                 .expect("PollWatcher receiver part was disconnected")
         })),
         kind: watcher.kind,
@@ -385,7 +505,7 @@ pub fn poll_watcher_channel() -> (TestWatcher<PollWatcher>, Receiver) {
     (watcher, rx)
 }
 
-/// This is a canonicalized path due to macos behaviour - it creates
+/// This is a canonicalized path due to macos behavior - it creates
 /// a dir with path '/var/...' but actually it is '/private/var/...'
 ///
 /// FsEventWatcher uses canonicalized paths
@@ -461,7 +581,7 @@ mod expect {
     };
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum UnexpectedEventBehaviour {
+    pub enum UnexpectedEventBehavior {
         Ignore,
         Panic,
     }
@@ -471,7 +591,7 @@ mod expect {
     pub struct ExpectedState<C> {
         pub remain: C,
         pub received: Vec<Event>,
-        pub unexpected_event_behaviour: UnexpectedEventBehaviour,
+        pub unexpected_event_behavior: UnexpectedEventBehavior,
         /// If it is Some, then any next equal events are acceptable
         /// while they are equal the stored ones. Ones mismatch clears the field
         multiple_event: Option<Event>,
@@ -494,18 +614,18 @@ mod expect {
             Self {
                 remain: iter.into_iter().collect(),
                 received: Default::default(),
-                unexpected_event_behaviour: UnexpectedEventBehaviour::Ignore,
+                unexpected_event_behavior: UnexpectedEventBehavior::Ignore,
                 multiple_event: None,
             }
         }
 
         pub fn allow_unexpected(mut self) -> Self {
-            self.unexpected_event_behaviour = UnexpectedEventBehaviour::Ignore;
+            self.unexpected_event_behavior = UnexpectedEventBehavior::Ignore;
             self
         }
 
         pub fn disallow_unexpected(mut self) -> Self {
-            self.unexpected_event_behaviour = UnexpectedEventBehaviour::Panic;
+            self.unexpected_event_behavior = UnexpectedEventBehavior::Panic;
             self
         }
 
@@ -522,14 +642,15 @@ mod expect {
 
             self.received.push(event.clone());
 
-            if let Some(multiple_event) = &self.multiple_event {
-                if multiple_event.kind == event.kind && multiple_event.paths == event.paths {
-                    return;
-                }
+            if let Some(multiple_event) = &self.multiple_event
+                && multiple_event.kind == event.kind
+                && multiple_event.paths == event.paths
+            {
+                return;
             }
 
             if expected.is_none()
-                && self.unexpected_event_behaviour == UnexpectedEventBehaviour::Panic
+                && self.unexpected_event_behavior == UnexpectedEventBehavior::Panic
             {
                 panic!("Unexpected event. State: {self:#?}")
             }
@@ -556,8 +677,10 @@ mod expect {
     pub struct Unordered(Vec<(usize, ExpectedEvent)>);
 
     impl ExpectedEvents for Unordered {
+        // A queue holding nothing but optional expectations must not keep the waiter blocking
+        // on an event that may never arrive.
         fn is_empty(&self) -> bool {
-            self.0.is_empty()
+            self.0.iter().all(|(_, expected)| expected.is_optional())
         }
 
         fn expected(&mut self, event: &Event) -> Option<ExpectedEvent> {
@@ -583,7 +706,7 @@ mod expect {
 
     impl ExpectedEvents for Ordered {
         fn is_empty(&self) -> bool {
-            self.0.is_empty()
+            self.0.iter().all(|expected| expected.is_optional())
         }
 
         fn expected(&mut self, event: &Event) -> Option<ExpectedEvent> {

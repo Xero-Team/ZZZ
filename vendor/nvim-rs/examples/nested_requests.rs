@@ -1,7 +1,5 @@
 use nvim_rs::{Handler, compat::tokio::Compat, create::tokio as create, neovim::Neovim};
 
-use async_trait::async_trait;
-
 use rmpv::Value;
 
 use std::{path::Path, sync::Arc};
@@ -25,7 +23,6 @@ struct NeovimHandler {
     froodle: Arc<Mutex<String>>,
 }
 
-#[async_trait]
 impl Handler for NeovimHandler {
     type Writer = Compat<ChildStdin>;
 

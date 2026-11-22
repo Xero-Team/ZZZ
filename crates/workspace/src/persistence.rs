@@ -64,7 +64,7 @@ const MAX_QUERY_PLACEHOLDERS: usize = 32000;
 fn parse_timestamp(text: &str) -> Timestamp {
     civil::DateTime::strptime("%Y-%m-%d %H:%M:%S", text)
         .ok()
-        .and_then(|naive| naive.to_zoned(TimeZone::UTC).ok())
+        .and_then(|naive| naive.to_zoned_datetime(TimeZone::UTC).ok())
         .map_or_else(Timestamp::now, |zoned| zoned.timestamp())
 }
 

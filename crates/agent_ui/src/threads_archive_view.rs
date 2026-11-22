@@ -23,7 +23,7 @@ use gpui::{
     prelude::*, px,
 };
 use itertools::Itertools as _;
-use jiff::{SignedDuration, Timestamp, Zoned, civil::Date};
+use jiff::{SignedDuration, Timestamp, ZonedDateTime, civil::Date};
 use menu::{Confirm, SelectFirst, SelectLast, SelectNext, SelectPrevious};
 use picker::{
     Picker, PickerDelegate,
@@ -330,7 +330,7 @@ impl ThreadsArchiveView {
             .collect::<Vec<_>>();
 
         let query = self.filter_editor.read(cx).text(cx).to_lowercase();
-        let today = Zoned::now().date();
+        let today = ZonedDateTime::now().date();
 
         let mut items = Vec::with_capacity(sessions.len() + 5);
         let mut current_bucket: Option<TimeBucket> = None;
@@ -346,7 +346,7 @@ impl ThreadsArchiveView {
                 let entry_date = session
                     .created_at
                     .unwrap_or(session.updated_at)
-                    .to_zoned(jiff::tz::TimeZone::system())
+                    .to_zoned_datetime(jiff::tz::TimeZone::system())
                     .date();
                 TimeBucket::from_dates(today, entry_date)
             };

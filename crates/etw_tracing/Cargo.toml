@@ -24,7 +24,7 @@ util.workspace = true
 workspace.workspace = true
 # Vendored from https://github.com/zed-industries/wprcontrol @ cd811f7d744f65291e13131b1d907fda63ed91a1
 wprcontrol = { path = "../../vendor/wprcontrol" }
-windows-core = "0.62"
+windows-core = "0.100"
 windows = { version = "0.62", features = [
 	"Win32_Foundation",
 	"Win32_Networking_WinSock",

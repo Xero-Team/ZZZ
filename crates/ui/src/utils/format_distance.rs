@@ -1,18 +1,18 @@
 // This won't be documented further as it is intended to be removed, or merged with the `time_format` crate.
 
-use jiff::{Zoned, civil};
+use jiff::{ZonedDateTime, civil};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DateTimeType {
     Naive(civil::DateTime),
-    Local(Zoned),
+    Local(ZonedDateTime),
 }
 
 impl DateTimeType {
     /// Converts the [`DateTimeType`] to a [`civil::DateTime`].
     ///
     /// If the [`DateTimeType`] is already a [`civil::DateTime`], it will be returned as is.
-    /// If the [`DateTimeType`] is a [`Zoned`], it will be converted to a [`civil::DateTime`].
+    /// If the [`DateTimeType`] is a [`ZonedDateTime`], it will be converted to a [`civil::DateTime`].
     pub fn to_naive(&self) -> civil::DateTime {
         match self {
             DateTimeType::Naive(naive) => *naive,
@@ -41,7 +41,7 @@ impl FormatDistance {
     }
 
     pub fn from_now(date: DateTimeType) -> Self {
-        Self::new(date, DateTimeType::Local(Zoned::now()))
+        Self::new(date, DateTimeType::Local(ZonedDateTime::now()))
     }
 
     pub fn include_seconds(mut self, include_seconds: bool) -> Self {
@@ -251,7 +251,7 @@ pub fn format_distance_from_now(
     add_suffix: bool,
     hide_prefix: bool,
 ) -> String {
-    let now = Zoned::now().datetime();
+    let now = ZonedDateTime::now().datetime();
 
     format_distance(datetime, now, include_seconds, add_suffix, hide_prefix)
 }

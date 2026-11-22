@@ -130,7 +130,7 @@ fn single_line_preview(sql: &str) -> String {
 /// local time and the stored value is UTC seconds.
 fn format_history_time(executed_at: i64) -> String {
     jiff::Timestamp::from_second(executed_at)
-        .map(|timestamp| timestamp.to_zoned(jiff::tz::TimeZone::system()))
+        .map(|timestamp| timestamp.to_zoned_datetime(jiff::tz::TimeZone::system()))
         .map_or_default(|time| time.strftime("%Y-%m-%d %H:%M").to_string())
 }
 

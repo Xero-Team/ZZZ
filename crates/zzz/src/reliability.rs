@@ -55,7 +55,7 @@ fn monitor_hangs(cx: &App) {
                                 save_hang_trace(
                                     main_thread_id,
                                     &background_executor,
-                                    jiff::Zoned::now(),
+                                    jiff::ZonedDateTime::now(),
                                 );
                             }
                         }
@@ -97,7 +97,7 @@ fn prune_hang_traces(directory: &Path, maximum_count: usize) {
 fn save_hang_trace(
     main_thread_id: ThreadId,
     background_executor: &gpui::BackgroundExecutor,
-    hang_time: jiff::Zoned,
+    hang_time: jiff::ZonedDateTime,
 ) {
     let thread_timings = background_executor
         .dispatcher()

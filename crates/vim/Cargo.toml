@@ -55,9 +55,8 @@ zzz_actions.workspace = true
 
 [dev-dependencies]
 async-compat.workspace = true
-async-trait.workspace = true
 env_logger.workspace = true
-# Vendored from https://github.com/KillTheMule/nvim-rs @ 764dd270c642f77f10f3e19d05cc178a6cbe69f3
+# Vendored from https://github.com/KillTheMule/nvim-rs @ 07f94b78f9356d20b9d43d11c80053a1626fe8ad
 nvim-rs = { path = "../../vendor/nvim-rs", features = ["use_tokio"] }
 tokio = { version = "1.54", features = ["full"] }
 command_palette = { workspace = true, features = ["test-support"] }

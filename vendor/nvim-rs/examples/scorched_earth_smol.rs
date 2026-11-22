@@ -1,15 +1,15 @@
 //! Scorched earth. See src/examples/scorched_earth.rs for documentation
-use std::{error::Error, sync::Arc};
-
-use async_trait::async_trait;
+use std::{error::Error, fs::File, sync::Arc};
 
 use rmpv::Value;
 
 use futures::lock::Mutex;
 
-use nvim_rs::{Handler, Neovim, create::async_std as create};
+use smol_macros::main;
 
-use async_std::{self, fs::File as ASFile};
+use smol::Unblock;
+
+use nvim_rs::{Handler, Neovim, create::smol as create};
 
 struct Posis {
     cursor_start: Option<(u64, u64)>,
@@ -35,11 +35,10 @@ fn the_smaller(first: Option<(u64, u64)>, second: (u64, u64)) -> Option<(u64, u6
 #[derive(Clone)]
 struct NeovimHandler(Arc<Mutex<Posis>>);
 
-#[async_trait]
 impl Handler for NeovimHandler {
-    type Writer = ASFile;
+    type Writer = Unblock<File>;
 
-    async fn handle_notify(&self, name: String, args: Vec<Value>, neovim: Neovim<ASFile>) {
+    async fn handle_notify(&self, name: String, args: Vec<Value>, neovim: Neovim<Unblock<File>>) {
         match name.as_ref() {
             "cursor-moved-i" => {
                 let line = args[0].as_u64().unwrap();
@@ -82,47 +81,49 @@ impl Handler for NeovimHandler {
     }
 }
 
-#[async_std::main]
+main! {
 async fn main() {
-    let p = Posis {
-        cursor_start: None,
-        cursor_end: None,
-    };
-    let handler: NeovimHandler = NeovimHandler(Arc::new(Mutex::new(p)));
+  let p = Posis {
+    cursor_start: None,
+    cursor_end: None,
+  };
+  let handler: NeovimHandler = NeovimHandler(Arc::new(Mutex::new(p)));
 
-    let (nvim, io_handler) = create::new_parent(handler).await.unwrap();
+  let (nvim, io_handler) = create::new_parent(handler).await.unwrap();
 
-    // Any error should probably be logged, as stderr is not visible to users.
-    match io_handler.await {
-        Err(err) => {
-            if !err.is_reader_error() {
-                // One last try, since there wasn't an error with writing to the
-                // stream
-                nvim.err_writeln(&format!("Error: '{}'", err))
-                    .await
-                    .unwrap_or_else(|e| {
-                        // We could inspect this error to see what was happening, and
-                        // maybe retry, but at this point it's probably best
-                        // to assume the worst and print a friendly and
-                        // supportive message to our users
-                        eprintln!("Well, dang... '{}'", e);
-                    });
-            }
+  // Any error should probably be logged, as stderr is not visible to users.
+  match io_handler.await {
+    Err(err) => {
+      if !err.is_reader_error() {
+        // One last try, since there wasn't an error with writing to the
+        // stream
+        nvim
+          .err_writeln(&format!("Error: '{}'", err))
+          .await
+          .unwrap_or_else(|e| {
+            // We could inspect this error to see what was happening, and
+            // maybe retry, but at this point it's probably best
+            // to assume the worst and print a friendly and
+            // supportive message to our users
+            eprintln!("Well, dang... '{}'", e);
+          });
+      }
 
-            if !err.is_channel_closed() {
-                // Closed channel usually means neovim quit itself, or this plugin was
-                // told to quit by closing the channel, so it's not always an error
-                // condition.
-                eprintln!("Error: '{}'", err);
+      if !err.is_channel_closed() {
+        // Closed channel usually means neovim quit itself, or this plugin was
+        // told to quit by closing the channel, so it's not always an error
+        // condition.
+        eprintln!("Error: '{}'", err);
 
-                let mut source = err.source();
+        let mut source = err.source();
 
-                while let Some(e) = source {
-                    eprintln!("Caused by: '{}'", e);
-                    source = e.source();
-                }
-            }
+        while let Some(e) = source {
+          eprintln!("Caused by: '{}'", e);
+          source = e.source();
         }
-        Ok(()) => {}
+      }
     }
+    Ok(()) => {}
+  }
+}
 }
