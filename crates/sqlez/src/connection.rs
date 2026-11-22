@@ -201,26 +201,30 @@ impl Connection {
             #[cfg(any(target_os = "linux", target_os = "freebsd"))]
             let offset = 0;
 
-            // SAFETY: same live connection; both calls only read connection-owned state, and
-            // the returned message stays valid until the next call on that connection.
+            // SAFETY: same live connection; both calls only read connection-owned state.
             let errcode = unsafe { sqlite3_errcode(prepare_connection.sqlite3) };
             // SAFETY: as above.
             let errmsg = unsafe { sqlite3_errmsg(prepare_connection.sqlite3) };
+
+            // Copy the message out before `sqlite3_finalize` below: SQLite's string
+            // stays valid only until the next call on the connection, and finalize is
+            // such a call even though it is a no-op for a null statement.
+            let position_error_message = (errcode == 1 && offset >= 0).then(|| {
+                // SAFETY: `errmsg` points into memory owned by `prepare_connection`,
+                // which is still alive, and it is NUL-terminated by SQLite.
+                String::from_utf8_lossy(unsafe { CStr::from_ptr(errmsg.cast()).to_bytes() })
+                    .into_owned()
+            });
 
             // SAFETY: `raw_statement` is whatever `prepare` produced; `sqlite3_finalize`
             // accepts a null handle and frees a compiled statement exactly once.
             unsafe { sqlite3_finalize(raw_statement) };
 
-            if errcode == 1 && offset >= 0 {
+            if let Some(err_msg) = position_error_message {
                 // The caller reports an offset into the SQL it passed in, so the position of
                 // this statement inside that buffer is added to the offset SQLite reported.
                 // Only the two addresses are subtracted here; nothing is dereferenced.
                 let sub_statement_correction = remaining_sql.as_ptr() as usize - sql_start as usize;
-                // SAFETY: `errmsg` points into memory owned by `prepare_connection`, which is
-                // still alive, and it is NUL-terminated by SQLite.
-                let err_msg =
-                    String::from_utf8_lossy(unsafe { CStr::from_ptr(errmsg.cast()).to_bytes() })
-                        .into_owned();
 
                 return Some((err_msg, offset as usize + sub_statement_correction));
             }

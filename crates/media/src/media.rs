@@ -332,9 +332,17 @@ pub mod core_video {
     impl_CFTypeDescription!(CVMetalTexture);
 
     impl CVMetalTexture {
-        pub fn as_texture_ref(&self) -> &metal::TextureRef {
+        /// The Metal texture backing this CoreVideo texture, or `None` when the
+        /// texture is not ready yet: `CVMetalTextureGetTexture` returns null in that
+        /// case and there is no valid reference to hand out.
+        pub fn as_texture_ref(&self) -> Option<&metal::TextureRef> {
             let texture = unsafe { CVMetalTextureGetTexture(self.as_concrete_TypeRef()) };
-            unsafe { metal::TextureRef::from_ptr(texture.cast()) }
+            if texture.is_null() {
+                return None;
+            }
+            // SAFETY: non-null (checked above) and owned by this `CVMetalTexture`,
+            // which outlives the borrow.
+            Some(unsafe { metal::TextureRef::from_ptr(texture.cast()) })
         }
     }
 
