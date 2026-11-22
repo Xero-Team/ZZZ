@@ -28,7 +28,7 @@ use gpui::{
     Action, AnyWindowHandle, BackgroundExecutor, ClipboardItem, CursorStyle, DisplayId,
     ForegroundExecutor, Keymap, Menu, MenuItem, OwnedMenu, PathPromptOptions, Platform,
     PlatformDisplay, PlatformKeyboardLayout, PlatformKeyboardMapper, PlatformTextSystem,
-    PlatformWindow, Result, RunnableVariant, Task, ThermalState, WindowAppearance,
+    PlatformWindow, PowerMode, Result, RunnableVariant, Task, ThermalState, WindowAppearance,
     WindowButtonLayout, WindowParams,
 };
 #[cfg(any(feature = "wayland", feature = "x11"))]
@@ -290,6 +290,12 @@ impl<P: LinuxClient + 'static> Platform for LinuxPlatform<P> {
 
     fn thermal_state(&self) -> ThermalState {
         ThermalState::Nominal
+    }
+
+    fn power_mode(&self) -> PowerMode {
+        // There is no power-source change notification to subscribe to here, so
+        // the mode is read from sysfs whenever the frame path asks for it.
+        read_power_mode()
     }
 
     fn compositor_name(&self) -> &'static str {
@@ -1162,10 +1168,89 @@ pub(super) fn compositor_gpu_hint_from_dev_t(dev: u64) -> Option<gpui_wgpu::Comp
     })
 }
 
+/// Where the kernel exports every battery and mains supply.
+const POWER_SUPPLY_PATH: &str = "/sys/class/power_supply";
+
+/// Maps the contents of the power supplies' `status` files to a [`PowerMode`].
+///
+/// Only `Discharging` means the machine is drawing from a battery. `Charging`,
+/// `Full` and `Not charging` all mean external power is connected, and an empty
+/// list means no battery is visible, so neither case may throttle the editor.
+fn power_mode_from_statuses<'a>(statuses: impl IntoIterator<Item = &'a str>) -> PowerMode {
+    if statuses
+        .into_iter()
+        .any(|status| status.trim() == "Discharging")
+    {
+        PowerMode::LowPower
+    } else {
+        PowerMode::Unknown
+    }
+}
+
+/// Reads the power mode from sysfs.
+///
+/// There is no D-Bus route to `power-profiles-daemon` here, so a power-saver
+/// profile selected while plugged in is indistinguishable from a normal one and
+/// reports `Unknown`. The scan is a handful of in-memory sysfs reads and is
+/// deliberately uncached, so unplugging a cable takes effect on the next frame.
+fn read_power_mode() -> PowerMode {
+    let entries = match std::fs::read_dir(POWER_SUPPLY_PATH) {
+        Ok(entries) => entries,
+        Err(error) => {
+            // Desktops, VMs and containers often have no power supply class at
+            // all; `Unknown` keeps them from being throttled on a guess.
+            log::debug!("no power supply information: {error}");
+            return PowerMode::Unknown;
+        }
+    };
+
+    let statuses = entries
+        .filter_map(|entry| entry.log_err())
+        .filter_map(|entry| {
+            let path = entry.path().join("status");
+            match std::fs::read_to_string(&path) {
+                Ok(status) => Some(status),
+                // Mains supplies normally have no `status` file, so a missing
+                // one carries no information rather than an error worth logging.
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Err(error) => {
+                    log::debug!("could not read {}: {error}", path.display());
+                    None
+                }
+            }
+        })
+        .collect::<Vec<_>>();
+
+    power_mode_from_statuses(statuses.iter().map(String::as_str))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use gpui::{Point, px};
+
+    #[test]
+    fn maps_power_supply_status_to_power_mode() {
+        // On AC: a mains supply plus a battery that is not discharging.
+        assert_eq!(
+            power_mode_from_statuses(["Unknown\n", "Not charging\n"]),
+            PowerMode::Unknown
+        );
+        assert_eq!(power_mode_from_statuses(["Charging\n"]), PowerMode::Unknown);
+        assert_eq!(power_mode_from_statuses(["Full\n"]), PowerMode::Unknown);
+
+        // Running on battery.
+        assert_eq!(
+            power_mode_from_statuses(["Unknown\n", "Discharging\n"]),
+            PowerMode::LowPower
+        );
+
+        // No readable supplies: desktops, VMs and containers.
+        assert_eq!(
+            power_mode_from_statuses(std::iter::empty::<&str>()),
+            PowerMode::Unknown
+        );
+    }
 
     #[cfg(any(feature = "wayland", feature = "x11"))]
     #[test]
