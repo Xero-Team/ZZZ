@@ -4269,37 +4269,15 @@ impl GitPanel {
 
                 let text = serde_json::to_string_pretty(&combined).unwrap_or_default();
 
-                let buffer = project
-                    .update(cx, |project, cx| {
-                        project.create_buffer(json_language, false, cx)
-                    })
-                    .await?;
-
-                buffer.update(cx, |buffer, cx| {
-                    buffer.set_text(text, cx);
-                    buffer.set_capability(language::Capability::ReadWrite, cx);
-                });
-
-                workspace.update_in(cx, |workspace, window, cx| {
-                    let buffer =
-                        cx.new(|cx| MultiBuffer::singleton(buffer, cx).with_title(title.clone()));
-
-                    workspace.add_item_to_active_pane(
-                        Box::new(cx.new(|cx| {
-                            let mut editor =
-                                Editor::for_multibuffer(buffer, Some(project.clone()), window, cx);
-                            editor.set_breadcrumb_header(title);
-                            editor.disable_mouse_wheel_zoom();
-                            editor
-                        })),
-                        None,
-                        true,
-                        window,
-                        cx,
-                    );
-                })?;
-
-                anyhow::Ok(())
+                editor::items::open_text_in_editor(
+                    project,
+                    workspace,
+                    json_language,
+                    title,
+                    text,
+                    cx,
+                )
+                .await
             })
             .detach_and_log_err(cx);
     }

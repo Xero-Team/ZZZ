@@ -5,7 +5,7 @@ use anyhow::Context as _;
 use convert_case::Casing as _;
 use editor::Editor;
 use futures::channel::oneshot;
-use fuzzy::{StringMatch, StringMatchCandidate, match_strings};
+use fuzzy::{StringMatch, StringMatchCandidate, match_or_all};
 use gpui::{
     Action, Animation, AnimationExt, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle,
     Focusable, KeyContext, ParentElement, Render, Styled, Subscription, Task, WeakEntity, Window,
@@ -1041,8 +1041,8 @@ impl PickerDelegate for ToolchainSelectorDelegate {
         let path_style = self.project.read(cx).path_style(cx);
         cx.spawn_in(window, async move |this, cx| {
             // The candidate id of a match indexes `self.candidates`, so the
-            // rendered string is built once per candidate for both branches.
-            let candidate_strings = candidates
+            // rendered string is built once per candidate.
+            let candidates = candidates
                 .iter()
                 .enumerate()
                 .map(|(candidate_id, (toolchain, _))| {
@@ -1051,36 +1051,11 @@ impl PickerDelegate for ToolchainSelectorDelegate {
                         &worktree_root_path,
                         path_style,
                     );
-                    (candidate_id, format!("{}{}", toolchain.name, path))
+                    StringMatchCandidate::new(candidate_id, &format!("{}{}", toolchain.name, path))
                 })
                 .collect::<Vec<_>>();
 
-            let matches = if query.is_empty() {
-                candidate_strings
-                    .into_iter()
-                    .map(|(candidate_id, string)| StringMatch {
-                        candidate_id,
-                        string,
-                        positions: Vec::new(),
-                        score: 0.0,
-                    })
-                    .collect()
-            } else {
-                let candidates = candidate_strings
-                    .into_iter()
-                    .map(|(candidate_id, string)| StringMatchCandidate::new(candidate_id, &string))
-                    .collect::<Vec<_>>();
-                match_strings(
-                    &candidates,
-                    &query,
-                    false,
-                    true,
-                    100,
-                    &Default::default(),
-                    background,
-                )
-                .await
-            };
+            let matches = match_or_all(&candidates, &query, background).await;
 
             this.update(cx, |this, cx| {
                 let delegate = &mut this.delegate;

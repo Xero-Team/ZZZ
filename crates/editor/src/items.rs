@@ -19,8 +19,8 @@ use gpui::{
 };
 use i18n::tr;
 use language::{
-    Bias, Buffer, BufferRow, CharKind, CharScopeContext, HighlightedText, LocalFile, PLAIN_TEXT,
-    Point, SelectionGoal, proto::serialize_anchor as serialize_text_anchor,
+    Bias, Buffer, BufferRow, CharKind, CharScopeContext, HighlightedText, Language, LocalFile,
+    PLAIN_TEXT, Point, SelectionGoal, proto::serialize_anchor as serialize_text_anchor,
 };
 use lsp::DiagnosticSeverity;
 use multi_buffer::{BufferOffset, MultiBufferOffset, MultiBufferRow, PathKey};
@@ -2456,6 +2456,40 @@ pub(crate) fn handle_lsp_show_document(
             }
         };
         request.respond(success);
+    })
+}
+
+/// Opens `text` as a read-write buffer titled `title` in the active pane of `workspace`.
+///
+/// `language` is the buffer's language; callers resolve it before calling because the
+/// lookup is async and some of them interleave other work with it.
+pub async fn open_text_in_editor(
+    project: Entity<Project>,
+    workspace: WeakEntity<Workspace>,
+    language: Option<Arc<Language>>,
+    title: String,
+    text: String,
+    cx: &mut AsyncWindowContext,
+) -> Result<Entity<Editor>> {
+    let buffer = project
+        .update(cx, |project, cx| project.create_buffer(language, false, cx))
+        .await?;
+
+    buffer.update(cx, |buffer, cx| {
+        buffer.set_text(text, cx);
+        buffer.set_capability(language::Capability::ReadWrite, cx);
+    });
+
+    workspace.update_in(cx, |workspace, window, cx| {
+        let multibuffer = cx.new(|cx| MultiBuffer::singleton(buffer, cx).with_title(title.clone()));
+        let editor = cx.new(|cx| {
+            let mut editor = Editor::for_multibuffer(multibuffer, Some(project), window, cx);
+            editor.set_breadcrumb_header(title);
+            editor.disable_mouse_wheel_zoom();
+            editor
+        });
+        workspace.add_item_to_active_pane(Box::new(editor.clone()), None, true, window, cx);
+        editor
     })
 }
 

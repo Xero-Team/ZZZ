@@ -3,7 +3,7 @@ mod active_buffer_language;
 pub use active_buffer_language::ActiveBufferLanguage;
 use anyhow::Context as _;
 use editor::Editor;
-use fuzzy::{StringMatch, StringMatchCandidate, match_strings};
+use fuzzy::{StringMatch, StringMatchCandidate, match_or_all};
 use gpui::{
     App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ParentElement,
     Render, Styled, WeakEntity, Window, actions,
@@ -261,29 +261,7 @@ impl PickerDelegate for LanguageSelectorDelegate {
         let candidates = self.candidates.clone();
         let query_is_empty = query.is_empty();
         cx.spawn_in(window, async move |this, cx| {
-            let matches = if query_is_empty {
-                candidates
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, candidate)| StringMatch {
-                        candidate_id: index,
-                        string: candidate.string,
-                        positions: Vec::new(),
-                        score: 0.0,
-                    })
-                    .collect()
-            } else {
-                match_strings(
-                    &candidates,
-                    &query,
-                    false,
-                    true,
-                    100,
-                    &Default::default(),
-                    background,
-                )
-                .await
-            };
+            let matches = match_or_all(&candidates, &query, background).await;
 
             this.update_in(cx, |this, window, cx| {
                 if matches.is_empty() {

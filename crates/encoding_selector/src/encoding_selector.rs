@@ -3,7 +3,7 @@ pub use active_buffer_encoding::ActiveBufferEncoding;
 
 use editor::Editor;
 use encoding_rs::Encoding;
-use fuzzy::{StringMatch, StringMatchCandidate, match_strings};
+use fuzzy::{StringMatch, StringMatchCandidate, match_or_all};
 use gpui::{
     App, AppContext, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
     InteractiveElement, ParentElement, Render, Styled, Task, WeakEntity, Window, actions,
@@ -264,29 +264,7 @@ impl PickerDelegate for EncodingSelectorDelegate {
         let candidates = self.match_candidates.clone();
 
         cx.spawn_in(window, async move |this, cx| {
-            let matches = if query.is_empty() {
-                candidates
-                    .iter()
-                    .enumerate()
-                    .map(|(index, candidate)| StringMatch {
-                        candidate_id: index,
-                        string: candidate.string.clone(),
-                        positions: Vec::new(),
-                        score: 0.0,
-                    })
-                    .collect()
-            } else {
-                match_strings(
-                    &candidates,
-                    &query,
-                    false,
-                    true,
-                    100,
-                    &Default::default(),
-                    background,
-                )
-                .await
-            };
+            let matches = match_or_all(&candidates, &query, background).await;
 
             this.update(cx, |this, cx| {
                 let delegate = &mut this.delegate;

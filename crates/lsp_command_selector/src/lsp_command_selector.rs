@@ -1,10 +1,7 @@
-use std::{
-    collections::BTreeSet,
-    sync::{Arc, atomic::AtomicBool},
-};
+use std::{collections::BTreeSet, sync::Arc};
 
 use editor::Editor;
-use fuzzy::{StringMatch, StringMatchCandidate, match_strings};
+use fuzzy::{StringMatch, StringMatchCandidate, match_or_all};
 use gpui::{
     AnyElement, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
     ParentElement, Render, SharedString, Task, WeakEntity, Window, actions,
@@ -306,29 +303,7 @@ impl PickerDelegate for LspCommandSelectorDelegate {
         let background = cx.background_executor().clone();
         let candidates = self.candidates.clone();
         cx.spawn_in(window, async move |picker, cx| {
-            let matches = if query.is_empty() {
-                candidates
-                    .iter()
-                    .enumerate()
-                    .map(|(index, candidate)| StringMatch {
-                        candidate_id: index,
-                        string: candidate.string.clone(),
-                        positions: Vec::new(),
-                        score: 0.0,
-                    })
-                    .collect()
-            } else {
-                match_strings(
-                    &candidates,
-                    &query,
-                    false,
-                    true,
-                    100,
-                    &AtomicBool::new(false),
-                    background,
-                )
-                .await
-            };
+            let matches = match_or_all(&candidates, &query, background).await;
 
             picker
                 .update_in(cx, |picker, window, cx| {
