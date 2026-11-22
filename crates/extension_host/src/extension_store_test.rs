@@ -8,7 +8,7 @@ use collections::{BTreeMap, HashSet};
 use extension::ExtensionHostProxy;
 use fs::{FakeFs, Fs, RealFs};
 use futures::{AsyncReadExt, FutureExt, StreamExt, io::BufReader};
-use gpui::{AppContext as _, BackgroundExecutor, TestAppContext};
+use gpui::{AppContext as _, BackgroundExecutor, BorrowAppContext, TestAppContext};
 use http_client::{FakeHttpClient, Response};
 use language::{BinaryStatus, LanguageMatcher, LanguageName, LanguageRegistry};
 use language_extension::LspAccess;
@@ -19,7 +19,7 @@ use project::{DEFAULT_COMPLETION_CONTEXT, Project};
 use release_channel::AppVersion;
 use reqwest_client::ReqwestClient;
 use serde_json::json;
-use settings::SettingsStore;
+use settings::{ExtensionCapabilityContent, SettingsStore};
 use std::{
     ffi::OsString,
     path::{Path, PathBuf},
@@ -538,6 +538,20 @@ async fn test_extension_store(cx: &mut TestAppContext) {
 async fn test_extension_store_with_test_extension(cx: &mut TestAppContext) {
     init_test(cx);
     cx.executor().allow_parking();
+
+    // The extension reaches GitHub and downloads its language server binary, and both of those
+    // host functions are now gated on the network capability the user grants.
+    cx.update(|cx| {
+        cx.update_global::<SettingsStore, _>(|store, cx| {
+            store.update_user_settings(cx, |settings| {
+                settings.extension.granted_extension_capabilities =
+                    Some(vec![ExtensionCapabilityContent::DownloadFile {
+                        host: "*".to_string(),
+                        path: vec!["**".to_string()],
+                    }]);
+            });
+        });
+    });
 
     let executor = cx.executor();
     async fn await_or_timeout<T>(

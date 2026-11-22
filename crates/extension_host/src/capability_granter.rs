@@ -111,13 +111,13 @@ impl CapabilityGranter {
         Ok(())
     }
 
-    /// Approves an outbound HTTP request made by `http_client.fetch`.
+    /// Approves an outbound HTTP request made by an extension.
     ///
-    /// The same `download_file` capability governs both network paths: fetching bytes into
-    /// memory and downloading them to disk are the same access to the same URL, so an
-    /// extension that cannot download from a host cannot read from it either. The binary
-    /// download options are deliberately not consulted here; they gate installing
-    /// executables, not ordinary network access.
+    /// The same `download_file` capability governs every network path an extension has: fetching
+    /// bytes into memory, downloads to disk, and the requests the host makes on the extension's
+    /// behalf (`github.*`, `npm_package_latest_version`). An extension that cannot download from
+    /// a host cannot reach it by any of those routes. The binary download options are deliberately
+    /// not consulted here; they gate installing executables, not ordinary network access.
     pub fn grant_fetch(&self, desired_url: &Url) -> Result<()> {
         let is_allowed = self
             .granted_capabilities
@@ -129,7 +129,7 @@ impl CapabilityGranter {
 
         if !is_allowed {
             bail!(
-                "capability for http_client.fetch {desired_url} is not granted by the extension host",
+                "capability for network access to {desired_url} is not granted by the extension host",
             );
         }
 
@@ -159,39 +159,40 @@ impl CapabilityGranter {
     }
 }
 
+/// A manifest that declares nothing, so a granter built from it exercises only the granted
+/// capabilities.
+#[cfg(test)]
+pub(crate) fn stub_manifest() -> ExtensionManifest {
+    ExtensionManifest {
+        id: "test".into(),
+        name: "Test".to_string(),
+        version: "1.0.0".into(),
+        schema_version: extension::SchemaVersion::ZERO,
+        description: None,
+        repository: None,
+        authors: vec![],
+        lib: Default::default(),
+        themes: vec![],
+        icon_themes: vec![],
+        languages: vec![],
+        grammars: Default::default(),
+        language_servers: Default::default(),
+        context_servers: Default::default(),
+        slash_commands: Default::default(),
+        snippets: None,
+        capabilities: vec![],
+        debug_adapters: Default::default(),
+        debug_locators: Default::default(),
+        language_model_providers: Default::default(),
+        database_drivers: Vec::new(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
-    use extension::{ProcessExecCapability, SchemaVersion};
+    use extension::ProcessExecCapability;
 
     use super::*;
-
-    fn extension_manifest() -> ExtensionManifest {
-        ExtensionManifest {
-            id: "test".into(),
-            name: "Test".to_string(),
-            version: "1.0.0".into(),
-            schema_version: SchemaVersion::ZERO,
-            description: None,
-            repository: None,
-            authors: vec![],
-            lib: Default::default(),
-            themes: vec![],
-            icon_themes: vec![],
-            languages: vec![],
-            grammars: BTreeMap::default(),
-            language_servers: BTreeMap::default(),
-            context_servers: BTreeMap::default(),
-            slash_commands: BTreeMap::default(),
-            snippets: None,
-            capabilities: vec![],
-            debug_adapters: Default::default(),
-            debug_locators: Default::default(),
-            language_model_providers: BTreeMap::default(),
-            database_drivers: Vec::new(),
-        }
-    }
 
     #[test]
     fn test_grant_binary_options() {
@@ -200,7 +201,7 @@ mod tests {
                 command: "ls".to_string(),
                 args: vec!["-la".to_string()],
             })],
-            ..extension_manifest()
+            ..stub_manifest()
         });
         let granter = CapabilityGranter::new(
             vec![ExtensionCapability::ProcessExec(ProcessExecCapability {
@@ -225,7 +226,7 @@ mod tests {
                 command: "ls".to_string(),
                 args: vec!["-la".to_string()],
             })],
-            ..extension_manifest()
+            ..stub_manifest()
         });
 
         // It returns an error when the extension host has no granted capabilities.
