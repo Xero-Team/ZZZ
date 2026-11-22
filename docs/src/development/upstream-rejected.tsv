@@ -566,7 +566,7 @@ sha	class	reason_code	note	source
 9b421ed7fe	C	absent-api	Adds v2 `session/list`; absent ACP v2 transport.	upstream-sync-2026-10-16.md
 9b5b5860	C	untriaged	`.rules` and Danger self-review automation are repository administration.	upstream-sync-2026-08-27.md
 9b9e7b814a	C	absent-api	xtask lint forbidding legacy Objective-C dependencies. Upstream tooling policy with no local behavior or caller.	upstream-sync-2026-10-24-b.md
-9bde578e	C	absent-api	Port reverted by `16d51d6962`; helper absent locally.	upstream-sync-2026-08-18.md
+9bde578e	C	absent-api	Local divergence in #65; upstream helper absent, ported here.	upstream-sync-2026-08-18.md
 9be5cb6139	C	absent-api	Settles receipt submissions after disconnect; `acp_thread/src/submission.rs` and ACP v2 are absent.	upstream-sync-2026-10-16.md
 9cd14daad7	C	philosophy	Requires organization IDs for Cloud feedback, a hosted account surface ZZZ removes.	upstream-sync-2026-10-20.md
 9d272b03	C	upstream-infra	GitHub Actions / xtask macOS SDK printing for release bundling.	upstream-sync-2026-09-18.md

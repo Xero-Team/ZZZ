@@ -161,6 +161,66 @@ impl BackgroundExecutor {
         self.spawn_with_priority(Priority::default(), future.boxed())
     }
 
+    /// Enqueues the given future to be run to completion on an OS thread of its own.
+    ///
+    /// Prefer this over [`Self::spawn`] for futures whose polls need more stack than
+    /// the shared background threads guarantee. A fresh thread gets the standard
+    /// library's default 2 MiB stack, while [`Self::spawn`] polls the future on the
+    /// threads the platform dispatcher hands out — on macOS those are GCD workers
+    /// whose stacks the kernel fixes at 512 KiB (`PTH_DEFAULT_STACKSIZE` in
+    /// <https://github.com/apple-oss-distributions/libpthread/blob/42d026df5b07825070f60134b980a1ec2552dfee/kern/kern_internal.h#L154>),
+    /// the tightest background-stack budget of any platform.
+    ///
+    /// The thread lives exactly as long as the future: completing or dropping the
+    /// returned [`Task`] eventually closes the channel the thread pulls runnables
+    /// from, and the thread returns. In tests the future runs on the test
+    /// scheduler's loop instead, so it stays deterministic.
+    #[cfg(not(target_family = "wasm"))]
+    #[track_caller]
+    pub fn spawn_dedicated<R>(&self, future: impl Future<Output = R> + Send + 'static) -> Task<R>
+    where
+        R: Send + 'static,
+    {
+        #[cfg(any(test, feature = "test-support"))]
+        if self.dispatcher.as_test().is_some() {
+            return self.spawn(future);
+        }
+
+        let background = self.inner.scheduler().clone();
+        let schedule_on_background = background.clone();
+        let (runnable_tx, runnable_rx) =
+            std::sync::mpsc::channel::<async_task::Runnable<scheduler::RunnableMeta>>();
+        let (runnable, task) = async_task::Builder::new()
+            .metadata(scheduler::RunnableMeta {
+                location: core::panic::Location::caller(),
+            })
+            .spawn(
+                move |_| future,
+                move |runnable| match runnable_tx.send(runnable) {
+                    Ok(()) => {}
+                    // The dedicated thread is already gone, so its stack guarantee
+                    // cannot be honoured any more; the shared pool beats stalling.
+                    Err(err) => schedule_on_background.schedule_background(err.0),
+                },
+            );
+
+        match std::thread::Builder::new()
+            .name("dedicated-executor".to_string())
+            .spawn(move || {
+                while let Ok(runnable) = runnable_rx.recv() {
+                    runnable.run();
+                }
+            }) {
+            Ok(_) => runnable.schedule(),
+            Err(err) => {
+                log::error!("failed to spawn a dedicated executor thread: {err}");
+                background.schedule_background(runnable);
+            }
+        }
+
+        Task::from_scheduler(scheduler::Task::from_async_task(task))
+    }
+
     /// Enqueues the given future to be run to completion on a background thread with the given priority.
     ///
     /// When `Priority::RealtimeAudio` is used, the task runs on a dedicated thread with
