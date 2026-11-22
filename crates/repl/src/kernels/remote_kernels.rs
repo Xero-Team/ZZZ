@@ -25,12 +25,25 @@ use std::{
 };
 use util::ResultExt as _;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RemoteKernelSpecification {
     pub name: String,
     pub url: String,
     pub token: String,
     pub kernelspec: JupyterKernelspec,
+}
+
+impl std::fmt::Debug for RemoteKernelSpecification {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RemoteKernelSpecification")
+            .field("name", &self.name)
+            .field("url", &self.url)
+            // The token is a credential, so it is redacted here the same way
+            // `RemoteRunningKernel` redacts its own.
+            .field("token", &"<redacted>")
+            .field("kernelspec", &self.kernelspec)
+            .finish()
+    }
 }
 
 pub async fn launch_remote_kernel(
@@ -447,6 +460,34 @@ impl RunningKernel for RemoteRunningKernel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::KernelSpecification;
+
+    #[test]
+    fn debug_redacts_the_jupyter_token() {
+        let specification = RemoteKernelSpecification {
+            name: "python3".to_string(),
+            url: "http://jupyter.example.test:8888".to_string(),
+            token: "secret-jupyter-token".to_string(),
+            kernelspec: JupyterKernelspec {
+                argv: vec!["python".to_string()],
+                display_name: "Python 3".to_string(),
+                language: "python".to_string(),
+                metadata: None,
+                interrupt_mode: None,
+                env: None,
+            },
+        };
+
+        let rendered = format!("{specification:?}");
+        assert!(!rendered.contains("secret-jupyter-token"), "{rendered}");
+        assert!(rendered.contains("<redacted>"), "{rendered}");
+
+        let rendered = format!(
+            "{:?}",
+            KernelSpecification::JupyterServer(specification.clone())
+        );
+        assert!(!rendered.contains("secret-jupyter-token"), "{rendered}");
+    }
 
     #[test]
     fn connection_failure_is_reported_once_until_shutdown() {

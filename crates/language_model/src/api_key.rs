@@ -5,7 +5,7 @@ use futures::{FutureExt, future};
 use gpui::{AsyncApp, Context, SharedString, Task};
 use gpui_util::ResultExt as _;
 use std::{
-    fmt::{Display, Formatter},
+    fmt::{Debug, Display, Formatter},
     sync::Arc,
 };
 
@@ -30,10 +30,21 @@ pub enum LoadStatus {
     Loaded(ApiKey),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ApiKey {
     source: ApiKeySource,
     key: Arc<str>,
+}
+
+impl Debug for ApiKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiKey")
+            .field("source", &self.source)
+            // The key is a credential: render the source, never the secret, so a
+            // `{:?}` on `ApiKeyState` or `LoadStatus` cannot leak it.
+            .field("key", &"<redacted>")
+            .finish()
+    }
 }
 
 impl ApiKeyState {
@@ -301,5 +312,22 @@ impl Display for ApiKeySource {
             ApiKeySource::EnvVar(var) => write!(f, "environment variable {}", var),
             ApiKeySource::SystemKeychain => write!(f, "system keychain"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_debug_does_not_render_the_api_key() {
+        let api_key = ApiKey::from_env("OPENAI_API_KEY".into(), "sk-secret-value");
+
+        let rendered = format!("{api_key:?}");
+        assert!(!rendered.contains("sk-secret-value"), "{rendered}");
+        assert!(rendered.contains("OPENAI_API_KEY"), "{rendered}");
+
+        let rendered = format!("{:?}", LoadStatus::Loaded(api_key));
+        assert!(!rendered.contains("sk-secret-value"), "{rendered}");
     }
 }
