@@ -6110,6 +6110,7 @@ dependencies = [
  "ui_component_registry",
  "ui_input",
  "unindent",
+ "url",
  "util",
  "vfs",
  "watch",
