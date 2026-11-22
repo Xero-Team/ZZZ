@@ -4731,7 +4731,7 @@ impl File {
             .or_else(|| snapshot.entry_for_path(old_file.path.as_ref()));
 
         let mut new_file = if let Some(entry) = snapshot_entry {
-            let mut file = Self::from_entry(entry.clone(), worktree.clone(), cx);
+            let mut file = Self::from_entry(entry.clone(), worktree, cx);
             if entry.mtime.is_none() {
                 file.disk_state = old_file.disk_state;
             }
