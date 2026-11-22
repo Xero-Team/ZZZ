@@ -925,9 +925,16 @@ impl process::Host for WasmState {
     }
 }
 
-/// Environment variables that make the dynamic loader, a shell, or an interpreter load code
-/// the extension supplies. A `process:exec` grant approves the program, not what it loads, so
-/// a guest may not set these on a granted command.
+/// Environment variables that make the dynamic loader, a shell, an interpreter, or a tool's
+/// configuration lookup load code the extension supplies. A `process:exec` grant approves the
+/// program, not what it loads, so a guest may not set these on a granted command.
+///
+/// Two families are listed: the loader family (`LD_*`, `DYLD_*`, `PATH`) and the
+/// configuration-locating family. The second is what a deny-list alone cannot enumerate
+/// completely, which is why the entries name the locator each tool reads rather than one
+/// variable per exploit: `git` reads `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM` plus
+/// `core.fsmonitor`, `core.pager`, and `sshCommand` out of them, and the interpreters read
+/// their module and startup paths from the rest.
 const DENIED_EXEC_ENV: &[&str] = &[
     "PATH",
     "LD_PRELOAD",
@@ -937,6 +944,27 @@ const DENIED_EXEC_ENV: &[&str] = &[
     "DYLD_LIBRARY_PATH",
     "DYLD_FRAMEWORK_PATH",
     "NODE_OPTIONS",
+    "NODE_PATH",
+    "GIT_CONFIG",
+    "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_SYSTEM",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_EXEC_PATH",
+    "GIT_SSH",
+    "GIT_SSH_COMMAND",
+    "PYTHONHOME",
+    "PYTHONPATH",
+    "PYTHONSTARTUP",
+    "RUBYLIB",
+    "RUBYOPT",
+    "PERL5LIB",
+    "PERL5OPT",
+    "CLASSPATH",
+    "JAVA_TOOL_OPTIONS",
+    "JDK_JAVA_OPTIONS",
+    "_JAVA_OPTIONS",
+    "BASH_ENV",
+    "ENV",
 ];
 
 /// Rejects guest-supplied environment variables that would let the extension choose code the
@@ -1227,5 +1255,39 @@ impl ExtensionImports for WasmState {
             .await
             .with_context(|| format!("setting permissions for path {path:?}"))
             .to_wasmtime_result()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn guest_environment_cannot_redirect_what_a_granted_command_loads() {
+        for key in [
+            "GIT_CONFIG_GLOBAL",
+            "GIT_CONFIG_SYSTEM",
+            "GIT_EXEC_PATH",
+            "GIT_SSH_COMMAND",
+            "PYTHONPATH",
+            "PYTHONSTARTUP",
+            "NODE_PATH",
+            "RUBYOPT",
+            "JAVA_TOOL_OPTIONS",
+            "BASH_ENV",
+            "LD_PRELOAD",
+        ] {
+            let error = checked_child_env(&[(key.to_string(), "x".to_string())])
+                .expect_err("the key must be refused");
+            assert!(error.to_string().contains(key), "{error}");
+        }
+
+        // Environment lookups on the child side are case-sensitive on unix but not on every
+        // platform, so the check compares without regard to case.
+        assert!(checked_child_env(&[("git_config_global".to_string(), "x".to_string())]).is_err());
+
+        let allowed = checked_child_env(&[("TERM".to_string(), "dumb".to_string())])
+            .expect("a benign variable is passed through");
+        assert_eq!(allowed, vec![("TERM".to_string(), "dumb".to_string())]);
     }
 }
