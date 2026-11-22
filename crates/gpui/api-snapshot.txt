@@ -481,6 +481,7 @@ BackgroundExecutor::set_block_on_ticks method & self , range : std :: ops :: Ran
 BackgroundExecutor::set_num_cpus method & self , count : usize
 BackgroundExecutor::simulate_random_delay method & self -> impl Future < Output = () > + use < >
 BackgroundExecutor::spawn method <R> where R : Send + 'static , & self , future : impl Future < Output = R > + Send + 'static -> Task < R >
+BackgroundExecutor::spawn_dedicated method <R> where R : Send + 'static , & self , future : impl Future < Output = R > + Send + 'static -> Task < R >
 BackgroundExecutor::spawn_with_priority method <R> where R : Send + 'static , & self , priority : Priority , future : impl Future < Output = R > + Send + 'static , -> Task < R >
 BackgroundExecutor::tick method & self -> bool
 BackgroundExecutor::timer method & self , duration : Duration -> Task < () >
