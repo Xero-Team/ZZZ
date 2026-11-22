@@ -231,27 +231,20 @@ fn default_delimiter_for_extension(extension: &str) -> Option<char> {
 }
 
 fn has_separator_directive(text: &str) -> bool {
-    text.lines().next().is_some_and(|line| {
-        let line = line.trim_start();
-        let line = line.trim_prefix('\u{feff}');
-        let bytes = line.as_bytes();
-        bytes.len() >= 5
-            && line[..4].eq_ignore_ascii_case("sep=")
-            && line[4..]
-                .chars()
-                .next()
-                .is_some_and(|delimiter| delimiter != '\r' && delimiter != '\n' && delimiter != '"')
-    })
+    separator_directive(text).is_some()
 }
 
 fn separator_directive(text: &str) -> Option<char> {
     let first_line = text.lines().next()?.trim_start();
     let first_line = first_line.trim_prefix('\u{feff}');
-    if first_line.len() < 5 || !first_line[..4].eq_ignore_ascii_case("sep=") {
+    // `get` rather than slicing by index: index 4 is only a `sep=` boundary when
+    // the first four bytes are ASCII, and a header such as `名前,値` puts index 4
+    // inside a multi-byte character.
+    let prefix = first_line.get(..4)?;
+    if !prefix.eq_ignore_ascii_case("sep=") {
         return None;
     }
-    let rest = &first_line[4..];
-    let delimiter = rest.chars().next()?;
+    let delimiter = first_line[4..].chars().next()?;
     (delimiter != '\r' && delimiter != '\n' && delimiter != '"').then_some(delimiter)
 }
 
@@ -693,6 +686,27 @@ Jane,"Simple name""#;
         assert_eq!(parsed.headers[0].display_value().unwrap().as_ref(), "name");
         assert_eq!(parsed.rows.len(), 1);
         assert_eq!(parsed.rows[0][1].display_value().unwrap().as_ref(), "1");
+    }
+
+    #[test]
+    fn test_multibyte_first_line_is_not_mistaken_for_a_separator_directive() {
+        use text::{Buffer, BufferId, ReplicaId};
+
+        // The fourth byte of `名` + `前` falls inside `前`, so a `[..4]` slice used
+        // to panic on a file with CJK column headers.
+        for source in ["名前,値\nあ,1", "abcé,1\nx,2"] {
+            assert!(!has_separator_directive(source));
+            assert_eq!(separator_directive(source), None);
+
+            let buffer = Buffer::new(ReplicaId::LOCAL, BufferId::new(3).unwrap(), source.to_string());
+            let parsed = from_buffer_with_selection(
+                buffer.snapshot(),
+                DelimiterSelection::Auto,
+                ',',
+                HeaderMode::FirstRow,
+            );
+            assert_eq!(parsed.number_of_cols, 2);
+        }
     }
 
     #[test]
