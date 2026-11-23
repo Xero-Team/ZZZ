@@ -1,6 +1,6 @@
 ---
 name: repository-research
-description: "Produces evidence-backed repository research from source, history, and primary docs: architecture maps, comparisons, and due diligence. Use for technology selection and health reviews."
+description: "Produces evidence-backed repository research from source, history, and primary docs: architecture maps, comparisons, and due diligence. Use for technology selection and health reviews. Do not use for reviewing ZZZ's own code or diffs, auditing ZZZ's recorded upstream decisions, or porting upstream commits."
 license: CC-BY-4.0
 compatibility: opencode
 version: 1.0.0
