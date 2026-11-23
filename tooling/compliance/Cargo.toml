@@ -9,7 +9,7 @@ license = "AGPL-3.0-or-later"
 workspace = true
 
 [features]
-octo-client = ["dep:octocrab", "dep:tokio"]
+octo-client = ["dep:octocrab", "dep:rustls", "dep:tokio"]
 
 [dependencies]
 anyhow.workspace = true
@@ -27,6 +27,7 @@ octocrab = { version = "0.54", default-features = false, features = [
     "timeout"
 ], optional = true }
 regex.workspace = true
+rustls = { workspace = true, optional = true }
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
