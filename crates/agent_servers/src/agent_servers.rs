@@ -1,4 +1,5 @@
 mod acp;
+mod agent_profile;
 mod custom;
 
 #[cfg(any(test, feature = "test-support"))]
@@ -22,9 +23,9 @@ use std::{any::Any, rc::Rc, sync::Arc};
 pub use acp::test_support::{
     FakeAcpAgentServer, FakeAcpConnectionHarness, connect_fake_acp_connection,
 };
-pub use acp::{
-    AcpConnection, AcpDebugMessage, AcpDebugMessageContent, AcpDebugMessageDirection,
-    GEMINI_TERMINAL_AUTH_METHOD_ID,
+pub use acp::{AcpConnection, AcpDebugMessage, AcpDebugMessageContent, AcpDebugMessageDirection};
+pub use agent_profile::{
+    GEMINI_TERMINAL_AUTH_METHOD_ID, auth_method_retries_on_remote, auth_method_success_patterns,
 };
 
 pub struct AgentServerDelegate {

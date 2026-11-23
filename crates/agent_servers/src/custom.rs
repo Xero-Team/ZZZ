@@ -1,4 +1,8 @@
-use crate::{AgentServer, AgentServerDelegate, load_proxy_env};
+use crate::{
+    AgentServer, AgentServerDelegate,
+    agent_profile::{self, CredentialSpec, EnvSource},
+    load_proxy_env,
+};
 use acp_thread::AgentConnection;
 use agent_client_protocol::v1::schema as acp;
 use anyhow::{Context as _, Result};
@@ -225,32 +229,36 @@ impl AgentServer for CustomAgentServer {
         if delegate.store.read(cx).no_browser() {
             extra_env.insert("NO_BROWSER".to_owned(), "1".to_owned());
         }
-        if is_registry_agent {
-            match agent_id.as_ref() {
-                CLAUDE_AGENT_ID => {
-                    extra_env.insert("ANTHROPIC_API_KEY".into(), String::new());
-                }
-                CODEX_ID => {
-                    if let Ok(api_key) = std::env::var("CODEX_API_KEY") {
-                        extra_env.insert("CODEX_API_KEY".into(), api_key);
+        // Environment an agent's profile declares. Credentials are resolved off
+        // the main thread below, next to the launch itself.
+        let mut pending_credentials = Vec::new();
+        if is_registry_agent && let Some(profile) = agent_profile::profile_for(&agent_id) {
+            for (key, source) in profile.env {
+                match source {
+                    EnvSource::Empty => {
+                        extra_env.insert((*key).to_owned(), String::new());
                     }
-                    if let Ok(api_key) = std::env::var("OPEN_AI_API_KEY") {
-                        extra_env.insert("OPEN_AI_API_KEY".into(), api_key);
+                    EnvSource::HostEnv(var) => {
+                        if let Ok(api_key) = std::env::var(var) {
+                            extra_env.insert((*key).to_owned(), api_key);
+                        }
                     }
+                    EnvSource::Literal(value) => {
+                        extra_env.insert((*key).to_owned(), (*value).to_owned());
+                    }
+                    EnvSource::Credential(spec) => pending_credentials.push((*key, spec)),
                 }
-                GEMINI_ID => {
-                    extra_env.insert("SURFACE".to_owned(), "zzz".to_owned());
-                }
-                _ => {}
             }
         }
         let store = delegate.store.downgrade();
         cx.spawn(async move |cx| {
-            if is_registry_agent
-                && agent_id.as_ref() == GEMINI_ID
-                && let Ok(api_key) = cx.update(api_key_for_gemini_cli).await
-            {
-                extra_env.insert("GEMINI_API_KEY".into(), api_key);
+            for (key, credential) in pending_credentials {
+                if let Ok(api_key) = cx
+                    .update(|cx| api_key_from_credential(credential, cx))
+                    .await
+                {
+                    extra_env.insert(key.to_owned(), api_key);
+                }
             }
             let command = store
                 .update(cx, |store, cx| {
@@ -282,18 +290,23 @@ impl AgentServer for CustomAgentServer {
     }
 }
 
-const GEMINI_API_URL: &str = "https://generativelanguage.googleapis.com";
-
-fn api_key_for_gemini_cli(cx: &mut App) -> Task<Result<String>> {
-    let env_var = EnvVar::new("GEMINI_API_KEY".into()).or(EnvVar::new("GOOGLE_AI_API_KEY".into()));
-    if let Some(key) = env_var.value {
+/// Resolves the credential an agent profile declares.
+///
+/// The declared environment variables come first, so a user can override the
+/// stored key; otherwise the system keychain entry for the profile's URL is used.
+fn api_key_from_credential(spec: &CredentialSpec, cx: &mut App) -> Task<Result<String>> {
+    let from_env = spec
+        .env_vars
+        .iter()
+        .find_map(|name| EnvVar::new((*name).into()).value);
+    if let Some(key) = from_env {
         return Task::ready(Ok(key));
     }
     let credentials_provider = zzz_credentials_provider::global(cx);
-    let api_url = GEMINI_API_URL.to_owned();
+    let keychain_url = spec.keychain_url.to_owned();
     cx.spawn(async move |cx| {
         Ok(
-            ApiKey::load_from_system_keychain(&api_url, credentials_provider.as_ref(), cx)
+            ApiKey::load_from_system_keychain(&keychain_url, credentials_provider.as_ref(), cx)
                 .await?
                 .key()
                 .to_owned(),

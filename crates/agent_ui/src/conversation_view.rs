@@ -13,9 +13,9 @@ use action_log::{ActionLog, DiffStats};
 use agent::ThreadStore;
 use agent_client_protocol::Error as AcpError;
 use agent_client_protocol::v1::schema as acp;
+use agent_servers::AgentServer;
 #[cfg(test)]
 use agent_servers::AgentServerDelegate;
-use agent_servers::{AgentServer, GEMINI_TERMINAL_AUTH_METHOD_ID};
 use agent_settings::AgentSettings;
 use anyhow::{Result, anyhow};
 #[cfg(feature = "audio")]
@@ -2057,13 +2057,7 @@ impl ConversationView {
                 })?
                 .await?;
 
-            let success_patterns = match method.0.as_ref() {
-                "claude-login" | GEMINI_TERMINAL_AUTH_METHOD_ID => vec![
-                    "Login successful".to_owned(),
-                    "Type your message".to_owned(),
-                ],
-                _ => Vec::new(),
-            };
+            let success_patterns = agent_servers::auth_method_success_patterns(method.0.as_ref());
             if success_patterns.is_empty() {
                 // No success patterns specified: wait for the process to exit and check exit code
                 let exit_status = terminal
@@ -2094,7 +2088,7 @@ impl ConversationView {
                                     terminal.update(cx, |terminal, _cx| terminal.get_content())?;
                                 if success_patterns
                                     .iter()
-                                    .any(|pattern| content.contains(pattern))
+                                    .any(|pattern| content.contains(*pattern))
                                 {
                                     return anyhow::Ok(());
                                 }
@@ -2120,7 +2114,7 @@ impl ConversationView {
                     _ = exit_status => {
                         if !previous_attempt
                             && project.read_with(cx, |project, _| project.is_via_remote_server())
-                            && method.0.as_ref() == GEMINI_TERMINAL_AUTH_METHOD_ID
+                            && agent_servers::auth_method_retries_on_remote(method.0.as_ref())
                         {
                             return cx
                                 .update(|window, cx| {

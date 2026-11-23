@@ -40,10 +40,8 @@ use acp_thread::{AcpThread, AuthRequired, LoadError, TerminalProviderEvent};
 use terminal::TerminalBuilder;
 use terminal::terminal_settings::{AlternateScroll, CursorShape};
 
-use crate::{CURSOR_ID, GEMINI_ID};
+use crate::agent_profile;
 
-pub const GEMINI_TERMINAL_AUTH_METHOD_ID: &str = "spawn-gemini-cli";
-const PARAMETERIZED_MODEL_PICKER_META_KEY: &str = "parameterizedModelPicker";
 const MAX_DEBUG_BACKLOG_MESSAGES: usize = 2000;
 const ACP_RESPONSE_CHANNEL_CANCELLED: &str =
     "response channel cancelled — connection may have dropped";
@@ -815,8 +813,10 @@ fn client_capabilities_for_agent(agent_id: &AgentId) -> acp::ClientCapabilities 
         ("terminal-auth".into(), true.into()),
     ]);
 
-    if agent_id.as_ref() == CURSOR_ID {
-        meta.insert(PARAMETERIZED_MODEL_PICKER_META_KEY.into(), true.into());
+    // Anything an agent needs beyond the spec comes from its declared profile,
+    // so an unknown agent gets the same, unpatched capabilities as a known one.
+    for (key, value) in agent_profile::client_meta_for(agent_id) {
+        meta.insert(key.into(), value.into());
     }
 
     acp::ClientCapabilities::new()
@@ -1138,25 +1138,10 @@ impl AcpConnection {
             None
         };
 
-        // TODO: Remove this override once Google team releases their official auth methods
-        let auth_methods = if agent_id.0.as_ref() == GEMINI_ID {
-            let mut gemini_args = original_command.args.clone();
-            gemini_args.retain(|a| a != "--experimental-acp" && a != "--acp");
-            let value = serde_json::json!({
-                "label": "gemini /auth",
-                "command": original_command.path.to_string_lossy(),
-                "args": gemini_args,
-                "env": original_command.env.unwrap_or_default(),
-            });
-            let meta = acp::Meta::from_iter([("terminal-auth".to_owned(), value)]);
-            vec![acp::AuthMethod::Agent(
-                acp::AuthMethodAgent::new(GEMINI_TERMINAL_AUTH_METHOD_ID, "Login")
-                    .description("Login with your Google or Vertex AI account")
-                    .meta(meta),
-            )]
-        } else {
-            response.auth_methods
-        };
+        // A profile may declare a terminal auth method the agent does not report
+        // yet; the launch command is reused with its session-only args stripped.
+        let auth_methods = agent_profile::synthesized_auth_method(&agent_id, &original_command)
+            .map_or(response.auth_methods, |method| vec![method]);
         Ok(Self {
             id: agent_id,
             auth_methods,
@@ -2601,6 +2586,8 @@ mod tests {
     use gpui::UpdateGlobal;
 
     use super::*;
+    use crate::CURSOR_ID;
+    use crate::agent_profile::PARAMETERIZED_MODEL_PICKER_META_KEY;
 
     #[test]
     fn cursor_client_capabilities_include_parameterized_model_picker_meta() {
