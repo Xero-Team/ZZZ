@@ -56,6 +56,32 @@
 //! To save the markdown output to a file instead, run `cargo perf-compare --save=$FILE
 //! new-ident old-ident`.
 //!
+//! `compare` only counts a change that clears `--json`'s recorded noise floor
+//! (see below) and the built-in significance threshold. It refuses to diff two
+//! runs collected under different build profiles, and names the tests it
+//! suppressed so a quiet report cannot hide a real regression by accident.
+//!
+//! ## The A/A noise floor
+//! Run one checkout twice with two idents, then measure the spread:
+//! ```sh
+//! cargo perf-test -p gpui -- --json=aa1
+//! cargo perf-test -p gpui -- --json=aa2
+//! cargo perf-compare noise aa1 aa2
+//! ```
+//! That writes `.perf-runs/noise.floor.json`, per-test spread in the same terms
+//! `compare` reports. `compare` loads it automatically.
+//!
+//! ## Soaking a workload
+//! A single sample cannot tell a leak from a large baseline. `perf-soak` runs a
+//! command at a fixed interval, parses every numeric `key=value` field it
+//! prints, and reports the least-squares slope of each metric:
+//! ```sh
+//! cargo perf-soak --minutes=30 --interval=60 -- ./target/release-fast/deps/editor_frame_workload ...
+//! ```
+//! `--minutes` also accepts the `--soak <minutes>` spelling. `editor_frame_workload`
+//! already prints `peak_kib`, `allocations` and `allocated_bytes`, which is what
+//! the slope needs; a climbing `peak_kib` across runs is the leak signal.
+//!
 //! NB: All files matching `.perf-runs/ident.*.json` will be considered when
 //! doing this comparison, so ensure there aren't leftover files in your `.perf-runs`
 //! directory that might match that!
@@ -66,7 +92,10 @@
 
 mod implementation;
 
-use implementation::{FailKind, Importance, Output, TestMdata, Timings, consts};
+use implementation::{
+    DEFAULT_SIGNIFICANCE_THRESHOLD, FailKind, Importance, NoiseFloor, Output, SoakReport,
+    TestMdata, Timings, consts, parse_metric_line,
+};
 
 use std::{
     fs::OpenOptions,
@@ -156,7 +185,9 @@ impl OutputKind<'_> {
                     .create(true)
                     .truncate(true)
                     .open(&file_path)?;
-                out_file.write_all(&serde_json::to_vec(output)?)?;
+                let mut output = output.clone();
+                output.set_profile(build_profile_from_binary_path(t_bin));
+                out_file.write_all(&serde_json::to_vec(&output)?)?;
                 if !QUIET.load(Ordering::Relaxed) {
                     eprintln!("JSON output written to {}", file_path.display());
                 }
@@ -164,6 +195,19 @@ impl OutputKind<'_> {
         }
         Ok(())
     }
+}
+
+/// Derives the cargo build profile from a test binary path.
+///
+/// A test binary lives at `target/<profile>/deps/<crate>-<hash>`, so the
+/// directory above `deps` names the profile (`release-fast`, `debug`, ...).
+fn build_profile_from_binary_path(t_bin: &str) -> Option<String> {
+    let path = Path::new(t_bin);
+    let deps = path.parent()?;
+    if deps.file_name()? != "deps" {
+        return None;
+    }
+    Some(deps.parent()?.file_name()?.to_string_lossy().into_owned())
 }
 
 /// Runs a given metadata-returning function from a test handler, parsing its
@@ -248,36 +292,19 @@ fn parse_mdata(t_bin: &str, mdata_fn: &str) -> Result<TestMdata, FailKind> {
     })
 }
 
-/// Compares the perf results of two profiles as per the arguments passed in.
-fn compare_profiles(args: &[String]) -> PerfResult<()> {
-    let mut save_to = None;
-    let mut ident_idx = 0;
-    args.first().inspect(|a| {
-        if a.starts_with("--save") {
-            save_to = Some(
-                a.strip_prefix("--save=")
-                    .expect("FATAL: save param formatted incorrectly"),
-            );
-            ident_idx = 1;
-        }
-    });
-    let ident_new = args
-        .get(ident_idx)
-        .expect("FATAL: missing identifier for new run");
-    let ident_old = args
-        .get(ident_idx + 1)
-        .expect("FATAL: missing identifier for old run");
+/// Resolves the workspace `.perf-runs` directory.
+fn runs_dir() -> PerfResult<PathBuf> {
     let wspace_dir = std::env::var("CARGO_MANIFEST_DIR")
         .map_err(|_| perf_error("CARGO_MANIFEST_DIR is not set"))?;
-    let runs_dir = PathBuf::from(&wspace_dir)
+    Ok(PathBuf::from(&wspace_dir)
         .join("..")
         .join("..")
-        .join(consts::RUNS_DIR);
+        .join(consts::RUNS_DIR))
+}
 
-    // Use the blank outputs initially, so we can merge into these with prefixes.
-    let mut outputs_new = Output::blank();
-    let mut outputs_old = Output::blank();
-
+/// Loads every run file whose ident starts with `ident`, merged with crate prefixes.
+fn load_run(runs_dir: &Path, ident: &str) -> PerfResult<Output> {
+    let mut output = Output::blank();
     for entry in runs_dir.read_dir()? {
         // A single unreadable or malformed run file should not abort the whole
         // comparison, so skip it with a diagnostic rather than unwrapping.
@@ -287,47 +314,172 @@ fn compare_profiles(args: &[String]) -> PerfResult<()> {
         let Ok(metadata) = entry.metadata() else {
             continue;
         };
-        if metadata.is_file() {
-            let Ok(name) = entry.file_name().into_string() else {
-                continue;
-            };
+        if !metadata.is_file() {
+            continue;
+        }
+        let Ok(name) = entry.file_name().into_string() else {
+            continue;
+        };
+        if !name.starts_with(ident) {
+            continue;
+        }
 
-            // A little helper to avoid code duplication. Reads the `output` from
-            // a json file, then merges it into what we have so far.
-            let read_into = |output: &mut Output| -> PerfResult<()> {
-                let mut elems = name.split('.').skip(1);
-                let prefix = elems
-                    .next()
-                    .ok_or_else(|| perf_error("run file name has no crate prefix"))?;
-                if elems.next() != Some("json") || elems.next().is_some() {
-                    return Err(perf_error("run file name is not <ident>.<crate>.json"));
-                }
-                let mut buffer = Vec::new();
-                OpenOptions::new()
-                    .read(true)
-                    .open(entry.path())?
-                    .read_to_end(&mut buffer)?;
-                let o_other: Output = serde_json::from_slice(&buffer)?;
-                output.merge(o_other, prefix);
-                Ok(())
-            };
-
-            let target = if name.starts_with(ident_old) {
-                Some(&mut outputs_old)
-            } else if name.starts_with(ident_new) {
-                Some(&mut outputs_new)
-            } else {
-                None
-            };
-            if let Some(target) = target
-                && let Err(error) = read_into(target)
-            {
+        let mut elems = name.split('.').skip(1);
+        let Ok(prefix) = elems
+            .next()
+            .ok_or_else(|| perf_error("run file name has no crate prefix"))
+        else {
+            continue;
+        };
+        if elems.next() != Some("json") || elems.next().is_some() {
+            continue;
+        }
+        let mut buffer = Vec::new();
+        if let Err(error) = OpenOptions::new()
+            .read(true)
+            .open(entry.path())
+            .and_then(|mut file| file.read_to_end(&mut buffer))
+        {
+            eprintln!("Skipping run file {name}: {error}");
+            continue;
+        }
+        let run: Output = match serde_json::from_slice(&buffer) {
+            Ok(run) => run,
+            Err(error) => {
                 eprintln!("Skipping run file {name}: {error}");
+                continue;
             }
+        };
+        output.merge(run, prefix);
+    }
+    Ok(output)
+}
+
+/// Refuses a comparison whose two halves were collected under different build
+/// profiles, since the delta would say nothing about a change to the code.
+fn ensure_same_profile(new: &Output, old: &Output) -> PerfResult<()> {
+    match (new.profile(), old.profile()) {
+        (Some(new), Some(old)) if new != old => Err(perf_error(&format!(
+            "refusing to compare runs from different build profiles: {new} vs {old}"
+        ))),
+        _ => Ok(()),
+    }
+}
+
+/// Loads the recorded A/A noise floor, if one exists.
+fn load_noise_floor(runs_dir: &Path) -> Option<NoiseFloor> {
+    let path = runs_dir.join(consts::NOISE_FLOOR_FILE);
+    let buffer = std::fs::read(&path).ok()?;
+    match serde_json::from_slice(&buffer) {
+        Ok(floor) => Some(floor),
+        Err(error) => {
+            eprintln!(
+                "Ignoring unreadable noise floor {}: {error}",
+                path.display()
+            );
+            None
         }
     }
+}
 
-    let res = outputs_new.compare_perf(outputs_old);
+/// Records an A/A noise floor from two runs of the same checkout.
+///
+/// Both idents must come from separate `cargo perf-test` invocations on one
+/// commit; the resulting per-test spread becomes the floor below which `compare`
+/// does not count a change.
+fn record_noise_floor(args: &[String]) -> PerfResult<()> {
+    let mut save_to = None;
+    let mut ident_idx = 0;
+    if let Some(first) = args.first()
+        && first.starts_with("--save")
+    {
+        save_to = Some(
+            first
+                .strip_prefix("--save=")
+                .ok_or_else(|| perf_error("FATAL: save param formatted incorrectly"))?,
+        );
+        ident_idx = 1;
+    }
+    let ident_first = args
+        .get(ident_idx)
+        .ok_or_else(|| perf_error("FATAL: missing identifier for the first A/A run"))?;
+    let ident_second = args
+        .get(ident_idx + 1)
+        .ok_or_else(|| perf_error("FATAL: missing identifier for the second A/A run"))?;
+
+    let runs_dir = runs_dir()?;
+    let first = load_run(&runs_dir, ident_first)?;
+    let second = load_run(&runs_dir, ident_second)?;
+    ensure_same_profile(&first, &second)?;
+
+    let floor = NoiseFloor::measure(&first, &second);
+    if floor.is_empty() {
+        return Err(perf_error(
+            "the two A/A runs share no tests, so no floor can be measured",
+        ));
+    }
+
+    let path = save_to.map_or_else(|| runs_dir.join(consts::NOISE_FLOOR_FILE), PathBuf::from);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&path)?;
+    file.write_all(&serde_json::to_vec_pretty(&floor)?)?;
+    println!("{floor}");
+    if !QUIET.load(Ordering::Relaxed) {
+        eprintln!("Noise floor written to {}", path.display());
+    }
+    Ok(())
+}
+
+/// Compares the perf results of two runs as per the arguments passed in.
+fn compare_profiles(args: &[String]) -> PerfResult<()> {
+    let mut save_to = None;
+    let mut ident_idx = 0;
+    if let Some(first) = args.first()
+        && first.starts_with("--save")
+    {
+        save_to = Some(
+            first
+                .strip_prefix("--save=")
+                .ok_or_else(|| perf_error("FATAL: save param formatted incorrectly"))?,
+        );
+        ident_idx = 1;
+    }
+    let ident_new = args
+        .get(ident_idx)
+        .ok_or_else(|| perf_error("FATAL: missing identifier for new run"))?;
+    let ident_old = args
+        .get(ident_idx + 1)
+        .ok_or_else(|| perf_error("FATAL: missing identifier for old run"))?;
+
+    let runs_dir = runs_dir()?;
+    let outputs_new = load_run(&runs_dir, ident_new)?;
+    let outputs_old = load_run(&runs_dir, ident_old)?;
+    ensure_same_profile(&outputs_new, &outputs_old)?;
+
+    let floor = load_noise_floor(&runs_dir);
+    if let Some(floor) = &floor
+        && let (Some(floor_profile), Some(run_profile)) = (floor.profile(), outputs_new.profile())
+        && floor_profile != run_profile
+    {
+        return Err(perf_error(&format!(
+            "refusing to gate a {run_profile} run on a noise floor measured in {floor_profile}"
+        )));
+    }
+    if floor.is_none() && !QUIET.load(Ordering::Relaxed) {
+        eprintln!(
+            "No A/A noise floor recorded; treat small deltas with suspicion. \
+             Run `cargo perf-test ... -- --json=aa1` and `--json=aa2` on one commit, \
+             then `cargo perf-compare noise aa1 aa2`."
+        );
+    }
+
+    let res = outputs_new.compare_perf(outputs_old, floor.as_ref(), DEFAULT_SIGNIFICANCE_THRESHOLD);
     if let Some(filename) = save_to {
         let mut file = std::fs::OpenOptions::new()
             .create(true)
@@ -338,6 +490,98 @@ fn compare_profiles(args: &[String]) -> PerfResult<()> {
     } else {
         println!("{res}");
     }
+    Ok(())
+}
+
+/// Samples a workload repeatedly and reports the slope of its metrics.
+///
+/// A single sample cannot distinguish a leak from a large baseline. This runs
+/// `command` every `interval` for `minutes`, parses every numeric `key=value`
+/// field it prints, and reports the least-squares slope of each metric, so a
+/// steadily climbing `peak_kib` or `allocations` stands out from a one-off peak.
+///
+/// Usage: `cargo perf-soak --minutes <N> [--interval <SECS>] -- <command...>`
+#[expect(
+    clippy::disallowed_methods,
+    reason = "perf intentionally shells out to test binaries and helper tools"
+)]
+fn soak(args: &[String]) -> PerfResult<()> {
+    let mut minutes = None;
+    let mut interval = Duration::from_secs(60);
+    let mut command_start = None;
+
+    let mut index = 0;
+    while index < args.len() {
+        let arg = &args[index];
+        if arg == "--" {
+            command_start = Some(index + 1);
+            break;
+        }
+        if let Some(value) = arg
+            .strip_prefix("--minutes=")
+            .or_else(|| arg.strip_prefix("--soak="))
+        {
+            minutes = Some(value.parse::<f64>().map_err(|error| {
+                perf_error(&format!("invalid --minutes value {value:?}: {error}"))
+            })?);
+        } else if let Some(value) = arg.strip_prefix("--interval=") {
+            let seconds = value
+                .parse::<u64>()
+                .map_err(|error| perf_error(&format!("invalid --interval value: {error}")))?;
+            interval = Duration::from_secs(seconds);
+        } else if arg == "--quiet" {
+            QUIET.store(true, Ordering::Relaxed);
+        } else {
+            return Err(perf_error(&format!(
+                "unexpected argument {arg:?}; usage: soak --minutes <N> [--interval <SECS>] -- <command...>"
+            )));
+        }
+        index += 1;
+    }
+
+    let minutes = minutes.ok_or_else(|| perf_error("soak requires --minutes=<N>"))?;
+    if minutes <= 0.0 {
+        return Err(perf_error("--minutes must be positive"));
+    }
+    let command_start = command_start
+        .ok_or_else(|| perf_error("soak requires `-- <command...>` after its flags"))?;
+    let command = args
+        .get(command_start..)
+        .filter(|command| !command.is_empty())
+        .ok_or_else(|| perf_error("soak requires a command after `--`"))?;
+
+    let duration = Duration::from_secs_f64(minutes * 60.0);
+    let started_at = Instant::now();
+    let mut samples = implementation::SoakSamples::default();
+
+    while started_at.elapsed() < duration {
+        let elapsed_minutes = started_at.elapsed().as_secs_f64() / 60.0;
+        let output = Command::new(&command[0])
+            .args(&command[1..])
+            .stdin(Stdio::null())
+            .output()?;
+        if !QUIET.load(Ordering::Relaxed) {
+            eprint!("\rSoaking: {elapsed_minutes:.1}/{minutes:.0} min");
+        }
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for (metric, value) in stdout.lines().flat_map(parse_metric_line) {
+            samples
+                .entry(metric)
+                .or_default()
+                .push((elapsed_minutes, value));
+        }
+
+        let remaining = duration.saturating_sub(started_at.elapsed());
+        if remaining.is_zero() {
+            break;
+        }
+        std::thread::sleep(remaining.min(interval));
+    }
+    if !QUIET.load(Ordering::Relaxed) {
+        eprintln!();
+    }
+
+    println!("{}", SoakReport { samples });
     Ok(())
 }
 
@@ -535,7 +779,16 @@ fn main() -> PerfResult<()> {
 
     // We're being asked to compare two results, not run the profiler.
     if t_bin == "compare" {
-        return compare_profiles(&args[2..]);
+        return match args.get(2).map(String::as_str) {
+            Some("noise") => record_noise_floor(&args[3..]),
+            Some("soak") => soak(&args[3..]),
+            _ => compare_profiles(&args[2..]),
+        };
+    }
+
+    // We're being asked to sample a workload over time.
+    if t_bin == "soak" {
+        return soak(&args[2..]);
     }
 
     // Minimum test importance we care about this run.

@@ -29,3 +29,4 @@ protoc-bin-vendored = "3"
 
 [dev-dependencies]
 serde_json.workspace = true
+zstd.workspace = true

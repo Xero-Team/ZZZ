@@ -3,7 +3,7 @@
 
 use collections::HashMap;
 use serde::{Deserialize, Serialize};
-use std::{num::NonZero, time::Duration};
+use std::{collections::BTreeMap, num::NonZero, time::Duration};
 
 pub mod consts {
     //! Preset identifiers and constants so that the profiler and proc macro agree
@@ -37,7 +37,18 @@ pub mod consts {
 
     /// Where to save json run information.
     pub const RUNS_DIR: &str = ".perf-runs";
+    /// The A/A noise floor recorded by `cargo perf-compare noise`, relative to
+    /// `RUNS_DIR`.
+    pub const NOISE_FLOOR_FILE: &str = "noise.floor.json";
 }
+
+/// The smallest per-test change that counts as real when no noise floor says
+/// otherwise.
+///
+/// Two runs of one commit on one machine move by a few percent; below this, a
+/// delta is measurement noise rather than signal. `compare` still prints such
+/// tests, it just does not let them move the category totals.
+pub const DEFAULT_SIGNIFICANCE_THRESHOLD: f64 = 0.02;
 
 /// How relevant a benchmark is.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -156,13 +167,35 @@ pub struct Output {
     /// INVARIANT: If the test succeeded, the second field is `Some(mdata)` and
     /// `mdata.iterations` is `Some(_)`.
     tests: Vec<(String, Option<TestMdata>, Result<Timings, FailKind>)>,
+    /// The build profile this run was collected under, derived from the test
+    /// binary path (e.g. `release-fast`).
+    ///
+    /// `compare` refuses to diff two runs whose profiles differ, because a
+    /// debug-versus-optimized delta says nothing about a change to the code.
+    /// Older run files predate this field and deserialize as `None`.
+    #[serde(default)]
+    profile: Option<String>,
 }
 
 impl Output {
     /// Instantiates an empty "output". Useful for merging.
     #[must_use]
     pub fn blank() -> Self {
-        Output { tests: Vec::new() }
+        Output {
+            tests: Vec::new(),
+            profile: None,
+        }
+    }
+
+    /// Records the build profile this run was collected under.
+    pub fn set_profile(&mut self, profile: Option<String>) {
+        self.profile = profile;
+    }
+
+    /// The build profile this run was collected under, if it was recorded.
+    #[must_use]
+    pub fn profile(&self) -> Option<&str> {
+        self.profile.as_deref()
     }
 
     /// Reports a success and adds it to this run's `Output`.
@@ -227,6 +260,9 @@ impl Output {
     /// To be used in conjunction with `Output::blank()`, or else only some tests will have
     /// a prefix set.
     pub fn merge<'a>(&mut self, other: Self, pref_other: impl Into<Option<&'a str>>) {
+        if self.profile.is_none() {
+            self.profile = other.profile;
+        }
         let pref = if let Some(pref) = pref_other.into() {
             "crates/".to_owned() + pref + "::"
         } else {
@@ -243,15 +279,38 @@ impl Output {
             .collect();
     }
 
+    /// The throughput of every successful test, in iterations per second.
+    fn throughputs(&self) -> HashMap<&str, f64> {
+        self.tests
+            .iter()
+            .filter_map(|(name, mdata, timings)| {
+                let mdata = mdata.as_ref()?;
+                let timings = timings.as_ref().ok()?;
+                let iterations = mdata.iterations?;
+                Some((name.as_str(), timings.iters_per_sec(iterations)))
+            })
+            .collect()
+    }
+
     /// Evaluates the performance of `self` against `baseline`. The latter is taken
     /// as the comparison point, i.e. a positive resulting `PerfReport` means that
     /// `self` performed better.
+    ///
+    /// A test counts towards its category only when its change clears both
+    /// `threshold` and the recorded A/A `floor` for that test, so measurement
+    /// noise cannot masquerade as a regression. Tests below the gate are still
+    /// counted per category and reported as suppressed.
     ///
     /// # Panics
     /// `self` and `baseline` are assumed to have the iterations field on all
     /// `TestMdata`s set to `Some(_)` if the `TestMdata` is present itself.
     #[must_use]
-    pub fn compare_perf(self, baseline: Self) -> PerfReport {
+    pub fn compare_perf(
+        self,
+        baseline: Self,
+        floor: Option<&NoiseFloor>,
+        threshold: f64,
+    ) -> PerfReport {
         let self_categories = self.collapse();
         let mut other_categories = baseline.collapse();
 
@@ -267,6 +326,8 @@ impl Output {
                 // Running totals for averaging out tests.
                 let mut r_total_numerator = 0.;
                 let mut r_total_denominator = 0;
+                let mut counted = 0;
+                let mut suppressed = 0;
                 // Yeah this is O(n^2), but realistically it'll hardly be a bottleneck.
                 for (name, (s_timings, s_iters, weight)) in self_data {
                     // Only use the new weights if they conflict.
@@ -275,6 +336,11 @@ impl Output {
                     };
                     let shift =
                         (o_timings.iters_per_sec(o_iters) / s_timings.iters_per_sec(s_iters)) - 1.;
+                    let gate = threshold.max(floor.map_or(0.0, |floor| floor.spread_for(&name)));
+                    if shift.abs() < gate {
+                        suppressed += 1;
+                        continue;
+                    }
                     if shift > max {
                         max = shift;
                     }
@@ -283,15 +349,35 @@ impl Output {
                     }
                     r_total_numerator += shift * f64::from(weight);
                     r_total_denominator += u32::from(weight);
+                    counted += 1;
                 }
-                // There were no runs here!
-                if r_total_denominator == 0 {
-                    None
+                if counted == 0 {
+                    // Nothing cleared the noise gate, but the category did exist
+                    // in both runs; say so instead of pretending it was absent.
+                    Some((
+                        cat,
+                        PerfDelta {
+                            max: 0.,
+                            mean: 0.,
+                            min: 0.,
+                            counted,
+                            suppressed,
+                        },
+                    ))
                 } else {
                     let mean = r_total_numerator / f64::from(r_total_denominator);
                     // TODO: also aggregate standard deviation? That's harder to keep
                     // meaningful, though, since we dk which tests are correlated.
-                    Some((cat, PerfDelta { max, mean, min }))
+                    Some((
+                        cat,
+                        PerfDelta {
+                            max,
+                            mean,
+                            min,
+                            counted,
+                            suppressed,
+                        },
+                    ))
                 }
             })
             .collect();
@@ -423,11 +509,103 @@ impl std::fmt::Display for Output {
 /// category.
 struct PerfDelta {
     /// The biggest improvement / least bad regression.
+    ///
+    /// Zero when every test in the category fell below the noise gate.
     max: f64,
     /// The weighted average change in test times.
     mean: f64,
     /// The worst regression / smallest improvement.
+    ///
+    /// Zero when every test in the category fell below the noise gate.
     min: f64,
+    /// How many tests cleared the noise gate and shaped this row.
+    counted: usize,
+    /// How many tests were inside the gate and excluded from this row.
+    suppressed: usize,
+}
+
+/// Per-test measurement noise, measured by running one checkout twice (`A/A`).
+///
+/// `compare` gates every test on its own recorded spread, so a metric that moves
+/// by 4% on an idle machine is not reported as a 4% regression. A test absent
+/// from the floor (new test, different machine) falls back to
+/// [`DEFAULT_SIGNIFICANCE_THRESHOLD`].
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct NoiseFloor {
+    /// The largest relative spread observed per test name, keyed the same way
+    /// `compare` names tests (crate-prefixed).
+    per_test: BTreeMap<String, f64>,
+    /// The build profile both runs were collected under.
+    #[serde(default)]
+    profile: Option<String>,
+}
+
+impl NoiseFloor {
+    /// Measures the per-test spread between two runs of the same checkout.
+    ///
+    /// Both runs must have been collected under the same build profile; the
+    /// caller is responsible for refusing a mixed pair before calling this.
+    #[must_use]
+    pub fn measure(first: &Output, second: &Output) -> Self {
+        let first_throughputs = first.throughputs();
+        let second_throughputs = second.throughputs();
+
+        let mut per_test = BTreeMap::new();
+        for (name, first_throughput) in &first_throughputs {
+            let Some(second_throughput) = second_throughputs.get(name) else {
+                continue;
+            };
+            if *first_throughput <= 0. || *second_throughput <= 0. {
+                continue;
+            }
+            let spread = (first_throughput / second_throughput - 1.).abs();
+            per_test.insert((*name).to_owned(), spread);
+        }
+
+        Self {
+            per_test,
+            profile: first
+                .profile()
+                .or_else(|| second.profile())
+                .map(ToOwned::to_owned),
+        }
+    }
+
+    /// The relative spread recorded for `test`, or zero if it was not measured.
+    #[must_use]
+    pub fn spread_for(&self, test: &str) -> f64 {
+        self.per_test.get(test).copied().unwrap_or(0.)
+    }
+
+    /// The build profile both runs were collected under, if it was recorded.
+    #[must_use]
+    pub fn profile(&self) -> Option<&str> {
+        self.profile.as_deref()
+    }
+
+    /// True when no test was measured, e.g. because the two runs shared no names.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.per_test.is_empty()
+    }
+}
+
+impl std::fmt::Display for NoiseFloor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.per_test.is_empty() {
+            return write!(f, "(no shared tests between the two runs)");
+        }
+        let mut sorted = self.per_test.iter().collect::<Vec<_>>();
+        sorted.sort_unstable_by(|(_, left), (_, right)| {
+            right.partial_cmp(left).unwrap_or(std::cmp::Ordering::Equal)
+        });
+        writeln!(f, "| Test | A/A spread |")?;
+        write!(f, "|:---|---:|")?;
+        for (test, spread) in sorted {
+            write!(f, "\n| {test} | {:.1}% |", spread * 100.)?;
+        }
+        Ok(())
+    }
 }
 
 /// Shim type for reporting all performance deltas across importance categories.
@@ -436,16 +614,123 @@ pub struct PerfReport {
     deltas: HashMap<Importance, PerfDelta>,
 }
 
+/// Parses the numeric `key=value` fields out of one line of workload output.
+///
+/// The leading token names the emitting phase (for example
+/// `EDITOR_FRAME_WORKLOAD`). A `workload=<name>` field distinguishes repeated
+/// phases inside one run, so it is folded into the metric name instead of being
+/// reported as a metric itself. Values that do not parse as a float are ignored,
+/// which lets a workload print labels alongside its numbers.
+#[must_use]
+pub fn parse_metric_line(line: &str) -> Vec<(String, f64)> {
+    let mut tokens = line.split_whitespace();
+    let Some(tag) = tokens.next() else {
+        return Vec::new();
+    };
+    if tag.contains('=') {
+        return Vec::new();
+    }
+
+    let fields = tokens
+        .filter_map(|token| token.split_once('='))
+        .collect::<Vec<_>>();
+    let workload = fields
+        .iter()
+        .find_map(|(key, value)| (*key == "workload").then_some(*value));
+    let prefix = match workload {
+        Some(workload) => format!("{tag}[{workload}]"),
+        None => tag.to_owned(),
+    };
+
+    fields
+        .into_iter()
+        .filter(|(key, _)| *key != "workload")
+        .filter_map(|(key, value)| {
+            let value = value.parse::<f64>().ok()?;
+            Some((format!("{prefix}.{key}"), value))
+        })
+        .collect()
+}
+
+/// The least-squares slope of `samples`, in units of y per unit of x.
+///
+/// Returns `None` when there are fewer than two samples or every sample shares
+/// one x value, i.e. when a slope would be meaningless.
+#[must_use]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "Sample counts are small enough that f64 represents them exactly"
+)]
+pub fn linear_slope(samples: &[(f64, f64)]) -> Option<f64> {
+    if samples.len() < 2 {
+        return None;
+    }
+    let count = samples.len() as f64;
+    let mean_x = samples.iter().map(|(x, _)| x).sum::<f64>() / count;
+    let mean_y = samples.iter().map(|(_, y)| y).sum::<f64>() / count;
+    let mut covariance = 0.0;
+    let mut variance = 0.0;
+    for (x, y) in samples {
+        covariance += (x - mean_x) * (y - mean_y);
+        variance += (x - mean_x) * (x - mean_x);
+    }
+    (variance > 0.0).then(|| covariance / variance)
+}
+
+/// One metric's samples over a soak run, as `(elapsed minutes, value)`.
+pub type SoakSamples = BTreeMap<String, Vec<(f64, f64)>>;
+
+/// Renders a soak run as a markdown table of per-metric slopes.
+///
+/// The slope is what distinguishes a leak from a one-off peak: a flat RSS with a
+/// single early spike and a steadily climbing RSS can share a maximum, but only
+/// the second one is a leak.
+pub struct SoakReport {
+    /// Samples keyed by metric name, each as `(elapsed minutes, value)`.
+    pub samples: SoakSamples,
+}
+
+impl std::fmt::Display for SoakReport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.samples.is_empty() {
+            return write!(f, "(the workload printed no numeric metrics)");
+        }
+        writeln!(
+            f,
+            "| Metric | Samples | First | Last | Slope / min | Growth |"
+        )?;
+        write!(f, "|:---|---:|---:|---:|---:|---:|")?;
+        for (metric, samples) in &self.samples {
+            let (Some((_, first)), Some((_, last))) = (samples.first(), samples.last()) else {
+                continue;
+            };
+            let slope = linear_slope(samples);
+            let growth = if *first == 0.0 {
+                "n/a".to_owned()
+            } else {
+                format!("{:+.1}%", (last / first - 1.) * 100.)
+            };
+            write!(
+                f,
+                "\n| {metric} | {} | {first:.0} | {last:.0} | {} | {growth} |",
+                samples.len(),
+                slope.map_or_else(|| "n/a".to_owned(), |slope| format!("{slope:+.2}")),
+            )?;
+        }
+        Ok(())
+    }
+}
+
 impl std::fmt::Display for PerfReport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.deltas.is_empty() {
             return write!(f, "(no matching tests)");
         }
         let sorted = self.deltas.iter().collect::<Vec<_>>();
-        writeln!(f, "| Category | Max | Mean | Min |")?;
+        writeln!(f, "| Category | Max | Mean | Min | Counted | Suppressed |")?;
         // We don't want to print too many newlines at the end, so handle newlines
         // a little jankily like this.
-        write!(f, "|:---|---:|---:|---:|")?;
+        write!(f, "|:---|---:|---:|---:|---:|---:|")?;
         for (cat, delta) in sorted.into_iter().rev() {
             const SIGN_POS: &str = "↑";
             const SIGN_NEG: &str = "↓";
@@ -468,12 +753,132 @@ impl std::fmt::Display for PerfReport {
             // Pretty-print these instead of just using the float display impl.
             write!(
                 f,
-                "\n| {cat} | {} | {} | {} |",
+                "\n| {cat} | {} | {} | {} | {} | {} |",
                 prettify(delta.max),
                 prettify(delta.mean),
-                prettify(delta.min)
+                prettify(delta.min),
+                delta.counted,
+                delta.suppressed
             )?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A `Timings` with no spread, so the throughput depends only on `mean_millis`.
+    fn timing(mean_millis: u64) -> Timings {
+        Timings {
+            mean: Duration::from_millis(mean_millis),
+            stddev: Duration::from_millis(0),
+        }
+    }
+
+    /// An `Output` holding one successful test with `mean_millis` per `iterations`.
+    fn output_with(name: &str, mean_millis: u64, iterations: NonZero<usize>) -> Output {
+        let mut output = Output::blank();
+        output.success(
+            name,
+            TestMdata {
+                version: consts::MDATA_VER,
+                iterations: Some(iterations),
+                importance: Importance::Average,
+                weight: consts::WEIGHT_DEFAULT,
+            },
+            iterations,
+            timing(mean_millis),
+        );
+        output
+    }
+
+    #[test]
+    fn parse_metric_line_folds_workload_into_the_metric_name() {
+        let metrics = parse_metric_line(
+            "EDITOR_FRAME_WORKLOAD workload=cached frames=10 allocations=512 bytes_per_frame=1.5",
+        );
+
+        assert_eq!(
+            metrics,
+            vec![
+                ("EDITOR_FRAME_WORKLOAD[cached].frames".to_owned(), 10.0),
+                (
+                    "EDITOR_FRAME_WORKLOAD[cached].allocations".to_owned(),
+                    512.0
+                ),
+                (
+                    "EDITOR_FRAME_WORKLOAD[cached].bytes_per_frame".to_owned(),
+                    1.5
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_metric_line_ignores_untagged_and_non_numeric_fields() {
+        let untagged = parse_metric_line("frames=10");
+        assert_eq!(untagged.len(), 0);
+        assert_eq!(
+            parse_metric_line("EDITOR_FRAME_RSS peak_kib=2048 note=unavailable"),
+            vec![("EDITOR_FRAME_RSS.peak_kib".to_owned(), 2048.0)]
+        );
+    }
+
+    #[test]
+    fn linear_slope_recovers_a_known_gradient() {
+        let samples = [(0.0, 100.0), (1.0, 110.0), (2.0, 120.0)];
+
+        assert_eq!(linear_slope(&samples), Some(10.0));
+        assert_eq!(linear_slope(&[(0.0, 1.0)]), None);
+        assert_eq!(linear_slope(&[(1.0, 1.0), (1.0, 2.0)]), None);
+    }
+
+    #[test]
+    fn noise_floor_records_the_measured_spread_per_test() {
+        let first = output_with("test_a", 100, NonZero::new(10).unwrap());
+        let second = output_with("test_a", 110, NonZero::new(10).unwrap());
+
+        let floor = NoiseFloor::measure(&first, &second);
+
+        // 10 iterations per 100 ms is 100/s against 90.9/s, i.e. a tenth apart.
+        let spread = floor.spread_for("test_a");
+        assert!((spread - 0.1).abs() < 1e-9, "{spread}");
+        assert_eq!(floor.spread_for("unmeasured"), 0.0);
+        assert!(!floor.is_empty());
+    }
+
+    #[test]
+    fn compare_perf_suppresses_changes_inside_the_noise_floor() {
+        let new = output_with("noisy", 103, NonZero::new(10).unwrap());
+        let old = output_with("noisy", 100, NonZero::new(10).unwrap());
+        let floor = NoiseFloor::measure(
+            &output_with("noisy", 100, NonZero::new(10).unwrap()),
+            &output_with("noisy", 104, NonZero::new(10).unwrap()),
+        );
+
+        let ungated = new.clone().compare_perf(old.clone(), None, 0.0).to_string();
+        let gated = new
+            .compare_perf(old, Some(&floor), DEFAULT_SIGNIFICANCE_THRESHOLD)
+            .to_string();
+
+        assert!(ungated.contains("3.0%"), "{ungated}");
+        assert!(ungated.contains("| 1 | 0 |"), "{ungated}");
+        assert!(gated.contains("0.0%"), "{gated}");
+        assert!(gated.contains("| 0 | 1 |"), "{gated}");
+    }
+
+    #[test]
+    fn compare_perf_counts_a_change_past_the_threshold() {
+        let new = output_with("real", 120, NonZero::new(10).unwrap());
+        let old = output_with("real", 100, NonZero::new(10).unwrap());
+
+        let report = new
+            .compare_perf(old, None, DEFAULT_SIGNIFICANCE_THRESHOLD)
+            .to_string();
+
+        assert!(report.contains("20.0%"), "{report}");
+        assert!(report.contains("| 1 | 0 |"), "{report}");
     }
 }

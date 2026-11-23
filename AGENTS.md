@@ -21,7 +21,9 @@
 - Two local-only harnesses; neither runs in CI, so a regression stays invisible until someone runs it:
   - `cargo perf-test -p <crate>` runs `#[perf]`-annotated tests under `release-fast`. Used by `gpui`, `search`, `terminal`, `util`, `vim`; harness in `tooling/perf`, macro in `crates/util_macros`.
   - `cargo bench -p <crate>` runs criterion benches (`harness = false`) in `editor`, `language`, `rope`, `fuzzy_nucleo`, `project_panel`, `extension_host`. `crates/editor/benches/editor_frame_workload.rs` measures frame time, RSS, and allocation count end to end; `crates/*_benchmarks` are standalone driver binaries, not criterion.
-  - `cargo perf-compare` diffs two runs and needs `hyperfine`.
+  - `cargo perf-compare` diffs two runs and needs `hyperfine`. It gates each metric on the A/A noise floor recorded by `cargo perf-compare noise` and refuses to diff runs from different build profiles.
+  - `cargo perf-soak --minutes=<N> -- <command>` repeats a workload and reports each printed metric's slope, so a leak shows up as growth instead of one sample.
+  - `crates/proto/src/payload_budget.rs` holds serialized-size ceilings for the remote-editing messages, and they run in the normal test job.
 - Optimization ground rules: never edit a benchmark to hit a target, never run two benchmarks concurrently, no `RUSTFLAGS`/`target-cpu=native` heroics, keep measured cases independent. No gate enforces any of this.
 - Priority order for build and runtime knobs is compute, memory, binary size, then compile time — `docs/src/development/build-pipeline.md`.
 

@@ -583,7 +583,16 @@ a single file rearranges the wrong code.
   keeps its debug info.
 - `crates/editor/benches/editor_frame_workload.rs` measures frame time, RSS,
   and allocation count end to end.
-- `cargo perf-compare` compares two runs; it needs `hyperfine`.
+- `cargo perf-compare` compares two runs; it needs `hyperfine`. It counts a
+  change only when it clears both the built-in significance threshold and the
+  A/A noise floor recorded by `cargo perf-compare noise`, and it refuses to diff
+  runs from different build profiles.
+- `cargo perf-soak --minutes=<N> -- <command>` repeats a workload and reports
+  the slope of its printed metrics, which distinguishes a leak from a one-off
+  peak.
+- Payload ceilings for the remote-editing messages are ordinary tests in
+  `crates/proto/src/payload_budget.rs`, so the normal test job catches a field
+  that makes a hot message bigger.
 
 ## How other projects do it {#comparison}
 

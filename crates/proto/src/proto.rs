@@ -2,6 +2,8 @@
 
 pub mod error;
 mod macros;
+#[cfg(test)]
+mod payload_budget;
 mod typed_envelope;
 mod vfs_conversion;
 
