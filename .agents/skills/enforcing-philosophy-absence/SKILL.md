@@ -17,12 +17,12 @@ metadata:
   user-language: Simplified Chinese
 ---
 
-Follow `REFERENCE.md` in this skill first. The absence pass is complete:
-the rejected crates and UX are gone, and `script/check-philosophy` now
-carries 76 regression assertions that pass on a clean tree. If philosophy
-and a clean compile conflict, delete the surface; never import rejected
-account, billing, telemetry, or hosted-Zed machinery to keep the trees
-matching.
+Read `Philosophy` and `Completed Boundary (regression triggers)` in
+`REFERENCE.md` first, then the section the task needs. The absence pass is
+complete: the rejected crates and UX are gone, and `script/check-philosophy` now
+carries 76 regression assertions that pass on a clean tree. If philosophy and a
+clean compile conflict, delete the surface; never import rejected account,
+billing, telemetry, or hosted-Zed machinery to keep the trees matching.
 
 # Enforcing Philosophy Absence
 

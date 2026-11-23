@@ -5,17 +5,18 @@ rules, and the report template live here so the main skill stays loadable.
 
 ## Contents
 
-- Scope
-- Persona cards
-- Round 1 output schema
-- Round 2 output schema
-- Dispatch prompt shape
-- Synthesis rules
-- Confidence classes
-- Severity mapping
-- Report template
-- Anti-patterns
-- Sources
+Read `Scope` and `Persona cards` before dispatching anything. Then read only the
+sections the current round needs.
+
+| If you are | Read |
+|---|---|
+| writing the dispatch prompt | `Dispatch prompt shape` and `Round 1 output schema` |
+| collecting round-2 output | `Round 2 output schema` |
+| merging findings by cross-confirmation | `Synthesis rules`, `Confidence classes`, `Severity mapping` |
+| writing the report | `Report template` |
+| about to publish a finding | `Anti-patterns` |
+
+`Sources` is provenance only; read it when a rule's origin is questioned.
 
 ## Scope
 

@@ -19,10 +19,10 @@ metadata:
   user-language: Simplified Chinese
 ---
 
-Follow `REFERENCE.md` in this skill first. It carries the key shape, the
-placeholder rules, and what each locale gate rejects. A key that exists in one
-catalog only, or a fallback that drifted from `en.json`, fails a gate and ships
-nothing.
+Read `Catalog layout` and `Key rule` in `REFERENCE.md` first, then the section the
+edit needs. The same file carries the key shape, the placeholder rules, and what
+each locale gate rejects. A key that exists in one catalog only, or a fallback
+that drifted from `en.json`, fails a gate and ships nothing.
 
 # Localizing UI Text
 

@@ -2,6 +2,22 @@
 
 Normative rules for the `absorbing-upstream` skill.
 
+## Contents
+
+Read `Session Defaults` and `Classification` first; every batch needs them. Then
+read only the sections the current step needs.
+
+| If you are | Read |
+|---|---|
+| deciding whether a commit belongs in ZZZ | `Philosophy`, `Allow`, `Reject` |
+| judging a commit that mixes upstream plumbing with a feature | `Isolation Test` |
+| running the pick | `Git Commands`, `Apply` |
+| checking the result | `Verification` |
+| writing the budget report | `Report` |
+| recording a rejection | `Rejection Ledger` |
+| about to import rejected machinery | `Hard Stops` |
+| looking for a precedent | `Worked Patterns` |
+
 ## Session Defaults
 
 Override only when the user supplies a value.

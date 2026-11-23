@@ -17,8 +17,8 @@ metadata:
   output-target: .opencode/agents
 ---
 
-Follow `REFERENCE.md` in this skill first. If there is any conflict or
-uncertainty, prefer the
+Read the `REFERENCE.md` sections the design needs; the Contents block maps a task
+to its sections. If there is any conflict or uncertainty, prefer the
 [OpenCode agents documentation](https://opencode.ai/docs/agents/), then the
 [OpenCode tools documentation](https://opencode.ai/docs/tools/), then ask the
 user a short clarifying question in Simplified Chinese.

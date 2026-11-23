@@ -17,9 +17,10 @@ metadata:
   user-language: Simplified Chinese
 ---
 
-Follow `REFERENCE.md` in this skill first. If philosophy and isolation
-conflict with a clean cherry-pick, reject or port; never import rejected
-machinery to make the trees match.
+Read `Session Defaults` and `Classification` in `REFERENCE.md` first, then the
+section the step needs. If philosophy and isolation conflict with a clean
+cherry-pick, reject or port; never import rejected machinery to make the trees
+match.
 
 # Absorbing Upstream
 

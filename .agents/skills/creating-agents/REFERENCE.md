@@ -3,6 +3,20 @@
 Use this reference when creating or refining agents for this repository. Prefer
 the agents rules first, then the tools rules.
 
+## Contents
+
+Read `Agent Files`, `Minimum Markdown Shape`, and `Required And Common Fields`
+first; every agent needs them. Then read only the sections the design needs.
+
+| If you are | Read |
+|---|---|
+| choosing the agent's mode | `Mode Selection` |
+| deciding which tools to grant | `Tool Model`, `Built-In Tools To Consider`, `Tool Choice Heuristics` |
+| setting tool permissions | `Permission Model` |
+| allowing web or search tools | `Web Tool Split`, `Search Tool Caveat` |
+| reviewing the draft before finishing | `Common Mistakes` |
+| wanting a starting point | `Example: Read-Only Reviewer`, `Example: Constrained Docs Agent` |
+
 ## Scope For This Skill
 
 - Create all generated agents under `.opencode/agents/`.

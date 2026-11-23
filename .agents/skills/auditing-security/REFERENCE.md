@@ -1,19 +1,24 @@
 # Reference: ZZZ Security Audit
 
-Normative material for `auditing-security`. Load this before reconnaissance.
+Normative material for `auditing-security`. Read the two model sections first,
+then the section each phase needs; the table below maps a phase to its section.
 Keep code, JSON, and commands in English; keep report narrative in Simplified
 Chinese.
 
 ## Contents
 
-- Trust boundary model
-- Verdicts and severity
-- Coverage ledger
-- Attack surfaces of ZZZ
-- `findings.json` schema
-- Report shape
-- Anti-patterns
-- Sources
+Read `Trust boundary model` and `Verdicts and severity` first; every candidate is
+judged against them.
+
+| If you are | Read |
+|---|---|
+| choosing what to hunt | `Attack surfaces of ZZZ` |
+| tracking what is still uncovered | `Coverage ledger` |
+| recording a validated finding | `findings.json` schema |
+| writing the report | `Report shape` |
+| about to publish a finding | `Anti-patterns` |
+
+`Sources` is provenance only; read it when a rule's origin is questioned.
 
 ## Trust boundary model
 

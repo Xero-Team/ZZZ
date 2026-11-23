@@ -5,6 +5,12 @@ skills rules first, then the local repository conventions.
 
 ## Contents
 
+Read only the sections the current task needs: `Naming rules`, `Description
+rules`, and `Trigger testing` for discovery work; `Minimum markdown shape` and
+`Recommended body structure` for the body; `Progressive disclosure` and
+`One-level reference rule` for deciding what moves out of `SKILL.md`;
+`Common mistakes` before finishing.
+
 - Scope for this skill
 - Skill files
 - Minimum markdown shape
@@ -218,6 +224,13 @@ explicitly when they matter.
 Keep `SKILL.md` focused on role, trigger conditions, procedure, and outputs.
 Move durable reference material into `REFERENCE.md` so the main skill stays easy
 to load and adapt.
+
+Size decides the last level. Below roughly 6 KB, reading `REFERENCE.md` whole is
+cheaper than routing, so `SKILL.md` may tell the agent to read it in full. Above
+that, open `REFERENCE.md` with a `## Contents` table mapping a task or phase to
+its sections, and have `SKILL.md` send the agent to the sections the current step
+needs. Never write "read `REFERENCE.md` first" for a large file: an unconditional
+load collapses the last level of progressive disclosure back into one blob.
 
 ## When To Add REFERENCE.md
 
