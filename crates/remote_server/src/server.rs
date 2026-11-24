@@ -267,7 +267,7 @@ fn ensure_peer_is_owner(streams: [&UnixStream; 3]) -> Result<()> {
     Ok(())
 }
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
+#[cfg(all(unix, any(target_os = "linux", target_os = "android")))]
 fn peer_uid(fd: std::os::fd::RawFd) -> std::io::Result<u32> {
     let mut credentials = std::mem::MaybeUninit::<libc::ucred>::uninit();
     let mut length = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
@@ -289,7 +289,7 @@ fn peer_uid(fd: std::os::fd::RawFd) -> std::io::Result<u32> {
     Ok(unsafe { credentials.assume_init() }.uid)
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "android"))))]
 fn peer_uid(fd: std::os::fd::RawFd) -> std::io::Result<u32> {
     let mut uid = 0;
     let mut gid = 0;
