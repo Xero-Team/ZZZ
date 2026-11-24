@@ -2086,6 +2086,7 @@ RUN sed -i -E 's/((^|\s)PATH=)([^\$]*)$/\1\${PATH:-\3}/g' /etc/profile || true
             let container_started = !docker_inspect.is_running();
             if container_started {
                 log::debug!("Container not running. Will attempt to start, and then proceed");
+                self.run_initialize_commands().await?;
                 self.docker_client.start_container(&docker_ps.id).await?;
             }
 
@@ -4951,6 +4952,20 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
             "compose up should target only the requested service, got: {:?}",
             compose_up.args
         );
+    }
+
+    #[gpui::test]
+    async fn test_runs_initialize_command_before_restarting_container(cx: &mut TestAppContext) {
+        let json = r#"{"image": "image", "initializeCommand": ["touch", "marker"]}"#;
+        let (dependencies, mut manifest) =
+            init_default_devcontainer_manifest(cx, json).await.unwrap();
+        manifest.parse_nonremote_vars().unwrap();
+
+        // The fake container is stopped, so restarting it must run `initializeCommand` first.
+        manifest.check_for_existing_devcontainer().await.unwrap();
+
+        let commands = dependencies.command_runner.commands_by_program("touch");
+        assert_eq!(commands.len(), 1);
     }
 
     #[gpui::test]
