@@ -698,7 +698,11 @@ Jane,"Simple name""#;
             assert!(!has_separator_directive(source));
             assert_eq!(separator_directive(source), None);
 
-            let buffer = Buffer::new(ReplicaId::LOCAL, BufferId::new(3).unwrap(), source.to_string());
+            let buffer = Buffer::new(
+                ReplicaId::LOCAL,
+                BufferId::new(3).unwrap(),
+                source.to_string(),
+            );
             let parsed = from_buffer_with_selection(
                 buffer.snapshot(),
                 DelimiterSelection::Auto,
