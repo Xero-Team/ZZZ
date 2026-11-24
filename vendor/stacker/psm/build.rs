@@ -138,10 +138,8 @@ fn main() {
             .join("src/arch"),
         );
     }
-    if !msvc {
-        cfg.flag("-xassembler-with-cpp");
-    }
     if !msvc || staged_asm.is_some() {
+        cfg.flag("-xassembler-with-cpp");
         cfg.define(&*format!("CFG_TARGET_OS_{}", os), None);
         cfg.define(&*format!("CFG_TARGET_ARCH_{}", arch), None);
         cfg.define(&*format!("CFG_TARGET_ENV_{}", env), None);
@@ -226,18 +224,7 @@ fn main() {
         println!("cargo:rustc-link-search=native={}", out_dir);
         println!("cargo:rustc-link-lib=static=psm_s");
     } else {
-        let staged = staged_asm.is_some();
-        cfg.file(staged_asm.unwrap_or_else(|| asm.to_owned()));
-        if staged {
-            // `clang-cl` runs the preprocessor as its own step for a `.S`
-            // source and writes the result to a `<stem>.asm` file in the
-            // current directory; `clang` would use the system temporary
-            // directory instead. Entering `OUT_DIR` keeps that intermediate
-            // out of the crate source tree, where it would otherwise trip
-            // `script/check-vendor` after every cross build.
-            let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR environment variable not set");
-            std::env::set_current_dir(out_dir).expect("Failed to enter OUT_DIR");
-        }
+        cfg.file(asm);
         cfg.compile("libpsm_s.a");
     }
 }

@@ -1,8 +1,6 @@
 //! Scorched earth. See src/examples/scorched_earth.rs for documentation
 use std::{error::Error, sync::Arc};
 
-use async_trait::async_trait;
-
 use rmpv::Value;
 
 use futures::lock::Mutex;
@@ -34,7 +32,6 @@ fn the_smaller(first: Option<(u64, u64)>, second: (u64, u64)) -> Option<(u64, u6
 #[derive(Clone)]
 struct NeovimHandler(Arc<Mutex<Posis>>);
 
-#[async_trait]
 impl Handler for NeovimHandler {
     type Writer = Compat<TokioFile>;
 

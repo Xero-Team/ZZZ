@@ -95,7 +95,7 @@ pub async fn latest_github_release(
     pre_release: bool,
     http: Arc<dyn HttpClient>,
 ) -> anyhow::Result<GithubRelease> {
-    let url = format!("{GITHUB_API_URL}/repos/{repo_name_with_owner}/releases");
+    let url = latest_release_url(repo_name_with_owner);
     let releases = github_api_get::<Vec<GithubRelease>>(&url, http, "latest releases").await?;
 
     releases
@@ -127,8 +127,22 @@ pub async fn get_release_by_tag_name(
     tag: &str,
     http: Arc<dyn HttpClient>,
 ) -> anyhow::Result<GithubRelease> {
-    let url = format!("{GITHUB_API_URL}/repos/{repo_name_with_owner}/releases/tags/{tag}");
+    let url = release_by_tag_name_url(repo_name_with_owner, tag);
     github_api_get(&url, http, "GitHub release").await
+}
+
+/// The endpoint [`latest_github_release`] requests.
+///
+/// Callers that have to authorise the request before making it need the exact URL, and naming it
+/// here keeps the authorised URL and the requested URL from drifting apart.
+pub fn latest_release_url(repo_name_with_owner: &str) -> String {
+    format!("{GITHUB_API_URL}/repos/{repo_name_with_owner}/releases")
+}
+
+/// The endpoint [`get_release_by_tag_name`] requests, for the reason given on
+/// [`latest_release_url`].
+pub fn release_by_tag_name_url(repo_name_with_owner: &str, tag: &str) -> String {
+    format!("{GITHUB_API_URL}/repos/{repo_name_with_owner}/releases/tags/{tag}")
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]

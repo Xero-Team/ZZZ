@@ -19,9 +19,10 @@ metadata:
   user-language: Simplified Chinese
 ---
 
-Follow `REFERENCE.md` in this skill before dispatching anything. It carries the
-persona cards, the two output schemas, the synthesis rules, and the report
-template. A finding without a `file:line` and a severity is noise.
+Read `Scope` and `Persona cards` in `REFERENCE.md` before dispatching anything,
+then the section the current round needs. The same file carries the two output
+schemas, the synthesis rules, and the report template. A finding without a
+`file:line` and a severity is noise.
 
 # Adversarial Review
 

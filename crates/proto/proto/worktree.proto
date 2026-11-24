@@ -18,6 +18,7 @@ message File {
   bool is_historic = 6;
   VfsPathV2 vfs_path = 7;
   ResourceIdV2 resource_id = 8;
+  bool is_private = 9;
 }
 
 message Entry {

@@ -114,6 +114,43 @@ impl Ord for StringMatch {
     }
 }
 
+/// Returns every candidate as an unmatched entry when `query` is empty, and the
+/// scored fuzzy matches otherwise.
+///
+/// An empty query deliberately ignores the match limit: a picker that has not
+/// been filtered yet lists all of its candidates.
+pub async fn match_or_all<T>(
+    candidates: &[T],
+    query: &str,
+    executor: BackgroundExecutor,
+) -> Vec<StringMatch>
+where
+    T: Borrow<StringMatchCandidate> + Sync,
+{
+    if query.is_empty() {
+        return candidates
+            .iter()
+            .map(|candidate| StringMatch {
+                candidate_id: candidate.borrow().id,
+                score: 0.0,
+                positions: Vec::new(),
+                string: candidate.borrow().string.clone(),
+            })
+            .collect();
+    }
+
+    match_strings(
+        candidates,
+        query,
+        false,
+        true,
+        100,
+        &Default::default(),
+        executor,
+    )
+    .await
+}
+
 pub async fn match_strings<T>(
     candidates: &[T],
     query: &str,

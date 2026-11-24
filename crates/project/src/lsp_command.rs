@@ -140,7 +140,7 @@ pub trait LspCommand: 'static + Sized + Send + std::fmt::Debug {
         cx: AsyncApp,
     ) -> Result<Self::Response>;
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Self::ProtoRequest;
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<Self::ProtoRequest>;
 
     async fn from_proto(
         message: Self::ProtoRequest,
@@ -425,15 +425,15 @@ impl LspCommand for PrepareRename {
         })
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::PrepareRename {
-        proto::PrepareRename {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::PrepareRename> {
+        Ok(proto::PrepareRename {
             project_id,
             buffer_id: buffer.remote_id().into(),
             position: Some(language::proto::serialize_anchor(
                 &buffer.anchor_before(self.position),
             )),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -582,8 +582,8 @@ impl LspCommand for PerformRename {
         }
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::PerformRename {
-        proto::PerformRename {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::PerformRename> {
+        Ok(proto::PerformRename {
             project_id,
             buffer_id: buffer.remote_id().into(),
             position: Some(language::proto::serialize_anchor(
@@ -591,7 +591,7 @@ impl LspCommand for PerformRename {
             )),
             new_name: self.new_name.clone(),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -706,8 +706,8 @@ impl LspCommand for GetDefinitions {
         .await
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::GetDefinition {
-        proto::GetDefinition {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::GetDefinition> {
+        Ok(proto::GetDefinition {
             project_id,
             buffer_id: buffer.remote_id().into(),
             position: Some(language::proto::serialize_anchor(
@@ -715,7 +715,7 @@ impl LspCommand for GetDefinitions {
             )),
             version: serialize_version(&buffer.version()),
             workspace_only: self.workspace_only,
-        }
+        })
     }
 
     async fn from_proto(
@@ -811,15 +811,15 @@ impl LspCommand for GetDeclarations {
         location_links_from_lsp(message, lsp_store, buffer, server_id, false, cx).await
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::GetDeclaration {
-        proto::GetDeclaration {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::GetDeclaration> {
+        Ok(proto::GetDeclaration {
             project_id,
             buffer_id: buffer.remote_id().into(),
             position: Some(language::proto::serialize_anchor(
                 &buffer.anchor_before(self.position),
             )),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -913,15 +913,15 @@ impl LspCommand for GetImplementations {
         location_links_from_lsp(message, lsp_store, buffer, server_id, false, cx).await
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::GetImplementation {
-        proto::GetImplementation {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::GetImplementation> {
+        Ok(proto::GetImplementation {
             project_id,
             buffer_id: buffer.remote_id().into(),
             position: Some(language::proto::serialize_anchor(
                 &buffer.anchor_before(self.position),
             )),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -1012,8 +1012,8 @@ impl LspCommand for GetTypeDefinitions {
         location_links_from_lsp(message, project, buffer, server_id, self.workspace_only, cx).await
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::GetTypeDefinition {
-        proto::GetTypeDefinition {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::GetTypeDefinition> {
+        Ok(proto::GetTypeDefinition {
             project_id,
             buffer_id: buffer.remote_id().into(),
             position: Some(language::proto::serialize_anchor(
@@ -1021,7 +1021,7 @@ impl LspCommand for GetTypeDefinitions {
             )),
             version: serialize_version(&buffer.version()),
             workspace_only: self.workspace_only,
-        }
+        })
     }
 
     async fn from_proto(
@@ -1440,15 +1440,15 @@ impl LspCommand for GetReferences {
         Ok(references)
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::GetReferences {
-        proto::GetReferences {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::GetReferences> {
+        Ok(proto::GetReferences {
             project_id,
             buffer_id: buffer.remote_id().into(),
             position: Some(language::proto::serialize_anchor(
                 &buffer.anchor_before(self.position),
             )),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -1599,15 +1599,15 @@ impl LspCommand for GetDocumentHighlights {
         }))
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::GetDocumentHighlights {
-        proto::GetDocumentHighlights {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::GetDocumentHighlights> {
+        Ok(proto::GetDocumentHighlights {
             project_id,
             buffer_id: buffer.remote_id().into(),
             position: Some(language::proto::serialize_anchor(
                 &buffer.anchor_before(self.position),
             )),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -1767,12 +1767,12 @@ impl LspCommand for GetDocumentSymbols {
         Ok(symbols)
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::GetDocumentSymbols {
-        proto::GetDocumentSymbols {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::GetDocumentSymbols> {
+        Ok(proto::GetDocumentSymbols {
             project_id,
             buffer_id: buffer.remote_id().into(),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -1939,14 +1939,14 @@ impl LspCommand for GetSignatureHelp {
         }))
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Self::ProtoRequest {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<Self::ProtoRequest> {
         let offset = buffer.point_utf16_to_offset(self.position);
-        proto::GetSignatureHelp {
+        Ok(proto::GetSignatureHelp {
             project_id,
             buffer_id: buffer.remote_id().to_proto(),
             position: Some(serialize_anchor(&buffer.anchor_after(offset))),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -2113,15 +2113,15 @@ impl LspCommand for GetHover {
         }))
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Self::ProtoRequest {
-        proto::GetHover {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<Self::ProtoRequest> {
+        Ok(proto::GetHover {
             project_id,
             buffer_id: buffer.remote_id().into(),
             position: Some(language::proto::serialize_anchor(
                 &buffer.anchor_before(self.position),
             )),
             version: serialize_version(&buffer.version),
-        }
+        })
     }
 
     async fn from_proto(
@@ -2448,15 +2448,15 @@ impl LspCommand for GetCompletions {
         })
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::GetCompletions {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::GetCompletions> {
         let anchor = buffer.anchor_after(self.position);
-        proto::GetCompletions {
+        Ok(proto::GetCompletions {
             project_id,
             buffer_id: buffer.remote_id().into(),
             position: Some(language::proto::serialize_anchor(&anchor)),
             version: serialize_version(&buffer.version()),
             server_id: self.server_id.map(|id| id.to_proto()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -2737,14 +2737,14 @@ impl LspCommand for GetCodeActions {
             .collect())
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::GetCodeActions {
-        proto::GetCodeActions {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::GetCodeActions> {
+        Ok(proto::GetCodeActions {
             project_id,
             buffer_id: buffer.remote_id().into(),
             start: Some(language::proto::serialize_anchor(&self.range.start)),
             end: Some(language::proto::serialize_anchor(&self.range.end)),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -2909,8 +2909,8 @@ impl LspCommand for OnTypeFormatting {
         }
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::OnTypeFormatting {
-        proto::OnTypeFormatting {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::OnTypeFormatting> {
+        Ok(proto::OnTypeFormatting {
             project_id,
             buffer_id: buffer.remote_id().into(),
             position: Some(language::proto::serialize_anchor(
@@ -2918,7 +2918,7 @@ impl LspCommand for OnTypeFormatting {
             )),
             trigger: self.trigger.clone(),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -3484,14 +3484,14 @@ impl LspCommand for InlayHints {
         Ok(hints)
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::InlayHints {
-        proto::InlayHints {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::InlayHints> {
+        Ok(proto::InlayHints {
             project_id,
             buffer_id: buffer.remote_id().into(),
             start: Some(language::proto::serialize_anchor(&self.range.start)),
             end: Some(language::proto::serialize_anchor(&self.range.end)),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -3628,13 +3628,13 @@ impl LspCommand for SemanticTokensFull {
         }
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::SemanticTokens {
-        proto::SemanticTokens {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::SemanticTokens> {
+        Ok(proto::SemanticTokens {
             project_id,
             buffer_id: buffer.remote_id().into(),
             version: serialize_version(&buffer.version()),
             for_server: self.for_server.map(|id| id.to_proto()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -3796,8 +3796,8 @@ impl LspCommand for SemanticTokensDelta {
         }
     }
 
-    fn to_proto(&self, _: u64, _: &Buffer) -> proto::SemanticTokens {
-        unimplemented!("Delta requests are never initialted on the remote client side")
+    fn to_proto(&self, _: u64, _: &Buffer) -> Result<proto::SemanticTokens> {
+        anyhow::bail!("semantic tokens delta is not forwarded to the remote client")
     }
 
     async fn from_proto(
@@ -3806,7 +3806,7 @@ impl LspCommand for SemanticTokensDelta {
         _: Entity<Buffer>,
         _: AsyncApp,
     ) -> Result<Self> {
-        unimplemented!("Delta requests are never initialted on the remote client side")
+        anyhow::bail!("semantic tokens delta is not forwarded to the remote client")
     }
 
     fn response_to_proto(
@@ -3925,12 +3925,12 @@ impl LspCommand for GetCodeLens {
             .collect())
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::GetCodeLens {
-        proto::GetCodeLens {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::GetCodeLens> {
+        Ok(proto::GetCodeLens {
             project_id,
             buffer_id: buffer.remote_id().into(),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -4052,13 +4052,13 @@ impl LspCommand for LinkedEditingRange {
         }
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::LinkedEditingRange {
-        proto::LinkedEditingRange {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::LinkedEditingRange> {
+        Ok(proto::LinkedEditingRange {
             project_id,
             buffer_id: buffer.remote_id().to_proto(),
             position: Some(serialize_anchor(&self.position)),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -4545,12 +4545,12 @@ impl LspCommand for GetDocumentDiagnostics {
         Ok(pulled_diagnostics.into_values().collect())
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::GetDocumentDiagnostics {
-        proto::GetDocumentDiagnostics {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<proto::GetDocumentDiagnostics> {
+        Ok(proto::GetDocumentDiagnostics {
             project_id,
             buffer_id: buffer.remote_id().into(),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -4684,12 +4684,12 @@ impl LspCommand for GetDocumentColor {
             .collect())
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Self::ProtoRequest {
-        proto::GetDocumentColor {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<Self::ProtoRequest> {
+        Ok(proto::GetDocumentColor {
             project_id,
             buffer_id: buffer.remote_id().to_proto(),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -4848,12 +4848,12 @@ impl LspCommand for GetFoldingRanges {
             .collect())
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Self::ProtoRequest {
-        proto::GetFoldingRanges {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<Self::ProtoRequest> {
+        Ok(proto::GetFoldingRanges {
             project_id,
             buffer_id: buffer.remote_id().to_proto(),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(
@@ -4996,12 +4996,12 @@ impl LspCommand for GetDocumentLinks {
             .collect())
     }
 
-    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Self::ProtoRequest {
-        proto::GetDocumentLinks {
+    fn to_proto(&self, project_id: u64, buffer: &Buffer) -> Result<Self::ProtoRequest> {
+        Ok(proto::GetDocumentLinks {
             project_id,
             buffer_id: buffer.remote_id().to_proto(),
             version: serialize_version(&buffer.version()),
-        }
+        })
     }
 
     async fn from_proto(

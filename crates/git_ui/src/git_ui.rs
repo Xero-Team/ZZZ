@@ -27,7 +27,7 @@ use project::git_store::Repository;
 use project_diff::ProjectDiff;
 use time::OffsetDateTime;
 use ui::prelude::*;
-use util::ResultExt;
+use util::ResultExt as _;
 use workspace::{ModalView, OpenMode, Workspace, notifications::DetachAndPromptErr};
 use zzz_actions;
 
@@ -39,12 +39,15 @@ use crate::{
 
 mod askpass_modal;
 pub mod branch_picker;
+mod changes_list;
 mod commit_modal;
 pub mod commit_tooltip;
 pub mod commit_view;
 mod conflict_view;
 pub mod created_worktrees;
 pub mod file_diff_view;
+pub mod fossil_panel;
+mod fossil_panel_settings;
 pub mod git_panel;
 mod git_panel_settings;
 pub mod git_picker;
@@ -90,6 +93,7 @@ pub fn init(cx: &mut App) {
         ProjectDiff::register(workspace, cx);
         CommitModal::register(workspace);
         git_panel::register(workspace);
+        fossil_panel::register(workspace);
         repository_selector::register(workspace);
         git_picker::register(workspace);
 
@@ -1152,7 +1156,6 @@ mod remote_button {
             .anchor(Anchor::TopRight)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn split_button(
         id: SharedString,
         left_label: impl Into<SharedString>,

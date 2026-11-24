@@ -55,8 +55,7 @@ fn property_names<T: schemars::JsonSchema>() -> Vec<String> {
     value
         .get("properties")
         .and_then(|properties| properties.as_object())
-        .map(|object| object.keys().cloned().collect())
-        .unwrap_or_default()
+        .map_or_else(Vec::new, |object| object.keys().cloned().collect())
 }
 
 fn section<T: schemars::JsonSchema>(name: &'static str) -> (&'static str, Vec<String>) {

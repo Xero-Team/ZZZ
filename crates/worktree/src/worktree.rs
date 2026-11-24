@@ -324,6 +324,10 @@ struct RemovedEntries {
 }
 
 impl RemovedEntries {
+    fn is_empty(&self) -> bool {
+        self.by_inode.is_empty() && self.by_path.is_empty()
+    }
+
     fn insert(&mut self, entry: &Entry) {
         self.by_path.insert(entry.path.clone(), entry.clone());
         match self.by_inode.entry(entry.inode) {
@@ -4566,6 +4570,7 @@ impl language::File for File {
             mtime: self.disk_state.mtime().map(|time| time.into()),
             is_deleted: self.disk_state.is_deleted(),
             is_historic: matches!(self.disk_state, DiskState::Historic { .. }),
+            is_private: self.is_private,
             vfs_path: self
                 .vfs_path
                 .as_ref()
@@ -4705,6 +4710,55 @@ impl File {
         Self::from_entry_with_snapshot(entry, worktree, vfs_snapshot.as_ref())
     }
 
+    /// Rebuilds a file handle from `snapshot`, keeping what a snapshot alone cannot
+    /// answer about `old_file`: the disk state when the entry has no `mtime` yet,
+    /// and the resource id when the entry survived a path change.
+    ///
+    /// `is_local` is a parameter instead of a guess because it depends on which
+    /// worktrees the calling store observes. A store that only subscribes to local
+    /// worktrees can pass `true`; one that also observes remote worktrees must pass
+    /// `old_file.is_local` so a remote file does not start claiming to be local.
+    pub fn refreshed_from_snapshot(
+        old_file: &File,
+        snapshot: &Snapshot,
+        worktree: Entity<Worktree>,
+        is_local: bool,
+        cx: &App,
+    ) -> File {
+        let snapshot_entry = old_file
+            .entry_id
+            .and_then(|entry_id| snapshot.entry_for_id(entry_id))
+            .or_else(|| snapshot.entry_for_path(old_file.path.as_ref()));
+
+        let mut new_file = if let Some(entry) = snapshot_entry {
+            let mut file = Self::from_entry(entry.clone(), worktree, cx);
+            if entry.mtime.is_none() {
+                file.disk_state = old_file.disk_state;
+            }
+            file
+        } else {
+            Self {
+                disk_state: DiskState::Deleted,
+                is_local,
+                entry_id: old_file.entry_id,
+                path: old_file.path.clone(),
+                worktree,
+                is_private: old_file.is_private,
+                resource_id: old_file.resource_id,
+                vfs_path: old_file.vfs_path.clone(),
+            }
+        };
+
+        if new_file.entry_id == old_file.entry_id
+            && new_file.path != old_file.path
+            && old_file.resource_id.is_some()
+        {
+            new_file.resource_id = old_file.resource_id;
+        }
+
+        new_file
+    }
+
     pub fn vfs_identity_for_path(
         path: &RelPath,
         worktree: &Entity<Worktree>,
@@ -4793,7 +4847,7 @@ impl File {
             disk_state,
             entry_id: proto.entry_id.map(ProjectEntryId::from_proto),
             is_local: false,
-            is_private: false,
+            is_private: proto.is_private,
             resource_id,
             vfs_path,
         })
@@ -6271,20 +6325,21 @@ impl BackgroundScanner {
     }
 
     async fn scan_dir(&self, job: &ScanJob) -> Result<()> {
+        if self.settings.is_path_excluded(&job.path) {
+            log::error!("skipping excluded directory {:?}", job.path);
+            return Ok(());
+        }
+        log::trace!("scanning directory {:?}", job.path);
         let root_abs_path;
         let root_char_bag;
         {
             let snapshot = &self.state.lock().await.snapshot;
-            if self.settings.is_path_excluded(&job.path) {
-                log::error!("skipping excluded directory {:?}", job.path);
-                return Ok(());
-            }
-            log::trace!("scanning directory {:?}", job.path);
             root_abs_path = snapshot.abs_path().clone();
             root_char_bag = snapshot.root_char_bag;
         }
 
-        let next_entry_id = self.next_entry_id.clone();
+        let parent_is_private = self.is_path_private(&job.path);
+        let parent_is_hidden = self.settings.is_path_hidden(&job.path);
         let mut ignore_stack = job.ignore_stack.clone();
         let mut new_ignore = None;
         let mut root_canonical_path = None;
@@ -6335,6 +6390,9 @@ impl BackgroundScanner {
                 .await
         };
 
+        // Siblings sorted by name are in `RelPath` order, which leaves little
+        // sorting for `populate_dir` to do while it holds the lock.
+        child_paths.sort_unstable_by(|a, b| a.file_name().cmp(&b.file_name()));
         // Ensure that .git and .gitignore are processed first.
         swap_to_front(&mut child_paths, GITIGNORE);
         swap_to_front(&mut child_paths, DOT_GIT);
@@ -6346,7 +6404,12 @@ impl BackgroundScanner {
             ignore_stack.global_ignore_root = Some(job.abs_path.clone());
         }
 
-        for child_abs_path in child_paths {
+        // Other workers take ids at the same time, so taking one per child as
+        // it's read would interleave this directory's ids with theirs.
+        // Contiguous ids let `populate_dir` insert into `entries_by_id` in
+        // one place.
+        let first_child_id = self.next_entry_id.fetch_add(child_paths.len(), SeqCst);
+        for (child_index, child_abs_path) in child_paths.into_iter().enumerate() {
             let child_abs_path: Arc<Path> = child_abs_path.into();
             let child_name = child_abs_path
                 .file_name()
@@ -6389,7 +6452,8 @@ impl BackgroundScanner {
                 }
             }
 
-            if self.settings.is_path_excluded(&child_path) {
+            // `job.path` was checked above, so only the child can match.
+            if self.settings.file_scan_exclusions.is_match(&child_path) {
                 log::debug!("skipping excluded child entry {child_path:?}");
 
                 self.state
@@ -6420,7 +6484,7 @@ impl BackgroundScanner {
             let mut child_entry = Entry::new(
                 child_path.clone(),
                 &child_metadata,
-                ProjectEntryId::new(&next_entry_id),
+                ProjectEntryId::from_usize(first_child_id + child_index),
                 root_char_bag,
                 None,
             )
@@ -6499,30 +6563,32 @@ impl BackgroundScanner {
                     self.settings.is_path_always_included(&child_path, false);
             }
 
+            if parent_is_private
+                || (!self.share_private_files
+                    && self.settings.private_files.is_match(&child_entry.path))
             {
-                let relative_path = job.path.join(
-                    RelPath::unix(child_name.to_str().expect("path should be valid UTF-8"))
-                        .expect("value should be present"),
-                );
-                if self.is_path_private(&relative_path) {
-                    log::debug!("detected private file: {relative_path:?}");
-                    child_entry.is_private = true;
-                }
-                if self.settings.is_path_hidden(&relative_path) {
-                    log::debug!("detected hidden file: {relative_path:?}");
-                    child_entry.is_hidden = true;
-                }
+                log::debug!("detected private file: {:?}", child_entry.path);
+                child_entry.is_private = true;
+            }
+            if parent_is_hidden || self.settings.hidden_files.is_match(&child_entry.path) {
+                log::debug!("detected hidden file: {:?}", child_entry.path);
+                child_entry.is_hidden = true;
             }
 
             new_entries.push(child_entry);
         }
 
         let mut state = self.state.lock().await;
-
+        // Ids are only reused from removed entries and from children loaded
+        // earlier. The initial scan has neither, so it skips the lookups.
+        let may_reuse_entry_ids = !state.removed_entries.is_empty()
+            || state.snapshot.child_entries(&job.path).next().is_some();
         // Identify any subdirectories that should not be scanned.
         let mut job_ix = 0;
         for entry in &mut new_entries {
-            state.reuse_entry_id(entry);
+            if may_reuse_entry_ids {
+                state.reuse_entry_id(entry);
+            }
             if entry.is_dir() {
                 if !state.should_scan_directory(
                     entry,

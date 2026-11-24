@@ -5,14 +5,14 @@ use anyhow::Context as _;
 use convert_case::Casing as _;
 use editor::Editor;
 use futures::channel::oneshot;
-use fuzzy::{StringMatch, StringMatchCandidate, match_strings};
+use fuzzy::{StringMatch, StringMatchCandidate, match_or_all};
 use gpui::{
     Action, Animation, AnimationExt, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle,
     Focusable, KeyContext, ParentElement, Render, Styled, Subscription, Task, WeakEntity, Window,
     actions, pulsating_between,
 };
 use i18n::tr;
-use language::{Language, LanguageName, Toolchain, ToolchainScope};
+use language::{LanguageName, Toolchain, ToolchainScope};
 use open_path_prompt::OpenPathDelegate;
 use picker::{Picker, PickerDelegate};
 use project::{DirectoryLister, Project, ProjectPath, Toolchains, WorktreeId};
@@ -45,7 +45,6 @@ pub fn init(cx: &mut App) {
 pub struct ToolchainSelector {
     state: State,
     create_search_state: Arc<dyn Fn(&mut Window, &mut Context<Self>) -> SearchState + 'static>,
-    language: Option<Arc<Language>>,
     project: Entity<Project>,
     language_name: LanguageName,
     worktree_id: WorktreeId,
@@ -529,7 +528,7 @@ impl Render for AddToolchainState {
                                                         window,
                                                         cx,
                                                     );
-                                                }))
+                                                })),
                                         )
                                     })),
                             )
@@ -650,22 +649,6 @@ impl ToolchainSelector {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let language_registry = project.read(cx).languages().clone();
-        cx.spawn({
-            let language_name = language_name.clone();
-            async move |this, cx| {
-                let language = language_registry
-                    .language_for_name(&language_name.0)
-                    .await
-                    .log_err();
-                this.update(cx, |this, cx| {
-                    this.language = language;
-                    cx.notify();
-                })
-                .log_err();
-            }
-        })
-        .detach();
         let project_clone = project.clone();
         let language_name_clone = language_name.clone();
         let relative_path_clone = relative_path.clone();
@@ -697,7 +680,6 @@ impl ToolchainSelector {
         Self {
             state: State::Search(create_search_state(window, cx)),
             create_search_state,
-            language: None,
             project,
             language_name,
             worktree_id,
@@ -1059,8 +1041,8 @@ impl PickerDelegate for ToolchainSelectorDelegate {
         let path_style = self.project.read(cx).path_style(cx);
         cx.spawn_in(window, async move |this, cx| {
             // The candidate id of a match indexes `self.candidates`, so the
-            // rendered string is built once per candidate for both branches.
-            let candidate_strings = candidates
+            // rendered string is built once per candidate.
+            let candidates = candidates
                 .iter()
                 .enumerate()
                 .map(|(candidate_id, (toolchain, _))| {
@@ -1069,36 +1051,11 @@ impl PickerDelegate for ToolchainSelectorDelegate {
                         &worktree_root_path,
                         path_style,
                     );
-                    (candidate_id, format!("{}{}", toolchain.name, path))
+                    StringMatchCandidate::new(candidate_id, &format!("{}{}", toolchain.name, path))
                 })
                 .collect::<Vec<_>>();
 
-            let matches = if query.is_empty() {
-                candidate_strings
-                    .into_iter()
-                    .map(|(candidate_id, string)| StringMatch {
-                        candidate_id,
-                        string,
-                        positions: Vec::new(),
-                        score: 0.0,
-                    })
-                    .collect()
-            } else {
-                let candidates = candidate_strings
-                    .into_iter()
-                    .map(|(candidate_id, string)| StringMatchCandidate::new(candidate_id, &string))
-                    .collect::<Vec<_>>();
-                match_strings(
-                    &candidates,
-                    &query,
-                    false,
-                    true,
-                    100,
-                    &Default::default(),
-                    background,
-                )
-                .await
-            };
+            let matches = match_or_all(&candidates, &query, background).await;
 
             this.update(cx, |this, cx| {
                 let delegate = &mut this.delegate;

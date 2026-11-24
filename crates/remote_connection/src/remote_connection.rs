@@ -1,4 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::Result;
 use askpass::EncryptedPassword;
@@ -554,11 +557,13 @@ impl ModalView for RemoteConnectionModal {
     }
 }
 
-#[derive(Clone)]
 pub struct RemoteClientDelegate {
     window: AnyWindowHandle,
     ui: WeakEntity<RemoteConnectionPrompt>,
-    known_password: Option<EncryptedPassword>,
+    /// The password taken from the connection URL, held only until the first
+    /// prompt answers itself. A cached value must not answer a later prompt that
+    /// asks for something else, such as a key passphrase or a host-key question.
+    known_password: Mutex<Option<EncryptedPassword>>,
 }
 
 impl RemoteClientDelegate {
@@ -570,7 +575,16 @@ impl RemoteClientDelegate {
         Self {
             window,
             ui,
-            known_password,
+            known_password: Mutex::new(known_password),
+        }
+    }
+
+    fn take_known_password(&self) -> Option<EncryptedPassword> {
+        // The lock is only held for the `take`, which cannot panic, so a poisoned
+        // guard still leaves the value usable.
+        match self.known_password.lock() {
+            Ok(mut known_password) => known_password.take(),
+            Err(poisoned) => poisoned.into_inner().take(),
         }
     }
 }
@@ -582,8 +596,7 @@ impl remote::RemoteClientDelegate for RemoteClientDelegate {
         password_sender: oneshot::Sender<EncryptedPassword>,
         cx: &mut AsyncApp,
     ) {
-        let mut known_password = self.known_password.clone();
-        if let Some(password) = known_password.take() {
+        if let Some(password) = self.take_known_password() {
             send_password(password_sender, password);
         } else {
             self.window
@@ -709,7 +722,9 @@ fn connect_with_delegate(
     cx: &mut App,
 ) -> Task<Result<Option<Entity<RemoteClient>>>> {
     let delegate: Arc<dyn remote::RemoteClientDelegate> =
-        Arc::new(BackgroundRemoteClientDelegate { known_password });
+        Arc::new(BackgroundRemoteClientDelegate {
+            known_password: Mutex::new(known_password),
+        });
 
     cx.spawn(async move |cx| {
         let connection = remote::connect(connection_options, delegate.clone(), cx).await?;
@@ -735,7 +750,7 @@ fn connect_with_delegate(
 /// when present; otherwise password prompts are logged and ignored,
 /// since there is no UI to show them.
 struct BackgroundRemoteClientDelegate {
-    known_password: Option<EncryptedPassword>,
+    known_password: Mutex<Option<EncryptedPassword>>,
 }
 
 impl remote::RemoteClientDelegate for BackgroundRemoteClientDelegate {
@@ -745,7 +760,11 @@ impl remote::RemoteClientDelegate for BackgroundRemoteClientDelegate {
         tx: oneshot::Sender<EncryptedPassword>,
         _cx: &mut AsyncApp,
     ) {
-        if let Some(password) = self.known_password.clone() {
+        let known_password = match self.known_password.lock() {
+            Ok(mut known_password) => known_password.take(),
+            Err(poisoned) => poisoned.into_inner().take(),
+        };
+        if let Some(password) = known_password {
             send_password(tx, password);
         } else {
             log::warn!(
@@ -778,11 +797,11 @@ pub fn connect(
         ui.set_cancellation_sender(cancellation_sender)
     });
 
-    let delegate = Arc::new(RemoteClientDelegate {
+    let delegate = Arc::new(RemoteClientDelegate::new(
         window,
-        ui: ui.downgrade(),
+        ui.downgrade(),
         known_password,
-    });
+    ));
 
     cx.spawn(async move |cx| {
         let connection = remote::connect(connection_options, delegate.clone(), cx);
@@ -802,4 +821,36 @@ pub fn connect(
         })
         .await
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use remote::RemoteClientDelegate as _;
+
+    #[gpui::test]
+    async fn test_cached_password_answers_one_prompt(cx: &mut gpui::TestAppContext) {
+        let mut cx = cx.to_async();
+        let delegate = BackgroundRemoteClientDelegate {
+            known_password: Mutex::new(Some(
+                "hunter2"
+                    .try_into()
+                    .expect("a password can always be encrypted"),
+            )),
+        };
+
+        let (first_tx, first_rx) = oneshot::channel();
+        delegate.ask_password("password: ".to_string(), first_tx, &mut cx);
+        assert!(
+            first_rx.await.is_ok(),
+            "the cached password should answer the first prompt"
+        );
+
+        let (second_tx, second_rx) = oneshot::channel();
+        delegate.ask_password("passphrase: ".to_string(), second_tx, &mut cx);
+        assert!(
+            second_rx.await.is_err(),
+            "the cache must not answer a second prompt with the same password"
+        );
+    }
 }

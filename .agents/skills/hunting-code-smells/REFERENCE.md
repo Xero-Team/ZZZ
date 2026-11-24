@@ -1,25 +1,28 @@
 # Reference: ZZZ Code Smell Catalog
 
-Normative material for `hunting-code-smells`. Load this before reviewing.
+Normative material for `hunting-code-smells`. Read the sections this review needs;
+the table below maps a touched area to its section.
 Keep the report in Simplified Chinese; keep code, commands, and this catalog in
 English.
 
 ## Contents
 
-- How to use this catalog
-- Severity model
-- 1. ZZZ hard rules (P0)
-- 2. Memory safety and UB contract (P0/P1)
-- 3. Rust idiom smells (P1)
-- 4. Clean Code structure smells (P1/P2)
-- 5. GPUI and architecture smells (P1/P2)
-- 6. i18n and docs smells (P1/P2)
-- 7. Quality optimization leads (P2)
-- 8. Mechanical checks
-- 9. Review report template
-- 10. Reviewer anti-patterns
-- 11. Verification evidence
-- Sources
+Read `How to use this catalog`, `Severity model`, and `1. ZZZ hard rules` first;
+every review needs them. Then read only the sections the change touches.
+
+| If the change touches | Read |
+|---|---|
+| `unsafe`, FFI, raw pointers, concurrency, task lifetime | `2. Memory safety and UB contract (P0/P1)` |
+| Rust API shape, ownership, iterators, error handling | `3. Rust idiom smells (P1)` |
+| module or function structure, naming, dependencies | `4. Clean Code structure smells (P1/P2)` |
+| GPUI entities, contexts, subscriptions, view layout | `5. GPUI and architecture smells (P1/P2)` |
+| user-facing strings, locale catalogs, docs | `6. i18n and docs smells (P1/P2)` |
+| a claimed speedup or allocation win | `7. Quality optimization leads (P2)` |
+| choosing scanners or running gate commands | `8. Mechanical checks` |
+| writing the report | `9. Review report template` and `11. Verification evidence` |
+| deciding whether to publish a finding | `10. Reviewer anti-patterns` |
+
+`Sources` is provenance only; read it when a rule's origin is questioned.
 
 ## How to use this catalog
 

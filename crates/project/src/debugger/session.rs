@@ -484,8 +484,14 @@ impl RunningMode {
                         )
                     })?;
                 initialized_rx.await?;
+                // Read the flag here rather than at boot: the user may toggle
+                // ignore-breakpoints while the session is still booting.
+                let ignore_breakpoints =
+                    session.read_with(cx, |session, _| session.ignore_breakpoints)?;
                 let errors_by_path = cx
-                    .update(|cx| this.send_source_breakpoints(false, &breakpoint_store, cx))
+                    .update(|cx| {
+                        this.send_source_breakpoints(ignore_breakpoints, &breakpoint_store, cx)
+                    })
                     .await;
 
                 dap_store.update(cx, |_, cx| {
@@ -2020,7 +2026,12 @@ impl Session {
             local.send_source_breakpoints(ignore, &self.breakpoint_store, cx)
         } else {
             // todo(debugger): We need to propagate this change to downstream sessions and send a message to upstream sessions
-            unimplemented!()
+            //
+            // A session that is still booting has nothing to send yet:
+            // `initialize_sequence` reads `ignore_breakpoints` when the adapter
+            // reports `initialized` and sends the breakpoints from there, so the
+            // toggle is applied at that point instead of being lost.
+            Task::ready(HashMap::default())
         }
     }
 

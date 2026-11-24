@@ -256,7 +256,6 @@ impl NewProcessModal {
                                 debug_picker
                                     .update_in(cx, |picker, window, cx| {
                                         picker.refresh(window, cx);
-                                        cx.notify();
                                     })
                                     .log_err();
                             }
@@ -1185,9 +1184,7 @@ impl DebugDelegate {
                 .debug_panel
                 .update(cx, |debug_panel, cx| {
                     let project = debug_panel.project().read(cx);
-                    let worktrees: Vec<_> = project.visible_worktrees(cx).collect();
-
-                    let mut path = if worktrees.len() > 1
+                    let mut path = if project.visible_worktrees(cx).count() > 1
                         && let Some(worktree) = project.worktree_for_id(*worktree_id, cx)
                     {
                         worktree
@@ -1412,10 +1409,10 @@ impl PickerDelegate for DebugDelegate {
                     delegate.prompt = query;
 
                     delegate.divider_index = delegate.last_used_candidate_index.and_then(|index| {
-                        delegate
+                        let index = delegate
                             .matches
-                            .partition_point(|matching_task| matching_task.candidate_id <= index)
-                            .checked_sub(1)
+                            .partition_point(|matching_task| matching_task.candidate_id <= index);
+                        (index != 0).then(|| index - 1)
                     });
 
                     if delegate.matches.is_empty() {

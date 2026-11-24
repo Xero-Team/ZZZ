@@ -6,27 +6,50 @@ use git::repository::{Remote, RemoteCommandOutput};
 use ui::SharedString;
 use util::ResultExt as _;
 
-const PULL_REQUEST_HINTS: &[(&str, &str, &str)] = &[
-    (
-        "Create a pull request",
-        "git_ui.remote_output.create_pull_request",
-        "Create Pull Request",
-    ),
-    (
-        "Create pull request",
-        "git_ui.remote_output.create_pull_request",
-        "Create Pull Request",
-    ),
-    (
-        "create a merge request",
-        "git_ui.remote_output.create_merge_request",
-        "Create Merge Request",
-    ),
-    (
-        "View merge request",
-        "git_ui.remote_output.view_merge_request",
-        "View Merge Request",
-    ),
+/// Whether a pull request link printed by the remote points at a page for
+/// creating a new pull request or at an already existing one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PullRequestLinkKind {
+    Create,
+    View,
+}
+
+struct PullRequestHint {
+    needle: &'static str,
+    label_key: &'static str,
+    label_fallback: &'static str,
+    kind: PullRequestLinkKind,
+}
+
+const PULL_REQUEST_HINTS: &[PullRequestHint] = &[
+    // GitHub: "Create a pull request for 'branch' on GitHub by visiting:"
+    PullRequestHint {
+        needle: "Create a pull request",
+        label_key: "git_ui.remote_output.create_pull_request",
+        label_fallback: "Create Pull Request",
+        kind: PullRequestLinkKind::Create,
+    },
+    // Bitbucket: "Create pull request for branch:"
+    PullRequestHint {
+        needle: "Create pull request",
+        label_key: "git_ui.remote_output.create_pull_request",
+        label_fallback: "Create Pull Request",
+        kind: PullRequestLinkKind::Create,
+    },
+    // GitLab: "To create a merge request for branch, visit:"
+    PullRequestHint {
+        needle: "create a merge request",
+        label_key: "git_ui.remote_output.create_merge_request",
+        label_fallback: "Create Merge Request",
+        kind: PullRequestLinkKind::Create,
+    },
+    // GitLab: "View merge request for branch:"
+    PullRequestHint {
+        needle: "View merge request",
+        label_key: "git_ui.remote_output.view_merge_request",
+        label_fallback: "View Merge Request",
+        kind: PullRequestLinkKind::View,
+    },
 ];
 
 #[derive(Clone)]
@@ -48,8 +71,23 @@ impl RemoteAction {
 
 pub enum SuccessStyle {
     Toast,
-    ToastWithLog { output: RemoteCommandOutput },
-    PushPullRequestLink { label: String, url: String },
+    ToastWithLog {
+        output: RemoteCommandOutput,
+    },
+    /// The push created a branch for which a new pull request can be opened.
+    /// The URL is built from the git hosting provider, the same way the
+    /// `git: create pull request` command does, and `fallback_url` (the link
+    /// printed by the remote) is only used if that fails.
+    CreatePullRequest {
+        label: String,
+        fallback_url: String,
+    },
+    /// The push references an existing pull request, which can only be reached
+    /// via the link printed by the remote.
+    OpenPullRequest {
+        label: String,
+        url: String,
+    },
 }
 
 pub struct SuccessMessage {
@@ -57,29 +95,40 @@ pub struct SuccessMessage {
     pub style: SuccessStyle,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct PullRequestLink {
+    label: String,
+    url: String,
+    kind: PullRequestLinkKind,
+}
+
 fn extract_pull_request_link(
     output: &RemoteCommandOutput,
     translate: impl Fn(&'static str, &'static str) -> String + Copy,
-) -> Option<(String, String)> {
-    let mut pending_label = None;
+) -> Option<PullRequestLink> {
+    let mut pending_hint: Option<&'static PullRequestHint> = None;
 
     for line in output.stderr.lines() {
         let Some(remote_line) = line.trim_start().strip_prefix("remote:") else {
-            pending_label = None;
+            pending_hint = None;
             continue;
         };
 
-        if let Some((_, key, fallback)) = PULL_REQUEST_HINTS
+        if let Some(hint) = PULL_REQUEST_HINTS
             .iter()
-            .find(|(hint, _, _)| remote_line.contains(hint))
+            .find(|hint| remote_line.contains(hint.needle))
         {
-            pending_label = Some(translate(key, fallback));
+            pending_hint = Some(hint);
         }
 
         if let Some(url) = extract_url(remote_line)
-            && let Some(label) = pending_label.as_ref()
+            && let Some(hint) = pending_hint
         {
-            return Some((label.clone(), url));
+            return Some(PullRequestLink {
+                label: translate(hint.label_key, hint.label_fallback),
+                url,
+                kind: hint.kind,
+            });
         }
     }
 
@@ -299,11 +348,17 @@ fn format_output_impl(
                     branch_name,
                     &remote_ref.name,
                 );
-                if let Some((label, url)) = extract_pull_request_link(&output, translate) {
-                    SuccessMessage {
-                        message,
-                        style: SuccessStyle::PushPullRequestLink { label, url },
-                    }
+                if let Some(PullRequestLink { label, url, kind }) =
+                    extract_pull_request_link(&output, translate)
+                {
+                    let style = match kind {
+                        PullRequestLinkKind::Create => SuccessStyle::CreatePullRequest {
+                            label,
+                            fallback_url: url,
+                        },
+                        PullRequestLinkKind::View => SuccessStyle::OpenPullRequest { label, url },
+                    };
+                    SuccessMessage { message, style }
                 } else {
                     SuccessMessage {
                         message,
@@ -359,24 +414,21 @@ mod tests {
 
         let msg = format_output(&action, output);
 
-        assert!(matches!(
-            msg.style,
-            SuccessStyle::PushPullRequestLink { ref label, ref url }
-                if label == "Create Pull Request"
-                    && url == "https://example.com/test/test/pull/new/test"
-        ));
-        assert_eq!(msg.message, "Pushed test_branch to test_remote");
+        if let SuccessStyle::CreatePullRequest {
+            label,
+            fallback_url,
+        } = msg.style
+        {
+            assert_eq!(msg.message, "Pushed test_branch to test_remote");
+            assert_eq!(label, "Create Pull Request");
+            assert_eq!(fallback_url, "https://example.com/test/test/pull/new/test");
+        } else {
+            panic!("Expected CreatePullRequest variant");
+        }
     }
 
     #[test]
     fn test_push_new_branch_bitbucket_pull_request() {
-        let action = RemoteAction::Push(
-            SharedString::new_static("test_branch"),
-            Remote {
-                name: SharedString::new_static("test_remote"),
-            },
-        );
-
         let output = RemoteCommandOutput {
             stdout: String::new(),
             stderr: indoc! {"
@@ -387,14 +439,14 @@ mod tests {
             .to_string(),
         };
 
-        let msg = format_output(&action, output);
-
-        assert!(matches!(
-            msg.style,
-            SuccessStyle::PushPullRequestLink { ref label, ref url }
-                if label == "Create Pull Request"
-                    && url == "https://bitbucket.example.com/projects/TEST/repos/test/pull-requests?create&sourceBranch=refs/heads/test"
-        ));
+        assert_eq!(
+            extract_pull_request_link(&output, |_, fallback| fallback.to_owned()),
+            Some(PullRequestLink {
+                label: "Create Pull Request".to_string(),
+                url: "https://bitbucket.example.com/projects/TEST/repos/test/pull-requests?create&sourceBranch=refs/heads/test".to_string(),
+                kind: PullRequestLinkKind::Create,
+            })
+        );
     }
 
     #[test]
@@ -422,13 +474,20 @@ mod tests {
 
         let msg = format_output(&action, output);
 
-        assert!(matches!(
-            msg.style,
-            SuccessStyle::PushPullRequestLink { ref label, ref url }
-                if label == "Create Merge Request"
-                    && url == "https://example.com/test/test/-/merge_requests/new?merge_request%5Bsource_branch%5D=test"
-        ));
-        assert_eq!(msg.message, "Pushed test_branch to test_remote");
+        if let SuccessStyle::CreatePullRequest {
+            label,
+            fallback_url,
+        } = msg.style
+        {
+            assert_eq!(msg.message, "Pushed test_branch to test_remote");
+            assert_eq!(label, "Create Merge Request");
+            assert_eq!(
+                fallback_url,
+                "https://example.com/test/test/-/merge_requests/new?merge_request%5Bsource_branch%5D=test"
+            )
+        } else {
+            panic!("Expected CreatePullRequest variant")
+        }
     }
 
     #[test]
@@ -460,13 +519,13 @@ mod tests {
 
         let msg = format_output(&action, output);
 
-        assert!(matches!(
-            msg.style,
-            SuccessStyle::PushPullRequestLink { ref label, ref url }
-                if label == "View Merge Request"
-                    && url == "https://example.com/test/test/-/merge_requests/99999"
-        ));
-        assert_eq!(msg.message, "Pushed test_branch to test_remote");
+        if let SuccessStyle::OpenPullRequest { label, url } = msg.style {
+            assert_eq!(msg.message, "Pushed test_branch to test_remote");
+            assert_eq!(label, "View Merge Request");
+            assert_eq!(url, "https://example.com/test/test/-/merge_requests/99999");
+        } else {
+            panic!("Expected OpenPullRequest variant")
+        }
     }
 
     #[test]
@@ -494,6 +553,10 @@ mod tests {
             assert_eq!(
                 output.stderr,
                 "To http://example.com/test/test.git\n * [new branch]      test -> test\n"
+            );
+            assert_eq!(
+                extract_pull_request_link(output, |_, fallback| fallback.to_owned()),
+                None
             );
         } else {
             panic!("Expected ToastWithLog variant");

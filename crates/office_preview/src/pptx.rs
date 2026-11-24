@@ -4,7 +4,7 @@
 //! 本模块按幻灯片序号提取文本，输出以「幻灯片 N」为二级标题的 Markdown：
 //! 段落、粗斜体、项目符号列表；图片与动画等暂不支持。
 
-use std::io::{Cursor, Read};
+use std::io::Cursor;
 
 use anyhow::Result;
 use quick_xml::events::{BytesStart, Event};
@@ -29,8 +29,7 @@ pub fn pptx_to_markdown(bytes: Vec<u8>) -> Result<String> {
 
     let mut out = String::new();
     for (number, name) in slides {
-        let mut xml = String::new();
-        archive.by_name(&name)?.read_to_string(&mut xml)?;
+        let xml = crate::ooxml::read_ooxml_entry(archive.by_name(&name)?)?;
         let text = convert_slide_xml(&xml);
         if text.trim().is_empty() {
             // 无文本内容的幻灯片（纯图片页等）跳过

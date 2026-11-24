@@ -562,6 +562,9 @@ actions!(
         /// Folds all code blocks at indentation level 9.
         #[action(name = "FoldAtLevel_9")]
         FoldAtLevel9,
+        /// Folds all code blocks at the same indentation level of the current
+        /// line.
+        FoldAtCurrentIndentationLevel,
         /// Folds all function bodies in the editor.
         FoldFunctionBodies,
         /// Folds the current code block and all its children.
@@ -718,8 +721,6 @@ actions!(
         OpenExcerpts,
         /// Opens excerpts in a split pane.
         OpenExcerptsSplit,
-        /// Opens the proposed changes editor.
-        OpenProposedChangesEditor,
         /// Opens documentation for the symbol at cursor.
         OpenDocs,
         /// Opens a permalink to the current line.

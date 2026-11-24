@@ -7,6 +7,20 @@ The absence pass is complete. This reference records the resulting
 invariants and the regression net that protects them. It is not a to-do
 list; a future change must not reintroduce a removed surface.
 
+## Contents
+
+Read `Philosophy` and `Completed Boundary (regression triggers)` first; they
+decide what counts as a violation. Then read only the sections the task needs.
+
+| If you are | Read |
+|---|---|
+| deciding whether a surface is in scope | `Out Of Scope` |
+| checking what must stay present | `Keep (verified present)` |
+| writing code beside a boundary | `Code Conventions` |
+| running the gate | `Verification` |
+| tempted to "restore" something to make a build pass | `Hard Stops` |
+| committing | `Commits` |
+
 ## Philosophy
 
 From the root `README.md`:

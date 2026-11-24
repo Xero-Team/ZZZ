@@ -73,8 +73,8 @@ patches = ["vendor/patches/lsp-types/0001-zzz-integration.patch"]
 [[package]]
 name = "notify"
 repository = "https://github.com/notify-rs/notify.git"
-source_ref = "refs/tags/notify-8.2.2"
-revision = "603674a8c7b7dfa396b2cc9925f75606a18bf295"
+source_ref = "refs/tags/notify-9.0.0"
+revision = "7edda71990a9c7f05c3e5e64cf873e1f0652d858"
 include = [
     "Cargo.toml",
     "README.md",
@@ -91,8 +91,8 @@ patches = ["vendor/patches/notify/0001-zzz-local.patch"]
 [[package]]
 name = "nvim-rs"
 repository = "https://github.com/KillTheMule/nvim-rs.git"
-source_ref = "refs/tags/v0.9.2"
-revision = "764dd270c642f77f10f3e19d05cc178a6cbe69f3"
+source_ref = "refs/tags/v0.10.0"
+revision = "07f94b78f9356d20b9d43d11c80053a1626fe8ad"
 include = [
     "CHANGELOG.md",
     "CONTRIBUTING.md",
@@ -115,7 +115,7 @@ patches = ["vendor/patches/nvim-rs/0001-rustfmt.patch"]
 name = "stacker"
 repository = "https://github.com/rust-lang/stacker.git"
 source_ref = "refs/heads/master"
-revision = "6ae722ada24abfbf1c085a4335424a68b4064336"
+revision = "f289c05e5a5f16bc667c48f63a2aa7b4cfb764f5"
 include = [
     "psm/Cargo.toml",
     "psm/LICENSE-APACHE",
@@ -152,8 +152,8 @@ patches = ["vendor/patches/scap/0001-zzz-platform-integration.patch"]
 [[package]]
 name = "trash"
 repository = "https://github.com/ArturKovacs/trash.git"
-source_ref = "refs/tags/v5.3.0"
-revision = "0fdaf8dfea62d0d5270a918d160dfb58cb76eb3f"
+source_ref = "refs/tags/v5.4.0"
+revision = "eaaccd3a0bffb02177ba4720ba09bb8d545e6afe"
 include = ["CHANGELOG.md", "Cargo.toml", "LICENSE.txt", "README.md", "src"]
 patches = ["vendor/patches/trash/0001-restore-and-delete-metadata.patch"]
 

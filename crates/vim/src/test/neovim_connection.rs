@@ -8,8 +8,6 @@ use std::{
 #[cfg(feature = "neovim")]
 use async_compat::Compat;
 #[cfg(feature = "neovim")]
-use async_trait::async_trait;
-#[cfg(feature = "neovim")]
 use gpui::Keystroke;
 
 #[cfg(feature = "neovim")]
@@ -550,25 +548,25 @@ impl Drop for NeovimConnection {
 struct NvimHandler {}
 
 #[cfg(feature = "neovim")]
-#[async_trait]
 impl Handler for NvimHandler {
     type Writer = nvim_rs::compat::tokio::Compat<ChildStdin>;
 
-    async fn handle_request(
+    fn handle_request(
         &self,
         _event_name: String,
         _arguments: Vec<Value>,
         _neovim: Neovim<Self::Writer>,
-    ) -> Result<Value, Value> {
-        unimplemented!();
+    ) -> impl std::future::Future<Output = Result<Value, Value>> + Send {
+        async { unimplemented!() }
     }
 
-    async fn handle_notify(
+    fn handle_notify(
         &self,
         _event_name: String,
         _arguments: Vec<Value>,
         _neovim: Neovim<Self::Writer>,
-    ) {
+    ) -> impl std::future::Future<Output = ()> + Send {
+        async {}
     }
 }
 

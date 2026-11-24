@@ -10,6 +10,9 @@ pub struct MarkdownPreviewSettings {
     /// Whether to render LaTeX math (`$...$`, `$$...$$`, `\(...\)`, `\[...\]`
     /// and fenced `math` blocks) as typeset formulas.
     pub render_math: bool,
+    /// Whether the preview may fetch `http(s)` images. When disabled, a remote
+    /// image renders as a placeholder and no request is made.
+    pub allow_remote_images: bool,
 }
 
 impl Settings for MarkdownPreviewSettings {
@@ -23,6 +26,30 @@ impl Settings for MarkdownPreviewSettings {
         Self {
             max_width,
             render_math: content.render_math.unwrap_or(true),
+            allow_remote_images: content.allow_remote_images.unwrap_or(false),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remote_images_are_disabled_by_default() {
+        let content = settings::SettingsContent::default();
+        assert!(!MarkdownPreviewSettings::from_settings(&content).allow_remote_images);
+    }
+
+    #[test]
+    fn remote_images_can_be_enabled() {
+        let content = settings::SettingsContent {
+            markdown_preview: Some(settings::MarkdownPreviewSettingsContent {
+                allow_remote_images: Some(true),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(MarkdownPreviewSettings::from_settings(&content).allow_remote_images);
     }
 }

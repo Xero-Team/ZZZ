@@ -578,6 +578,18 @@ check_negative_rg_targets_exist() {
     (( missing == 0 ))
 }
 
+# c7183557d5 reintroduced the hosted Zed Predict onboarding action and left
+# `zzz::OpenAccountSettings` in the `zzz` action list, and the gate stayed green:
+# this vocabulary spelled `edit_prediction` only, and no assertion looked at
+# `actions!` declarations or keymap bindings at all. Removed surfaces are
+# rejected by name here, so a renamed re-introduction cannot slip through as a
+# dead action again.
+check_no_removed_surface_actions() {
+    ! rg -n 'zed_predict|predict_onboarding|OpenZedPredict|OpenAccountSettings|account_onboarding' \
+        "$root/crates" "$root/assets" --glob '!**/vendor/**'
+}
+
+check "removed surfaces have no declared actions" check_no_removed_surface_actions
 check "default settings are local-first" check_default_settings
 check "extension gallery uses the upstream marketplace" check_extension_marketplace_uses_upstream
 check "telemetry endpoint is absent" check_no_telemetry_endpoint

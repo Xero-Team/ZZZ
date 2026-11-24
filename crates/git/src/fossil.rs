@@ -20,7 +20,7 @@ use crate::{
         Branch, BranchesScanResult, CommitDataReader, CommitDetails, CommitDiff, CommitOptions,
         CreateWorktreeTarget, DiffType, FetchOptions, GitCommitTemplate, GitRepository,
         GitRepositoryCheckpoint, InitialGraphCommitData, LogOrder, LogSource, PushOptions, Remote,
-        RemoteCommandOutput, RepoPath, ResetMode, SearchCommitArgs, Worktree,
+        RemoteCommandOutput, RepoPath, RepositoryBackend, ResetMode, SearchCommitArgs, Worktree,
     },
     stash::GitStash,
     status::{
@@ -57,9 +57,11 @@ pub const FOSSIL_BINARY_NOT_FOUND_MESSAGE: &str = "Fossil executable not found. 
 /// Fossil 2.1.
 pub const FOSSIL_CHECKOUT_DB_NAMES: [&str; 2] = [".fslckout", "_FOSSIL_"];
 
-/// Fossil support is opt-in: the worktree scanner and the filesystem repository
-/// opener both ask this before doing anything Fossil-specific, so Git-only
-/// projects pay one cached environment lookup and no extra filesystem probes.
+/// Set `ZZZ_FOSSIL` to `0`, `false`, `no` or `off` to keep Fossil checkouts from
+/// being opened as repositories. Fossil support is otherwise on, and the
+/// worktree scanner and the filesystem repository opener both ask this before
+/// doing anything Fossil-specific, so Git-only projects pay one cached
+/// environment lookup and no extra filesystem probes.
 pub const FOSSIL_SUPPORT_ENV_VAR: &str = "ZZZ_FOSSIL";
 
 pub fn fossil_support_enabled() -> bool {
@@ -67,9 +69,9 @@ pub fn fossil_support_enabled() -> bool {
     *ENABLED.get_or_init(|| match std::env::var(FOSSIL_SUPPORT_ENV_VAR) {
         Ok(value) => !matches!(
             value.trim().to_ascii_lowercase().as_str(),
-            "" | "0" | "false" | "no" | "off"
+            "0" | "false" | "no" | "off"
         ),
-        Err(_) => false,
+        Err(_) => true,
     })
 }
 
@@ -174,6 +176,10 @@ impl FossilRepository {
 }
 
 impl GitRepository for FossilRepository {
+    fn backend(&self) -> RepositoryBackend {
+        RepositoryBackend::Fossil
+    }
+
     fn reload_index(&self) {
         // Fossil has no index to reload; the checkout database is read per command.
     }

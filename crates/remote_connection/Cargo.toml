@@ -31,3 +31,6 @@ ui.workspace = true
 ui_input.workspace = true
 util.workspace = true
 workspace.workspace = true
+
+[dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }

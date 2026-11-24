@@ -26,6 +26,3 @@ tree-sitter.workspace = true
 util.workspace = true
 vfs.workspace = true
 
-
-[features]
-test-support = []

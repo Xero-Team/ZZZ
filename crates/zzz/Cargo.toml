@@ -2,7 +2,7 @@
 description = "A local-first, open-source code editor."
 edition.workspace = true
 name = "zzz"
-version = "1.30.0"
+version = "1.31.0"
 publish.workspace = true
 license = "AGPL-3.0-or-later"
 authors = ["Xero Team"]
@@ -240,6 +240,7 @@ ui = { workspace = true, features = ["accessibility"] }
 ui_input = { workspace = true, features = ["accessibility"] }
 
 [build-dependencies]
+sha2.workspace = true
 windows_resources = { path = "../windows_resources" }
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]

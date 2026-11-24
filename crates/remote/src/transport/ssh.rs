@@ -132,11 +132,15 @@ fn sftp_put_command(source_path: &str, destination_path: &str) -> String {
     format!("put {source} {destination}\n")
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct SshConnectionOptions {
     pub host: SshConnectionHost,
     pub username: Option<String>,
     pub port: Option<u16>,
+    /// Never serialized: this value arrives from a `zzz://ssh://user:pass@host` URL and is
+    /// persisted with the workspace and thread metadata otherwise, which would write the
+    /// password to the application database.
+    #[serde(default, skip_serializing)]
     pub password: Option<String>,
     pub args: Option<Vec<String>>,
     pub port_forwards: Option<Vec<SshPortForwardOption>>,
@@ -144,6 +148,25 @@ pub struct SshConnectionOptions {
 
     pub nickname: Option<String>,
     pub upload_binary_over_ssh: bool,
+}
+
+// `.rules` requires a hand-written `Debug` for any type holding a secret, so this one prints
+// whether a password is set instead of the password itself.
+impl std::fmt::Debug for SshConnectionOptions {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SshConnectionOptions")
+            .field("host", &self.host)
+            .field("username", &self.username)
+            .field("port", &self.port)
+            .field("password", &self.password.as_ref().map(|_| "<redacted>"))
+            .field("args", &self.args)
+            .field("port_forwards", &self.port_forwards)
+            .field("connection_timeout", &self.connection_timeout)
+            .field("nickname", &self.nickname)
+            .field("upload_binary_over_ssh", &self.upload_binary_over_ssh)
+            .finish()
+    }
 }
 
 impl From<settings::SshConnection> for SshConnectionOptions {
@@ -2528,5 +2551,50 @@ mod tests {
             options.ssh_destination_args(),
             ["--", "-oProxyCommand=touch /tmp/pwned"]
         );
+    }
+
+    #[test]
+    fn test_debug_redacts_password() {
+        let options = SshConnectionOptions {
+            host: "example.com".into(),
+            username: Some("user".to_string()),
+            password: Some("hunter2".to_string()),
+            ..Default::default()
+        };
+
+        let debug = format!("{options:?}");
+        assert!(
+            !debug.contains("hunter2"),
+            "debug output rendered the password: {debug}"
+        );
+        assert!(debug.contains("<redacted>"), "debug output: {debug}");
+
+        let without_password = SshConnectionOptions {
+            password: None,
+            ..options
+        };
+        let debug = format!("{without_password:?}");
+        assert!(!debug.contains("redacted"), "debug output: {debug}");
+    }
+
+    #[test]
+    fn test_serialization_omits_password() {
+        let options = SshConnectionOptions {
+            host: "example.com".into(),
+            username: Some("user".to_string()),
+            password: Some("hunter2".to_string()),
+            ..Default::default()
+        };
+
+        let serialized = serde_json::to_string(&options).expect("serializing ssh options");
+        assert!(
+            !serialized.contains("hunter2") && !serialized.contains("password"),
+            "serialized options carry the password: {serialized}"
+        );
+
+        let restored: SshConnectionOptions =
+            serde_json::from_str(&serialized).expect("deserializing ssh options");
+        assert_eq!(restored.password, None);
+        assert_eq!(restored.host, options.host);
     }
 }

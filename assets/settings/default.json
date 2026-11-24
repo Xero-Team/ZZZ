@@ -140,6 +140,10 @@
     // Whether to render LaTeX math (`$...$`, `$$...$$`, `\(...\)`, `\[...\]`,
     // and fenced `math` blocks) as typeset formulas in the markdown preview.
     "render_math": true,
+    // Whether the preview may fetch images over the network. Opening a preview of
+    // an untrusted document must not reveal the reader's address to the image
+    // host, so remote images render as a placeholder unless this is enabled.
+    "allow_remote_images": false,
   },
   // Determines the modifier to be used to add multiple cursors with the mouse. The open hover link mouse gestures will adapt such that it do not conflict with the multicursor modifier.
   //
@@ -1035,6 +1039,16 @@
     // Saved database connections. Secrets are never stored here;
     // they live in the platform keychain under the connection's stable id.
     "connections": [],
+  },
+  "fossil_panel": {
+    // Whether to show the fossil panel button in the status bar.
+    "button": true,
+    // Where to dock the fossil panel. Can be 'left' or 'right'.
+    "dock": "left",
+    // Default width of the fossil panel.
+    "default_width": 300,
+    // Whether the fossil panel should open on startup.
+    "starts_open": false,
   },
   "git_panel": {
     // Whether to show the git panel button in the status bar.

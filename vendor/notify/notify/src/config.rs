@@ -1,6 +1,10 @@
 //! Configuration types
 
-use std::time::Duration;
+use notify_types::event::EventKindMask;
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 /// Indicates whether only the provided directory or its sub-directories as well should be watched
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
@@ -21,6 +25,25 @@ impl RecursiveMode {
     }
 }
 
+/// Controls how path separators are represented in emitted event paths on Windows.
+///
+/// This applies to `ReadDirectoryChangesWatcher`.
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash, Default)]
+pub enum WindowsPathSeparatorStyle {
+    /// Infer separator style from each watched input path.
+    ///
+    /// For example, watching `C:/tmp` yields paths with `/`, while watching `C:\tmp`
+    /// yields paths with `\`.
+    #[default]
+    Auto,
+
+    /// Always use `/` in emitted event paths.
+    Slash,
+
+    /// Always use `\` in emitted event paths.
+    Backslash,
+}
+
 /// Watcher Backend configuration
 ///
 /// This contains multiple settings that may relate to only one specific backend,
@@ -35,7 +58,7 @@ impl RecursiveMode {
 /// ```
 ///
 /// Some options can be changed during runtime, others have to be set when creating the watcher backend.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Config {
     /// See [Config::with_poll_interval]
     poll_interval: Option<Duration>,
@@ -44,6 +67,18 @@ pub struct Config {
     compare_contents: bool,
 
     follow_symlinks: bool,
+
+    /// See [Config::with_event_kinds]
+    event_kinds: EventKindMask,
+
+    /// See [Config::with_windows_path_separator_style]
+    windows_path_separator_style: WindowsPathSeparatorStyle,
+
+    /// See [Config::with_windows_extended_information]
+    windows_extended_information: bool,
+
+    /// See [Config::with_fsevent_latency]
+    fsevent_latency: Duration,
 }
 
 impl Config {
@@ -55,15 +90,15 @@ impl Config {
     /// The default poll frequency is 30 seconds.
     ///
     /// This will enable automatic polling, overwriting [`with_manual_polling()`](Config::with_manual_polling).
+    #[must_use]
     pub fn with_poll_interval(mut self, dur: Duration) -> Self {
-        // TODO: v7.0 break signature to option
         self.poll_interval = Some(dur);
         self
     }
 
     /// Returns current setting
+    #[must_use]
     pub fn poll_interval(&self) -> Option<Duration> {
-        // Changed Signature to Option
         self.poll_interval
     }
 
@@ -72,45 +107,159 @@ impl Config {
     /// Disable automatic polling. Requires calling [`crate::PollWatcher::poll()`] manually.
     ///
     /// This will disable automatic polling, overwriting [`with_poll_interval()`](Config::with_poll_interval).
+    #[must_use]
     pub fn with_manual_polling(mut self) -> Self {
         self.poll_interval = None;
         self
     }
 
-    /// For the [`PollWatcher`](crate::PollWatcher) backend.
+    /// Compare file contents for [`PollWatcher`](crate::PollWatcher).
     ///
-    /// Optional feature that will evaluate the contents of changed files to determine if
-    /// they have indeed changed using a fast hashing algorithm.  This is especially important
-    /// for pseudo filesystems like those on Linux under /sys and /proc which are not obligated
-    /// to respect any other filesystem norms such as modification timestamps, file sizes, etc.
-    /// By enabling this feature, performance will be significantly impacted as all files will
-    /// need to be read and hashed at each `poll_interval`.
+    /// When enabled, each scan reads and hashes every regular file, increasing I/O and CPU usage.
+    /// Content changes produce `Modify(Data(Any))`; modification time changes with identical
+    /// contents produce `Modify(Metadata(WriteTime))`.
     ///
-    /// This can't be changed during runtime. Off by default.
+    /// Without it, changes to a regular file's size or modification time produce `Modify(Data(Any))`,
+    /// including `touch`. Changes preserving both go undetected, as can happen on `/proc` and `/sys`.
+    ///
+    /// Disabled by default; cannot be changed at runtime.
+    #[must_use]
     pub fn with_compare_contents(mut self, compare_contents: bool) -> Self {
         self.compare_contents = compare_contents;
         self
     }
 
     /// Returns current setting
+    #[must_use]
     pub fn compare_contents(&self) -> bool {
         self.compare_contents
     }
 
-    /// For the [INotifyWatcher](crate::INotifyWatcher), [KqueueWatcher](crate::KqueueWatcher),
-    /// and [PollWatcher](crate::PollWatcher).
+    /// For the `INotifyWatcher`, `KqueueWatcher`, and [`PollWatcher`](crate::PollWatcher).
     ///
     /// Determine if symbolic links should be followed when recursively watching a directory.
     ///
     /// This can't be changed during runtime. On by default.
+    #[must_use]
     pub fn with_follow_symlinks(mut self, follow_symlinks: bool) -> Self {
         self.follow_symlinks = follow_symlinks;
         self
     }
 
     /// Returns current setting
+    #[must_use]
     pub fn follow_symlinks(&self) -> bool {
         self.follow_symlinks
+    }
+
+    /// Filter which event kinds are monitored.
+    ///
+    /// This allows you to control which types of filesystem events are delivered
+    /// to your event handler. On backends that support kernel-level filtering
+    /// (inotify), the mask is translated to native flags for optimal
+    /// performance. On other backends (kqueue, Windows, FSEvents, PollWatcher),
+    /// filtering is applied in userspace.
+    ///
+    /// The default is `CORE | ACCESS_OPEN | ACCESS_CLOSE`, the events that notify v8 reported.
+    /// [`EventKindMask::ALL`] (also `EventKindMask::default()`) adds `ACCESS_CLOSE_NOWRITE`,
+    /// which reports closing a file or directory that was opened without write access.
+    /// Recursive registration itself generates access events as it reads directories.
+    /// Use [`EventKindMask::CORE`] to exclude access events, or `CORE | ACCESS_CLOSE`
+    /// to keep close-after-write notifications without these directory access events.
+    ///
+    /// This can't be changed during runtime.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use notify::{Config, EventKindMask};
+    ///
+    /// // Only monitor file creation and deletion
+    /// let config = Config::default()
+    ///     .with_event_kinds(EventKindMask::CREATE | EventKindMask::REMOVE);
+    ///
+    /// // Monitor everything including access events
+    /// let config_all = Config::default()
+    ///     .with_event_kinds(EventKindMask::ALL);
+    /// ```
+    #[must_use]
+    pub fn with_event_kinds(mut self, event_kinds: EventKindMask) -> Self {
+        self.event_kinds = event_kinds;
+        self
+    }
+
+    /// Returns current setting
+    #[must_use]
+    pub fn event_kinds(&self) -> EventKindMask {
+        self.event_kinds
+    }
+
+    /// For the `ReadDirectoryChangesWatcher` backend.
+    ///
+    /// Controls path separator normalization for emitted event paths on Windows.
+    ///
+    /// The default is [`WindowsPathSeparatorStyle::Auto`], which preserves the
+    /// separator style implied by each watched input path.
+    ///
+    /// This can't be changed during runtime.
+    #[must_use]
+    pub fn with_windows_path_separator_style(mut self, style: WindowsPathSeparatorStyle) -> Self {
+        self.windows_path_separator_style = style;
+        self
+    }
+
+    /// Returns current setting.
+    #[must_use]
+    pub fn windows_path_separator_style(&self) -> WindowsPathSeparatorStyle {
+        self.windows_path_separator_style
+    }
+
+    /// Use `ReadDirectoryChangesExW` to classify created and removed entries as files or folders.
+    /// Reparse points are not followed; modification events remain `ModifyKind::Any`.
+    ///
+    /// Requires Windows 10 1709 / Windows Server 2019 or later and NTFS. Unsupported APIs
+    /// fail at construction; unsupported filesystems fail at `watch()` or via the event handler.
+    /// No automatic fallback: use a default-configured watcher for unsupported paths.
+    ///
+    /// Off by default and ignored by other backends. Cannot be changed via
+    /// [`Watcher::configure`](crate::Watcher::configure); create a new watcher to switch modes.
+    /// Both notification modes use a 64 KiB read buffer per OS watch.
+    #[must_use]
+    pub fn with_windows_extended_information(mut self, extended_information: bool) -> Self {
+        self.windows_extended_information = extended_information;
+        self
+    }
+
+    /// Returns whether extended directory notifications are enabled on Windows.
+    #[must_use]
+    pub fn windows_extended_information(&self) -> bool {
+        self.windows_extended_information
+    }
+
+    /// For the `FsEventWatcher` backend.
+    ///
+    /// The latency passed to `FSEventStreamCreate`: how long the FSEvents service waits
+    /// after hearing about an event from the kernel before invoking the callback. A larger
+    /// value lets the system coalesce bursts of changes into fewer callbacks at the cost of
+    /// higher delivery latency.
+    ///
+    /// This watcher is created with `kFSEventStreamCreateFlagNoDefer`, so the first event in
+    /// an idle period is delivered immediately; only subsequent events get coalesced within
+    /// the latency window.
+    ///
+    /// The default is [`Duration::ZERO`].
+    ///
+    /// This can't be changed during runtime.
+    #[must_use]
+    pub fn with_fsevent_latency(mut self, latency: Duration) -> Self {
+        self.fsevent_latency = latency;
+        self
+    }
+
+    /// Returns current setting
+    #[must_use]
+    pub fn fsevent_latency(&self) -> Duration {
+        self.fsevent_latency
     }
 }
 
@@ -120,6 +269,247 @@ impl Default for Config {
             poll_interval: Some(Duration::from_secs(30)),
             compare_contents: false,
             follow_symlinks: true,
+            event_kinds: EventKindMask::CORE
+                | EventKindMask::ACCESS_OPEN
+                | EventKindMask::ACCESS_CLOSE,
+            windows_path_separator_style: WindowsPathSeparatorStyle::Auto,
+            windows_extended_information: false,
+            fsevent_latency: Duration::ZERO,
         }
+    }
+}
+
+/// Single watch backend configuration
+///
+/// This contains some settings that may relate to only one specific backend,
+/// such as to correctly configure each backend regardless of what is selected during runtime.
+#[derive(Clone, Debug)]
+pub struct WatchPathConfig {
+    recursive_mode: RecursiveMode,
+    dereference_symlinks: bool,
+    user_data: Option<u64>,
+}
+
+impl WatchPathConfig {
+    /// Creates new instance with provided [`RecursiveMode`]
+    #[must_use]
+    pub fn new(recursive_mode: RecursiveMode) -> Self {
+        Self {
+            recursive_mode,
+            dereference_symlinks: true,
+            user_data: None,
+        }
+    }
+
+    /// Set [`RecursiveMode`] for the watch
+    #[must_use]
+    pub fn with_recursive_mode(mut self, recursive_mode: RecursiveMode) -> Self {
+        self.recursive_mode = recursive_mode;
+        self
+    }
+
+    /// Returns current setting
+    #[must_use]
+    pub fn recursive_mode(&self) -> RecursiveMode {
+        self.recursive_mode
+    }
+
+    /// Set whether a symbolic link is followed to its destination, for
+    /// [`RecursiveMode::NonRecursive`] watches on the `INotifyWatcher`.
+    #[must_use]
+    pub fn with_dereference_symlinks(mut self, dereference_symlinks: bool) -> Self {
+        self.dereference_symlinks = dereference_symlinks;
+        self
+    }
+
+    /// Returns current setting
+    #[must_use]
+    pub fn dereference_symlinks(&self) -> bool {
+        self.dereference_symlinks
+    }
+
+    /// Attaches an application-defined value to events and errors from this watch.
+    ///
+    /// All built-in backends expose it through [`Event::user_data`](crate::Event::user_data)
+    /// and [`Error::user_data`](crate::Error::user_data).
+    /// Recursive descendants inherit the value; explicitly registered watches keep their own.
+    /// Rewatching replaces it, and [`Watcher::watch`](crate::Watcher::watch) resets it to `None`.
+    ///
+    /// ```no_run
+    /// use notify::{Event, RecursiveMode, Result, WatchPathConfig, Watcher};
+    /// use std::path::Path;
+    ///
+    /// # fn main() -> Result<()> {
+    /// let mut watcher = notify::recommended_watcher(|result: Result<Event>| {
+    ///     if let Ok(event) = result {
+    ///         println!("watch {:?}: {:?}", event.user_data(), event.paths);
+    ///     }
+    /// })?;
+    /// watcher.watch_with(
+    ///     Path::new("src"),
+    ///     WatchPathConfig::new(RecursiveMode::Recursive).with_user_data(42),
+    /// )?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn with_user_data(mut self, user_data: u64) -> Self {
+        self.user_data = Some(user_data);
+        self
+    }
+
+    /// Returns the value attached to this watch, or `None` if none was set.
+    #[must_use]
+    pub fn user_data(&self) -> Option<u64> {
+        self.user_data
+    }
+}
+
+/// A registered path and its recursive mode, returned by
+/// [`Watcher::watched_paths`](crate::Watcher::watched_paths).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct WatchedPath {
+    /// The watched path, as it was passed to the watcher.
+    pub path: PathBuf,
+    /// Whether the watch covers the path's descendants.
+    pub recursive_mode: RecursiveMode,
+}
+
+impl WatchedPath {
+    /// Creates a watched path with the given path and recursive mode.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use notify::{RecursiveMode, WatchedPath};
+    ///
+    /// let watched = WatchedPath::new("src".into(), RecursiveMode::Recursive);
+    /// ```
+    #[must_use]
+    pub fn new(path: PathBuf, recursive_mode: RecursiveMode) -> Self {
+        Self {
+            path,
+            recursive_mode,
+        }
+    }
+}
+
+/// An operation to apply to a watcher
+///
+/// See [`Watcher::update_paths`](crate::Watcher::update_paths) for more information.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum PathOp {
+    /// Path should be watched
+    Watch(PathBuf, WatchPathConfig),
+
+    /// Path should be unwatched
+    Unwatch(PathBuf),
+}
+
+impl PathOp {
+    /// Watch the path with [`RecursiveMode::Recursive`]
+    #[must_use]
+    pub fn watch_recursive<P: Into<PathBuf>>(path: P) -> Self {
+        Self::Watch(path.into(), WatchPathConfig::new(RecursiveMode::Recursive))
+    }
+
+    /// Watch the path with [`RecursiveMode::NonRecursive`]
+    #[must_use]
+    pub fn watch_non_recursive<P: Into<PathBuf>>(path: P) -> Self {
+        Self::Watch(
+            path.into(),
+            WatchPathConfig::new(RecursiveMode::NonRecursive),
+        )
+    }
+
+    /// Unwatch the path
+    #[must_use]
+    pub fn unwatch<P: Into<PathBuf>>(path: P) -> Self {
+        Self::Unwatch(path.into())
+    }
+
+    /// Returns the path associated with this operation.
+    #[must_use]
+    pub fn as_path(&self) -> &Path {
+        match self {
+            PathOp::Watch(p, _) => p,
+            PathOp::Unwatch(p) => p,
+        }
+    }
+
+    /// Returns the path associated with this operation.
+    #[must_use]
+    pub fn into_path(self) -> PathBuf {
+        match self {
+            PathOp::Watch(p, _) => p,
+            PathOp::Unwatch(p) => p,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use notify_types::event::EventKindMask;
+
+    #[test]
+    fn config_default_event_kinds_excludes_close_nowrite() {
+        let config = Config::default();
+        assert_eq!(
+            config.event_kinds(),
+            EventKindMask::ALL - EventKindMask::ACCESS_CLOSE_NOWRITE
+        );
+    }
+
+    #[test]
+    fn config_with_event_kinds() {
+        let mask = EventKindMask::CREATE | EventKindMask::REMOVE;
+        let config = Config::default().with_event_kinds(mask);
+        assert_eq!(config.event_kinds(), mask);
+    }
+
+    #[test]
+    fn config_with_all_events_includes_access() {
+        let config = Config::default().with_event_kinds(EventKindMask::ALL);
+        assert!(config.event_kinds().intersects(EventKindMask::ALL_ACCESS));
+    }
+
+    #[test]
+    fn config_with_empty_mask() {
+        let config = Config::default().with_event_kinds(EventKindMask::empty());
+        assert!(config.event_kinds().is_empty());
+    }
+
+    #[test]
+    fn config_default_windows_separator_style_is_auto() {
+        let config = Config::default();
+        assert_eq!(
+            config.windows_path_separator_style(),
+            WindowsPathSeparatorStyle::Auto
+        );
+    }
+
+    #[test]
+    fn config_with_windows_separator_style() {
+        let config =
+            Config::default().with_windows_path_separator_style(WindowsPathSeparatorStyle::Slash);
+        assert_eq!(
+            config.windows_path_separator_style(),
+            WindowsPathSeparatorStyle::Slash
+        );
+    }
+
+    #[test]
+    fn config_default_fsevent_latency_is_zero() {
+        assert_eq!(Config::default().fsevent_latency(), Duration::ZERO);
+    }
+
+    #[test]
+    fn config_with_fsevent_latency() {
+        let latency = Duration::from_millis(250);
+        let config = Config::default().with_fsevent_latency(latency);
+        assert_eq!(config.fsevent_latency(), latency);
     }
 }

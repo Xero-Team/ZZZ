@@ -20,8 +20,9 @@ metadata:
   user-language: Simplified Chinese
 ---
 
-Follow `REFERENCE.md` in this skill first. It carries the trust-boundary model,
-the ZZZ attack-surface catalog, the severity mapping onto P0/P1/P2, and the
+Read `Trust boundary model` and `Verdicts and severity` in `REFERENCE.md` before
+reconnaissance, then the section each phase needs. The same file carries the ZZZ
+attack-surface catalog, the severity mapping onto P0/P1/P2, and the
 `findings.json` schema. A candidate without a named principal, a crossed boundary,
 and an observable result is not a finding.
 

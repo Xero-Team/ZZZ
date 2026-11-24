@@ -1,25 +1,18 @@
-use agent::{TerminalTool, ToolPermissionDecision};
+use agent::TerminalTool;
 use agent_settings::AgentSettings;
-use gpui::{
-    Focusable, HighlightStyle, ReadGlobal, ScrollHandle, SharedString, StyledText,
-    TextStyleRefinement, point, prelude::*,
-};
+use gpui::{HighlightStyle, ReadGlobal, ScrollHandle, SharedString, StyledText, point, prelude::*};
 use i18n as app_i18n;
 use settings::{Settings as _, SettingsStore, ToolPermissionMode};
-use shell_command_parser::extract_commands;
 use std::sync::Arc;
-use theme_settings::ThemeSettings;
-use ui::{Banner, ContextMenu, Divider, PopoverMenu, Severity, Tooltip, prelude::*};
-use util::ResultExt as _;
-use util::shell::ShellKind;
+use ui::{Banner, ContextMenu, Divider, PopoverMenu, prelude::*};
 
-use crate::{SettingsWindow, components::SettingsInputField};
+use crate::SettingsWindow;
 
 const HARDCODED_RULES_DESCRIPTION: &str =
     "`rm -rf` commands are always blocked when run on `$HOME`, `~`, `.`, `..`, or `/`";
-const SETTINGS_DISCLAIMER: &str = "Note: custom tool permissions apply to all agents in ZZZ, including external agents connected through the Agent Client Protocol (ACP).";
+const SETTINGS_DISCLAIMER: &str = "Note: custom tool permissions apply to all agents in ZZZ, including external agents connected through the Agent Client Protocol (ACP). Only the default action for each tool is consulted today: agents gate a tool by its id, so that default is the only permission setting that changes behaviour.";
 
-/// Tools that support permission rules
+/// Tools that support per-tool permission settings
 const TOOLS: &[ToolInfo] = &[
     ToolInfo {
         id: "terminal",
@@ -27,8 +20,6 @@ const TOOLS: &[ToolInfo] = &[
         name: "Terminal",
         description_key: "settings_ui.tool_permissions.tool.terminal.description",
         description: "Commands executed in the terminal",
-        regex_explanation_key: "settings_ui.tool_permissions.tool.terminal.regex_explanation",
-        regex_explanation: "Patterns are matched against each command in the input. Commands chained with &&, ||, ;, or pipes are split and checked individually.",
     },
     ToolInfo {
         id: "edit_file",
@@ -36,8 +27,6 @@ const TOOLS: &[ToolInfo] = &[
         name: "Edit File",
         description_key: "settings_ui.tool_permissions.tool.edit_file.description",
         description: "File editing operations",
-        regex_explanation_key: "settings_ui.tool_permissions.tool.edit_file.regex_explanation",
-        regex_explanation: "Patterns are matched against the file path being edited.",
     },
     ToolInfo {
         id: "delete_path",
@@ -45,8 +34,6 @@ const TOOLS: &[ToolInfo] = &[
         name: "Delete Path",
         description_key: "settings_ui.tool_permissions.tool.delete_path.description",
         description: "File and directory deletion",
-        regex_explanation_key: "settings_ui.tool_permissions.tool.delete_path.regex_explanation",
-        regex_explanation: "Patterns are matched against the path being deleted.",
     },
     ToolInfo {
         id: "copy_path",
@@ -54,8 +41,6 @@ const TOOLS: &[ToolInfo] = &[
         name: "Copy Path",
         description_key: "settings_ui.tool_permissions.tool.copy_path.description",
         description: "File and directory copying",
-        regex_explanation_key: "settings_ui.tool_permissions.tool.copy_path.regex_explanation",
-        regex_explanation: "Patterns are matched independently against the source path and the destination path. Enter either path below to test.",
     },
     ToolInfo {
         id: "move_path",
@@ -63,8 +48,6 @@ const TOOLS: &[ToolInfo] = &[
         name: "Move Path",
         description_key: "settings_ui.tool_permissions.tool.move_path.description",
         description: "File and directory moves/renames",
-        regex_explanation_key: "settings_ui.tool_permissions.tool.move_path.regex_explanation",
-        regex_explanation: "Patterns are matched independently against the source path and the destination path. Enter either path below to test.",
     },
     ToolInfo {
         id: "create_directory",
@@ -72,8 +55,6 @@ const TOOLS: &[ToolInfo] = &[
         name: "Create Directory",
         description_key: "settings_ui.tool_permissions.tool.create_directory.description",
         description: "Directory creation",
-        regex_explanation_key: "settings_ui.tool_permissions.tool.create_directory.regex_explanation",
-        regex_explanation: "Patterns are matched against the directory path being created.",
     },
     ToolInfo {
         id: "save_file",
@@ -81,8 +62,6 @@ const TOOLS: &[ToolInfo] = &[
         name: "Save File",
         description_key: "settings_ui.tool_permissions.tool.save_file.description",
         description: "File saving operations",
-        regex_explanation_key: "settings_ui.tool_permissions.tool.save_file.regex_explanation",
-        regex_explanation: "Patterns are matched against the file path being saved.",
     },
     ToolInfo {
         id: "fetch",
@@ -90,8 +69,6 @@ const TOOLS: &[ToolInfo] = &[
         name: "Fetch",
         description_key: "settings_ui.tool_permissions.tool.fetch.description",
         description: "HTTP requests to URLs",
-        regex_explanation_key: "settings_ui.tool_permissions.tool.fetch.regex_explanation",
-        regex_explanation: "Patterns are matched against the URL being fetched.",
     },
     ToolInfo {
         id: "skill",
@@ -99,8 +76,6 @@ const TOOLS: &[ToolInfo] = &[
         name: "Skill",
         description_key: "settings_ui.tool_permissions.tool.skill.description",
         description: "Loading agent skill instructions",
-        regex_explanation_key: "settings_ui.tool_permissions.tool.skill.regex_explanation",
-        regex_explanation: "Patterns are matched against the absolute path to the skill's SKILL.md file.",
     },
     ToolInfo {
         id: "restore_file_from_disk",
@@ -108,8 +83,6 @@ const TOOLS: &[ToolInfo] = &[
         name: "Restore File from Disk",
         description_key: "settings_ui.tool_permissions.tool.restore_file_from_disk.description",
         description: "Discards unsaved changes by reloading from disk",
-        regex_explanation_key: "settings_ui.tool_permissions.tool.restore_file_from_disk.regex_explanation",
-        regex_explanation: "Patterns are matched against the file path being restored.",
     },
 ];
 
@@ -119,8 +92,6 @@ pub(crate) struct ToolInfo {
     name: &'static str,
     description_key: &'static str,
     description: &'static str,
-    regex_explanation_key: &'static str,
-    regex_explanation: &'static str,
 }
 
 impl ToolInfo {
@@ -130,10 +101,6 @@ impl ToolInfo {
 
     fn description(&self, cx: &App) -> SharedString {
         app_i18n::tr(cx, self.description_key, self.description).into()
-    }
-
-    fn regex_explanation(&self, cx: &App) -> SharedString {
-        app_i18n::tr(cx, self.regex_explanation_key, self.regex_explanation).into()
     }
 }
 
@@ -210,120 +177,6 @@ fn mode_display_label(mode: ToolPermissionMode, cx: &App) -> SharedString {
             tr(cx, "settings_ui.tool_permissions.mode.confirm", "Confirm")
         }
     }
-}
-
-fn rule_title(mode: ToolPermissionMode, cx: &App) -> SharedString {
-    match mode {
-        ToolPermissionMode::Allow => tr(
-            cx,
-            "settings_ui.tool_permissions.rule.always_allow",
-            "Always Allow",
-        ),
-        ToolPermissionMode::Deny => tr(
-            cx,
-            "settings_ui.tool_permissions.rule.always_deny",
-            "Always Deny",
-        ),
-        ToolPermissionMode::Confirm => tr(
-            cx,
-            "settings_ui.tool_permissions.rule.always_confirm",
-            "Always Confirm",
-        ),
-    }
-}
-
-fn rule_description(mode: ToolPermissionMode, cx: &App) -> SharedString {
-    match mode {
-        ToolPermissionMode::Allow => tr(
-            cx,
-            "settings_ui.tool_permissions.rule_description.always_allow",
-            "If any of these regexes match, the action will be approved unless an Always Confirm or Always Deny matches.",
-        ),
-        ToolPermissionMode::Deny => tr(
-            cx,
-            "settings_ui.tool_permissions.rule_description.always_deny",
-            "If any of these regexes match, the tool action will be denied.",
-        ),
-        ToolPermissionMode::Confirm => tr(
-            cx,
-            "settings_ui.tool_permissions.rule_description.always_confirm",
-            "If any of these regexes match, a confirmation will be shown unless an Always Deny regex matches.",
-        ),
-    }
-}
-
-fn invalid_rule_type_label(rule_type: &str, cx: &App) -> SharedString {
-    match rule_type {
-        "always_allow" => rule_title(ToolPermissionMode::Allow, cx),
-        "always_deny" => rule_title(ToolPermissionMode::Deny, cx),
-        "always_confirm" => rule_title(ToolPermissionMode::Confirm, cx),
-        other => other.into(),
-    }
-}
-
-fn invalid_regex_message(err: &str, cx: &App) -> String {
-    format!(
-        "{}: {err}. {}",
-        tr(
-            cx,
-            "settings_ui.tool_permissions.validation.invalid_regex",
-            "Invalid regex",
-        ),
-        tr(
-            cx,
-            "settings_ui.tool_permissions.validation.pattern_saved_but_blocked",
-            "Pattern saved but will block this tool until fixed or removed.",
-        )
-    )
-}
-
-fn duplicate_pattern_message(cx: &App) -> String {
-    tr(
-        cx,
-        "settings_ui.tool_permissions.validation.duplicate_pattern",
-        "A pattern with that name already exists in this rule list.",
-    )
-    .to_string()
-}
-
-fn rule_summary(rule_count: usize, invalid_count: usize, cx: &App) -> Option<String> {
-    let mut parts = Vec::new();
-
-    if rule_count > 0 {
-        let label = if rule_count == 1 {
-            tr(
-                cx,
-                "settings_ui.tool_permissions.summary.rule_singular",
-                "rule",
-            )
-        } else {
-            tr(
-                cx,
-                "settings_ui.tool_permissions.summary.rule_plural",
-                "rules",
-            )
-        };
-        parts.push(format!("{rule_count} {label}"));
-    }
-
-    if invalid_count > 0 {
-        let label = if invalid_count == 1 {
-            tr(
-                cx,
-                "settings_ui.tool_permissions.summary.invalid_singular",
-                "invalid item",
-            )
-        } else {
-            tr(
-                cx,
-                "settings_ui.tool_permissions.summary.invalid_plural",
-                "invalid items",
-            )
-        };
-        parts.push(format!("{invalid_count} {label}"));
-    }
-
-    (!parts.is_empty()).then(|| parts.join(", "))
 }
 
 /// Renders the main tool permissions setup page showing a list of tools
@@ -403,12 +256,6 @@ fn render_tool_list_item(
     _window: &mut Window,
     cx: &mut Context<SettingsWindow>,
 ) -> AnyElement {
-    let rules = get_tool_rules(tool.id, cx);
-    let rule_count =
-        rules.always_allow.len() + rules.always_deny.len() + rules.always_confirm.len();
-    let invalid_count = rules.invalid_patterns.len();
-    let rule_summary = rule_summary(rule_count, invalid_count, cx);
-
     let render_fn = get_tool_render_fn(tool.id);
 
     h_flex()
@@ -420,16 +267,7 @@ fn render_tool_list_item(
             v_flex()
                 .w_full()
                 .min_w_0()
-                .child(h_flex().gap_1().child(Label::new(tool.name(cx))).when_some(
-                    rule_summary,
-                    |this, summary| {
-                        this.child(
-                            Label::new(summary)
-                                .size(LabelSize::Small)
-                                .color(Color::Muted),
-                        )
-                    },
-                ))
+                .child(h_flex().gap_1().child(Label::new(tool.name(cx))))
                 .child(
                     Label::new(tool.description(cx))
                         .size(LabelSize::Small)
@@ -486,12 +324,12 @@ fn get_tool_render_fn(
 /// Renders an individual tool's permission configuration page
 pub(crate) fn render_tool_config_page(
     tool: &ToolInfo,
-    settings_window: &SettingsWindow,
+    _settings_window: &SettingsWindow,
     scroll_handle: &ScrollHandle,
-    window: &mut Window,
+    _window: &mut Window,
     cx: &mut Context<SettingsWindow>,
 ) -> AnyElement {
-    let rules = get_tool_rules(tool.id, cx);
+    let default_mode = get_tool_default(tool.id, cx);
     let page_title = tool.name(cx);
     let scroll_step = px(80.);
 
@@ -523,768 +361,38 @@ pub(crate) fn render_tool_config_page(
         .child(
             v_flex()
                 .min_w_0()
-                .child(Label::new(page_title).size(LabelSize::Large))
-                .child(
-                    Label::new(tool.regex_explanation(cx))
-                        .size(LabelSize::Small)
-                        .color(Color::Muted),
-                ),
+                .child(Label::new(page_title).size(LabelSize::Large)),
         )
         .when(tool.id == TerminalTool::NAME, |this| {
             this.child(render_hardcoded_security_banner(cx))
         })
-        .child(render_verification_section(tool.id, window, cx))
-        .when_some(
-            settings_window.regex_validation_error.clone(),
-            |this, error| {
-                this.child(
-                    Banner::new()
-                        .severity(Severity::Warning)
-                        .child(Label::new(error).size(LabelSize::Small))
-                        .action_slot(
-                            Button::new(
-                                "dismiss-regex-error",
-                                tr(cx, "settings_ui.tool_permissions.dismiss", "Dismiss"),
-                            )
-                            .style(ButtonStyle::Tinted(ui::TintColor::Warning))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.regex_validation_error = None;
-                                cx.notify();
-                            })),
-                        ),
-                )
-            },
-        )
         .child(
             v_flex()
                 .mt_6()
                 .min_w_0()
                 .w_full()
-                .gap_5()
-                .child(render_default_mode_section(tool.id, rules.default, cx))
-                .child(Divider::horizontal().color(ui::DividerColor::BorderFaded))
-                .child(render_rule_section(
-                    tool.id,
-                    ToolPermissionMode::Deny,
-                    &rules.always_deny,
-                    cx,
-                ))
-                .child(Divider::horizontal().color(ui::DividerColor::BorderFaded))
-                .child(render_rule_section(
-                    tool.id,
-                    ToolPermissionMode::Allow,
-                    &rules.always_allow,
-                    cx,
-                ))
-                .child(Divider::horizontal().color(ui::DividerColor::BorderFaded))
-                .child(render_rule_section(
-                    tool.id,
-                    ToolPermissionMode::Confirm,
-                    &rules.always_confirm,
-                    cx,
-                ))
-                .when(!rules.invalid_patterns.is_empty(), |this| {
-                    this.child(Divider::horizontal().color(ui::DividerColor::BorderFaded))
-                        .child(render_invalid_patterns_section(
-                            tool.id,
-                            &rules.invalid_patterns,
-                            cx,
-                        ))
-                }),
+                .child(render_default_mode_section(tool.id, default_mode, cx)),
         )
-        .into_any_element()
-}
-
-fn render_hardcoded_rules(smaller_font_size: bool, cx: &App) -> AnyElement {
-    div()
-        .map(|this| {
-            if smaller_font_size {
-                this.text_xs()
-            } else {
-                this.text_sm()
-            }
-        })
-        .text_color(cx.theme().colors().text_muted)
-        .child(render_inline_code_markdown(
-            tr(
-                cx,
-                "settings_ui.tool_permissions.hardcoded_rules_description",
-                HARDCODED_RULES_DESCRIPTION,
-            )
-            .as_ref(),
-            cx,
-        ))
         .into_any_element()
 }
 
 fn render_hardcoded_security_banner(cx: &mut Context<SettingsWindow>) -> AnyElement {
+    let description = tr(
+        cx,
+        "settings_ui.tool_permissions.hardcoded_rules_description",
+        HARDCODED_RULES_DESCRIPTION,
+    );
+
     div()
         .mt_3()
-        .child(Banner::new().child(render_hardcoded_rules(false, cx)))
-        .into_any_element()
-}
-
-fn render_verification_section(
-    tool_id: &'static str,
-    window: &mut Window,
-    cx: &mut Context<SettingsWindow>,
-) -> AnyElement {
-    let input_id = format!("{}-verification-input", tool_id);
-
-    let editor = window.use_keyed_state(input_id, cx, |window, cx| {
-        let mut editor = editor::Editor::single_line(window, cx);
-        editor.set_placeholder_text(
-            &tr(
-                cx,
-                "settings_ui.tool_permissions.test_input_placeholder",
-                "Enter a tool input to test your rules...",
+        .child(
+            Banner::new().child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().colors().text_muted)
+                    .child(render_inline_code_markdown(description.as_ref(), cx)),
             ),
-            window,
-            cx,
-        );
-
-        let global_settings = ThemeSettings::get_global(cx);
-        editor.set_text_style_refinement(TextStyleRefinement {
-            font_family: Some(global_settings.buffer_font.family.clone()),
-            font_size: Some(rems(0.75).into()),
-            ..Default::default()
-        });
-
-        editor
-    });
-
-    cx.observe(&editor, |_, _, cx| cx.notify()).detach();
-
-    let focus_handle = editor.focus_handle(cx).tab_index(0).tab_stop(true);
-
-    let current_text = editor.read(cx).text(cx);
-    let (decision, matched_patterns) = if current_text.is_empty() {
-        (None, Vec::new())
-    } else {
-        let matches = find_matched_patterns(tool_id, &current_text, cx);
-        let decision = evaluate_test_input(tool_id, &current_text, cx);
-        (Some(decision), matches)
-    };
-
-    let default_mode = get_tool_rules(tool_id, cx).default;
-    let is_hardcoded_denial = matches!(
-        &decision,
-        Some(ToolPermissionDecision::Deny(reason))
-            if reason.contains("built-in security rule")
-    );
-    let denial_reason = match &decision {
-        Some(ToolPermissionDecision::Deny(reason))
-            if !reason.is_empty() && !is_hardcoded_denial =>
-        {
-            Some(reason.clone())
-        }
-        _ => None,
-    };
-    let (authoritative_mode, patterns_agree) = match &decision {
-        Some(decision) => {
-            let authoritative = decision_to_mode(decision);
-            let implied = implied_mode_from_patterns(&matched_patterns, default_mode);
-            let agrees = authoritative == implied;
-            if !agrees {
-                log::error!(
-                    "Tool permission verdict disagreement for '{}': \
-                     engine={}, pattern_preview={}. \
-                     Showing authoritative verdict only.",
-                    tool_id,
-                    mode_display_label(authoritative, cx),
-                    mode_display_label(implied, cx),
-                );
-            }
-            (Some(authoritative), agrees)
-        }
-        None => (None, true),
-    };
-
-    let color = cx.theme().colors();
-
-    v_flex()
-        .mt_3()
-        .min_w_0()
-        .gap_2()
-        .child(
-            v_flex()
-                .p_2p5()
-                .gap_1p5()
-                .bg(color.surface_background.opacity(0.15))
-                .border_1()
-                .border_dashed()
-                .border_color(color.border_variant)
-                .rounded_sm()
-                .child(
-                    Label::new(tr(
-                        cx,
-                        "settings_ui.tool_permissions.test_your_rules",
-                        "Test Your Rules",
-                    ))
-                        .color(Color::Muted)
-                        .size(LabelSize::Small),
-                )
-                .child(
-                    h_flex()
-                        .w_full()
-                        .h_8()
-                        .px_2()
-                        .rounded_md()
-                        .border_1()
-                        .border_color(color.border)
-                        .bg(color.editor_background)
-                        .track_focus(&focus_handle)
-                        .child(editor),
-                )
-                .when_some(authoritative_mode, |this, mode| {
-                    this.when(patterns_agree, |this| {
-                        if matched_patterns.is_empty() {
-                            this.child(
-                                Label::new(tr(
-                                    cx,
-                                    "settings_ui.tool_permissions.no_regex_matches",
-                                    "No regex matches, using the default action.",
-                                ))
-                                    .size(LabelSize::Small)
-                                    .color(Color::Muted),
-                            )
-                        } else {
-                            this.child(render_matched_patterns(&matched_patterns, cx))
-                        }
-                    })
-                    .when(!patterns_agree, |this| {
-                        if is_hardcoded_denial {
-                            this.child(render_hardcoded_rules(true, cx))
-                        } else if let Some(reason) = &denial_reason {
-                            this.child(
-                                Label::new(format!(
-                                    "{}: {}",
-                                    tr(
-                                        cx,
-                                        "settings_ui.tool_permissions.denied",
-                                        "Denied",
-                                    ),
-                                    reason
-                                ))
-                                    .size(LabelSize::XSmall)
-                                    .color(Color::Warning),
-                            )
-                        } else {
-                            this.child(
-                                Label::new(tr(
-                                    cx,
-                                    "settings_ui.tool_permissions.pattern_preview_differs",
-                                    "Pattern preview differs from engine; showing authoritative result.",
-                                ))
-                                .size(LabelSize::XSmall)
-                                .color(Color::Warning),
-                            )
-                        }
-                    })
-                    .when(is_hardcoded_denial && patterns_agree, |this| {
-                        this.child(render_hardcoded_rules(true, cx))
-                    })
-                    .child(render_verdict_label(mode, cx))
-                    .when_some(
-                        denial_reason.filter(|_| patterns_agree && !is_hardcoded_denial),
-                        |this, reason| {
-                            this.child(
-                                Label::new(format!(
-                                    "{}: {}",
-                                    tr(
-                                        cx,
-                                        "settings_ui.tool_permissions.reason",
-                                        "Reason",
-                                    ),
-                                    reason
-                                ))
-                                    .size(LabelSize::XSmall)
-                                    .color(Color::Error),
-                            )
-                        },
-                    )
-                }),
         )
-        .into_any_element()
-}
-
-#[derive(Clone, Debug)]
-struct MatchedPattern {
-    pattern: String,
-    rule_type: ToolPermissionMode,
-    is_overridden: bool,
-}
-
-fn find_matched_patterns(tool_id: &str, input: &str, cx: &App) -> Vec<MatchedPattern> {
-    let settings = AgentSettings::get_global(cx);
-    let Some(rules) = settings.tool_permissions.tools.get(tool_id) else {
-        return Vec::new();
-    };
-
-    let mut matched = Vec::new();
-
-    // For terminal commands, parse chained commands (&&, ||, ;) so the preview
-    // matches the real permission engine's behavior.
-    // When parsing fails (extract_commands returns None), the real engine
-    // ignores always_allow rules, so we track parse success to mirror that.
-    let (inputs_to_check, allow_enabled) = if tool_id == TerminalTool::NAME {
-        match extract_commands(input) {
-            Some(cmds) => (cmds, true),
-            None => (vec![input.to_owned()], false),
-        }
-    } else {
-        (vec![input.to_owned()], true)
-    };
-
-    let mut has_deny_match = false;
-    let mut has_confirm_match = false;
-
-    for rule in &rules.always_deny {
-        if inputs_to_check.iter().any(|cmd| rule.is_match(cmd)) {
-            has_deny_match = true;
-            matched.push(MatchedPattern {
-                pattern: rule.pattern.clone(),
-                rule_type: ToolPermissionMode::Deny,
-                is_overridden: false,
-            });
-        }
-    }
-
-    for rule in &rules.always_confirm {
-        if inputs_to_check.iter().any(|cmd| rule.is_match(cmd)) {
-            has_confirm_match = true;
-            matched.push(MatchedPattern {
-                pattern: rule.pattern.clone(),
-                rule_type: ToolPermissionMode::Confirm,
-                is_overridden: has_deny_match,
-            });
-        }
-    }
-
-    // The real engine requires ALL commands to match at least one allow
-    // pattern for the overall verdict to be Allow. Compute that first,
-    // then show individual patterns with correct override status.
-    let all_commands_matched_allow = !inputs_to_check.is_empty()
-        && inputs_to_check
-            .iter()
-            .all(|cmd| rules.always_allow.iter().any(|rule| rule.is_match(cmd)));
-
-    for rule in &rules.always_allow {
-        if inputs_to_check.iter().any(|cmd| rule.is_match(cmd)) {
-            matched.push(MatchedPattern {
-                pattern: rule.pattern.clone(),
-                rule_type: ToolPermissionMode::Allow,
-                is_overridden: !allow_enabled
-                    || has_deny_match
-                    || has_confirm_match
-                    || !all_commands_matched_allow,
-            });
-        }
-    }
-
-    matched
-}
-
-fn render_matched_patterns(patterns: &[MatchedPattern], cx: &App) -> AnyElement {
-    v_flex()
-        .gap_1()
-        .children(patterns.iter().map(|pattern| {
-            let (type_label, color) = match pattern.rule_type {
-                ToolPermissionMode::Deny => {
-                    (rule_title(ToolPermissionMode::Deny, cx), Color::Error)
-                }
-                ToolPermissionMode::Confirm => {
-                    (rule_title(ToolPermissionMode::Confirm, cx), Color::Warning)
-                }
-                ToolPermissionMode::Allow => {
-                    (rule_title(ToolPermissionMode::Allow, cx), Color::Success)
-                }
-            };
-
-            let type_color = if pattern.is_overridden {
-                Color::Muted
-            } else {
-                color
-            };
-
-            h_flex()
-                .gap_1()
-                .child(
-                    Label::new(pattern.pattern.clone())
-                        .size(LabelSize::Small)
-                        .color(Color::Muted)
-                        .buffer_font(cx)
-                        .when(pattern.is_overridden, |this| this.strikethrough()),
-                )
-                .child(
-                    Icon::new(IconName::Dash)
-                        .size(IconSize::Small)
-                        .color(Color::Custom(cx.theme().colors().icon_muted.opacity(0.4))),
-                )
-                .child(
-                    Label::new(type_label)
-                        .size(LabelSize::XSmall)
-                        .color(type_color)
-                        .when(pattern.is_overridden, |this| {
-                            this.strikethrough().alpha(0.5)
-                        }),
-                )
-        }))
-        .into_any_element()
-}
-
-fn evaluate_test_input(tool_id: &str, input: &str, cx: &App) -> ToolPermissionDecision {
-    let settings = AgentSettings::get_global(cx);
-
-    // ShellKind is only used for terminal tool's hardcoded security rules;
-    // for other tools, the check returns None immediately.
-    ToolPermissionDecision::from_input(
-        tool_id,
-        &[input.to_owned()],
-        &settings.tool_permissions,
-        ShellKind::system(),
-    )
-}
-
-fn decision_to_mode(decision: &ToolPermissionDecision) -> ToolPermissionMode {
-    match decision {
-        ToolPermissionDecision::Allow => ToolPermissionMode::Allow,
-        ToolPermissionDecision::Deny(_) => ToolPermissionMode::Deny,
-        ToolPermissionDecision::Confirm => ToolPermissionMode::Confirm,
-    }
-}
-
-fn implied_mode_from_patterns(
-    patterns: &[MatchedPattern],
-    default_mode: ToolPermissionMode,
-) -> ToolPermissionMode {
-    let has_active_deny = patterns
-        .iter()
-        .any(|p| matches!(p.rule_type, ToolPermissionMode::Deny) && !p.is_overridden);
-    let has_active_confirm = patterns
-        .iter()
-        .any(|p| matches!(p.rule_type, ToolPermissionMode::Confirm) && !p.is_overridden);
-    let has_active_allow = patterns
-        .iter()
-        .any(|p| matches!(p.rule_type, ToolPermissionMode::Allow) && !p.is_overridden);
-
-    if has_active_deny {
-        ToolPermissionMode::Deny
-    } else if has_active_confirm {
-        ToolPermissionMode::Confirm
-    } else if has_active_allow {
-        ToolPermissionMode::Allow
-    } else {
-        default_mode
-    }
-}
-
-fn verdict_color(mode: ToolPermissionMode) -> Color {
-    match mode {
-        ToolPermissionMode::Allow => Color::Success,
-        ToolPermissionMode::Deny => Color::Error,
-        ToolPermissionMode::Confirm => Color::Warning,
-    }
-}
-
-fn render_verdict_label(mode: ToolPermissionMode, cx: &App) -> AnyElement {
-    h_flex()
-        .gap_1()
-        .child(
-            Label::new(tr(cx, "settings_ui.tool_permissions.result", "Result:"))
-                .size(LabelSize::Small)
-                .color(Color::Muted),
-        )
-        .child(
-            Label::new(mode_display_label(mode, cx))
-                .size(LabelSize::Small)
-                .color(verdict_color(mode)),
-        )
-        .into_any_element()
-}
-
-fn render_invalid_patterns_section(
-    tool_id: &'static str,
-    invalid_patterns: &[InvalidPatternView],
-    cx: &mut Context<SettingsWindow>,
-) -> AnyElement {
-    let section_id = format!("{}-invalid-patterns-section", tool_id);
-    let theme_colors = cx.theme().colors();
-
-    v_flex()
-        .id(section_id)
-        .child(
-            h_flex()
-                .gap_1()
-                .child(
-                    Icon::new(IconName::Warning)
-                        .size(IconSize::Small)
-                        .color(Color::Error),
-                )
-                .child(
-                    Label::new(tr(
-                        cx,
-                        "settings_ui.tool_permissions.invalid_patterns",
-                        "Invalid Patterns",
-                    ))
-                    .color(Color::Error),
-                ),
-        )
-        .child(
-            Label::new(tr(
-                cx,
-                "settings_ui.tool_permissions.invalid_patterns_description",
-                "These patterns failed to compile as regular expressions. The tool will be blocked until they are fixed or removed.",
-            ))
-            .size(LabelSize::Small)
-            .color(Color::Muted),
-        )
-        .child(
-            v_flex()
-                .mt_2()
-                .w_full()
-                .gap_1p5()
-                .children(invalid_patterns.iter().map(|invalid| {
-                    let rule_type_label = invalid_rule_type_label(&invalid.rule_type, cx);
-
-                    let pattern_for_delete = invalid.pattern.clone();
-                    let rule_type = match invalid.rule_type.as_str() {
-                        "always_allow" => ToolPermissionMode::Allow,
-                        "always_deny" => ToolPermissionMode::Deny,
-                        _ => ToolPermissionMode::Confirm,
-                    };
-                    let tool_id_for_delete = tool_id.to_owned();
-                    let delete_id =
-                        format!("{}-invalid-delete-{}", tool_id, invalid.pattern.clone());
-
-                    v_flex()
-                        .p_2()
-                        .rounded_md()
-                        .border_1()
-                        .border_color(theme_colors.border_variant)
-                        .bg(theme_colors.surface_background.opacity(0.15))
-                        .gap_1()
-                        .child(
-                            h_flex()
-                                .justify_between()
-                                .child(
-                                    h_flex()
-                                        .gap_1p5()
-                                        .min_w_0()
-                                        .child(
-                                            Label::new(invalid.pattern.clone())
-                                                .size(LabelSize::Small)
-                                                .color(Color::Error)
-                                                .buffer_font(cx),
-                                        )
-                                        .child(
-                                            Label::new(format!("({})", rule_type_label))
-                                                .size(LabelSize::XSmall)
-                                                .color(Color::Muted),
-                                        ),
-                                )
-                                .child(
-                                    IconButton::new(delete_id, IconName::Trash)
-                                        .icon_size(IconSize::Small)
-                                        .icon_color(Color::Muted)
-                                        .tooltip(Tooltip::text(tr(
-                                            cx,
-                                            "settings_ui.tool_permissions.delete_invalid_pattern",
-                                            "Delete Invalid Pattern",
-                                        )))
-                                        .on_click(cx.listener(move |_, _, _, cx| {
-                                            delete_pattern(
-                                                &tool_id_for_delete,
-                                                rule_type,
-                                                &pattern_for_delete,
-                                                cx,
-                                            );
-                                        })),
-                                ),
-                        )
-                        .child(
-                            Label::new(format!(
-                                "{}: {}",
-                                tr(cx, "settings_ui.tool_permissions.error", "Error"),
-                                invalid.error
-                            ))
-                                .size(LabelSize::XSmall)
-                                .color(Color::Muted),
-                        )
-                })),
-        )
-        .into_any_element()
-}
-
-fn render_rule_section(
-    tool_id: &'static str,
-    rule_type: ToolPermissionMode,
-    patterns: &[String],
-    cx: &mut Context<SettingsWindow>,
-) -> AnyElement {
-    let section_id = format!("{}-{:?}-section", tool_id, rule_type);
-
-    let user_patterns: Vec<_> = patterns.iter().enumerate().collect();
-
-    v_flex()
-        .id(section_id)
-        .child(Label::new(rule_title(rule_type, cx)))
-        .child(
-            Label::new(rule_description(rule_type, cx))
-                .size(LabelSize::Small)
-                .color(Color::Muted),
-        )
-        .child(
-            v_flex()
-                .mt_2()
-                .w_full()
-                .gap_1p5()
-                .when(patterns.is_empty(), |this| {
-                    this.child(render_pattern_empty_state(cx))
-                })
-                .when(!user_patterns.is_empty(), |this| {
-                    this.child(v_flex().gap_1p5().children(user_patterns.iter().map(
-                        |(index, pattern)| {
-                            render_user_pattern_row(
-                                tool_id,
-                                rule_type,
-                                *index,
-                                (*pattern).clone(),
-                                cx,
-                            )
-                        },
-                    )))
-                })
-                .child(render_add_pattern_input(tool_id, rule_type, cx)),
-        )
-        .into_any_element()
-}
-
-fn render_pattern_empty_state(cx: &mut Context<SettingsWindow>) -> AnyElement {
-    h_flex()
-        .p_2()
-        .rounded_md()
-        .border_1()
-        .border_dashed()
-        .border_color(cx.theme().colors().border_variant)
-        .child(
-            Label::new(tr(
-                cx,
-                "settings_ui.tool_permissions.no_patterns_configured",
-                "No patterns configured",
-            ))
-            .size(LabelSize::Small)
-            .color(Color::Disabled),
-        )
-        .into_any_element()
-}
-
-fn render_user_pattern_row(
-    tool_id: &'static str,
-    rule_type: ToolPermissionMode,
-    index: usize,
-    pattern: String,
-    cx: &mut Context<SettingsWindow>,
-) -> AnyElement {
-    let pattern_for_delete = pattern.clone();
-    let pattern_for_update = pattern.clone();
-    let tool_id_for_delete = tool_id.to_owned();
-    let tool_id_for_update = tool_id.to_owned();
-    let input_id = format!("{}-{:?}-pattern-{}", tool_id, rule_type, index);
-    let delete_id = format!("{}-{:?}-delete-{}", tool_id, rule_type, index);
-    let settings_window = cx.entity().downgrade();
-
-    SettingsInputField::new()
-        .with_id(input_id)
-        .with_initial_text(pattern)
-        .tab_index(0)
-        .with_buffer_font()
-        .color(Color::Default)
-        .action_slot(
-            IconButton::new(delete_id, IconName::Trash)
-                .icon_size(IconSize::Small)
-                .icon_color(Color::Muted)
-                .tooltip(Tooltip::text(tr(
-                    cx,
-                    "settings_ui.tool_permissions.delete_pattern",
-                    "Delete Pattern",
-                )))
-                .on_click(cx.listener(move |_, _, _, cx| {
-                    delete_pattern(&tool_id_for_delete, rule_type, &pattern_for_delete, cx);
-                })),
-        )
-        .on_confirm(move |new_pattern, _window, cx| {
-            if let Some(new_pattern) = new_pattern {
-                let new_pattern = new_pattern.trim().to_owned();
-                if !new_pattern.is_empty() && new_pattern != pattern_for_update {
-                    let updated = update_pattern(
-                        &tool_id_for_update,
-                        rule_type,
-                        &pattern_for_update,
-                        new_pattern.clone(),
-                        cx,
-                    );
-
-                    let validation_error = if updated {
-                        match regex::Regex::new(&new_pattern) {
-                            Err(err) => Some(invalid_regex_message(&err.to_string(), cx)),
-                            Ok(_) => None,
-                        }
-                    } else {
-                        Some(duplicate_pattern_message(cx))
-                    };
-                    settings_window
-                        .update(cx, |this, cx| {
-                            this.regex_validation_error = validation_error;
-                            cx.notify();
-                        })
-                        .log_err();
-                }
-            }
-        })
-        .into_any_element()
-}
-
-fn render_add_pattern_input(
-    tool_id: &'static str,
-    rule_type: ToolPermissionMode,
-    cx: &mut Context<SettingsWindow>,
-) -> AnyElement {
-    let tool_id_owned = tool_id.to_owned();
-    let input_id = format!("{}-{:?}-new-pattern", tool_id, rule_type);
-    let settings_window = cx.entity().downgrade();
-
-    SettingsInputField::new()
-        .with_id(input_id)
-        .with_placeholder(tr(
-            cx,
-            "settings_ui.tool_permissions.add_regex_pattern",
-            "Add regex pattern...",
-        ))
-        .tab_index(0)
-        .with_buffer_font()
-        .display_clear_button()
-        .display_confirm_button()
-        .clear_on_confirm()
-        .on_confirm(move |pattern, _window, cx| {
-            if let Some(pattern) = pattern {
-                let trimmed = pattern.trim().to_owned();
-                if !trimmed.is_empty() {
-                    save_pattern(&tool_id_owned, rule_type, trimmed.clone(), cx);
-
-                    let validation_error = match regex::Regex::new(&trimmed) {
-                        Err(err) => Some(invalid_regex_message(&err.to_string(), cx)),
-                        Ok(_) => None,
-                    };
-                    settings_window
-                        .update(cx, |this, cx| {
-                            this.regex_validation_error = validation_error;
-                            cx.notify();
-                        })
-                        .log_err();
-                }
-            }
-        })
         .into_any_element()
 }
 
@@ -1311,7 +419,7 @@ fn render_global_default_mode_section(
                     Label::new(tr(
                         cx,
                         "settings_ui.tool_permissions.default_permission_description",
-                        "Controls the default behavior for all tool actions. Per-tool rules and patterns can override this.",
+                        "Controls the default behavior for all tool actions. Per-tool defaults can override this.",
                     ))
                     .size(LabelSize::Small)
                     .color(Color::Muted),
@@ -1385,7 +493,7 @@ fn render_default_mode_section(
                     Label::new(tr(
                         cx,
                         "settings_ui.tool_permissions.default_action_description",
-                        "Action to take when no patterns match.",
+                        "Action to take for every call to this tool.",
                     ))
                     .size(LabelSize::Small)
                     .color(Color::Muted),
@@ -1427,167 +535,14 @@ fn render_default_mode_section(
         .into_any_element()
 }
 
-struct InvalidPatternView {
-    pattern: String,
-    rule_type: String,
-    error: String,
-}
-
-struct ToolRulesView {
-    default: ToolPermissionMode,
-    always_allow: Vec<String>,
-    always_deny: Vec<String>,
-    always_confirm: Vec<String>,
-    invalid_patterns: Vec<InvalidPatternView>,
-}
-
-fn get_tool_rules(tool_name: &str, cx: &App) -> ToolRulesView {
+fn get_tool_default(tool_name: &str, cx: &App) -> ToolPermissionMode {
     let settings = AgentSettings::get_global(cx);
-
-    let tool_rules = settings.tool_permissions.tools.get(tool_name);
-
-    match tool_rules {
-        Some(rules) => ToolRulesView {
-            default: rules.default.unwrap_or(settings.tool_permissions.default),
-            always_allow: rules
-                .always_allow
-                .iter()
-                .map(|r| r.pattern.clone())
-                .collect(),
-            always_deny: rules
-                .always_deny
-                .iter()
-                .map(|r| r.pattern.clone())
-                .collect(),
-            always_confirm: rules
-                .always_confirm
-                .iter()
-                .map(|r| r.pattern.clone())
-                .collect(),
-            invalid_patterns: rules
-                .invalid_patterns
-                .iter()
-                .map(|p| InvalidPatternView {
-                    pattern: p.pattern.clone(),
-                    rule_type: p.rule_type.clone(),
-                    error: p.error.clone(),
-                })
-                .collect(),
-        },
-        None => ToolRulesView {
-            default: settings.tool_permissions.default,
-            always_allow: Vec::new(),
-            always_deny: Vec::new(),
-            always_confirm: Vec::new(),
-            invalid_patterns: Vec::new(),
-        },
-    }
-}
-
-fn save_pattern(tool_name: &str, rule_type: ToolPermissionMode, pattern: String, cx: &mut App) {
-    let tool_name = tool_name.to_owned();
-
-    SettingsStore::global(cx).update_settings_file(<dyn fs::Fs>::global(cx), move |settings, _| {
-        let tool_permissions = settings
-            .agent
-            .get_or_insert_default()
-            .tool_permissions
-            .get_or_insert_default();
-        let tool_rules = tool_permissions
-            .tools
-            .entry(Arc::from(tool_name.as_str()))
-            .or_default();
-
-        let rule = settings::ToolRegexRule {
-            pattern,
-            case_sensitive: None,
-        };
-
-        let rules_list = match rule_type {
-            ToolPermissionMode::Allow => tool_rules.always_allow.get_or_insert_default(),
-            ToolPermissionMode::Deny => tool_rules.always_deny.get_or_insert_default(),
-            ToolPermissionMode::Confirm => tool_rules.always_confirm.get_or_insert_default(),
-        };
-
-        if !rules_list.0.iter().any(|r| r.pattern == rule.pattern) {
-            rules_list.0.push(rule);
-        }
-    });
-}
-
-fn update_pattern(
-    tool_name: &str,
-    rule_type: ToolPermissionMode,
-    old_pattern: &str,
-    new_pattern: String,
-    cx: &mut App,
-) -> bool {
-    let settings = AgentSettings::get_global(cx);
-    if let Some(tool_rules) = settings.tool_permissions.tools.get(tool_name) {
-        let patterns = match rule_type {
-            ToolPermissionMode::Allow => &tool_rules.always_allow,
-            ToolPermissionMode::Deny => &tool_rules.always_deny,
-            ToolPermissionMode::Confirm => &tool_rules.always_confirm,
-        };
-        if patterns.iter().any(|r| r.pattern == new_pattern) {
-            return false;
-        }
-    }
-
-    let tool_name = tool_name.to_owned();
-    let old_pattern = old_pattern.to_owned();
-
-    SettingsStore::global(cx).update_settings_file(<dyn fs::Fs>::global(cx), move |settings, _| {
-        let tool_permissions = settings
-            .agent
-            .get_or_insert_default()
-            .tool_permissions
-            .get_or_insert_default();
-
-        if let Some(tool_rules) = tool_permissions.tools.get_mut(tool_name.as_str()) {
-            let rules_list = match rule_type {
-                ToolPermissionMode::Allow => &mut tool_rules.always_allow,
-                ToolPermissionMode::Deny => &mut tool_rules.always_deny,
-                ToolPermissionMode::Confirm => &mut tool_rules.always_confirm,
-            };
-
-            if let Some(list) = rules_list {
-                let already_exists = list.0.iter().any(|r| r.pattern == new_pattern);
-                if !already_exists
-                    && let Some(rule) = list.0.iter_mut().find(|r| r.pattern == old_pattern)
-                {
-                    rule.pattern = new_pattern;
-                }
-            }
-        }
-    });
-
-    true
-}
-
-fn delete_pattern(tool_name: &str, rule_type: ToolPermissionMode, pattern: &str, cx: &mut App) {
-    let tool_name = tool_name.to_owned();
-    let pattern = pattern.to_owned();
-
-    SettingsStore::global(cx).update_settings_file(<dyn fs::Fs>::global(cx), move |settings, _| {
-        let tool_permissions = settings
-            .agent
-            .get_or_insert_default()
-            .tool_permissions
-            .get_or_insert_default();
-
-        if let Some(tool_rules) = tool_permissions.tools.get_mut(tool_name.as_str()) {
-            let rules_list = match rule_type {
-                ToolPermissionMode::Allow => &mut tool_rules.always_allow,
-                ToolPermissionMode::Deny => &mut tool_rules.always_deny,
-                ToolPermissionMode::Confirm => &mut tool_rules.always_confirm,
-            };
-
-            if let Some(list) = rules_list {
-                list.0.retain(|r| r.pattern != pattern);
-            }
-        }
-    });
+    settings
+        .tool_permissions
+        .tools
+        .get(tool_name)
+        .and_then(|rules| rules.default)
+        .unwrap_or(settings.tool_permissions.default)
 }
 
 fn set_global_default_permission(mode: ToolPermissionMode, cx: &mut App) {

@@ -145,20 +145,6 @@ impl ToolchainList {
     pub fn toolchains(&self) -> &[Toolchain] {
         &self.toolchains
     }
-    pub fn default_toolchain(&self) -> Option<Toolchain> {
-        self.default.and_then(|ix| self.toolchains.get(ix)).cloned()
-    }
-    pub fn group_for_index(&self, index: usize) -> Option<(usize, SharedString)> {
-        if index >= self.toolchains.len() {
-            return None;
-        }
-        let first_equal_or_greater = self
-            .groups
-            .partition_point(|(group_lower_bound, _)| group_lower_bound <= &index);
-        self.groups
-            .get(first_equal_or_greater.checked_sub(1)?)
-            .cloned()
-    }
 }
 
 #[cfg(test)]
@@ -225,11 +211,11 @@ mod tests {
     }
 
     #[test]
-    fn toolchain_list_returns_default_and_group_for_index() {
+    fn toolchain_list_returns_toolchains_in_order() {
         let stable = sample_toolchain("stable", "/toolchains/stable");
         let nightly = sample_toolchain("nightly", "/toolchains/nightly");
         let list = ToolchainList {
-            toolchains: vec![stable.clone(), nightly],
+            toolchains: vec![stable.clone(), nightly.clone()],
             default: Some(0),
             groups: vec![
                 (0, SharedString::new("Installed")),
@@ -238,22 +224,6 @@ mod tests {
             .into_boxed_slice(),
         };
 
-        assert_eq!(
-            list.toolchains(),
-            &[
-                stable.clone(),
-                sample_toolchain("nightly", "/toolchains/nightly")
-            ]
-        );
-        assert_eq!(list.default_toolchain(), Some(stable));
-        assert_eq!(
-            list.group_for_index(0),
-            Some((0, SharedString::new("Installed")))
-        );
-        assert_eq!(
-            list.group_for_index(1),
-            Some((1, SharedString::new("Suggested")))
-        );
-        assert_eq!(list.group_for_index(2), None);
+        assert_eq!(list.toolchains(), &[stable, nightly]);
     }
 }

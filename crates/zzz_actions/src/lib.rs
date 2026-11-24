@@ -55,8 +55,6 @@ actions!(
         /// Opens the keymap editor.
         #[action(deprecated_aliases = ["zzz_actions::OpenKeymapEditor"])]
         OpenKeymap,
-        /// Opens account settings.
-        OpenAccountSettings,
         /// Opens server settings.
         OpenServerSettings,
         /// Quits the application.
@@ -301,8 +299,6 @@ pub mod git {
             Switch,
             /// Selects a different repository.
             SelectRepo,
-            /// Filter remotes.
-            FilterRemotes,
             /// Create a git remote.
             CreateRemote,
             /// Opens the git branch selector.
@@ -504,8 +500,6 @@ pub mod agent {
             /// Opens the agent settings panel.
             #[action(deprecated_aliases = ["agent::OpenConfiguration"])]
             OpenSettings,
-            /// Opens the agent onboarding modal.
-            OpenOnboardingModal,
             /// Starts a chat conversation with the agent.
             Chat,
             /// Toggles the language model selector dropdown.
@@ -705,14 +699,6 @@ pub mod outline {
     /// breadcrumbs <-> outline dependency cycle.
     pub static TOGGLE_OUTLINE: OnceLock<fn(AnyView, &mut Window, &mut App)> = OnceLock::new();
 }
-
-actions!(
-    git_onboarding,
-    [
-        /// Opens the git integration onboarding modal.
-        OpenGitIntegrationOnboarding
-    ]
-);
 
 pub mod debug_panel {
     use gpui::actions;

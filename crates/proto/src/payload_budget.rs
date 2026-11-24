@@ -206,6 +206,7 @@ fn build_update_buffer_file() -> Vec<u8> {
             is_historic: false,
             vfs_path: vfs_path(&["crates", "proto", "src", "proto.rs"]),
             resource_id: None,
+            is_private: false,
         }),
     }
     .encode_to_vec()

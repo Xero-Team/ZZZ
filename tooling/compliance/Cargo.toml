@@ -9,7 +9,7 @@ license = "AGPL-3.0-or-later"
 workspace = true
 
 [features]
-octo-client = ["dep:octocrab", "dep:jsonwebtoken", "dep:tokio"]
+octo-client = ["dep:octocrab", "dep:tokio"]
 
 [dependencies]
 anyhow.workspace = true
@@ -17,9 +17,6 @@ async-trait.workspace = true
 derive_more.workspace = true
 futures.workspace = true
 itertools.workspace = true
-# Must match the `jsonwebtoken` version used by `octocrab` (currently 10.x);
-# `OctocrabBuilder::app` takes `jsonwebtoken::EncodingKey` from that version.
-jsonwebtoken = { workspace = true, features = ["use_pem"], optional = true }
 octocrab = { version = "0.54", default-features = false, features = [
     "default-client",
     "jwt-aws-lc-rs",

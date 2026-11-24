@@ -180,7 +180,14 @@ pub fn extract_copy_move_pattern_display(input: &str) -> Option<String> {
 pub fn extract_url_pattern(url: &str) -> Option<String> {
     let parsed = Url::parse(url).ok()?;
     let domain = parsed.host_str()?;
-    Some(format!("^https?://{}", escape_for_pattern(domain)))
+    // Anchor on the host boundary rather than the host string alone: without it,
+    // `^https?://github\.com` also matches `https://github.com.attacker.tld`, while
+    // the label the user sees is just the host. A port (`:`), a path (`/`), or the
+    // end of the input are the only valid continuations.
+    Some(format!(
+        "^https?://{}(?:[/:]|$)",
+        escape_for_pattern(domain)
+    ))
 }
 
 pub fn extract_url_pattern_display(url: &str) -> Option<String> {
@@ -383,13 +390,37 @@ mod tests {
     fn test_extract_url_pattern() {
         assert_eq!(
             extract_url_pattern("https://github.com/user/repo"),
-            Some("^https?://github\\.com".to_string())
+            Some("^https?://github\\.com(?:[/:]|$)".to_string())
         );
         assert_eq!(
             extract_url_pattern("http://example.com/path?query=1"),
-            Some("^https?://example\\.com".to_string())
+            Some("^https?://example\\.com(?:[/:]|$)".to_string())
         );
         assert_eq!(extract_url_pattern("not a url"), None);
+    }
+
+    #[test]
+    fn test_extract_url_pattern_stops_at_the_host_boundary() {
+        let pattern = extract_url_pattern("https://github.com/user/repo").unwrap();
+        let pattern = regex::Regex::new(&pattern).unwrap();
+
+        for allowed in [
+            "https://github.com",
+            "https://github.com/",
+            "https://github.com/user/repo",
+            "https://github.com:8443/user/repo",
+            "http://github.com/",
+        ] {
+            assert!(pattern.is_match(allowed), "{allowed} should match");
+        }
+
+        for denied in [
+            "https://github.com.attacker.tld/collect",
+            "https://github.company.test/",
+            "https://notgithub.com/",
+        ] {
+            assert!(!pattern.is_match(denied), "{denied} should not match");
+        }
     }
 
     #[test]
@@ -412,7 +443,7 @@ mod tests {
         );
         assert_eq!(
             extract_url_pattern("https://typescript-eslint.io/rules/no-unused-vars"),
-            Some("^https?://typescript-eslint\\.io".to_string())
+            Some("^https?://typescript-eslint\\.io(?:[/:]|$)".to_string())
         );
         assert_eq!(
             extract_path_pattern("/my-project/sub-dir/file.rs"),
@@ -428,7 +459,7 @@ mod tests {
         );
         assert_eq!(
             extract_url_pattern("https://test.example.com/path"),
-            Some("^https?://test\\.example\\.com".to_string())
+            Some("^https?://test\\.example\\.com(?:[/:]|$)".to_string())
         );
     }
 

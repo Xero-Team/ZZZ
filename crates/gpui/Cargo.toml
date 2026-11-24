@@ -106,7 +106,7 @@ gpui_util.workspace = true
 hdrhistogram = { workspace = true, optional = true }
 waker-fn = "1.2.0"
 lyon = "1.0"
-pin-project = "1.1.13"
+pin-project = "1.2.0"
 spin = "0.12.3"
 pollster.workspace = true
 url.workspace = true

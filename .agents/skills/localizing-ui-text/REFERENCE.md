@@ -1,18 +1,22 @@
 # Reference: ZZZ Locale Catalogs
 
-Normative material for `localizing-ui-text`. Load this before editing a catalog.
+Normative material for `localizing-ui-text`. Read `Catalog layout` and `Key rule`
+first, then the section the edit needs.
 Keep code, keys, and commands in English; keep the report in Simplified Chinese.
 
 ## Contents
 
-- Catalog layout
-- Key rule
-- Call sites
-- Placeholders
-- Gates
-- Removing a key
-- Translation notes
-- Sources
+Read `Catalog layout` and `Key rule` first; every edit depends on them.
+
+| If you are | Read |
+|---|---|
+| changing the call site that renders the string | `Call sites` |
+| working with formatted or plural text | `Placeholders` |
+| fixing a failing locale gate | `Gates` |
+| removing a string | `Removing a key` |
+| choosing the wording | `Translation notes` |
+
+`Sources` is provenance only; read it when a rule's origin is questioned.
 
 ## Catalog layout
 

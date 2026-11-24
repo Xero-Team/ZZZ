@@ -243,6 +243,8 @@ External agents run as separate processes that communicate with ZZZ via the [Age
 
 ### What ZZZ Forwards to External Agents
 
+When an agent offers model selection, mode, thinking effort, or a Fast Mode toggle, those controls appear in the message composer. Open **Agent Options** for the agent's other settings.
+
 When you start an external agent thread, ZZZ sends:
 
 | Setting               | How to Configure                                                      |

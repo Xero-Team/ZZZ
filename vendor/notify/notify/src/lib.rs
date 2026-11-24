@@ -1,10 +1,12 @@
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! Cross-platform file system notification library
 //!
 //! # Installation
 //!
 //! ```toml
 //! [dependencies]
-//! notify = "8.2.2"
+//! notify = "9.0.0"
 //! ```
 //!
 //! If you want debounced events (or don't need them in-order), see [notify-debouncer-mini](https://docs.rs/notify-debouncer-mini/latest/notify_debouncer_mini/)
@@ -15,16 +17,21 @@
 //! List of compilation features, see below for details
 //!
 //! - `serde` for serialization of events
-//! - `macos_fsevent` enabled by default, for fsevent backend on macos
-//! - `macos_kqueue` for kqueue backend on macos
+//! - `macos_fsevent` (default) for the FSEvents backend on macOS
+//! - `macos_kqueue` for the kqueue backend on macOS
+//! - `freebsd_inotify` enables notify's inotify backend on FreeBSD 14.5+
+//!   - inotify is automatically enabled when built natively, this feature is only needed for cross-compilation
 //! - `serialization-compat-6` restores the serialization behavior of notify 6, off by default
+//!
+//! Native FreeBSD builds use inotify on 14.5+ and kqueue on older releases. When
+//! cross-compiling for FreeBSD 14.5+, enable `freebsd_inotify` explicitly.
 //!
 //! ### Serde
 //!
 //! Events are serializable via [serde](https://serde.rs) if the `serde` feature is enabled:
 //!
 //! ```toml
-//! notify = { version = "8.2.2", features = ["serde"] }
+//! notify = { version = "9.0.0", features = ["serde"] }
 //! ```
 //!
 //! # Known Problems
@@ -32,9 +39,20 @@
 //! ### Network filesystems
 //!
 //! Network mounted filesystems like NFS may not emit any events for notify to listen to.
-//! This applies especially to WSL programs watching windows paths ([issue #254](https://github.com/notify-rs/notify/issues/254)).
+//! In Linux programs running under WSL, [`RecommendedWatcher`] uses inotify.
+//! On WSL2, changes made by Windows applications to files on Windows filesystems (such as
+//! `/mnt/c/...`) may not produce inotify events, even when [`Watcher::watch`] succeeds.
+//! See [issue #254](https://github.com/notify-rs/notify/issues/254) and
+//! [microsoft/WSL#4739](https://github.com/microsoft/WSL/issues/4739).
 //!
-//! A workaround is the [`PollWatcher`] backend.
+//! A workaround is to use [`PollWatcher`] explicitly for paths affected by these limitations.
+//! Set the scan interval with [`Config::with_poll_interval`] (the default is 30 seconds).
+//! Shorter intervals reduce detection latency but increase filesystem I/O.
+//! Polling compares the state observed at each scan; changes that occur and are reverted between
+//! scans may be missed.
+//!
+//! Enable [`Config::with_compare_contents`] to detect changes that preserve modification times
+//! and file sizes. This reads and hashes every regular file on each scan.
 //!
 //! ### Docker with Linux on macOS M1
 //!
@@ -48,16 +66,118 @@
 //! belong to you. In this case, reverting to the pollwatcher can fix the issue,
 //! with a slight performance cost.
 //!
-//! ### Editor Behaviour
+//! ### macOS, FSEvents: limit on watched paths
+//!
+//! To avoid an FSEvents bug that closes unrelated file descriptors, notify limits the
+//! combined stream roots of its FSEvents watchers to `floor(soft RLIMIT_NOFILE / 12)`
+//! per process (21 for a soft limit of 256). This is a precaution based on observed
+//! behavior, not a limit documented by Apple.
+//!
+//! Nested watches on the same volume share a recursive ancestor's stream root.
+//! Files beneath that root do not count separately.
+//!
+//! An operation that exceeds the current limit fails with [`ErrorKind::MaxFilesWatch`],
+//! leaving existing watches running. Removing a recursive watch or changing it to
+//! [`RecursiveMode::NonRecursive`] can expose nested watches as separate roots;
+//! unwatch those first if necessary. Lowering the soft limit can also prevent removals
+//! until the replacement stream fits.
+//! [`Watcher::update_paths`] checks each operation and preserves successful earlier operations.
+//!
+//! To watch more paths, raise `RLIMIT_NOFILE`, watch a common ancestor recursively, or
+//! use another backend. kqueue also has descriptor limits; [`PollWatcher`] avoids this limit.
+//!
+//! ### macOS/APFS: `std::fs::copy` can trigger events on the source path
+//!
+//! On APFS, `std::fs::copy` may use copy-on-write cloning (`fclonefileat`/`clonefile`).
+//! This can update inode metadata on the source file, and FSEvents may report a metadata change
+//! for the source path (see [issue #259](https://github.com/notify-rs/notify/issues/259) and
+//! [issue #465](https://github.com/notify-rs/notify/issues/465)).
+//!
+//! Workarounds are to avoid `std::fs::copy` (use `std::io::copy` or `read`/`write` instead), or
+//! filter out metadata-only events if they're not relevant (e.g. don't include
+//! `EventKindMask::MODIFY_META` in [`Config::with_event_kinds`]).
+//!
+//! ### Editor Behavior
 //!
 //! If you rely on precise events (Write/Delete/Create..), you will notice that the actual events
 //! can differ a lot between file editors. Some truncate the file on save, some create a new one and replace the old one.
-//! See also [this](https://github.com/notify-rs/notify/issues/247) and [this](https://github.com/notify-rs/notify/issues/113#issuecomment-281836995) issues for example.
+//! With inotify, a watch follows the file's inode, so replacing the file can stop notifications
+//! for subsequent saves.
 //!
-//! ### Parent folder deletion
+//! To observe subsequent saves after a file is replaced, watch its parent directory with
+//! [`RecursiveMode::NonRecursive`] and filter events whose [`Event::paths`] contain the target
+//! file's path. Check all paths in an event, since a rename event can include both the old and
+//! new paths.
+//! This relies on filesystem notifications; for the WSL2 limitation above, use [`PollWatcher`].
+//! See also [issue #247](https://github.com/notify-rs/notify/issues/247) and
+//! [issue #113](https://github.com/notify-rs/notify/issues/113#issuecomment-281836995).
 //!
-//! If you want to receive an event for a deletion of folder `b` for the path `/a/b/..`, you will have to watch its parent `/a`.
-//! See [here](https://github.com/notify-rs/notify/issues/403) for more details.
+//! ### Changes to watched paths
+//!
+//! Renaming, moving, or deleting a directly watched file or directory affects backends differently:
+//!
+//! | Backend | Rename / move | Delete | New item at original path |
+//! | --- | --- | --- | --- |
+//! | inotify | Old object, old paths | Watch ends | Rewatch required |
+//! | Windows (directory) | Old object, old paths | Watch ends | Rewatch required |
+//! | Windows (file) | Original path | Watch kept | Events possible |
+//! | FSEvents (macOS) | Original path | Watch kept | Events possible |
+//! | kqueue | Watch ends | Watch ends | Rewatch required |
+//! | [`PollWatcher`] | Original path | Watch kept | Detected on scan |
+//!
+//! Exact events depend on the filesystem and operation; see
+//! [issue #554](https://github.com/notify-rs/notify/issues/554).
+//! Windows may emit no event for a directory rename or move.
+//!
+//! To detect changes to `/a/b`, also watch `/a` with [`RecursiveMode::NonRecursive`] and
+//! recheck the target when the parent reports a change. Remove any surviving watch with
+//! [`Watcher::unwatch`] before watching the desired path again, once it exists.
+//! This assumes the parent stays in place; see [issue #403](https://github.com/notify-rs/notify/issues/403).
+//!
+//! For a fixed path that may disappear and return, use [`PollWatcher`]. The path must exist
+//! when registered; changes that occur and are reverted between scans can be missed.
+//!
+//! ### kqueue: event details
+//!
+//! kqueue does not identify the type of a deleted entry, and this backend does not cache it,
+//! so removal events use [`event::RemoveKind::Any`].
+//! A non-recursive directory watch reports changes to directory entries as events on the
+//! directory itself, without identifying the affected child. Watch individual files to receive
+//! their data changes, or use [`RecursiveMode::Recursive`] to track children.
+//! See [issue #644](https://github.com/notify-rs/notify/issues/644).
+//!
+//! Recursive watches discover new entries by scanning directories after a notification.
+//! Files created and removed between scans and intermediate paths in rapid renames can be missed.
+//! Descendants found while registering a newly created directory are watched, but do not receive
+//! individual creation events. Do not rely on receiving a separate event for every operation.
+//!
+//! ### kqueue: recursive watches and file descriptor limits
+//!
+//! The kqueue backend keeps an open file descriptor for each watched file and directory.
+//! Large recursive watches, including `/`, can exceed the process or system limit and fail
+//! with [`ErrorKind::MaxFilesWatch`]. On macOS, use FSEvents for large trees: keep the default
+//! features (or enable `macos_fsevent`) and do not enable `macos_kqueue`. Enabling `macos_kqueue`
+//! also changes [`RecommendedWatcher`] to kqueue, even when `macos_fsevent` is enabled.
+//!
+//! During a recursive kqueue watch, missing children are skipped. Other child errors, such as
+//! permission failures or symbolic link cycles, are sent to the event handler while the walk
+//! continues through the rest of the tree. A successful `watch()` can therefore leave some
+//! descendants unwatched; handle error events to detect incomplete coverage.
+//! Failure to watch or read the requested root, reaching the watch limit, or failure to register
+//! the watches returns an error from `watch()`. Already installed watches are not rolled back.
+//!
+//! Recursive kqueue watches skip FIFOs, sockets, and device files without reporting errors.
+//! Symbolic links to these special files are also skipped. Watching a special file directly
+//! returns an [`ErrorKind::Io`] error with [`std::io::ErrorKind::Unsupported`].
+//!
+//! When filesystem events trigger further watch additions, failures are sent to the event
+//! handler; reaching the watch limit stops the remaining additions in that batch.
+//! Repeated recoverable errors for the same known path are reported once per request or event
+//! batch. Later changes to the parent directory can retry failed entries and report errors again.
+//!
+//! See [issue #703](https://github.com/notify-rs/notify/issues/703),
+//! [issue #455](https://github.com/notify-rs/notify/issues/455), and
+//! [issue #596](https://github.com/notify-rs/notify/issues/596).
 //!
 //! ### Pseudo Filesystems like /proc, /sys
 //!
@@ -82,6 +202,13 @@
 //!
 //! When watching a very large amount of files, notify may fail to receive all events.
 //! For example the linux backend is documented to not be a 100% reliable source. See also issue [#412](https://github.com/notify-rs/notify/issues/412).
+//!
+//! ### Watching many paths on macOS
+//!
+//! Use [`Watcher::update_paths`] to register many paths in one batch. The FSEvents backend
+//! rebuilds its stream when adding a path that is not already covered by a recursive watch on
+//! the same volume. Adding N independent paths with separate [`Watcher::watch`] calls therefore
+//! registers O(N²) paths in total; a single batch rebuilds the stream only once.
 //!
 //! # Examples
 //!
@@ -128,7 +255,7 @@
 //! ## With different configurations
 //!
 //! It is possible to create several watchers with different configurations or implementations that
-//! all call the same event function. This can accommodate advanced behaviour or work around limits.
+//! all call the same event function. This can accommodate advanced behavior or work around limits.
 //!
 //! ```rust
 //! # use notify::{RecursiveMode, Result, Watcher};
@@ -162,14 +289,22 @@
 
 #![deny(missing_docs)]
 
-pub use config::{Config, RecursiveMode};
-pub use error::{Error, ErrorKind, Result};
-pub use notify_types::event::{self, Event, EventKind};
+pub use config::{
+    Config, PathOp, RecursiveMode, WatchPathConfig, WatchedPath, WindowsPathSeparatorStyle,
+};
+pub use error::{Error, ErrorKind, Result, UpdatePathsError};
+pub use notify_types::event::{self, Event, EventKind, EventKindMask};
 use std::path::Path;
 
+pub(crate) type StdResult<T, E> = std::result::Result<T, E>;
 pub(crate) type Receiver<T> = std::sync::mpsc::Receiver<T>;
 pub(crate) type Sender<T> = std::sync::mpsc::Sender<T>;
-#[cfg(any(target_os = "linux", target_os = "android", target_os = "windows"))]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    all(target_os = "freebsd", notify_freebsd_inotify),
+    target_os = "windows",
+))]
 pub(crate) type BoundSender<T> = std::sync::mpsc::SyncSender<T>;
 
 #[inline]
@@ -177,7 +312,12 @@ pub(crate) fn unbounded<T>() -> (Sender<T>, Receiver<T>) {
     std::sync::mpsc::channel()
 }
 
-#[cfg(any(target_os = "linux", target_os = "android", target_os = "windows"))]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    all(target_os = "freebsd", notify_freebsd_inotify),
+    target_os = "windows",
+))]
 #[inline]
 pub(crate) fn bounded<T>(cap: usize) -> (BoundSender<T>, Receiver<T>) {
     std::sync::mpsc::sync_channel(cap)
@@ -185,7 +325,11 @@ pub(crate) fn bounded<T>(cap: usize) -> (BoundSender<T>, Receiver<T>) {
 
 #[cfg(all(target_os = "macos", not(feature = "macos_kqueue")))]
 pub use crate::fsevent::FsEventWatcher;
-#[cfg(any(target_os = "linux", target_os = "android"))]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    all(target_os = "freebsd", notify_freebsd_inotify),
+))]
 pub use crate::inotify::INotifyWatcher;
 #[cfg(any(
     target_os = "freebsd",
@@ -203,7 +347,11 @@ pub use windows::ReadDirectoryChangesWatcher;
 
 #[cfg(all(target_os = "macos", not(feature = "macos_kqueue")))]
 pub mod fsevent;
-#[cfg(any(target_os = "linux", target_os = "android"))]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    all(target_os = "freebsd", notify_freebsd_inotify),
+))]
 pub mod inotify;
 #[cfg(any(
     target_os = "freebsd",
@@ -222,6 +370,18 @@ pub mod poll;
 
 mod config;
 mod error;
+mod paths;
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly",
+    target_os = "ios",
+    all(target_os = "macos", feature = "macos_kqueue")
+))]
+mod walk;
 
 #[cfg(test)]
 pub(crate) mod test;
@@ -272,6 +432,20 @@ impl EventHandler for flume::Sender<Result<Event>> {
     }
 }
 
+#[cfg(feature = "futures")]
+impl EventHandler for futures::channel::mpsc::UnboundedSender<Result<Event>> {
+    fn handle_event(&mut self, event: Result<Event>) {
+        let _ = self.unbounded_send(event);
+    }
+}
+
+#[cfg(feature = "tokio")]
+impl EventHandler for tokio::sync::mpsc::UnboundedSender<Result<Event>> {
+    fn handle_event(&mut self, event: Result<Event>) {
+        let _ = self.send(event);
+    }
+}
+
 impl EventHandler for std::sync::mpsc::Sender<Result<Event>> {
     fn handle_event(&mut self, event: Result<Event>) {
         let _ = self.send(event);
@@ -282,7 +456,7 @@ impl EventHandler for std::sync::mpsc::Sender<Result<Event>> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum WatcherKind {
-    /// inotify backend (linux)
+    /// Inotify backend (Linux, Android, and FreeBSD 14.5+)
     Inotify,
     /// FS-Event backend (mac)
     Fsevent,
@@ -296,28 +470,29 @@ pub enum WatcherKind {
     NullWatcher,
 }
 
-/// Providing methods for adding and removing paths to watch.
-///
-/// `Box<dyn PathsMut>` is created by [`Watcher::paths_mut`]. See its documentation for more.
-pub trait PathsMut {
-    /// Add a new path to watch. See [`Watcher::watch`] for more.
-    fn add(&mut self, path: &Path, recursive_mode: RecursiveMode) -> Result<()>;
-
-    /// Remove a path from watching. See [`Watcher::unwatch`] for more.
-    fn remove(&mut self, path: &Path) -> Result<()>;
-
-    /// Ensure added/removed paths are applied.
-    ///
-    /// The behaviour of dropping a [`PathsMut`] without calling [`commit`] is unspecified.
-    /// The implementation is free to ignore the changes or not, and may leave the watcher in a started or stopped state.
-    fn commit(self: Box<Self>) -> Result<()>;
-}
-
 /// Type that can deliver file activity notifications
 ///
 /// `Watcher` is implemented per platform using the best implementation available on that platform.
 /// In addition to such event driven implementations, a polling implementation is also provided
 /// that should work on any platform.
+///
+/// # Creating a watcher
+///
+/// Because `Watcher` is a trait, Rust usually can't infer the concrete watcher type when calling
+/// `Watcher::new(...)` directly. Prefer [`recommended_watcher`] / [`RecommendedWatcher`] (or a
+/// specific backend like [`PollWatcher`]) when constructing a watcher.
+///
+/// ```no_run
+/// use notify::{Event, RecursiveMode, Result, Watcher};
+/// use std::{path::Path, sync::mpsc};
+///
+/// fn main() -> Result<()> {
+///     let (tx, _rx) = mpsc::channel::<Result<Event>>();
+///     let mut watcher = notify::recommended_watcher(tx)?;
+///     watcher.watch(Path::new("."), RecursiveMode::Recursive)?;
+///     Ok(())
+/// }
+/// ```
 pub trait Watcher {
     /// Create a new watcher with an initial Config.
     fn new<F: EventHandler>(event_handler: F, config: config::Config) -> Result<Self>
@@ -332,61 +507,105 @@ pub trait Watcher {
     /// If the `path` is a file, `recursive_mode` will be ignored and events will be delivered only
     /// for the file.
     ///
-    /// On some platforms, if the `path` is renamed or removed while being watched, behaviour may
-    /// be unexpected. See discussions in [#165] and [#166]. If less surprising behaviour is wanted
-    /// one may non-recursively watch the _parent_ directory as well and manage related events.
+    /// Event paths are reported using the same root representation as `path`. If `path` is
+    /// relative, emitted event paths are relative to the process current directory at the time this
+    /// method is called. If `path` is absolute, emitted event paths are absolute. Convert `path`
+    /// before calling this method if your application needs a specific representation.
     ///
-    /// [#165]: https://github.com/notify-rs/notify/issues/165
-    /// [#166]: https://github.com/notify-rs/notify/issues/166
+    /// On success, calling this method again for the same backend-resolved path replaces the
+    /// existing watch for that path. The recursive mode is updated to the new value, a second
+    /// independent watch is not added, and a single call to [`Watcher::unwatch`] removes the
+    /// watched path.
+    ///
+    /// To add many paths at once, use [`Watcher::update_paths`]. On macOS, this avoids rebuilding
+    /// the FSEvents stream for each path.
+    ///
+    /// For rename, move, and deletion behavior, see
+    /// [Changes to watched paths](crate#changes-to-watched-paths).
     fn watch(&mut self, path: &Path, recursive_mode: RecursiveMode) -> Result<()>;
 
+    /// Begin watching a path with per-path settings.
+    ///
+    /// Behaves like [`Watcher::watch`], with the options in `config` applied to this watch alone.
+    /// Backends that do not implement a given option ignore it, so the default implementation
+    /// applies only [`WatchPathConfig::recursive_mode`].
+    /// All built-in event-producing backends support [`WatchPathConfig::with_user_data`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error in the case that `path` does not exist or if adding the watch fails.
+    /// The error carries [`WatchPathConfig::user_data`] through [`Error::user_data`].
+    fn watch_with(&mut self, path: &Path, config: WatchPathConfig) -> Result<()> {
+        self.watch(path, config.recursive_mode())
+            .map_err(|err| err.set_user_data_opt(config.user_data()))
+    }
+
     /// Stop watching a path.
+    ///
+    /// Only a path that was passed to [`Watcher::watch`] can be unwatched. A recursive watch
+    /// above `path` keeps reporting it, so unwatching cannot exclude a subtree from a recursive
+    /// watch.
     ///
     /// # Errors
     ///
     /// Returns an error in the case that `path` has not been watched or if removing the watch
-    /// fails.
+    /// fails. A path that only a recursive watch above it covers has not been watched, and
+    /// unwatching it returns [`ErrorKind::WatchNotFound`].
     fn unwatch(&mut self, path: &Path) -> Result<()>;
 
-    /// Add/remove paths to watch.
+    /// Add/remove paths to watch in batch.
     ///
-    /// For some watcher implementations this method provides better performance than multiple calls to [`Watcher::watch`] and [`Watcher::unwatch`] if you want to add/remove many paths at once.
+    /// For some [`Watcher`] implementations this method provides better performance than multiple
+    /// calls to [`Watcher::watch`] and [`Watcher::unwatch`] if you want to add/remove many paths at once.
+    /// In particular, the FSEvents backend on macOS rebuilds its stream only once for the whole batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`UpdatePathsError`] if any operation fails. Operations are applied sequentially.
+    /// When an error occurs, processing stops: operations before `origin` have been applied,
+    /// `origin` is the operation that failed (if known), and `remaining` are the operations that
+    /// were not attempted. `remaining` does not include `origin`.
     ///
     /// # Examples
     ///
     /// ```
-    /// # use notify::{Watcher, RecursiveMode, Result};
-    /// # use std::path::Path;
-    /// # fn main() -> Result<()> {
-    /// # let many_paths_to_add = vec![];
-    /// let mut watcher = notify::recommended_watcher(|_event| { /* event handler */ })?;
-    /// let mut watcher_paths = watcher.paths_mut();
+    /// # use notify::{Watcher, RecursiveMode, PathOp};
+    /// # use std::path::{Path, PathBuf};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let many_paths_to_add: Vec<PathBuf> = vec![];
+    /// # let many_paths_to_remove: Vec<PathBuf> = vec![];
+    /// let mut watcher = notify::NullWatcher;
+    /// let mut batch = Vec::new();
+    ///
     /// for path in many_paths_to_add {
-    ///     watcher_paths.add(path, RecursiveMode::Recursive)?;
+    ///     batch.push(PathOp::watch_recursive(path));
     /// }
-    /// watcher_paths.commit()?;
+    ///
+    /// for path in many_paths_to_remove {
+    ///     batch.push(PathOp::unwatch(path));
+    /// }
+    ///
+    /// // real work is done there
+    /// watcher.update_paths(batch)?;
     /// # Ok(())
     /// # }
     /// ```
-    fn paths_mut<'me>(&'me mut self) -> Box<dyn PathsMut + 'me> {
-        struct DefaultPathsMut<'a, T: ?Sized>(&'a mut T);
-        impl<T: Watcher + ?Sized> PathsMut for DefaultPathsMut<'_, T> {
-            fn add(&mut self, path: &Path, recursive_mode: RecursiveMode) -> Result<()> {
-                self.0.watch(path, recursive_mode)
-            }
-            fn remove(&mut self, path: &Path) -> Result<()> {
-                self.0.unwatch(path)
-            }
-            fn commit(self: Box<Self>) -> Result<()> {
-                Ok(())
-            }
-        }
-        Box::new(DefaultPathsMut(self))
+    #[expect(
+        clippy::result_large_err,
+        reason = "Keep the public error, including the failed PathOp and its configuration, unboxed"
+    )]
+    fn update_paths(&mut self, ops: Vec<PathOp>) -> StdResult<(), UpdatePathsError> {
+        update_paths(ops, |op| match op {
+            PathOp::Watch(path, config) => self
+                .watch_with(&path, config.clone())
+                .map_err(|e| (PathOp::Watch(path, config), e)),
+            PathOp::Unwatch(path) => self.unwatch(&path).map_err(|e| (PathOp::Unwatch(path), e)),
+        })
     }
 
     /// Configure the watcher at runtime.
     ///
-    /// See the [`Config`](config/struct.Config.html) struct for all configuration options.
+    /// See the [`Config`] struct for all configuration options.
     ///
     /// # Returns
     ///
@@ -397,6 +616,20 @@ pub trait Watcher {
         Ok(false)
     }
 
+    /// Returns the currently watched paths and their recursive modes.
+    ///
+    /// Returned paths use the same representation that was passed to [`Watcher::watch`] or
+    /// [`Watcher::update_paths`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the watcher implementation cannot provide this information.
+    fn watched_paths(&self) -> Result<Vec<WatchedPath>> {
+        Err(Error::generic(
+            "listing watched paths is not supported by this watcher",
+        ))
+    }
+
     /// Returns the watcher kind, allowing to perform backend-specific tasks
     fn kind() -> WatcherKind
     where
@@ -404,7 +637,11 @@ pub trait Watcher {
 }
 
 /// The recommended [`Watcher`] implementation for the current platform
-#[cfg(any(target_os = "linux", target_os = "android"))]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    all(target_os = "freebsd", notify_freebsd_inotify),
+))]
 pub type RecommendedWatcher = INotifyWatcher;
 /// The recommended [`Watcher`] implementation for the current platform
 #[cfg(all(target_os = "macos", not(feature = "macos_kqueue")))]
@@ -414,7 +651,7 @@ pub type RecommendedWatcher = FsEventWatcher;
 pub type RecommendedWatcher = ReadDirectoryChangesWatcher;
 /// The recommended [`Watcher`] implementation for the current platform
 #[cfg(any(
-    target_os = "freebsd",
+    all(target_os = "freebsd", not(notify_freebsd_inotify)),
     target_os = "openbsd",
     target_os = "netbsd",
     target_os = "dragonfly",
@@ -437,6 +674,20 @@ pub type RecommendedWatcher = KqueueWatcher;
 pub type RecommendedWatcher = PollWatcher;
 
 /// Convenience method for creating the [`RecommendedWatcher`] for the current platform.
+///
+/// This is often the most ergonomic way to construct a watcher, because calling `Watcher::new(...)`
+/// requires specifying the concrete watcher type.
+///
+/// ```no_run
+/// use notify::{RecursiveMode, Result, Watcher};
+/// use std::path::Path;
+///
+/// fn main() -> Result<()> {
+///     let mut watcher = notify::recommended_watcher(|res| println!("event: {res:?}"))?;
+///     watcher.watch(Path::new("."), RecursiveMode::Recursive)?;
+///     Ok(())
+/// }
+/// ```
 pub fn recommended_watcher<F>(event_handler: F) -> Result<RecommendedWatcher>
 where
     F: EventHandler,
@@ -445,10 +696,34 @@ where
     RecommendedWatcher::new(event_handler, Config::default())
 }
 
+#[expect(
+    clippy::result_large_err,
+    reason = "Match Watcher::update_paths without changing the public batch error type"
+)]
+pub(crate) fn update_paths<F>(ops: Vec<PathOp>, mut apply: F) -> StdResult<(), UpdatePathsError>
+where
+    F: FnMut(PathOp) -> StdResult<(), (PathOp, Error)>,
+{
+    let mut iter = ops.into_iter();
+    while let Some(op) = iter.next() {
+        if let Err((error_op, source)) = apply(op) {
+            return Err(UpdatePathsError {
+                source,
+                origin: Some(error_op),
+                remaining: iter.collect(),
+            }
+            .with_origin_user_data());
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
+        collections::HashSet,
         fs, iter,
+        path::{Path, PathBuf},
         sync::mpsc,
         time::{Duration, Instant},
     };
@@ -456,8 +731,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        Config, Error, ErrorKind, Event, NullWatcher, PollWatcher, RecommendedWatcher,
-        RecursiveMode, Result, Watcher, WatcherKind,
+        Config, Error, ErrorKind, Event, NullWatcher, PathOp, PollWatcher, RecommendedWatcher,
+        RecursiveMode, Result, StdResult, WatchPathConfig, WatchedPath, Watcher, WatcherKind,
     };
     use crate::test::*;
 
@@ -483,7 +758,56 @@ mod tests {
         assert_debug_impl!(PollWatcher);
         assert_debug_impl!(RecommendedWatcher);
         assert_debug_impl!(RecursiveMode);
+        assert_debug_impl!(WatchPathConfig);
         assert_debug_impl!(WatcherKind);
+    }
+
+    include!("freebsd_version.rs");
+
+    fn freebsd_inotify_supported(output: &str) -> bool {
+        parse_freebsd_release(output).is_some_and(|release| release >= FREEBSD_INOTIFY_MIN)
+    }
+
+    #[test]
+    fn freebsd_inotify_release_threshold() {
+        for (version, expected) in [
+            ("13.5-RELEASE", false),
+            ("14.4-RELEASE", false),
+            ("14.4-RELEASE-p3", false),
+            ("14.4-STABLE", false),
+            ("14.5-BETA1", true),
+            ("14.5-RELEASE", true),
+            ("14.5-RELEASE-p1", true),
+            ("14.5-STABLE", true),
+            ("14.6-RELEASE", true),
+            ("15.0-RELEASE", true),
+            ("15.1-RELEASE", true),
+            ("16.0-CURRENT", true),
+        ] {
+            assert_eq!(freebsd_inotify_supported(version), expected, "{version}");
+        }
+        assert_eq!(parse_freebsd_release(""), None);
+        assert_eq!(parse_freebsd_release("14"), None);
+        assert_eq!(parse_freebsd_release("14."), None);
+    }
+
+    #[cfg(target_os = "freebsd")]
+    #[test]
+    fn recommended_watcher_matches_freebsd_version() {
+        let output = std::process::Command::new("/bin/freebsd-version")
+            .arg("-u")
+            .output()
+            .expect("run freebsd-version");
+        assert!(output.status.success(), "freebsd-version failed");
+
+        let version = std::str::from_utf8(&output.stdout).expect("parse freebsd-version output");
+        let expected = if cfg!(feature = "freebsd_inotify") || freebsd_inotify_supported(version) {
+            WatcherKind::Inotify
+        } else {
+            WatcherKind::Kqueue
+        };
+
+        assert_eq!(RecommendedWatcher::kind(), expected);
     }
 
     fn iter_with_timeout(rx: &mpsc::Receiver<Result<Event>>) -> impl Iterator<Item = Event> + '_ {
@@ -501,6 +825,78 @@ mod tests {
         })
     }
 
+    fn canonical_or_path(path: &Path) -> PathBuf {
+        path.canonicalize()
+            .expect("test paths should always be canonicalizable")
+    }
+
+    fn canonical_watch_set(paths: Vec<WatchedPath>) -> HashSet<(PathBuf, RecursiveMode)> {
+        paths
+            .into_iter()
+            .map(|watched| (canonical_or_path(&watched.path), watched.recursive_mode))
+            .collect()
+    }
+
+    fn matches_path(path: &Path, expected: &Path, canonical_expected: Option<&PathBuf>) -> bool {
+        path == expected || canonical_expected.is_some_and(|canonical| path == canonical)
+    }
+
+    fn watch_with_retry(
+        watcher: &mut RecommendedWatcher,
+        path: impl AsRef<Path>,
+        recursive_mode: RecursiveMode,
+    ) -> Result<()> {
+        const FSEVENT_WATCH_RETRIES: usize = 5;
+        const FSEVENT_WATCH_RETRY_BASE_DELAY: Duration = Duration::from_millis(50);
+
+        let path = path.as_ref();
+        for attempt in 0..=FSEVENT_WATCH_RETRIES {
+            match watcher.watch(path, recursive_mode) {
+                Ok(()) => return Ok(()),
+                Err(err)
+                    if RecommendedWatcher::kind() == WatcherKind::Fsevent
+                        && matches!(err.kind, ErrorKind::WatchStartFailed)
+                        && attempt < FSEVENT_WATCH_RETRIES =>
+                {
+                    let _ = watcher.unwatch(path);
+                    let delay_factor = 1u32 << attempt;
+                    std::thread::sleep(FSEVENT_WATCH_RETRY_BASE_DELAY * delay_factor);
+                }
+                Err(err) => return Err(err),
+            }
+        }
+
+        unreachable!("watch() retries must return or error")
+    }
+
+    fn update_paths_unwatch_with_retry(
+        watcher: &mut RecommendedWatcher,
+        path: &Path,
+    ) -> Result<()> {
+        const FSEVENT_UNWATCH_RETRIES: usize = 5;
+        const FSEVENT_UNWATCH_RETRY_BASE_DELAY: Duration = Duration::from_millis(50);
+
+        for attempt in 0..=FSEVENT_UNWATCH_RETRIES {
+            match watcher.update_paths(vec![PathOp::unwatch(path)]) {
+                Ok(()) => return Ok(()),
+                Err(err)
+                    if RecommendedWatcher::kind() == WatcherKind::Fsevent
+                        && matches!(
+                            &err.source.kind,
+                            ErrorKind::Io(io_err) if io_err.raw_os_error() == Some(9)
+                        )
+                        && attempt < FSEVENT_UNWATCH_RETRIES =>
+                {
+                    let delay_factor = 1u32 << attempt;
+                    std::thread::sleep(FSEVENT_UNWATCH_RETRY_BASE_DELAY * delay_factor);
+                }
+                Err(err) => return Err(err.into()),
+            }
+        }
+
+        unreachable!("fsevent unwatch retries must return or error")
+    }
+
     #[test]
     fn integration() -> std::result::Result<(), Box<dyn std::error::Error>> {
         let dir = tempdir()?;
@@ -508,7 +904,7 @@ mod tests {
         // set up the watcher
         let (tx, rx) = std::sync::mpsc::channel();
         let mut watcher = RecommendedWatcher::new(tx, Config::default())?;
-        watcher.watch(dir.path(), RecursiveMode::Recursive)?;
+        watch_with_retry(&mut watcher, dir.path(), RecursiveMode::Recursive)?;
 
         // create a new file
         let file_path = dir.path().join("file.txt");
@@ -531,7 +927,68 @@ mod tests {
     }
 
     #[test]
-    fn test_paths_mut() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    fn event_paths_preserve_relative_watch_root()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let cwd = std::env::current_dir()?;
+        let dir = tempfile::Builder::new()
+            .prefix("notify-relative-")
+            .tempdir_in(&cwd)?;
+        let relative_dir = dir.path().strip_prefix(&cwd)?.to_path_buf();
+        let relative_file = relative_dir.join("file.txt");
+        let absolute_file = dir.path().join("file.txt");
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut watcher = RecommendedWatcher::new(tx, Config::default())?;
+        watch_with_retry(&mut watcher, &relative_dir, RecursiveMode::Recursive)?;
+
+        assert!(
+            watcher.watched_paths()?.contains(&WatchedPath::new(
+                relative_dir.clone(),
+                RecursiveMode::Recursive
+            )),
+            "watched_paths() did not preserve relative watch path"
+        );
+
+        fs::write(&absolute_file, b"Lorem ipsum")?;
+
+        for event in iter_with_timeout(&rx) {
+            if event.paths.iter().any(|path| path == &relative_file) {
+                assert!(
+                    event.paths.iter().all(|path| path.is_relative()),
+                    "relative watch emitted absolute path: {event:?}"
+                );
+                return Ok(());
+            }
+
+            println!("unexpected event: {event:?}");
+        }
+
+        panic!("did not receive expected relative event path");
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn test_windows_trash_dir() -> std::result::Result<(), Box<dyn std::error::Error>> {
+        use crate::recommended_watcher;
+
+        let dir = tempdir()?;
+        let child_dir = dir.path().join("child");
+        fs::create_dir(&child_dir)?;
+
+        let mut watcher = recommended_watcher(|_| {
+            // Do something with the event
+        })?;
+        watcher.watch(&child_dir, RecursiveMode::NonRecursive)?;
+
+        trash::delete(&child_dir)?;
+
+        watcher.watch(dir.path(), RecursiveMode::NonRecursive)?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_update_paths() -> std::result::Result<(), Box<dyn std::error::Error>> {
         let dir = tempdir()?;
 
         let dir_a = dir.path().join("a");
@@ -544,11 +1001,30 @@ mod tests {
         let mut watcher = RecommendedWatcher::new(tx, Config::default())?;
 
         // start watching a and b
-        {
-            let mut watcher_paths = watcher.paths_mut();
-            watcher_paths.add(&dir_a, RecursiveMode::Recursive)?;
-            watcher_paths.add(&dir_b, RecursiveMode::Recursive)?;
-            watcher_paths.commit()?;
+        const FSEVENT_UPDATE_PATHS_RETRIES: usize = 5;
+        const FSEVENT_UPDATE_PATHS_RETRY_BASE_DELAY: Duration = Duration::from_millis(50);
+        for attempt in 0..=FSEVENT_UPDATE_PATHS_RETRIES {
+            match watcher.update_paths(vec![
+                PathOp::Watch(
+                    dir_a.clone(),
+                    WatchPathConfig::new(RecursiveMode::Recursive),
+                ),
+                PathOp::Watch(
+                    dir_b.clone(),
+                    WatchPathConfig::new(RecursiveMode::Recursive),
+                ),
+            ]) {
+                Ok(()) => break,
+                Err(err)
+                    if RecommendedWatcher::kind() == WatcherKind::Fsevent
+                        && matches!(err.source.kind, ErrorKind::WatchStartFailed)
+                        && attempt < FSEVENT_UPDATE_PATHS_RETRIES =>
+                {
+                    let delay_factor = 1u32 << attempt;
+                    std::thread::sleep(FSEVENT_UPDATE_PATHS_RETRY_BASE_DELAY * delay_factor);
+                }
+                Err(err) => return Err(err.into()),
+            }
         }
 
         // create file1 in both a and b
@@ -556,16 +1032,18 @@ mod tests {
         let b_file1 = dir_b.join("file1");
         fs::write(&a_file1, b"Lorem ipsum")?;
         fs::write(&b_file1, b"Lorem ipsum")?;
+        let a_file1_canonical = a_file1.canonicalize().ok();
+        let b_file1_canonical = b_file1.canonicalize().ok();
 
         // wait for create events of a/file1 and b/file1
         let mut a_file1_encountered: bool = false;
         let mut b_file1_encountered: bool = false;
         for event in iter_with_timeout(&rx) {
             for path in event.paths {
-                a_file1_encountered =
-                    a_file1_encountered || (path == a_file1 || path == a_file1.canonicalize()?);
-                b_file1_encountered =
-                    b_file1_encountered || (path == b_file1 || path == b_file1.canonicalize()?);
+                a_file1_encountered = a_file1_encountered
+                    || matches_path(&path, &a_file1, a_file1_canonical.as_ref());
+                b_file1_encountered = b_file1_encountered
+                    || matches_path(&path, &b_file1, b_file1_canonical.as_ref());
             }
             if a_file1_encountered && b_file1_encountered {
                 break;
@@ -575,31 +1053,209 @@ mod tests {
         assert!(b_file1_encountered, "Did not receive event of {b_file1:?}");
 
         // stop watching a
-        {
-            let mut watcher_paths = watcher.paths_mut();
-            watcher_paths.remove(&dir_a)?;
-            watcher_paths.commit()?;
-        }
+        update_paths_unwatch_with_retry(&mut watcher, &dir_a)?;
 
         // create file2 in both a and b
         let a_file2 = dir_a.join("file2");
         let b_file2 = dir_b.join("file2");
         fs::write(&a_file2, b"Lorem ipsum")?;
         fs::write(&b_file2, b"Lorem ipsum")?;
+        let a_file2_canonical = a_file2.canonicalize().ok();
+        let b_file2_canonical = b_file2.canonicalize().ok();
 
         // wait for the create event of b/file2 only
         for event in iter_with_timeout(&rx) {
             for path in event.paths {
                 assert!(
-                    path != a_file2 || path != a_file2.canonicalize()?,
+                    !matches_path(&path, &a_file2, a_file2_canonical.as_ref()),
                     "Event of {a_file2:?} should not be received"
                 );
-                if path == b_file2 || path == b_file2.canonicalize()? {
+                if matches_path(&path, &b_file2, b_file2_canonical.as_ref()) {
                     return Ok(());
                 }
             }
         }
         panic!("Did not receive the event of {b_file2:?}");
+    }
+
+    #[test]
+    fn watched_paths_reflect_watch_and_unwatch()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let dir = tempdir()?;
+        let dir_a = dir.path().join("a");
+        let dir_b = dir.path().join("b");
+        fs::create_dir(&dir_a)?;
+        fs::create_dir(&dir_b)?;
+
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let mut watcher = RecommendedWatcher::new(tx, Config::default())?;
+
+        watch_with_retry(&mut watcher, &dir_a, RecursiveMode::Recursive)?;
+        watch_with_retry(&mut watcher, &dir_b, RecursiveMode::NonRecursive)?;
+
+        let watched = canonical_watch_set(watcher.watched_paths()?);
+        assert!(watched.contains(&(canonical_or_path(&dir_a), RecursiveMode::Recursive)));
+        assert!(watched.contains(&(canonical_or_path(&dir_b), RecursiveMode::NonRecursive)));
+
+        watcher.unwatch(&dir_a)?;
+
+        let watched = canonical_watch_set(watcher.watched_paths()?);
+        assert!(!watched.contains(&(canonical_or_path(&dir_a), RecursiveMode::Recursive)));
+        assert!(watched.contains(&(canonical_or_path(&dir_b), RecursiveMode::NonRecursive)));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rewatching_same_path_replaces_recursive_mode()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let dir = tempdir()?;
+        let root = canonical_or_path(dir.path());
+
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let mut watcher = RecommendedWatcher::new(tx, Config::default())?;
+
+        watch_with_retry(&mut watcher, dir.path(), RecursiveMode::Recursive)?;
+        watch_with_retry(&mut watcher, dir.path(), RecursiveMode::NonRecursive)?;
+
+        let watched = canonical_watch_set(watcher.watched_paths()?);
+        assert!(watched.contains(&(root.clone(), RecursiveMode::NonRecursive)));
+        assert!(!watched.contains(&(root.clone(), RecursiveMode::Recursive)));
+        assert_eq!(
+            watched.iter().filter(|(path, _mode)| path == &root).count(),
+            1
+        );
+
+        watcher.unwatch(dir.path())?;
+
+        let watched = canonical_watch_set(watcher.watched_paths()?);
+        assert!(!watched.iter().any(|(path, _mode)| path == &root));
+
+        Ok(())
+    }
+
+    #[test]
+    fn overlapping_recursive_watch_preserves_explicit_child()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let dir = tempdir()?;
+        let child = dir.path().join("child");
+        fs::create_dir(&child)?;
+
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let mut watcher = RecommendedWatcher::new(tx, Config::default())?;
+
+        watch_with_retry(&mut watcher, &child, RecursiveMode::NonRecursive)?;
+        watch_with_retry(&mut watcher, dir.path(), RecursiveMode::Recursive)?;
+
+        let watched = canonical_watch_set(watcher.watched_paths()?);
+        assert!(watched.contains(&(canonical_or_path(dir.path()), RecursiveMode::Recursive)));
+        assert!(watched.contains(&(canonical_or_path(&child), RecursiveMode::NonRecursive)));
+
+        watcher.unwatch(dir.path())?;
+
+        let watched = canonical_watch_set(watcher.watched_paths()?);
+        assert!(!watched.contains(&(canonical_or_path(dir.path()), RecursiveMode::Recursive)));
+        assert!(watched.contains(&(canonical_or_path(&child), RecursiveMode::NonRecursive)));
+
+        Ok(())
+    }
+
+    #[test]
+    fn overlapping_recursive_child_rewrites_descendant_event_paths()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let cwd = std::env::current_dir()?;
+        let dir = tempfile::Builder::new()
+            .prefix("notify-overlap-")
+            .tempdir_in(&cwd)?;
+        let relative_dir = dir.path().strip_prefix(&cwd)?.to_path_buf();
+        let child = dir.path().join("child");
+        let grandchild = child.join("grandchild");
+        fs::create_dir_all(&grandchild)?;
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut watcher = RecommendedWatcher::new(tx, Config::default())?;
+
+        watch_with_retry(&mut watcher, &relative_dir, RecursiveMode::Recursive)?;
+        watch_with_retry(&mut watcher, &child, RecursiveMode::Recursive)?;
+        watcher.unwatch(&relative_dir)?;
+
+        let watched = watcher.watched_paths()?;
+        assert!(
+            watched.contains(&WatchedPath::new(child.clone(), RecursiveMode::Recursive)),
+            "watched_paths() did not preserve explicit child path: {watched:?}"
+        );
+
+        let file = grandchild.join("file.txt");
+        let stale_file = relative_dir
+            .join("child")
+            .join("grandchild")
+            .join("file.txt");
+        fs::write(&file, b"Lorem ipsum")?;
+
+        for event in iter_with_timeout(&rx) {
+            if event.paths.iter().any(|path| path == &file) {
+                assert!(
+                    event.paths.iter().all(|path| path.is_absolute()),
+                    "absolute child watch emitted non-absolute path: {event:?}"
+                );
+                return Ok(());
+            }
+
+            assert!(
+                !event.paths.iter().any(|path| path == &stale_file),
+                "stale parent-relative file path after parent unwatch: {event:?}"
+            );
+        }
+
+        panic!("did not receive expected child event path");
+    }
+
+    #[test]
+    fn update_paths_in_a_loop_with_errors() -> StdResult<(), Box<dyn std::error::Error>> {
+        let dir = tempdir()?;
+        let existing_dir_1 = dir.path().join("existing_dir_1");
+        let not_existent_file = dir.path().join("not_existent_file");
+        let existing_dir_2 = dir.path().join("existing_dir_2");
+
+        fs::create_dir(&existing_dir_1)?;
+        fs::create_dir(&existing_dir_2)?;
+
+        let mut paths_to_add = vec![
+            PathOp::watch_recursive(existing_dir_1.clone()),
+            PathOp::watch_recursive(not_existent_file.clone()),
+            PathOp::watch_recursive(existing_dir_2.clone()),
+        ];
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut watcher = RecommendedWatcher::new(tx, Config::default())?;
+
+        while !paths_to_add.is_empty() {
+            if let Err(e) = watcher.update_paths(std::mem::take(&mut paths_to_add)) {
+                paths_to_add = e.remaining;
+            }
+        }
+
+        fs::write(existing_dir_1.join("1"), "")?;
+        fs::write(&not_existent_file, "")?;
+        let waiting_path = existing_dir_2.join("1");
+        fs::write(&waiting_path, "")?;
+        let waiting_path_canonical = waiting_path.canonicalize().ok();
+
+        for event in iter_with_timeout(&rx) {
+            let path = event
+                .paths
+                .first()
+                .unwrap_or_else(|| panic!("event must have a path: {event:?}"));
+            assert!(
+                path != &not_existent_file,
+                "unexpected {not_existent_file:?} event"
+            );
+            if matches_path(path, &waiting_path, waiting_path_canonical.as_ref()) {
+                return Ok(());
+            }
+        }
+
+        panic!("Did not receive the event of {waiting_path:?}");
     }
 
     #[test]
@@ -652,5 +1308,72 @@ mod tests {
         std::fs::remove_file(&path).expect("remove");
 
         rx.wait_unordered([expected(path).remove()]);
+    }
+
+    #[cfg(feature = "futures")]
+    #[tokio::test]
+    async fn futures_unbounded_sender_as_handler() {
+        use crate::recommended_watcher;
+        use futures::StreamExt;
+
+        let tmpdir = testdir();
+        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let mut watcher = recommended_watcher(tx).unwrap();
+        watcher
+            .watch(tmpdir.path(), RecursiveMode::NonRecursive)
+            .unwrap();
+
+        std::fs::create_dir(tmpdir.path().join("1")).unwrap();
+
+        tokio::time::timeout(Duration::from_secs(5), rx.next())
+            .await
+            .expect("timeout")
+            .expect("No event")
+            .expect("Error");
+    }
+
+    #[cfg(feature = "tokio")]
+    #[tokio::test]
+    async fn tokio_unbounded_sender_as_handler() {
+        use crate::recommended_watcher;
+
+        let tmpdir = testdir();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut watcher = recommended_watcher(tx).unwrap();
+        watcher
+            .watch(tmpdir.path(), RecursiveMode::NonRecursive)
+            .unwrap();
+
+        std::fs::create_dir(tmpdir.path().join("1")).unwrap();
+
+        tokio::time::timeout(Duration::from_secs(5), rx.recv())
+            .await
+            .expect("timeout")
+            .expect("No event")
+            .expect("Error");
+    }
+
+    #[test]
+    fn update_paths_error_contains_errored_path() {
+        let err = super::update_paths(
+            [
+                PathOp::unwatch("1"),
+                PathOp::unwatch("2"),
+                PathOp::unwatch("3"),
+            ]
+            .into(),
+            |op| {
+                if op.as_path() == Path::new("2") {
+                    Err((op, super::Error::path_not_found()))
+                } else {
+                    Ok(())
+                }
+            },
+        )
+        .unwrap_err();
+        assert_eq!(
+            &err.into_iter().map(PathOp::into_path).collect::<Vec<_>>(),
+            &[PathBuf::from("2"), PathBuf::from("3"),]
+        )
     }
 }

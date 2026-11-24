@@ -313,7 +313,7 @@ impl AgentThreadEntry {
         }
     }
 
-    pub fn location(&self, ix: usize) -> Option<(acp::ToolCallLocation, AgentLocation)> {
+    pub fn location(&self, ix: usize) -> Option<(acp::ToolCallLocation, Option<AgentLocation>)> {
         if let AgentThreadEntry::ToolCall(ToolCall {
             locations,
             resolved_locations,
@@ -322,7 +322,7 @@ impl AgentThreadEntry {
         {
             Some((
                 locations.get(ix)?.clone(),
-                resolved_locations.get(ix)?.clone()?,
+                resolved_locations.get(ix).cloned().flatten(),
             ))
         } else {
             None
@@ -5911,9 +5911,11 @@ mod tests {
         thread.read_with(cx, |thread, cx| {
             let (tool_call_location, agent_location) = thread.entries[0]
                 .location(0)
-                .expect("external tool-call location should resolve");
+                .expect("external tool-call location");
             assert_eq!(tool_call_location.path, skill_path);
 
+            let agent_location =
+                agent_location.expect("external tool-call location should resolve");
             let buffer = agent_location
                 .buffer
                 .upgrade()

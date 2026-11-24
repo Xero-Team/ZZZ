@@ -138,6 +138,9 @@ pub struct SettingsContent {
 
     pub git_panel: Option<GitPanelSettingsContent>,
 
+    /// Configuration of the read-only Fossil panel.
+    pub fossil_panel: Option<FossilPanelSettingsContent>,
+
     /// Configuration of the Telegram panel.
     pub telegram_panel: Option<TelegramPanelSettingsContent>,
 
@@ -273,7 +276,7 @@ pub struct SettingsContent {
 fallible_options::flattened_deserialize!(SettingsContent {
     sections: { project, theme, extension, workspace, editor, remote },
     options: {
-        file_finder, git_panel, telegram_panel, telegram, tabs, tab_bar, tab_switcher, status_bar,
+        file_finder, git_panel, fossil_panel, telegram_panel, telegram, tabs, tab_bar, tab_switcher, status_bar,
         preview_tabs, agent, agent_servers, audio, auto_update, base_keymap, debugger, database,
         diagnostics, git, global_lsp_settings, image_viewer, markdown_preview, repl, helix_mode,
         hide_mouse, journal, log, line_indicator_format, outline_panel, project_panel, node, proxy,
@@ -639,6 +642,29 @@ pub enum DockPosition {
     Left,
     Bottom,
     Right,
+}
+
+/// Configuration of the read-only Fossil panel.
+#[with_fallible_options]
+#[derive(Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug)]
+pub struct FossilPanelSettingsContent {
+    /// Whether to show the panel button in the status bar.
+    ///
+    /// Default: true
+    pub button: Option<bool>,
+    /// Where to dock the panel.
+    ///
+    /// Default: left
+    pub dock: Option<DockPosition>,
+    /// Default width of the panel in pixels.
+    ///
+    /// Default: 300
+    #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
+    pub default_width: Option<f32>,
+    /// Whether the fossil panel should open on startup.
+    ///
+    /// Default: false
+    pub starts_open: Option<bool>,
 }
 
 #[with_fallible_options]
@@ -1289,6 +1315,14 @@ pub struct MarkdownPreviewSettingsContent {
     ///
     /// Default: true
     pub render_math: Option<bool>,
+    /// Whether the preview may fetch images over the network. A Markdown
+    /// document is untrusted input, so with this disabled (the default) an
+    /// `http(s)` image is never requested and a placeholder is rendered
+    /// instead; that keeps opening a preview from revealing the reader's
+    /// address, and when it was opened, to the image host.
+    ///
+    /// Default: false
+    pub allow_remote_images: Option<bool>,
 }
 
 /// The settings for the image viewer.

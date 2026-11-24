@@ -351,9 +351,9 @@ fn server_precedences(
     language_name: Option<&LanguageName>,
     tokens: &HashMap<LanguageServerId, Arc<[BufferSemanticToken]>>,
 ) -> HashMap<LanguageServerId, u32> {
-    let ordered_adapters = language_name
-        .map(|language_name| languages.lsp_adapters(language_name))
-        .unwrap_or_default();
+    let ordered_adapters = language_name.map_or_else(Default::default, |language_name| {
+        languages.lsp_adapters(language_name)
+    });
 
     // We base this on the ids that are present rather than the adapter count,
     // otherwise a server we can't resolve an adapter for outranks the
@@ -1182,11 +1182,10 @@ mod tests {
         let toml_language = Arc::new(Language::new(
             LanguageConfig {
                 name: "TOML".into(),
-                matcher: (LanguageMatcher {
+                matcher: LanguageMatcher {
                     path_suffixes: vec!["toml".into()],
                     ..LanguageMatcher::default()
-                })
-                .into(),
+                },
                 ..LanguageConfig::default()
             },
             None,

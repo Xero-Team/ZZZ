@@ -2222,7 +2222,8 @@ impl ProjectPanel {
         };
         let filename = self.filename_editor.read(cx).text(cx);
         if !filename.is_empty() {
-            if filename.is_empty() {
+            let trimmed_filename = filename.trim();
+            if trimmed_filename.is_empty() {
                 edit_state.validation_state = ValidationState::Error(tr(
                     cx,
                     "project_panel.validation.empty_name",
@@ -2232,7 +2233,6 @@ impl ProjectPanel {
                 return;
             }
 
-            let trimmed_filename = filename.trim();
             if trimmed_filename != filename {
                 edit_state.validation_state = ValidationState::Warning(tr(
                     cx,
@@ -2265,10 +2265,9 @@ impl ProjectPanel {
                         already_exists = true;
                     }
                 } else {
-                    let new_path = if let Some(parent) = entry.path.clone().parent() {
-                        parent.join(&filename)
-                    } else {
-                        filename.into()
+                    let new_path = match entry.path.parent() {
+                        Some(parent) => parent.join(&filename),
+                        None => filename.into(),
                     };
 
                     // We skip the collision check for worktree roots as the
@@ -4233,9 +4232,7 @@ impl ProjectPanel {
                     let destination_path = dest_dir.join(&relative_path);
 
                     // Create parent directories if needed
-                    if let Some(parent) = destination_path.parent()
-                        && !parent.exists()
-                    {
+                    if let Some(parent) = destination_path.parent() {
                         fs.create_dir(parent).await.log_err();
                     }
 

@@ -17,9 +17,10 @@ metadata:
   user-language: Simplified Chinese
 ---
 
-Follow `REFERENCE.md` in this skill first. Findings are only useful when they
-name a concrete `file:line`, a severity, and the smallest safe fix. Prefer a
-short accurate report over a wide speculative refactor.
+Read the `REFERENCE.md` Contents table, then only the sections the change
+touches. Findings are only useful when they name a concrete `file:line`, a
+severity, and the smallest safe fix. Prefer a short accurate report over a wide
+speculative refactor.
 
 # Hunting Code Smells
 

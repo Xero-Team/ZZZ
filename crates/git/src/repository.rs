@@ -298,21 +298,6 @@ impl Branch {
             .strip_prefix("refs/remotes/")
             .and_then(|stripped| stripped.split('/').next())
     }
-
-    pub fn tracking_status(&self) -> Option<UpstreamTrackingStatus> {
-        self.upstream
-            .as_ref()
-            .and_then(|upstream| upstream.tracking.status())
-    }
-
-    pub fn priority_key(&self) -> (bool, Option<i64>) {
-        (
-            self.is_head,
-            self.most_recent_commit
-                .as_ref()
-                .map(|commit| commit.commit_timestamp),
-        )
-    }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -471,10 +456,6 @@ impl Upstream {
             .and_then(|stripped| stripped.split('/').next())
     }
 
-    pub fn stripped_ref_name(&self) -> Option<&str> {
-        self.ref_name.strip_prefix("refs/remotes/")
-    }
-
     pub fn branch_name(&self) -> Option<&str> {
         self.ref_name
             .strip_prefix("refs/remotes/")
@@ -504,10 +485,6 @@ impl From<UpstreamTrackingStatus> for UpstreamTracking {
 }
 
 impl UpstreamTracking {
-    pub fn is_gone(&self) -> bool {
-        matches!(self, UpstreamTracking::Gone)
-    }
-
     pub fn status(&self) -> Option<UpstreamTrackingStatus> {
         match self {
             UpstreamTracking::Gone => None,
@@ -775,7 +752,32 @@ pub fn delete_branch_flag(is_remote_tracking_ref: bool, force: bool) -> &'static
     }
 }
 
+/// Which backend implements a repository.
+///
+/// The Git panel and the Fossil panel each claim the repositories they can
+/// render. A Fossil checkout has no index and no writable surfaces, so it
+/// belongs to the Fossil panel and never to the Git panel's staging UI.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RepositoryBackend {
+    Git,
+    Fossil,
+}
+
+impl RepositoryBackend {
+    pub fn is_git(self) -> bool {
+        matches!(self, Self::Git)
+    }
+
+    pub fn is_fossil(self) -> bool {
+        matches!(self, Self::Fossil)
+    }
+}
+
 pub trait GitRepository: Send + Sync {
+    /// The backend implementing this repository. Every implementation states
+    /// this explicitly, so a new backend cannot inherit Git's UI by accident.
+    fn backend(&self) -> RepositoryBackend;
+
     fn reload_index(&self);
 
     /// Returns the contents of an entry in the repository's index, or None if there is no entry for the given path.
@@ -1318,6 +1320,10 @@ fn parse_remote_urls(stdout: &str) -> HashMap<String, String> {
 }
 
 impl GitRepository for RealGitRepository {
+    fn backend(&self) -> RepositoryBackend {
+        RepositoryBackend::Git
+    }
+
     fn reload_index(&self) {
         if let Ok(mut index) = self.repository.lock().index() {
             index.read(false).log_err();
@@ -2492,7 +2498,7 @@ impl GitRepository for RealGitRepository {
         async move {
             let git = git?;
             git.run_remote_command(Some(askpass), &env, &["commit", "--quiet", "-m"], |cmd| {
-                cmd.arg(&message.to_string())
+                cmd.arg(message.as_str())
                     .arg("--cleanup=strip")
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped());
@@ -3609,7 +3615,6 @@ impl GitBinary {
         Ok(String::from_utf8(output.stdout)?)
     }
 
-    #[allow(clippy::disallowed_methods)]
     pub(crate) fn build_command<S>(&self, args: &[S]) -> util::command::Command
     where
         S: AsRef<OsStr>,
@@ -5236,6 +5241,36 @@ mod tests {
         //         .ok(),
         //     None
         // );
+    }
+
+    #[gpui::test]
+    async fn test_blame_untracked_path_with_large_contents(cx: &mut TestAppContext) {
+        disable_git_global_config();
+        cx.executor().allow_parking();
+
+        let repo_dir = tempfile::tempdir().unwrap();
+        git_init_repo(repo_dir.path());
+        fs::write(repo_dir.path().join("committed.txt"), "line one\n").unwrap();
+        git_command(repo_dir.path(), ["add", "-A"]);
+        git_command(repo_dir.path(), ["commit", "-m", "First commit"]);
+        let repo = RealGitRepository::new(
+            &repo_dir.path().join(".git"),
+            None,
+            Some("git".into()),
+            cx.executor(),
+        )
+        .unwrap();
+
+        // Git exits without reading stdin for a path that isn't in HEAD.
+        let blame = repo
+            .blame(
+                repo_path("untracked.txt"),
+                Rope::from("line\n".repeat(1 << 20)),
+                LineEnding::Unix,
+            )
+            .await
+            .unwrap();
+        assert_eq!(blame.entries, Vec::new());
     }
 
     #[gpui::test]

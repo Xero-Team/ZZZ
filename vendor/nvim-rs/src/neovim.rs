@@ -2,19 +2,18 @@
 use std::{
     future::Future,
     sync::{
-        Arc,
+        Arc, Mutex as SyncMutex,
         atomic::{AtomicU64, Ordering},
     },
 };
 
 use futures::{
-    TryFutureExt,
     channel::{
         mpsc::{UnboundedReceiver, UnboundedSender, unbounded},
         oneshot,
     },
-    future,
-    io::{AsyncRead, AsyncReadExt, AsyncWrite},
+    future::join,
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     lock::Mutex,
     sink::SinkExt,
     stream::StreamExt,
@@ -37,8 +36,8 @@ use rmpv::Value;
 #[macro_export]
 macro_rules! call_args {
     () => (Vec::new());
-    ($($e:expr), +,) => (call_args![$($e),*]);
-    ($($e:expr), +) => {{
+    ($($e:expr_2021), +,) => (call_args![$($e),*]);
+    ($($e:expr_2021), +) => {{
         let vec = vec![
           $($e.into_val(),)*
         ];
@@ -48,7 +47,48 @@ macro_rules! call_args {
 
 type ResponseResult = Result<Result<Value, Value>, Arc<DecodeError>>;
 
-type Queue = Arc<Mutex<Vec<(u64, oneshot::Sender<ResponseResult>)>>>;
+#[derive(Default)]
+struct Queue {
+    requests: Vec<(u64, oneshot::Sender<ResponseResult>)>,
+    closed: bool,
+}
+
+impl Queue {
+    fn ensure_open(&self) -> Result<(), std::io::Error> {
+        if self.closed {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                "RPC connection queue is closed",
+            ));
+        }
+        Ok(())
+    }
+
+    fn try_push(
+        &mut self,
+        request: (u64, oneshot::Sender<ResponseResult>),
+    ) -> Result<(), std::io::Error> {
+        self.ensure_open()?;
+        self.requests.push(request);
+        Ok(())
+    }
+}
+
+// Locked sections only access queue state; they never run user code or await.
+type SharedQueue = Arc<SyncMutex<Queue>>;
+
+// Never hold this synchronous lock across IO or an await point.
+fn close_queue(queue: &SharedQueue, error: Arc<DecodeError>) {
+    let requests = {
+        let mut pending = queue.lock().expect("Queue lock must not be poisoned");
+        pending.closed = true;
+        std::mem::take(&mut pending.requests)
+    };
+    for (_, sender) in requests {
+        // Cancellation of an individual caller must not hide the connection error.
+        let _ = sender.send(Err(error.clone()));
+    }
+}
 
 /// An active Neovim session.
 pub struct Neovim<W>
@@ -56,7 +96,7 @@ where
     W: AsyncWrite + Send + Unpin + 'static,
 {
     pub(crate) writer: Arc<Mutex<W>>,
-    pub(crate) queue: Queue,
+    queue: SharedQueue,
     pub(crate) msgid_counter: Arc<AtomicU64>,
 }
 
@@ -103,15 +143,20 @@ where
         let req = Neovim {
             writer: Arc::new(Mutex::new(writer)),
             msgid_counter: Arc::new(AtomicU64::new(0)),
-            queue: Arc::new(Mutex::new(Vec::new())),
+            queue: Arc::new(SyncMutex::new(Queue::default())),
         };
 
         let (sender, receiver) = unbounded();
-        let fut = future::try_join(
-            req.clone().io_loop(reader, sender),
-            req.clone().handler_loop(handler, receiver),
-        )
-        .map_ok(|_| ());
+        let io = req.clone().io_loop(reader, sender);
+        let handling = req.clone().handler_loop(handler, receiver);
+        let fut = async move {
+            // Let the handler drain notifications already queued by io_loop before
+            // returning its result. Wrapping that result prevents try_join from
+            // canceling the handler when io_loop fails.
+            let (io_res, handler_res) = join(io, handling).await;
+            handler_res?;
+            io_res
+        };
 
         (req, fut)
     }
@@ -132,7 +177,7 @@ where
     ) -> Result<
         (
             Neovim<<H as Handler>::Writer>,
-            impl Future<Output = Result<(), Box<LoopError>>>,
+            impl Future<Output = Result<(), Box<LoopError>>> + use<H, R, W>,
         ),
         Box<HandshakeError>,
     >
@@ -143,7 +188,7 @@ where
         let instance = Neovim {
             writer: Arc::new(Mutex::new(writer)),
             msgid_counter: Arc::new(AtomicU64::new(0)),
-            queue: Arc::new(Mutex::new(Vec::new())),
+            queue: Arc::new(SyncMutex::new(Queue::default())),
         };
 
         let msgid = instance.msgid_counter.fetch_add(1, Ordering::SeqCst);
@@ -161,7 +206,7 @@ where
             method: "nvim_exec_lua".to_owned(),
             params: call_args![format!("return '{message}'"), Vec::<Value>::new()],
         };
-        model::encode(instance.writer.clone(), req).await?;
+        instance.write_message(req, None).await?;
 
         let expected_resp = RpcMessage::RpcResponse {
             msgid,
@@ -203,11 +248,16 @@ where
         }
 
         let (sender, receiver) = unbounded();
-        let fut = future::try_join(
-            instance.clone().io_loop(reader, sender),
-            instance.clone().handler_loop(handler, receiver),
-        )
-        .map_ok(|_| ());
+        let io = instance.clone().io_loop(reader, sender);
+        let handling = instance.clone().handler_loop(handler, receiver);
+        let fut = async move {
+            // Let the handler drain notifications already queued by io_loop before
+            // returning its result. Wrapping that result prevents try_join from
+            // canceling the handler when io_loop fails.
+            let (io_res, handler_res) = join(io, handling).await;
+            handler_res?;
+            io_res
+        };
 
         Ok((instance, fut))
     }
@@ -227,12 +277,60 @@ where
 
         let (sender, receiver) = oneshot::channel();
 
-        self.queue.lock().await.push((msgid, sender));
-
-        let writer = self.writer.clone();
-        model::encode(writer, req).await?;
-
+        self.write_message(req, Some((msgid, sender))).await?;
         Ok(receiver)
+    }
+
+    async fn write_message(
+        &self,
+        message: RpcMessage,
+        pending_request: Option<(u64, oneshot::Sender<ResponseResult>)>,
+    ) -> Result<(), Box<EncodeError>> {
+        let mut bytes = Vec::new();
+        model::encode_sync(&mut bytes, message)?;
+
+        // Cancellation while waiting for the writer has not touched the stream.
+        let mut writer = self.writer.lock().await;
+        {
+            let mut queue = self.queue.lock().expect("Queue lock must not be poisoned");
+            if let Some(request) = pending_request {
+                queue.try_push(request)?;
+            } else {
+                // Replies do not enter the pending queue, but must also reject a
+                // closed session.
+                queue.ensure_open()?;
+            }
+        }
+
+        struct WriteGuard<'a> {
+            queue: &'a SharedQueue,
+            complete: bool,
+        }
+
+        impl Drop for WriteGuard<'_> {
+            fn drop(&mut self) {
+                if !self.complete {
+                    close_queue(
+                        self.queue,
+                        Arc::new(DecodeError::ReaderError(std::io::Error::new(
+                            std::io::ErrorKind::BrokenPipe,
+                            "RPC write failed or was cancelled",
+                        ))),
+                    );
+                }
+            }
+        }
+
+        // Declare after the writer lock so cancellation invalidates the session
+        // before another request or response can acquire the writer.
+        let mut guard = WriteGuard {
+            queue: &self.queue,
+            complete: false,
+        };
+        writer.write_all(&bytes).await?;
+        writer.flush().await?;
+        guard.complete = true;
+        Ok(())
     }
 
     pub async fn call(
@@ -262,30 +360,6 @@ where
         }
     }
 
-    async fn send_error_to_callers(
-        &self,
-        queue: &Queue,
-        err: DecodeError,
-    ) -> Result<Arc<DecodeError>, Box<LoopError>> {
-        let err = Arc::new(err);
-        let mut v: Vec<u64> = vec![];
-
-        let mut queue = queue.lock().await;
-        queue.drain(0..).for_each(|sender| {
-            let msgid = sender.0;
-            sender
-                .1
-                .send(Err(err.clone()))
-                .unwrap_or_else(|_| v.push(msgid));
-        });
-
-        if v.is_empty() {
-            Ok(err)
-        } else {
-            Err((err, v).into())
-        }
-    }
-
     async fn handler_loop<H>(
         self,
         handler: H,
@@ -312,10 +386,11 @@ where
                 } => {
                     let handler_c = handler.clone();
                     let neovim = self.clone();
-                    let writer = self.writer.clone();
 
                     handler.spawn(async move {
-                        let response = match handler_c.handle_request(method, params, neovim).await
+                        let response = match handler_c
+                            .handle_request(method, params, neovim.clone())
+                            .await
                         {
                             Ok(result) => RpcMessage::RpcResponse {
                                 msgid,
@@ -329,9 +404,12 @@ where
                             },
                         };
 
-                        model::encode(writer, response).await.unwrap_or_else(|e| {
-                            error!("Error sending response to request {}: '{}'", msgid, e);
-                        });
+                        neovim
+                            .write_message(response, None)
+                            .await
+                            .unwrap_or_else(|e| {
+                                error!("Error sending response to request {}: '{}'", msgid, e);
+                            });
                     });
                 }
                 RpcMessage::RpcNotification { method, params } => {
@@ -342,45 +420,77 @@ where
         }
     }
 
-    async fn io_loop<R>(
+    fn io_loop<R>(
         self,
         mut reader: R,
         mut sender: UnboundedSender<RpcMessage>,
-    ) -> Result<(), Box<LoopError>>
+    ) -> impl Future<Output = Result<(), Box<LoopError>>>
     where
         R: AsyncRead + Send + Unpin + 'static,
     {
-        let mut rest: Vec<u8> = vec![];
+        struct ConnectionGuard(SharedQueue);
 
-        loop {
-            let msg = match model::decode(&mut reader, &mut rest).await {
-                Ok(msg) => msg,
-                Err(err) => {
-                    let e = self.send_error_to_callers(&self.queue, *err).await?;
-                    return Err(Box::new(LoopError::DecodeError(e, None)));
-                }
-            };
+        impl Drop for ConnectionGuard {
+            fn drop(&mut self) {
+                // This is a synthetic shutdown error: the RPC response producer is gone,
+                // even if the transport itself is still open. BrokenPipe denotes that
+                // unusable channel; it does not claim that a peer sent EOF.
+                // Decode failures already release callers with their original error.
+                close_queue(
+                    &self.0,
+                    Arc::new(DecodeError::ReaderError(std::io::Error::new(
+                        std::io::ErrorKind::BrokenPipe,
+                        "RPC IO loop stopped",
+                    ))),
+                );
+            }
+        }
 
-            debug!("Get message {:?}", msg);
-            if let RpcMessage::RpcResponse {
-                msgid,
-                result,
-                error,
-            } = msg
-            {
-                let sender = find_sender(&self.queue, msgid).await?;
-                if error == Value::Nil {
-                    sender
-                        .send(Ok(Ok(result)))
-                        .map_err(|r| (msgid, r.expect("This was an OK(_)")))?;
+        // An async fn would construct the guard only on its first poll.
+        // Construct the guard before polling so dropping an unpolled IO future
+        // also closes the session and wakes pending calls.
+        let guard = ConnectionGuard(self.queue.clone());
+        async move {
+            let _guard = guard;
+            let mut rest: Vec<u8> = vec![];
+
+            loop {
+                let msg = match model::decode(&mut reader, &mut rest).await {
+                    Ok(msg) => msg,
+                    Err(err) => {
+                        let e = Arc::new(*err);
+                        close_queue(&self.queue, e.clone());
+                        return Err(Box::new(LoopError::DecodeError(e, None)));
+                    }
+                };
+
+                debug!("Get message {:?}", msg);
+                if let RpcMessage::RpcResponse {
+                    msgid,
+                    result,
+                    error,
+                } = msg
+                {
+                    let sender = find_sender(&self.queue, msgid)?;
+                    let response = if error == Value::Nil {
+                        Ok(result)
+                    } else {
+                        Err(error)
+                    };
+                    // A caller may have timed out after sending its request. Consume the
+                    // late response without disconnecting other callers or notifications.
+                    if sender.send(Ok(response)).is_err() {
+                        debug!("Discarding response to cancelled request {}", msgid);
+                    }
                 } else {
-                    sender
-                        .send(Ok(Err(error)))
-                        .map_err(|r| (msgid, r.expect("This was an OK(_)")))?;
+                    // Send message to handler_loop()
+                    //
+                    // TODO: This unwrap makes me uncomfortable. Let's extend LoopError and
+                    // return it here. There's not much to do after the handler_loop went
+                    // away (which is the only error condition here), but let's not tear
+                    // down stuff we don't need to.
+                    sender.send(msg).await.unwrap();
                 }
-            } else {
-                // Send message to handler_loop()
-                sender.send(msg).await.unwrap();
             }
         }
     }
@@ -414,11 +524,12 @@ where
  * is that Vec is faster on small queue sizes
  * in most cases Vec.len = 1 so we just take first item in iteration.
  */
-async fn find_sender(
-    queue: &Queue,
+fn find_sender(
+    queue: &SharedQueue,
     msgid: u64,
 ) -> Result<oneshot::Sender<ResponseResult>, Box<LoopError>> {
-    let mut queue = queue.lock().await;
+    let mut pending = queue.lock().expect("Queue lock must not be poisoned");
+    let queue = &mut pending.requests;
 
     let pos = match queue.iter().position(|req| req.0 == msgid) {
         Some(p) => p,
@@ -431,31 +542,468 @@ async fn find_sender(
 mod tests {
     use super::*;
 
+    fn session<R: AsyncRead + Send + Unpin + 'static>(
+        reader: R,
+    ) -> (
+        Neovim<futures::io::Sink>,
+        impl Future<Output = Result<(), Box<LoopError>>>,
+    ) {
+        Neovim::new(
+            reader,
+            futures::io::sink(),
+            crate::rpc::handler::Dummy::<futures::io::Sink>::new(),
+        )
+    }
+
+    async fn assert_disconnected(
+        nvim: &Neovim<futures::io::Sink>,
+        mut pending: oneshot::Receiver<ResponseResult>,
+    ) {
+        // Shutdown has completed, so notification must already be available.
+        let result = pending
+            .try_recv()
+            .expect("Shutdown must send an error before dropping the sender")
+            .expect("Shutdown must release pending calls synchronously");
+        assert!(result.is_err());
+        assert!(
+            nvim.queue
+                .lock()
+                .expect("Queue lock must not be poisoned")
+                .requests
+                .is_empty()
+        );
+        let error = nvim
+            .call("after_close", vec![])
+            .await
+            .expect_err("RPC shutdown must return an error");
+        assert!(error.is_channel_closed());
+    }
+
+    #[tokio::test]
+    async fn dropping_unpolled_io_releases_callers() {
+        let (nvim, io) = session(futures::io::Cursor::new(Vec::<u8>::new()));
+        let pending = nvim
+            .send_msg("pending", vec![])
+            .await
+            .expect("Test request must be written to the sink");
+        drop(io);
+        assert_disconnected(&nvim, pending).await;
+    }
+
+    #[tokio::test]
+    async fn aborting_io_releases_callers() {
+        use tokio_util::compat::TokioAsyncReadCompatExt;
+        let (reader, _peer) = tokio::io::duplex(1024);
+        let (nvim, io) = session(reader.compat());
+        let mut io = Box::pin(io);
+        let pending = nvim
+            .send_msg("pending", vec![])
+            .await
+            .expect("Test request must be written to the sink");
+        // Ensure this tests cancellation after polling, not an unpolled future.
+        assert!(futures::poll!(io.as_mut()).is_pending());
+        let task = tokio::spawn(io);
+        task.abort();
+        assert!(
+            task.await
+                .expect_err("Aborted task must report cancellation")
+                .is_cancelled()
+        );
+        assert_disconnected(&nvim, pending).await;
+    }
+
+    #[tokio::test]
+    async fn eof_with_cancelled_call_preserves_original_error() {
+        let (nvim, io) = session(futures::io::Cursor::new(Vec::<u8>::new()));
+        drop(
+            nvim.send_msg("cancelled", vec![])
+                .await
+                .expect("Test request must be written to the sink"),
+        );
+        let pending = nvim
+            .send_msg("pending", vec![])
+            .await
+            .expect("Test request must be written to the sink");
+        let error = io.await.expect_err("RPC shutdown must return an error");
+        assert!(matches!(*error, LoopError::DecodeError(_, None)));
+        assert!(error.is_channel_closed());
+        assert_disconnected(&nvim, pending).await;
+    }
+
+    #[tokio::test]
+    async fn unknown_response_releases_other_callers() {
+        let mut wire = Vec::new();
+        model::encode_sync(
+            &mut wire,
+            RpcMessage::RpcResponse {
+                msgid: 999,
+                error: Value::Nil,
+                result: Value::Nil,
+            },
+        )
+        .expect("Test response must encode into memory");
+        let (nvim, io) = session(futures::io::Cursor::new(wire));
+        let pending = nvim
+            .send_msg("pending", vec![])
+            .await
+            .expect("Test request must be written to the sink");
+        assert!(matches!(
+            *io.await.expect_err("RPC shutdown must return an error"),
+            LoopError::MsgidNotFound(999)
+        ));
+        assert_disconnected(&nvim, pending).await;
+    }
+
+    #[tokio::test]
+    async fn write_failure_closes_pending_requests() {
+        // Opening a file read-only gives a deterministic failing writer.
+        let file = tempfile::NamedTempFile::new().expect("Temporary test file must be created");
+        let writer = futures::io::AllowStdIo::new(
+            std::fs::File::open(file.path()).expect("Existing test file must open read-only"),
+        );
+        let (nvim, _io) = Neovim::new(
+            futures::io::Cursor::new(Vec::<u8>::new()),
+            writer,
+            crate::rpc::handler::Dummy::<futures::io::AllowStdIo<std::fs::File>>::new(),
+        );
+        let (tx, mut rx) = oneshot::channel();
+        nvim.queue
+            .lock()
+            .expect("Queue lock must not be poisoned")
+            .requests
+            .push((999, tx));
+        assert!(nvim.call("write", vec![]).await.is_err());
+        assert!(
+            rx.try_recv()
+                .expect("Write failure must notify pending callers")
+                .expect("Failed write must release pending calls synchronously")
+                .is_err()
+        );
+        assert!(
+            nvim.queue
+                .lock()
+                .expect("Queue lock must not be poisoned")
+                .requests
+                .is_empty()
+        );
+        assert!(
+            nvim.call("after_close", vec![])
+                .await
+                .expect_err("RPC shutdown must return an error")
+                .is_channel_closed()
+        );
+    }
+
+    #[tokio::test]
+    async fn late_responses_after_timeout_preserve_connection() {
+        use std::time::Duration;
+
+        for error in [Value::Nil, Value::from("late error")] {
+            let nvim = Neovim {
+                writer: Arc::new(Mutex::new(futures::io::sink())),
+                queue: Arc::new(SyncMutex::new(Queue::default())),
+                msgid_counter: Arc::new(AtomicU64::new(0)),
+            };
+            // Time out only after the complete request has been written.
+            let cancelled = nvim.send_msg("slow", vec![]).await.unwrap();
+            assert!(
+                tokio::time::timeout(Duration::from_millis(1), cancelled)
+                    .await
+                    .is_err()
+            );
+            let active = nvim.send_msg("next", vec![]).await.unwrap();
+            let mut wire = Vec::new();
+            for message in [
+                RpcMessage::RpcResponse {
+                    msgid: 0,
+                    error,
+                    result: Value::Nil,
+                },
+                RpcMessage::RpcResponse {
+                    msgid: 1,
+                    error: Value::Nil,
+                    result: Value::from(42),
+                },
+                RpcMessage::RpcNotification {
+                    method: "redraw".into(),
+                    params: vec![],
+                },
+            ] {
+                model::encode_sync(&mut wire, message).unwrap();
+            }
+            let (tx, mut rx) = unbounded();
+            // EOF ends this finite stream, but both replies and the notification
+            // must have been processed before the connection reports EOF.
+            let end = nvim
+                .clone()
+                .io_loop(futures::io::Cursor::new(wire), tx)
+                .await;
+            assert!(matches!(*end.unwrap_err(), LoopError::DecodeError(..)));
+            assert_eq!(active.await.unwrap().unwrap().unwrap(), Value::from(42));
+            assert!(matches!(rx.next().await,
+        Some(RpcMessage::RpcNotification { method, .. }) if method == "redraw"));
+            assert!(
+                nvim.queue
+                    .lock()
+                    .expect("Queue lock must not be poisoned")
+                    .requests
+                    .is_empty()
+            );
+        }
+    }
+
+    #[derive(Clone)]
+    struct RecordingHandler {
+        sender: tokio::sync::mpsc::UnboundedSender<(String, Vec<Value>)>,
+    }
+
+    impl Handler for RecordingHandler {
+        type Writer = futures::io::Sink;
+
+        async fn handle_notify(
+            &self,
+            method: String,
+            args: Vec<Value>,
+            _neovim: Neovim<Self::Writer>,
+        ) {
+            self.sender.send((method, args)).unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn final_notification_is_handled_before_eof() {
+        let mut wire = Vec::new();
+        model::encode_sync(
+            &mut wire,
+            RpcMessage::RpcNotification {
+                method: "redraw".into(),
+                params: vec![],
+            },
+        )
+        .unwrap();
+
+        let (sender, mut notifications) = tokio::sync::mpsc::unbounded_channel();
+        let (_, session) = Neovim::new(
+            futures::io::Cursor::new(wire),
+            futures::io::sink(),
+            RecordingHandler { sender },
+        );
+
+        let error = session.await.unwrap_err();
+        assert!(matches!(*error, LoopError::DecodeError(..)));
+        assert_eq!(notifications.try_recv().unwrap(), ("redraw".into(), vec![]));
+    }
+
+    #[tokio::test]
+    async fn handshake_delivers_connect_before_eof() {
+        let handshake = "HandshakeMessage";
+        let connect = Value::Array(vec![
+            Value::from("connect"),
+            Value::Array(vec![Value::from("hey")]),
+        ]);
+        let redraw = vec![connect];
+        let mut wire = Vec::new();
+        model::encode_sync(
+            &mut wire,
+            RpcMessage::RpcResponse {
+                msgid: 0,
+                error: Value::Nil,
+                result: Value::String(handshake.into()),
+            },
+        )
+        .unwrap();
+        model::encode_sync(
+            &mut wire,
+            RpcMessage::RpcNotification {
+                method: "redraw".into(),
+                params: redraw.clone(),
+            },
+        )
+        .unwrap();
+
+        let (sender, mut notifications) = tokio::sync::mpsc::unbounded_channel();
+        let (_, session) = Neovim::handshake(
+            futures::io::Cursor::new(wire),
+            futures::io::sink(),
+            RecordingHandler { sender },
+            handshake,
+        )
+        .await
+        .unwrap();
+
+        let error = session.await.unwrap_err();
+        assert!(matches!(*error, LoopError::DecodeError(..)));
+        assert_eq!(notifications.try_recv().unwrap(), ("redraw".into(), redraw));
+    }
+
+    #[tokio::test]
+    async fn large_buffer_survives_backpressure() {
+        check_large_buffer_write(false).await;
+    }
+
+    #[tokio::test]
+    async fn cancellation_while_waiting_for_writer_preserves_connection() {
+        let (nvim, _io) = session(futures::io::Cursor::new(Vec::<u8>::new()));
+        let writer = nvim.writer.lock().await;
+        let mut sending = Box::pin(nvim.send_msg("cancelled", vec![]));
+        assert!(futures::poll!(sending.as_mut()).is_pending());
+        drop(sending);
+        drop(writer);
+        assert!(nvim.queue.lock().unwrap().requests.is_empty());
+        drop(nvim.send_msg("next", vec![]).await.unwrap());
+        assert!(!nvim.queue.lock().unwrap().closed);
+    }
+
+    #[tokio::test]
+    async fn cancelled_large_buffer_does_not_corrupt_next_request() {
+        check_large_buffer_write(true).await;
+    }
+
+    async fn check_large_buffer_write(cancel: bool) {
+        use std::time::Duration;
+        use tokio::io::AsyncReadExt as _;
+        use tokio_util::compat::TokioAsyncWriteCompatExt;
+
+        // Model a local pipe whose peer temporarily stops reading. The payload
+        // exceeds its capacity, so a write must yield after sending a prefix.
+        const CAPACITY: usize = 4096;
+        let (client, mut peer) = tokio::io::duplex(CAPACITY);
+        let writer = client.compat_write();
+        let (nvim, io) = Neovim::new(
+            futures::io::Cursor::new(Vec::<u8>::new()),
+            writer,
+            crate::rpc::handler::Dummy::new(),
+        );
+        let lines = Value::Array(vec![Value::from("x".repeat(1024)); 1024]);
+        let params = vec![
+            Value::from("return _G.godot_neovim.sync_external_lines(...)"),
+            Value::Array(vec![Value::from(0), lines, Value::Map(vec![])]),
+        ];
+        let first = RpcMessage::RpcRequest {
+            msgid: 0,
+            method: "nvim_exec_lua".into(),
+            params: params.clone(),
+        };
+        let second = RpcMessage::RpcRequest {
+            msgid: 1,
+            method: "nvim_eval".into(),
+            params: vec![Value::from("1")],
+        };
+        let mut first_wire = Vec::new();
+        model::encode_sync(&mut first_wire, first.clone()).unwrap();
+        assert!(first_wire.len() > CAPACITY);
+
+        let mut sending = Box::pin(nvim.send_msg("nvim_exec_lua", params));
+        assert!(futures::poll!(sending.as_mut()).is_pending());
+        // A request already waiting for the writer must also honor invalidation.
+        let mut next_write = Box::pin(nvim.send_msg("nvim_eval", vec![Value::from("1")]));
+        assert!(futures::poll!(next_write.as_mut()).is_pending());
+        if cancel {
+            // Match godot-neovim's timeout around the entire RPC, including sending.
+            assert!(
+                tokio::time::timeout(Duration::from_millis(500), sending.as_mut())
+                    .await
+                    .is_err()
+            );
+        }
+
+        let mut prefix = vec![0; CAPACITY];
+        peer.read_exact(&mut prefix).await.unwrap();
+        assert_eq!(prefix, first_wire[..CAPACITY]);
+        let drain = tokio::spawn(async move {
+            let mut wire = prefix;
+            peer.read_to_end(&mut wire).await.unwrap();
+            wire
+        });
+        if !cancel {
+            drop(sending.as_mut().await.unwrap());
+        }
+        drop(sending);
+
+        let next = tokio::time::timeout(Duration::from_secs(2), next_write.as_mut())
+            .await
+            .expect("The next write must finish or reject the closed connection");
+        drop(next_write);
+        drop(io);
+        drop(nvim);
+        let wire = tokio::time::timeout(Duration::from_secs(2), drain)
+            .await
+            .unwrap()
+            .unwrap();
+
+        if next.is_err() {
+            // Closing the connection after cancellation is also a safe outcome.
+            assert!(cancel);
+            assert!(first_wire.starts_with(&wire));
+            return;
+        }
+        let mut reader = futures::io::Cursor::new(wire);
+        let mut rest = Vec::new();
+        let decoded = model::decode(&mut reader, &mut rest)
+            .await
+            .expect("Accepting another request must not leave a truncated RPC frame");
+        assert_eq!(decoded, first);
+        assert_eq!(model::decode(&mut reader, &mut rest).await.unwrap(), second);
+        assert!(rest.is_empty());
+    }
+
     #[tokio::test]
     async fn test_find_sender() {
-        let queue = Arc::new(Mutex::new(Vec::new()));
+        let queue = Arc::new(SyncMutex::new(Queue::default()));
 
         {
             let (sender, _receiver) = oneshot::channel();
-            queue.lock().await.push((1, sender));
+            queue
+                .lock()
+                .expect("Queue lock must not be poisoned")
+                .requests
+                .push((1, sender));
         }
         {
             let (sender, _receiver) = oneshot::channel();
-            queue.lock().await.push((2, sender));
+            queue
+                .lock()
+                .expect("Queue lock must not be poisoned")
+                .requests
+                .push((2, sender));
         }
         {
             let (sender, _receiver) = oneshot::channel();
-            queue.lock().await.push((3, sender));
+            queue
+                .lock()
+                .expect("Queue lock must not be poisoned")
+                .requests
+                .push((3, sender));
         }
 
-        find_sender(&queue, 1).await.unwrap();
-        assert_eq!(2, queue.lock().await.len());
-        find_sender(&queue, 2).await.unwrap();
-        assert_eq!(1, queue.lock().await.len());
-        find_sender(&queue, 3).await.unwrap();
-        assert!(queue.lock().await.is_empty());
+        find_sender(&queue, 1).unwrap();
+        assert_eq!(
+            2,
+            queue
+                .lock()
+                .expect("Queue lock must not be poisoned")
+                .requests
+                .len()
+        );
+        find_sender(&queue, 2).unwrap();
+        assert_eq!(
+            1,
+            queue
+                .lock()
+                .expect("Queue lock must not be poisoned")
+                .requests
+                .len()
+        );
+        find_sender(&queue, 3).unwrap();
+        assert!(
+            queue
+                .lock()
+                .expect("Queue lock must not be poisoned")
+                .requests
+                .is_empty()
+        );
 
-        if let LoopError::MsgidNotFound(17) = *find_sender(&queue, 17).await.unwrap_err() {
+        if let LoopError::MsgidNotFound(17) = *find_sender(&queue, 17).unwrap_err() {
         } else {
             panic!()
         }

@@ -89,6 +89,7 @@ impl RepositorySelector {
             .read(cx)
             .repositories()
             .values()
+            .filter(|repository| repository.read(cx).backend().is_git())
             .cloned()
             .collect();
         sort_by_display_name(&mut repository_entries, &display_names, cx);
@@ -148,15 +149,6 @@ pub struct RepositorySelectorDelegate {
     active_repository: Option<Entity<Repository>>,
     selected_index: usize,
     display_names: HashMap<RepositoryId, SharedString>,
-}
-
-impl RepositorySelectorDelegate {
-    pub fn update_repository_entries(&mut self, all_repositories: Vec<Entity<Repository>>) {
-        self.selected_index =
-            index_of_active_repository(&all_repositories, self.active_repository.as_ref());
-        self.repository_entries = all_repositories.clone();
-        self.filtered_repositories = all_repositories;
-    }
 }
 
 impl PickerDelegate for RepositorySelectorDelegate {

@@ -4,8 +4,6 @@ use nvim_rs::{Handler, Neovim, Value, compat::tokio::Compat, create::tokio as cr
 
 use tokio::process::{ChildStdin, Command};
 
-use async_trait::async_trait;
-
 use std::{
     fs::File,
     io::Write,
@@ -21,7 +19,6 @@ struct NeovimHandler {
     buf: Arc<Mutex<Vec<String>>>,
 }
 
-#[async_trait]
 impl Handler for NeovimHandler {
     type Writer = Compat<ChildStdin>;
 

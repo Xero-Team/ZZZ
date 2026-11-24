@@ -114,7 +114,7 @@ resolve; they now name the commits that landed on `main`.
 | f0685e0a | C     | --           | Parent-revision blame; git/proto conflict.                     |
 | 3cf86bed | C     | --           | OpenAI subscribed account models.                              |
 | 9f164a0d | C     | --           | Native agent Chat Completions share.                           |
-| 9bde578e | C     | --           | Port reverted by `16d51d6962`; helper absent locally.          |
+| 9bde578e | C     | --           | Local divergence in #65; upstream helper absent, ported here.  |
 | 1e3d8b5a | B     | 51d2122f4a   | Share the search snapshot behind an Arc; ported after review.  |
 | 56b1e79a | A     | 4cc4126f     | Cherry-picked with `-x -s`.                                    |
 | 939d2d70 | A     | --           | Already equivalent title_bar test-support.                     |
@@ -164,14 +164,17 @@ upstream remote was created.
 App version followed upstream: `crates/zzz` is now `1.17.0`.
 
 `9bde578e` was cherry-picked then fully reverted after `cargo check` failed on
-absent `SchedulerLocalExecutor` / `spawn_dedicated`. Re-checked 2026-11-17: the
-re-application `dcafe24237` was itself reverted by `16d51d6962` the same day and
-nothing re-ported it, so `crates/gpui/src/executor.rs` still has no
-`spawn_dedicated` and `crates/agent_servers/src/acp.rs:982` still starts the
-connection future with `background_spawn`. The decision row is therefore `C`
-(issue #65), not `A`. `4efba716` was adapted to
-`LineHint`. Duplicate `#[test]` from the `4ed3738c` port was dropped in
-`1d63e442`.
+absent `SchedulerLocalExecutor` / `spawn_dedicated`; the re-application
+`dcafe24237` was itself reverted by `16d51d6962` the same day. `crates/scheduler`
+has no `SchedulerLocalExecutor`, so the port cannot be a verbatim cherry-pick
+either. Issue #65 landed it as a local divergence instead: `BackgroundExecutor`
+gained `spawn_dedicated` in `crates/gpui/src/executor.rs`, which drives the
+future on a fresh `std::thread` and reuses the existing `async_task` runnable
+machinery, and both `connect_client_future` call sites in
+`crates/agent_servers/src/acp.rs` now poll the connection there instead of on a
+`background_spawn` worker. The decision row stays `C` because the upstream
+commit is still not absorbed verbatim. `4efba716` was adapted to `LineHint`.
+Duplicate `#[test]` from the `4ed3738c` port was dropped in `1d63e442`.
 
 ## Per-commit notes
 
@@ -229,6 +232,10 @@ PASS cargo check --locked -p project
 PASS cargo check --locked -p editor -p git_ui -p repl -p language -p remote -p anthropic
 FAIL cargo check after 9bde578e: missing spawn_dedicated; commit reverted
 FAIL cargo check -p project after 4efba716: MatchPositionHint; adapted to LineHint
+PASS cargo check -p gpui -p agent_servers, re-run 2026-11-22 after the #65 port
+PASS cargo check -p agent_servers --tests, re-run 2026-11-22 after the #65 port
+PASS cargo test -p gpui --lib executor, re-run 2026-11-22 after the #65 port
+PASS cargo test -p agent_servers --lib acp, re-run 2026-11-22 after the #65 port
 NOT RUN macOS / Windows / wasm32 gpui_web runtime
 NOT RUN cargo test --workspace
 ```

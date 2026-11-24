@@ -19,8 +19,8 @@ use gpui::{
 };
 use i18n::tr;
 use language::{
-    Bias, Buffer, BufferRow, CharKind, CharScopeContext, HighlightedText, LocalFile, PLAIN_TEXT,
-    Point, SelectionGoal, proto::serialize_anchor as serialize_text_anchor,
+    Bias, Buffer, BufferRow, CharKind, CharScopeContext, HighlightedText, Language, LocalFile,
+    PLAIN_TEXT, Point, SelectionGoal, proto::serialize_anchor as serialize_text_anchor,
 };
 use lsp::DiagnosticSeverity;
 use multi_buffer::{BufferOffset, MultiBufferOffset, MultiBufferRow, PathKey};
@@ -2380,6 +2380,11 @@ fn chunk_search_range(
     }))
 }
 
+/// Schemes an `external: true` show-document request may hand to the OS opener.
+fn may_open_externally(uri: &lsp::Uri) -> bool {
+    matches!(uri.scheme(), "http" | "https")
+}
+
 pub(crate) fn handle_lsp_show_document(
     workspace: &mut Workspace,
     request: &LanguageServerShowDocumentRequest,
@@ -2388,8 +2393,20 @@ pub(crate) fn handle_lsp_show_document(
 ) -> Task<()> {
     let request = request.clone();
     if request.external {
-        cx.open_url(request.uri.as_str());
-        request.respond(true);
+        // The request can originate from a language server running on a remote host,
+        // so the scheme is not the user's choice. Hand only web URLs to the OS
+        // opener; file:, smb:, and custom schemes stay unopened unless the user
+        // starts them, the same way the `file:` path below requires a real path.
+        if may_open_externally(&request.uri) {
+            cx.open_url(request.uri.as_str());
+            request.respond(true);
+        } else {
+            log::warn!(
+                "refusing to open {} externally for a language server show-document request",
+                request.uri.as_str()
+            );
+            request.respond(false);
+        }
         return Task::ready(());
     }
     let Ok(abs_path) = request.uri.to_file_path_ext(workspace.path_style(cx)) else {
@@ -2442,6 +2459,40 @@ pub(crate) fn handle_lsp_show_document(
     })
 }
 
+/// Opens `text` as a read-write buffer titled `title` in the active pane of `workspace`.
+///
+/// `language` is the buffer's language; callers resolve it before calling because the
+/// lookup is async and some of them interleave other work with it.
+pub async fn open_text_in_editor(
+    project: Entity<Project>,
+    workspace: WeakEntity<Workspace>,
+    language: Option<Arc<Language>>,
+    title: String,
+    text: String,
+    cx: &mut AsyncWindowContext,
+) -> Result<Entity<Editor>> {
+    let buffer = project
+        .update(cx, |project, cx| project.create_buffer(language, false, cx))
+        .await?;
+
+    buffer.update(cx, |buffer, cx| {
+        buffer.set_text(text, cx);
+        buffer.set_capability(language::Capability::ReadWrite, cx);
+    });
+
+    workspace.update_in(cx, |workspace, window, cx| {
+        let multibuffer = cx.new(|cx| MultiBuffer::singleton(buffer, cx).with_title(title.clone()));
+        let editor = cx.new(|cx| {
+            let mut editor = Editor::for_multibuffer(multibuffer, Some(project), window, cx);
+            editor.set_breadcrumb_header(title);
+            editor.disable_mouse_wheel_zoom();
+            editor
+        });
+        workspace.add_item_to_active_pane(Box::new(editor.clone()), None, true, window, cx);
+        editor
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use crate::editor_tests::init_test;
@@ -2456,6 +2507,28 @@ mod tests {
     use serde_json::json;
     use std::path::{Path, PathBuf};
     use util::{path, rel_path::RelPath};
+
+    #[test]
+    fn external_show_document_only_opens_web_urls() {
+        for uri in ["https://example.test/docs", "http://example.test/docs"] {
+            assert!(
+                may_open_externally(&uri.parse().expect("valid uri")),
+                "{uri} should be opened externally"
+            );
+        }
+
+        for uri in [
+            "file:///home/user/.ssh/id_ed25519",
+            "smb://example.test/share",
+            "ftp://example.test/file",
+            "zzz://ssh://user@host",
+        ] {
+            assert!(
+                !may_open_externally(&uri.parse().expect("valid uri")),
+                "{uri} must not be opened externally"
+            );
+        }
+    }
 
     #[gpui::test]
     fn test_read_only_toggle_requires_singleton_buffer(cx: &mut gpui::TestAppContext) {

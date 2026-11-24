@@ -116,22 +116,6 @@ pub mod core_media {
     impl_CFTypeDescription!(CMFormatDescription);
 
     impl CMFormatDescription {
-        pub fn h264_parameter_set_count(&self) -> usize {
-            let mut count = 0;
-            let result = unsafe {
-                CMVideoFormatDescriptionGetH264ParameterSetAtIndex(
-                    self.as_concrete_TypeRef(),
-                    0,
-                    ptr::null_mut(),
-                    ptr::null_mut(),
-                    &raw mut count,
-                    ptr::null_mut(),
-                )
-            };
-            assert_eq!(result, 0);
-            count
-        }
-
         pub fn h264_parameter_set_at_index(&self, index: usize) -> Result<&[u8]> {
             let mut bytes = ptr::null();
             let mut len = 0;
@@ -348,9 +332,17 @@ pub mod core_video {
     impl_CFTypeDescription!(CVMetalTexture);
 
     impl CVMetalTexture {
-        pub fn as_texture_ref(&self) -> &metal::TextureRef {
+        /// The Metal texture backing this CoreVideo texture, or `None` when the
+        /// texture is not ready yet: `CVMetalTextureGetTexture` returns null in that
+        /// case and there is no valid reference to hand out.
+        pub fn as_texture_ref(&self) -> Option<&metal::TextureRef> {
             let texture = unsafe { CVMetalTextureGetTexture(self.as_concrete_TypeRef()) };
-            unsafe { metal::TextureRef::from_ptr(texture.cast()) }
+            if texture.is_null() {
+                return None;
+            }
+            // SAFETY: non-null (checked above) and owned by this `CVMetalTexture`,
+            // which outlives the borrow.
+            Some(unsafe { metal::TextureRef::from_ptr(texture.cast()) })
         }
     }
 

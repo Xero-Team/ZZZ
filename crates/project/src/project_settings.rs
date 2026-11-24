@@ -23,8 +23,9 @@ pub use settings::DirenvSettings;
 pub use settings::LspSettings;
 use settings::{
     DapSettingsContent, EditorconfigEvent, InvalidSettingsError, LocalSettingsKind,
-    LocalSettingsPath, RegisterSetting, SemanticTokenRules, Settings, SettingsLocation,
-    SettingsStore, parse_json_with_comments, watch_config_file,
+    LocalSettingsPath, PlatformOverrides, RegisterSetting, ReleaseChannelOverrides,
+    SemanticTokenRules, Settings, SettingsLocation, SettingsStore, parse_json_with_comments,
+    watch_config_file,
 };
 use std::{cell::OnceCell, collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 use task::{DebugTaskFile, TaskTemplates, VsCodeDebugTaskFile, VsCodeTaskFile};
@@ -862,6 +863,111 @@ pub enum SettingsObserverMode {
     Remote,
 }
 
+impl SettingsObserverMode {
+    /// Which end of a remote session an observer with this mode sits on.
+    ///
+    /// A `Local` observer owns the worktrees the settings describe, so it is the end that
+    /// runs what they say; a `Remote` observer proxies worktrees that live on another
+    /// machine and only renders them.
+    fn direction(&self) -> SettingsDirection {
+        match self {
+            Self::Local(..) => SettingsDirection::WorktreesLocal,
+            Self::Remote => SettingsDirection::WorktreesRemote,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SettingsDirection {
+    WorktreesLocal,
+    WorktreesRemote,
+}
+
+/// User-settings sections that a peer may not set through `UpdateUserSettings`, with the
+/// keys under each that decide what this machine executes.
+const REFUSED_REMOTE_USER_SETTINGS: &[(&str, &[&str])] = &[
+    // Enabling this skips the trust gate for every project on this machine, which lets an
+    // untrusted worktree's `.ZZZ/settings.json` and `.ZZZ/tasks.json` take effect.
+    ("session", &["trust_all_worktrees"]),
+    // The program and arguments choose the executable a later terminal opens.
+    ("terminal", &["shell"]),
+];
+
+/// Whether an inbound `UpdateUserSettings` payload may replace the user settings held by
+/// this process.
+///
+/// The only sender in the tree is the client-side watcher built by
+/// `SettingsObserver::new_remote`, which forwards the user's settings up to the remote
+/// server, so the observer that receives them is the one whose worktrees are local and
+/// that has been shared with a downstream peer. Requiring the shared direction keeps a
+/// remote host from rewriting the settings of the client that connected to it, since
+/// nothing sends this message back down that connection.
+fn may_apply_remote_user_settings(
+    direction: SettingsDirection,
+    is_shared_downstream: bool,
+    project_id: u64,
+    payload_project_id: u64,
+) -> bool {
+    direction == SettingsDirection::WorktreesLocal
+        && is_shared_downstream
+        && project_id == payload_project_id
+}
+
+/// Removes the keys in `REFUSED_REMOTE_USER_SETTINGS` from a user-settings payload.
+///
+/// Returns the payload unchanged when it carries none of them, so an honest sender's
+/// settings reach the store byte for byte. Returns `None` when the payload cannot be
+/// parsed, because a payload that cannot be inspected cannot be vetted.
+fn strip_refused_remote_user_settings(contents: &str) -> Option<String> {
+    let mut settings: serde_json::Value = parse_json_with_comments(contents).ok()?;
+    let mut stripped = strip_refused_sections(&mut settings);
+    // The store merges the OS and release-channel sections over the top-level one, and the
+    // active profile over both, so the refused keys have to go from every place they can
+    // be set from.
+    for section in ReleaseChannelOverrides::OVERRIDE_KEYS
+        .iter()
+        .chain(PlatformOverrides::OVERRIDE_KEYS)
+    {
+        if let Some(overrides) = settings.get_mut(*section) {
+            stripped |= strip_refused_sections(overrides);
+        }
+    }
+    if let Some(profiles) = settings
+        .get_mut("profiles")
+        .and_then(|profiles| profiles.as_object_mut())
+    {
+        for profile in profiles.values_mut() {
+            if let Some(profile_settings) = profile.get_mut("settings") {
+                stripped |= strip_refused_sections(profile_settings);
+            }
+        }
+    }
+
+    if !stripped {
+        return Some(contents.to_owned());
+    }
+    serde_json::to_string(&settings).ok()
+}
+
+fn strip_refused_sections(settings: &mut serde_json::Value) -> bool {
+    let Some(settings) = settings.as_object_mut() else {
+        return false;
+    };
+    let mut stripped = false;
+    for (section, keys) in REFUSED_REMOTE_USER_SETTINGS {
+        let Some(section) = settings
+            .get_mut(*section)
+            .and_then(|section| section.as_object_mut())
+        else {
+            continue;
+        };
+        for key in *keys {
+            stripped |= section.remove(*key).is_some();
+        }
+    }
+    stripped
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum SettingsObserverEvent {
     LocalSettingsUpdated(Result<PathBuf, InvalidSettingsError>),
@@ -1165,13 +1271,39 @@ impl SettingsObserver {
     }
 
     async fn handle_update_user_settings(
-        _: Entity<Self>,
+        this: Entity<Self>,
         envelope: TypedEnvelope<proto::UpdateUserSettings>,
         cx: AsyncApp,
     ) -> anyhow::Result<()> {
+        let (direction, is_shared_downstream, project_id) = this.read_with(&cx, |this, _| {
+            (
+                this.mode.direction(),
+                this.downstream_client.is_some(),
+                this.project_id,
+            )
+        });
+        if !may_apply_remote_user_settings(
+            direction,
+            is_shared_downstream,
+            project_id,
+            envelope.payload.project_id,
+        ) {
+            log::warn!(
+                "Ignoring UpdateUserSettings for project {}: this observer is not the shared \
+                 local end of that project",
+                envelope.payload.project_id
+            );
+            return Ok(());
+        }
+
+        let Some(contents) = strip_refused_remote_user_settings(&envelope.payload.contents) else {
+            log::warn!("Ignoring UpdateUserSettings whose contents could not be parsed");
+            return Ok(());
+        };
+
         cx.update_global(|settings_store: &mut SettingsStore, cx| {
             settings_store
-                .set_user_settings(&envelope.payload.contents, cx)
+                .set_user_settings(&contents, cx)
                 .result()
                 .context("setting new user settings")?;
             anyhow::Ok(())
@@ -1748,4 +1880,108 @@ impl From<DapSettingsContent> for DapSettings {
 pub enum DapBinary {
     Default,
     Custom(String),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_shared_local_end_applies_remote_user_settings() {
+        assert!(may_apply_remote_user_settings(
+            SettingsDirection::WorktreesLocal,
+            true,
+            REMOTE_SERVER_PROJECT_ID,
+            REMOTE_SERVER_PROJECT_ID,
+        ));
+        // A remote host answering the client that connected to it: the client renders the
+        // host's worktrees, so it must not adopt settings the host sends down.
+        assert!(!may_apply_remote_user_settings(
+            SettingsDirection::WorktreesRemote,
+            true,
+            REMOTE_SERVER_PROJECT_ID,
+            REMOTE_SERVER_PROJECT_ID,
+        ));
+        // An observer that was never shared with a peer has no legitimate sender.
+        assert!(!may_apply_remote_user_settings(
+            SettingsDirection::WorktreesLocal,
+            false,
+            REMOTE_SERVER_PROJECT_ID,
+            REMOTE_SERVER_PROJECT_ID,
+        ));
+        // A peer may only address a project it was shared.
+        assert!(!may_apply_remote_user_settings(
+            SettingsDirection::WorktreesLocal,
+            true,
+            7,
+            REMOTE_SERVER_PROJECT_ID,
+        ));
+    }
+
+    #[test]
+    fn refused_keys_are_stripped_everywhere_they_can_be_set() {
+        let payload = serde_json::json!({
+            "session": {"trust_all_worktrees": true, "restore_unsaved_buffers": false},
+            "terminal": {"shell": {"program": "/tmp/payload"}, "font_size": 13},
+            "linux": {"session": {"trust_all_worktrees": true}},
+            "stable": {"terminal": {"shell": {"program": "/tmp/payload"}}},
+            "profiles": {
+                "outer": {
+                    "settings": {
+                        "session": {"trust_all_worktrees": true},
+                        "terminal": {"shell": "system"},
+                    }
+                }
+            },
+        })
+        .to_string();
+
+        let sanitized = strip_refused_remote_user_settings(&payload).expect("payload is vetted");
+        let sanitized: serde_json::Value =
+            serde_json::from_str(&sanitized).expect("sanitized payload is still JSON");
+
+        assert_eq!(sanitized.pointer("/session/trust_all_worktrees"), None);
+        assert_eq!(
+            sanitized
+                .pointer("/session/restore_unsaved_buffers")
+                .and_then(serde_json::Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(sanitized.pointer("/terminal/shell"), None);
+        assert_eq!(
+            sanitized
+                .pointer("/terminal/font_size")
+                .and_then(serde_json::Value::as_f64),
+            Some(13.0)
+        );
+        assert_eq!(
+            sanitized.pointer("/linux/session/trust_all_worktrees"),
+            None
+        );
+        assert_eq!(sanitized.pointer("/stable/terminal/shell"), None);
+        assert_eq!(
+            sanitized.pointer("/profiles/outer/settings/session/trust_all_worktrees"),
+            None
+        );
+        assert_eq!(
+            sanitized.pointer("/profiles/outer/settings/terminal/shell"),
+            None
+        );
+    }
+
+    #[test]
+    fn a_payload_without_refused_keys_is_passed_through_unchanged() {
+        let payload =
+            r#"{"session":{"restore_unsaved_buffers":false},"terminal":{"font_size":13}}"#;
+
+        assert_eq!(
+            strip_refused_remote_user_settings(payload).as_deref(),
+            Some(payload)
+        );
+    }
+
+    #[test]
+    fn an_unparseable_payload_is_not_vetted() {
+        assert_eq!(strip_refused_remote_user_settings("{"), None);
+    }
 }

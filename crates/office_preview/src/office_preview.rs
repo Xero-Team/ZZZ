@@ -7,6 +7,7 @@
 mod document;
 mod docx;
 mod markup;
+mod ooxml;
 pub mod persistence;
 mod pptx;
 mod spreadsheet;

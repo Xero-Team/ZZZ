@@ -29,7 +29,7 @@ use git::repository::{
 };
 use git::stash::GitStash;
 use git::status::{DiffStat, StageStatus};
-use git::{Amend, Commit, Signoff, ToggleStaged, repository::RepoPath, status::FileStatus};
+use git::{Amend, Commit, Signoff, ToggleStaged, repository::RepoPath};
 use git::{
     ExpandCommitEditor, GitHostingProviderRegistry, GitRemote, RestoreTrackedFiles, StageAll,
     StashAll, StashApply, StashPop, ToggleCommitEditor, ToggleFillCommitEditor,
@@ -75,6 +75,7 @@ use ui::{
     HeadlineSize, IndentGuideColors, PopoverMenu, RenderedIndentGuide, ScrollAxes, Scrollbars,
     SplitButton, Tab, Tooltip, WithScrollbar, prelude::*,
 };
+use url::Url;
 use util::paths::PathStyle;
 use util::{ResultExt, TryFutureExt, markdown::MarkdownInlineCode, maybe};
 use workspace::SERIALIZATION_THROTTLE_TIME;
@@ -88,6 +89,12 @@ use zzz_actions::{
     workspace::{CopyPath, CopyRelativePath},
 };
 
+use crate::changes_list::{
+    DirectoryRow as ChangesListDirectoryRow, ListEntry as ChangesListEntry, Section,
+    SectionHeader as ChangesListSectionHeader, TreeKey, TreeStatusRow as ChangesListTreeStatusRow,
+    TreeViewState as ChangesListTreeViewState,
+};
+
 const MAX_HISTORY_TAG_CHIPS: usize = 3;
 actions!(
     git_panel,
@@ -98,8 +105,6 @@ actions!(
         Toggle,
         /// Toggles focus on the git panel.
         ToggleFocus,
-        /// Opens the git panel menu.
-        OpenMenu,
         /// Focuses on the commit message editor.
         FocusEditor,
         /// Focuses on the changes list.
@@ -554,83 +559,32 @@ fn commit_history_from_response(
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-enum Section {
-    Conflict,
-    Tracked,
-    New,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-struct GitHeaderEntry {
-    header: Section,
-}
-
-impl GitHeaderEntry {
-    pub fn contains(&self, status_entry: &GitStatusEntry, repo: &Repository) -> bool {
-        let this = &self.header;
-        let status = status_entry.status;
-        match this {
-            Section::Conflict => {
-                repo.had_conflict_on_last_merge_head_change(&status_entry.repo_path)
-            }
-            Section::Tracked => !status.is_created(),
-            Section::New => status.is_created(),
-        }
-    }
-    pub fn title(&self, cx: &App) -> String {
-        match self.header {
-            Section::Conflict => tr(cx, "git_ui.git_panel.section.conflicts", "Conflicts"),
-            Section::Tracked => tr(cx, "git_ui.git_panel.section.tracked", "Tracked"),
-            Section::New => tr(cx, "git_ui.git_panel.section.untracked", "Untracked"),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-enum GitListEntry {
-    Status(GitStatusEntry),
-    TreeStatus(GitTreeStatusEntry),
-    Directory(GitTreeDirEntry),
-    Header(GitHeaderEntry),
-}
+type GitListEntry = ChangesListEntry<GitStatusEntry>;
+type GitHeaderEntry = ChangesListSectionHeader;
+type GitTreeStatusEntry = ChangesListTreeStatusRow<GitStatusEntry>;
+type GitTreeDirEntry = ChangesListDirectoryRow;
+type TreeViewState = ChangesListTreeViewState<GitStatusEntry>;
 
 impl GitListEntry {
-    fn is_selectable(&self) -> bool {
-        matches!(self, GitListEntry::Status(_) | GitListEntry::TreeStatus(_))
-    }
-
     fn status_entry(&self) -> Option<&GitStatusEntry> {
-        match self {
-            GitListEntry::Status(entry) => Some(entry),
-            GitListEntry::TreeStatus(entry) => Some(&entry.entry),
-            _ => None,
-        }
+        self.file()
     }
 
     fn directory_entry(&self) -> Option<&GitTreeDirEntry> {
-        match self {
-            GitListEntry::Directory(entry) => Some(entry),
-            _ => None,
-        }
+        self.directory()
     }
+}
 
-    /// Returns the tree indentation depth for this entry.
-    fn depth(&self) -> usize {
-        match self {
-            GitListEntry::Directory(dir) => dir.depth,
-            GitListEntry::TreeStatus(status) => status.depth,
-            _ => 0,
-        }
-    }
-
-    fn repo_path(&self) -> Option<&RepoPath> {
-        match self {
-            GitListEntry::Status(entry) => Some(&entry.repo_path),
-            GitListEntry::TreeStatus(entry) => Some(&entry.entry.repo_path),
-            GitListEntry::Directory(entry) => Some(&entry.key.path),
-            GitListEntry::Header(_) => None,
-        }
+fn section_contains(
+    section: &GitHeaderEntry,
+    status_entry: &GitStatusEntry,
+    repo: &Repository,
+) -> bool {
+    let status = status_entry.status;
+    match section.header {
+        Section::Conflict => repo.had_conflict_on_last_merge_head_change(&status_entry.repo_path),
+        Section::Tracked => !status.is_created(),
+        Section::New => status.is_created(),
     }
 }
 
@@ -697,201 +651,29 @@ impl GitPanelViewMode {
     }
 }
 
-#[derive(Default)]
-struct TreeViewState {
-    // Maps visible index to actual entry index.
-    // Length equals the number of visible entries.
-    // This is needed because some entries (like collapsed directories) may be hidden.
-    logical_indices: Vec<usize>,
-    expanded_dirs: HashMap<TreeKey, bool>,
-    directory_descendants: HashMap<TreeKey, Vec<GitStatusEntry>>,
-}
+pub use crate::changes_list::StatusEntry as GitStatusEntry;
 
-impl TreeViewState {
-    fn build_tree_entries(
-        &mut self,
-        section: Section,
-        mut entries: Vec<GitStatusEntry>,
-        seen_directories: &mut HashSet<TreeKey>,
-    ) -> Vec<(GitListEntry, bool)> {
-        if entries.is_empty() {
-            return Vec::new();
-        }
-
-        entries.sort_by(|a, b| a.repo_path.cmp(&b.repo_path));
-
-        let mut root = TreeNode::default();
-        for entry in entries {
-            let components: Vec<&str> = entry.repo_path.components().collect();
-            if components.is_empty() {
-                root.files.push(entry);
-                continue;
-            }
-
-            let mut current = &mut root;
-            let mut current_path = String::new();
-
-            for (ix, component) in components.iter().enumerate() {
-                if ix == components.len() - 1 {
-                    current.files.push(entry.clone());
-                } else {
-                    if !current_path.is_empty() {
-                        current_path.push('/');
-                    }
-                    current_path.push_str(component);
-                    let dir_path = match RepoPath::new(&current_path) {
-                        Ok(dir_path) => dir_path,
-                        Err(error) => {
-                            log::error!(
-                                "Failed to build git tree directory path {current_path:?}: {error}"
-                            );
-                            continue;
-                        }
-                    };
-
-                    let component = SharedString::from(component.to_string());
-
-                    current = current
-                        .children
-                        .entry(component.clone())
-                        .or_insert_with(|| TreeNode {
-                            name: component,
-                            path: Some(dir_path),
-                            ..Default::default()
-                        });
-                }
-            }
-        }
-
-        let (flattened, _) = self.flatten_tree(&root, section, 0, seen_directories);
-        flattened
-    }
-
-    fn flatten_tree(
-        &mut self,
-        node: &TreeNode,
-        section: Section,
-        depth: usize,
-        seen_directories: &mut HashSet<TreeKey>,
-    ) -> (Vec<(GitListEntry, bool)>, Vec<GitStatusEntry>) {
-        let mut all_statuses = Vec::new();
-        let mut flattened = Vec::new();
-
-        for child in node.children.values() {
-            let (terminal, name) = Self::compact_directory_chain(child);
-            let Some(path) = terminal.path.clone().or_else(|| child.path.clone()) else {
-                continue;
-            };
-            let (child_flattened, mut child_statuses) =
-                self.flatten_tree(terminal, section, depth + 1, seen_directories);
-            let key = TreeKey { section, path };
-            let expanded = *self.expanded_dirs.get(&key).unwrap_or(&true);
-            self.expanded_dirs.entry(key.clone()).or_insert(true);
-            seen_directories.insert(key.clone());
-
-            self.directory_descendants
-                .insert(key.clone(), child_statuses.clone());
-
-            flattened.push((
-                GitListEntry::Directory(GitTreeDirEntry {
-                    key,
-                    name,
-                    depth,
-                    expanded,
-                }),
-                true,
-            ));
-
-            if expanded {
-                flattened.extend(child_flattened);
-            } else {
-                flattened.extend(child_flattened.into_iter().map(|(child, _)| (child, false)));
-            }
-
-            all_statuses.append(&mut child_statuses);
-        }
-
-        for file in &node.files {
-            all_statuses.push(file.clone());
-            flattened.push((
-                GitListEntry::TreeStatus(GitTreeStatusEntry {
-                    entry: file.clone(),
-                    depth,
-                }),
-                true,
-            ));
-        }
-
-        (flattened, all_statuses)
-    }
-
-    fn compact_directory_chain(mut node: &TreeNode) -> (&TreeNode, SharedString) {
-        let mut parts = vec![node.name.clone()];
-        while node.files.is_empty() && node.children.len() == 1 {
-            let Some(child) = node.children.values().next() else {
-                continue;
-            };
-            if child.path.is_none() {
-                break;
-            }
-            parts.push(child.name.clone());
-            node = child;
-        }
-        let name = parts.join("/");
-        (node, SharedString::from(name))
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-struct GitTreeStatusEntry {
-    entry: GitStatusEntry,
-    depth: usize,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
-struct TreeKey {
-    section: Section,
-    path: RepoPath,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-struct GitTreeDirEntry {
-    key: TreeKey,
-    name: SharedString,
-    depth: usize,
-    // staged_state: ToggleState,
-    expanded: bool,
-}
-
-#[derive(Default)]
-struct TreeNode {
-    name: SharedString,
-    path: Option<RepoPath>,
-    children: BTreeMap<SharedString, TreeNode>,
-    files: Vec<GitStatusEntry>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct GitStatusEntry {
-    pub(crate) repo_path: RepoPath,
-    pub(crate) status: FileStatus,
-    pub(crate) staging: StageStatus,
-    pub(crate) diff_stat: Option<DiffStat>,
-}
-
-impl GitStatusEntry {
-    fn display_name(&self, path_style: PathStyle) -> String {
-        self.repo_path.file_name().map_or_else(
-            || self.repo_path.display(path_style).to_string(),
-            |name| name.to_owned(),
-        )
-    }
-
-    fn parent_dir(&self, path_style: PathStyle) -> Option<String> {
-        self.repo_path
-            .parent()
-            .map(|parent| parent.display(path_style).to_string())
-    }
+/// The repository the Git panel should show.
+///
+/// Fossil checkouts live in the same store as Git ones, and the store's active
+/// repository follows the file being edited, so a Fossil checkout can be active
+/// while Git repositories remain. In that case show one of those instead of an
+/// empty "No Git Repositories" panel; the repository selector still switches
+/// between them.
+fn active_git_repository(project: &Project, cx: &App) -> Option<Entity<Repository>> {
+    let git_store = project.git_store();
+    let git_store = git_store.read(cx);
+    git_store
+        .active_repository()
+        .filter(|repository| repository.read(cx).backend().is_git())
+        .or_else(|| {
+            git_store
+                .repositories()
+                .iter()
+                .filter(|(_, repository)| repository.read(cx).backend().is_git())
+                .min_by_key(|(id, _)| id.0)
+                .map(|(_, repository)| repository.clone())
+        })
 }
 
 /// The label for `repository`, disambiguated against every other repository in
@@ -1073,7 +855,8 @@ impl GitPanel {
         let app_state = workspace.app_state().clone();
         let fs = app_state.fs.clone();
         let git_store = project.read(cx).git_store().clone();
-        let active_repository = project.read(cx).active_repository(cx);
+        let active_repository = active_git_repository(project.read(cx), cx);
+
         let signoff_enabled = serialized_panel
             .as_ref()
             .is_some_and(|panel| panel.signoff_enabled);
@@ -2228,7 +2011,6 @@ impl GitPanel {
                     )
                 });
                 this.update_visible_entries(window, cx);
-                cx.notify();
                 task
             })?
             .await?;
@@ -2585,7 +2367,7 @@ impl GitPanel {
                         .iter()
                         .filter_map(|entry| entry.status_entry())
                         .filter(|status_entry| {
-                            section.contains(status_entry, &repo)
+                            section_contains(section, status_entry, &repo)
                                 && GitPanel::stage_status_for_entry(status_entry, &repo).as_bool()
                                     != Some(goal_staged_state)
                         })
@@ -3605,65 +3387,61 @@ impl GitPanel {
     }
 
     pub fn create_pull_request(&self, window: &mut Window, cx: &mut Context<Self>) {
-        let result = (|| -> anyhow::Result<()> {
-            let repo = self
-                .active_repository
-                .clone()
-                .ok_or_else(|| anyhow::anyhow!("No active repository"))?;
-
-            let (branch, remote_origin, remote_upstream) = {
-                let repository = repo.read(cx);
-                (
-                    repository.branch.clone(),
-                    repository.remote_origin_url.clone(),
-                    repository.remote_upstream_url.clone(),
-                )
-            };
-
-            let branch = branch.ok_or_else(|| anyhow::anyhow!("No active branch"))?;
-            let source_branch = branch
-                .upstream
-                .as_ref()
-                .filter(|upstream| matches!(upstream.tracking, UpstreamTracking::Tracked(_)))
-                .and_then(|upstream| upstream.branch_name())
-                .ok_or_else(|| anyhow::anyhow!("No remote configured for repository"))?;
-            let source_branch = source_branch.to_owned();
-
-            let remote_url = branch
-                .upstream
-                .as_ref()
-                .and_then(|upstream| match upstream.remote_name() {
-                    Some("upstream") => remote_upstream.as_deref(),
-                    Some(_) => remote_origin.as_deref(),
-                    None => None,
-                })
-                .or(remote_origin.as_deref())
-                .or(remote_upstream.as_deref())
-                .ok_or_else(|| anyhow::anyhow!("No remote configured for repository"))?;
-            let remote_url = remote_url.to_owned();
-
-            let provider_registry = GitHostingProviderRegistry::global(cx);
-            let Some((provider, parsed_remote)) =
-                git::parse_git_remote_url(provider_registry, &remote_url)
-            else {
-                return Err(anyhow::anyhow!("Unsupported remote URL: {}", remote_url));
-            };
-
-            let Some(url) = provider.build_create_pull_request_url(&parsed_remote, &source_branch)
-            else {
-                return Err(anyhow::anyhow!("Unable to construct pull request URL"));
-            };
-
-            cx.open_url(url.as_str());
-            Ok(())
-        })();
-
-        if let Err(err) = result {
-            log::error!("Error while creating pull request {:?}", err);
-            cx.defer_in(window, |panel, _window, cx| {
-                panel.show_error_toast("create pull request", err, cx);
-            });
+        match self.create_pull_request_url(cx) {
+            Ok(url) => cx.open_url(url.as_str()),
+            Err(err) => {
+                log::error!("Error while creating pull request {:?}", err);
+                cx.defer_in(window, |panel, _window, cx| {
+                    panel.show_error_toast("create pull request", err, cx);
+                });
+            }
         }
+    }
+
+    /// Builds the URL for creating a pull request for the current branch using
+    /// the repository's git hosting provider. Used both by the
+    /// `CreatePullRequest` action and the post-push toast.
+    fn create_pull_request_url(&self, cx: &App) -> anyhow::Result<Url> {
+        let repository = self
+            .active_repository
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("No active repository"))?
+            .read(cx);
+        let branch = repository
+            .branch
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("No active branch"))?;
+        let source_branch = branch
+            .upstream
+            .as_ref()
+            .filter(|upstream| matches!(upstream.tracking, UpstreamTracking::Tracked(_)))
+            .and_then(|upstream| upstream.branch_name())
+            .ok_or_else(|| anyhow::anyhow!("No remote configured for repository"))?;
+
+        let remote_url = branch
+            .upstream
+            .as_ref()
+            .and_then(|upstream| match upstream.remote_name() {
+                Some("upstream") => repository.remote_upstream_url.as_deref(),
+                Some(_) => repository.remote_origin_url.as_deref(),
+                None => None,
+            })
+            .or(repository.remote_origin_url.as_deref())
+            .or(repository.remote_upstream_url.as_deref())
+            .ok_or_else(|| anyhow::anyhow!("No remote configured for repository"))?;
+
+        let provider_registry = GitHostingProviderRegistry::global(cx);
+        let Some((provider, parsed_remote)) =
+            git::parse_git_remote_url(provider_registry, remote_url)
+        else {
+            return Err(anyhow::anyhow!("Unsupported remote URL: {remote_url}"));
+        };
+
+        let url = provider
+            .build_create_pull_request_url(&parsed_remote, source_branch)
+            .ok_or_else(|| anyhow::anyhow!("Unable to construct pull request URL"))?;
+
+        Ok(url)
     }
 
     fn askpass_delegate(
@@ -3939,7 +3717,7 @@ impl GitPanel {
 
     fn schedule_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let handle = cx.entity().downgrade();
-        let new_active_repository = self.project.read(cx).active_repository(cx);
+        let new_active_repository = active_git_repository(self.project.read(cx), cx);
         let active_repository_changed = self.active_repository.as_ref().map(Entity::entity_id)
             != new_active_repository.as_ref().map(Entity::entity_id);
         if active_repository_changed {
@@ -4491,37 +4269,15 @@ impl GitPanel {
 
                 let text = serde_json::to_string_pretty(&combined).unwrap_or_default();
 
-                let buffer = project
-                    .update(cx, |project, cx| {
-                        project.create_buffer(json_language, false, cx)
-                    })
-                    .await?;
-
-                buffer.update(cx, |buffer, cx| {
-                    buffer.set_text(text, cx);
-                    buffer.set_capability(language::Capability::ReadWrite, cx);
-                });
-
-                workspace.update_in(cx, |workspace, window, cx| {
-                    let buffer =
-                        cx.new(|cx| MultiBuffer::singleton(buffer, cx).with_title(title.clone()));
-
-                    workspace.add_item_to_active_pane(
-                        Box::new(cx.new(|cx| {
-                            let mut editor =
-                                Editor::for_multibuffer(buffer, Some(project.clone()), window, cx);
-                            editor.set_breadcrumb_header(title);
-                            editor.disable_mouse_wheel_zoom();
-                            editor
-                        })),
-                        None,
-                        true,
-                        window,
-                        cx,
-                    );
-                })?;
-
-                anyhow::Ok(())
+                editor::items::open_text_in_editor(
+                    project,
+                    workspace,
+                    json_language,
+                    title,
+                    text,
+                    cx,
+                )
+                .await
             })
             .detach_and_log_err(cx);
     }
@@ -4537,6 +4293,7 @@ impl GitPanel {
         };
 
         let is_push = matches!(action, RemoteAction::Push(_, _));
+        let git_panel = cx.weak_entity();
 
         workspace.update(cx, |workspace, cx| {
             let SuccessMessage { message, style } =
@@ -4551,14 +4308,34 @@ impl GitPanel {
             );
 
             let status_toast = StatusToast::new(message, cx, move |this, _cx| {
-                use remote_output::SuccessStyle::{PushPullRequestLink, Toast, ToastWithLog};
+                use remote_output::SuccessStyle::{
+                    CreatePullRequest, OpenPullRequest, Toast, ToastWithLog,
+                };
                 let this = this.icon(
                     Icon::new(IconName::GitBranch)
                         .size(IconSize::Small)
                         .color(Color::Muted),
                 );
                 match (style, is_push) {
-                    (PushPullRequestLink { label, url }, _) => {
+                    (
+                        CreatePullRequest {
+                            label,
+                            fallback_url,
+                        },
+                        _,
+                    ) => {
+                        this.action(label, move |_window, cx| {
+                            // Prefer the URL built from the git hosting provider,
+                            // matching the `CreatePullRequest` action, and only
+                            // fall back to the link printed by the remote.
+                            let url = git_panel
+                                .read_with(cx, |panel, cx| panel.create_pull_request_url(cx))
+                                .ok()
+                                .and_then(|url| url.log_err());
+                            cx.open_url(url.as_ref().map_or(fallback_url.as_str(), Url::as_str));
+                        })
+                    }
+                    (OpenPullRequest { label, url }, _) => {
                         this.action(label, move |_window, cx| cx.open_url(&url))
                     }
                     (Toast | ToastWithLog { .. }, true) => {
@@ -6284,6 +6061,12 @@ impl GitPanel {
         let has_directory_worktree = project
             .visible_worktrees(cx)
             .any(|worktree| !worktree.read(cx).is_single_file());
+        // A Fossil checkout is not a Git repository, and offering `git init`
+        // inside one would put a second VCS in the same directory.
+        let has_fossil_checkout = project
+            .repositories(cx)
+            .values()
+            .any(|repository| repository.read(cx).backend().is_fossil());
         if worktree_count > 0 && self.active_repository.is_none() {
             v_flex()
                 .gap_1()
@@ -6296,7 +6079,7 @@ impl GitPanel {
                     ))
                     .color(Color::Muted),
                 )
-                .when(has_directory_worktree, |this| {
+                .when(has_directory_worktree && !has_fossil_checkout, |this| {
                     this.child(
                         Button::new(
                             "initialize_repository",
@@ -6608,7 +6391,7 @@ impl GitPanel {
                         .color(Color::Muted),
                     )
                     .child(
-                        Label::new(header.title(cx))
+                        Label::new(crate::changes_list::section_title(header.header, cx))
                             .color(Color::Muted)
                             .size(LabelSize::Small),
                     ),
@@ -8484,7 +8267,7 @@ mod tests {
 
     use git::{
         repository::repo_path,
-        status::{StatusCode, UnmergedStatus, UnmergedStatusCode},
+        status::{FileStatus, StatusCode, UnmergedStatus, UnmergedStatusCode},
     };
     use gpui::{TestAppContext, UpdateGlobal, VisualTestContext, px};
     use project::FakeFs;
@@ -9655,7 +9438,7 @@ mod tests {
 
     #[gpui::test]
     async fn test_bulk_staging(cx: &mut TestAppContext) {
-        use GitListEntry::*;
+        use crate::changes_list::ListEntry::*;
 
         init_test(cx);
         let fs = FakeFs::new(cx.background_executor.clone());
@@ -9850,7 +9633,7 @@ mod tests {
 
     #[gpui::test]
     async fn test_bulk_staging_with_sort_by_paths(cx: &mut TestAppContext) {
-        use GitListEntry::*;
+        use crate::changes_list::ListEntry::*;
 
         init_test(cx);
         let fs = FakeFs::new(cx.background_executor.clone());

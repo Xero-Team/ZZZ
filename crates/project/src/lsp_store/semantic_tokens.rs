@@ -238,35 +238,23 @@ impl LspStore {
         for_server: Option<LanguageServerId>,
         cx: &mut Context<Self>,
     ) -> Task<Option<HashMap<LanguageServerId, SemanticTokensResponse>>> {
-        if let Some((client, upstream_project_id)) = self.upstream_client() {
+        if self.upstream_client().is_some() {
             let request = SemanticTokensFull { for_server };
-            if !self.is_capable_for_proto_request(buffer, &request, cx) {
+            let Some(request_task) = self.upstream_request_task(buffer, request, None, cx) else {
                 return Task::ready(None);
-            }
+            };
 
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-            let request_task = client.request_lsp(
-                upstream_project_id,
-                None,
-                request_timeout,
-                cx.background_executor().clone(),
-                request.to_proto(upstream_project_id, buffer.read(cx)),
-            );
-            let buffer = buffer.clone();
             cx.spawn(async move |weak_lsp_store, cx| {
                 let lsp_store = weak_lsp_store.upgrade()?;
+                let Some((buffer, responses)) = request_task.await.log_err().flatten() else {
+                    return Some(HashMap::default());
+                };
                 let tokens = join_all(
-                    request_task
-                        .await
-                        .log_err()
-                        .flatten()
-                        .map_or_default(|response| response.payload)
+                    responses
                         .into_iter()
                         .map(|response| {
                             let server_id = LanguageServerId::from_proto(response.server_id);
-                            let response = request.response_from_proto(
+                            let response = SemanticTokensFull { for_server }.response_from_proto(
                                 response.response,
                                 lsp_store.clone(),
                                 buffer.clone(),

@@ -2,14 +2,30 @@
 
 Normative rules for the `absorbing-upstream` skill.
 
+## Contents
+
+Read `Session Defaults` and `Classification` first; every batch needs them. Then
+read only the sections the current step needs.
+
+| If you are | Read |
+|---|---|
+| deciding whether a commit belongs in ZZZ | `Philosophy`, `Allow`, `Reject` |
+| judging a commit that mixes upstream plumbing with a feature | `Isolation Test` |
+| running the pick | `Git Commands`, `Apply` |
+| checking the result | `Verification` |
+| writing the budget report | `Report` |
+| recording a rejection | `Rejection Ledger` |
+| about to import rejected machinery | `Hard Stops` |
+| looking for a precedent | `Worked Patterns` |
+
 ## Session Defaults
 
 Override only when the user supplies a value.
 
 ```text
-LAST_REVIEWED_UPSTREAM=aff99ecc3249cfa95e720c4d6c1eb4a72105a3ee
+LAST_REVIEWED_UPSTREAM=f4fe0be1f8c7974db07e01c5cd05bee0cf4eb8d9
 LOCAL_BASE_BRANCH=main
-LOCAL_BASE_COMMIT=be1bfe60fe43c3e031a2742ecdc7776f606fe6a8
+LOCAL_BASE_COMMIT=e824f4608c
 UPSTREAM_URL=https://github.com/zed-industries/zed.git
 UPSTREAM_REF=refs/heads/main
 WORK_BRANCH=sync/upstream-YYYY-MM-DD
@@ -20,18 +36,19 @@ CREATE_PR=no
 PUSH=no
 ```
 
-As of 2026-11-15, local `main` is `da3887d10e`. The last new upstream
-window is `docs/src/development/upstream/upstream-sync-2026-11-13.md` on
-`sync/upstream-2026-11-13`; it reviews `6ceb6fee87..aff99ecc32`, the
-first 20 of 22 commits, and advances the reviewed baseline to
-`aff99ecc32`. The live head at query time was `dc93abce2f`, so the next
-range starts with `83df5df635` and `dc93abce2f`. The preceding chain
-ends at `2026-11-12`, which closed on `6ceb6fee87`.
-`upstream-sync-2026-11-14.md` re-checks 40 earlier `C` rows and does not
-move the baseline. The most recent full re-audit is
-`docs/src/development/upstream/upstream-sync-audit-2026-11-03.md`; the
-tree holds 48 sync reports and 5 audit reports. Query live upstream
-again at run start; never trust these recorded values as the live head.
+As of 2026-11-22, local `main` was `e824f4608c`. The last new upstream
+window is `docs/src/development/upstream/upstream-sync-2026-11-22.md` on
+`sync/upstream-2026-11-22`; it reviews `54fff2ff5b..f4fe0be1f8`, the seven
+commits that landed after batch E, and advances the reviewed baseline to
+`f4fe0be1f8`, which was also the live head at query time, so no commit is
+waiting for review. The preceding chain reviews `4a7d10473a..54fff2ff5b`
+in the 2026-11-20-e report, which drained the backlog that batches B
+through D left behind, after the `6ceb6fee87..4a7d10473a` window covered
+by the 2026-11-13, 2026-11-16, 2026-11-17, 2026-11-20, 2026-11-20-b,
+2026-11-20-c and 2026-11-20-d reports. The most recent full re-audit is
+`docs/src/development/upstream/upstream-sync-audit-2026-11-17.md`; the tree
+holds 58 sync reports and 6 audit reports. Query live upstream again at run
+start; never trust these recorded values as the live head.
 The next range starts after `LAST_REVIEWED_UPSTREAM`.
 
 ## Philosophy

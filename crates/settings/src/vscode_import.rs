@@ -187,6 +187,7 @@ impl VsCodeSettings {
             file_finder: None,
             git: self.git_settings_content(),
             git_panel: self.git_panel_settings_content(),
+            fossil_panel: None,
             telegram: None,
             telegram_panel: None,
             global_lsp_settings: skip_default(GlobalLspSettingsContent {

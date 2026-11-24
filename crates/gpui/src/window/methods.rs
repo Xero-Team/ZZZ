@@ -1451,6 +1451,16 @@ impl Window {
         let scale_factor = self.scale_factor();
         let left = floor_to_device_pixel(bounds.left().0, scale_factor);
         let top = floor_to_device_pixel(bounds.top().0, scale_factor);
+        // Rounding outward would turn an empty region into a 1px strip at
+        // fractional positions, so return a zero size instead. Negative
+        // sizes become zero too, because the blurred shadow shader draws a
+        // negative-size hole the same as a positive one.
+        if bounds.is_empty() {
+            return Bounds::new(
+                point(ScaledPixels(left), ScaledPixels(top)),
+                Size::default(),
+            );
+        }
         let right = ceil_to_device_pixel(bounds.right().0, scale_factor).max(left);
         let bottom = ceil_to_device_pixel(bounds.bottom().0, scale_factor).max(top);
         Bounds::from_corners(

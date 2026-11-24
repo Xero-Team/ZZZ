@@ -62,11 +62,11 @@ pub trait ContextLessSummary: Clone {
 impl<T: ContextLessSummary> Summary for T {
     type Context<'a> = ();
 
-    fn zero<'a>((): ()) -> Self {
+    fn zero((): ()) -> Self {
         T::zero()
     }
 
-    fn add_summary<'a>(&mut self, summary: &Self, (): ()) {
+    fn add_summary(&mut self, summary: &Self, (): ()) {
         T::add_summary(self, summary)
     }
 }

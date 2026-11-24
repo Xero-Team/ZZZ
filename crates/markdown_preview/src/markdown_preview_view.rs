@@ -1038,7 +1038,7 @@ fn handle_url_click(
     if path_part.is_empty() {
         if let Some(fragment) = fragment {
             let view = view.clone();
-            let slug = SharedString::from(fragment.to_owned());
+            let slug = SharedString::from(fragment);
             window.defer(cx, move |window, cx| {
                 if let Some(view) = view.upgrade() {
                     let markdown = view.read(cx).markdown.clone();
@@ -1258,6 +1258,17 @@ fn resolve_preview_image(
     }
 
     if dest_url.starts_with("http://") || dest_url.starts_with("https://") {
+        // A Markdown document is untrusted input: requesting a remote image tells the
+        // image host that the file was opened, from which address, and when. Unless the
+        // user opts in, render a placeholder and make no request. `try_get` fails closed
+        // when the settings store is not available.
+        if !MarkdownPreviewSettings::try_get(cx)
+            .is_some_and(|settings| settings.allow_remote_images)
+        {
+            return Some(ImageSource::Resource(Resource::Embedded(
+                "icons/image.svg".into(),
+            )));
+        }
         return Some(ImageSource::Resource(Resource::Uri(SharedUri::from(
             dest_url.to_owned(),
         ))));
@@ -2429,7 +2440,8 @@ mod tests {
             );
             assert!(matches!(resolved, Some(ImageSource::Custom(_))));
 
-            // Web URLs stay URLs; data URLs are handled by the parser itself.
+            // Web URLs are not fetched unless the user opts in, so the default build
+            // substitutes a local placeholder instead of the remote resource.
             assert!(matches!(
                 resolve_preview_image(
                     "https://example.com/pic.png",
@@ -2439,7 +2451,7 @@ mod tests {
                     Some(&source_project_path),
                     cx,
                 ),
-                Some(ImageSource::Resource(Resource::Uri(_)))
+                Some(ImageSource::Resource(Resource::Embedded(_)))
             ));
             assert!(
                 resolve_preview_image(

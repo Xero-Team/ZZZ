@@ -1,3 +1,4 @@
+use crate::capability_granter::CapabilityGranter;
 use crate::wasm_host::wit::since_v0_6_0::slash_command::SlashCommandOutputSection;
 use crate::wasm_host::wit::{CompletionKind, CompletionLabelDetails, InsertTextFormat, SymbolKind};
 use crate::wasm_host::{WasmState, wit::ToWasmtimeResult};
@@ -635,8 +636,13 @@ impl http_client::Host for WasmState {
     ) -> wasmtime::Result<Result<http_client::HttpResponse, String>> {
         maybe!(async {
             let url = &request.url;
-            let request = convert_request(&request)?;
-            let mut response = self.host.http_client.send(request).await?;
+            let mut response = send_granted_request(
+                self.host.http_client.clone(),
+                &self.capability_granter,
+                NetworkGrant::Fetch,
+                &request,
+            )
+            .await?;
 
             if response.status().is_client_error() || response.status().is_server_error() {
                 bail!("failed to fetch '{url}': status code {}", response.status())
@@ -651,11 +657,14 @@ impl http_client::Host for WasmState {
         &mut self,
         request: http_client::HttpRequest,
     ) -> wasmtime::Result<Result<Resource<ExtensionHttpResponseStream>, String>> {
-        let request =
-            convert_request(&request).map_err(|error| wasmtime::Error::msg(error.to_string()))?;
-        let response = self.host.http_client.send(request);
         maybe!(async {
-            let response = response.await?;
+            let response = send_granted_request(
+                self.host.http_client.clone(),
+                &self.capability_granter,
+                NetworkGrant::Fetch,
+                &request,
+            )
+            .await?;
             let stream = Arc::new(Mutex::new(response));
             let resource = self.table.push(stream)?;
             Ok(resource)
@@ -663,6 +672,25 @@ impl http_client::Host for WasmState {
         .await
         .to_wasmtime_result()
     }
+}
+
+/// Sends a guest request once the capability approves its URL, and again for the URL of every
+/// redirect the request takes.
+async fn send_granted_request(
+    http_client: Arc<dyn ::http_client::HttpClient>,
+    granter: &CapabilityGranter,
+    grant: NetworkGrant,
+    request: &http_client::HttpRequest,
+) -> Result<::http_client::Response<AsyncBody>> {
+    send_following_granted_redirects(
+        http_client.as_ref(),
+        granter,
+        grant,
+        Url::parse(&request.url)?,
+        HopRequest::from_guest(request),
+        redirect_hop_limit(&request.redirect_policy),
+    )
+    .await
 }
 
 impl http_client::HostHttpResponseStream for WasmState {
@@ -708,27 +736,185 @@ impl From<http_client::HttpMethod> for ::http_client::Method {
     }
 }
 
-fn convert_request(
-    extension_request: &http_client::HttpRequest,
-) -> anyhow::Result<::http_client::Request<AsyncBody>> {
-    let mut request = ::http_client::Request::builder()
-        .method(::http_client::Method::from(extension_request.method))
-        .uri(&extension_request.url)
-        .follow_redirects(match extension_request.redirect_policy {
-            http_client::RedirectPolicy::NoFollow => ::http_client::RedirectPolicy::NoFollow,
-            http_client::RedirectPolicy::FollowLimit(limit) => {
-                ::http_client::RedirectPolicy::FollowLimit(limit)
-            }
-            http_client::RedirectPolicy::FollowAll => ::http_client::RedirectPolicy::FollowAll,
-        });
-    for (key, value) in &extension_request.headers {
-        request = request.header(key, value);
+/// The hop budget for a request whose guest asked to follow every redirect.
+///
+/// A guest used to be able to reach 100 hops by way of the client's own `FollowAll` ceiling. The
+/// host now authorises every hop, so a long chain costs a capability check each time and a chain
+/// that never terminates would keep the extension busy for as long as the server keeps answering.
+const MAX_REDIRECT_HOPS: u32 = 10;
+
+/// Which capability check a hop of an outbound request has to pass.
+#[derive(Clone, Copy)]
+enum NetworkGrant {
+    /// `http_client.fetch` and `http_client.fetch_stream`.
+    Fetch,
+    /// `download_file`, which additionally requires binary downloads to be enabled.
+    DownloadFile,
+}
+
+impl NetworkGrant {
+    fn check(self, granter: &CapabilityGranter, url: &Url) -> Result<()> {
+        match self {
+            Self::Fetch => granter.grant_fetch(url),
+            Self::DownloadFile => granter.grant_download_file(url),
+        }
     }
-    let body = extension_request
-        .body
-        .clone()
-        .map_or_default(AsyncBody::from);
-    request.body(body).map_err(anyhow::Error::from)
+}
+
+/// The parts of a request that every redirect hop of it carries over.
+struct HopRequest {
+    method: ::http_client::Method,
+    headers: Vec<(String, String)>,
+    body: Option<Vec<u8>>,
+}
+
+impl HopRequest {
+    fn from_guest(request: &http_client::HttpRequest) -> Self {
+        Self {
+            method: request.method.into(),
+            headers: request.headers.clone(),
+            body: request.body.clone(),
+        }
+    }
+
+    /// Builds the request for one hop.
+    ///
+    /// The client is told not to follow redirects: it would follow them without asking the
+    /// capability layer again, which is what let a granted host hand the request to a host the
+    /// extension was never granted.
+    fn build(&self, url: &Url) -> Result<::http_client::Request<AsyncBody>> {
+        let mut request = ::http_client::Request::builder()
+            .method(self.method.clone())
+            .uri(url.as_str())
+            .follow_redirects(::http_client::RedirectPolicy::NoFollow);
+        for (key, value) in &self.headers {
+            request = request.header(key, value);
+        }
+        let body = self.body.clone().map_or_default(AsyncBody::from);
+        request.body(body).map_err(anyhow::Error::from)
+    }
+
+    /// Drops the credentials a client does not carry to a different origin. The HTTP client used
+    /// to do this while following redirects itself, and the host now has to.
+    fn strip_credentials(&mut self) {
+        const CREDENTIAL_HEADERS: [&str; 4] = [
+            "authorization",
+            "cookie",
+            "proxy-authorization",
+            "www-authenticate",
+        ];
+
+        self.headers.retain(|(name, _)| {
+            !CREDENTIAL_HEADERS
+                .iter()
+                .any(|header| name.eq_ignore_ascii_case(header))
+        });
+    }
+}
+
+/// Sends a request and follows its redirects, asking `grant` about the URL of every hop before
+/// that hop is sent.
+///
+/// The final response is returned as-is, including a redirect response that arrives once
+/// `max_hops` is spent, so the guest sees the same response its own client would have returned
+/// when it stops following.
+async fn send_following_granted_redirects(
+    http_client: &dyn ::http_client::HttpClient,
+    granter: &CapabilityGranter,
+    grant: NetworkGrant,
+    mut url: Url,
+    mut request: HopRequest,
+    max_hops: u32,
+) -> Result<::http_client::Response<AsyncBody>> {
+    let mut hop = 0;
+
+    loop {
+        grant.check(granter, &url)?;
+        let response = http_client.send(request.build(&url)?).await?;
+
+        let Some(next_url) = redirect_target(&url, &response) else {
+            return Ok(response);
+        };
+        if hop == max_hops {
+            return Ok(response);
+        }
+
+        hop += 1;
+        if next_url.host_str() != url.host_str() {
+            request.strip_credentials();
+        }
+        let next_method = redirect_method(&request.method, response.status());
+        if next_method != request.method {
+            request.body = None;
+        }
+        request.method = next_method;
+        url = next_url;
+    }
+}
+
+/// The URL a response redirects to, when the host should send another request for it.
+fn redirect_target(
+    current_url: &Url,
+    response: &::http_client::Response<AsyncBody>,
+) -> Option<Url> {
+    if !response.status().is_redirection() {
+        return None;
+    }
+
+    let location = response
+        .headers()
+        .get(::http_client::http::header::LOCATION)?
+        .to_str()
+        .ok()?;
+
+    // `Location` is resolved against the URL that answered it, since it may be relative.
+    current_url.join(location).ok()
+}
+
+/// The method the next hop has to use. A 301, 302 or 303 answers a request whose body was
+/// already consumed, so the hop is sent as a bodiless `GET` instead.
+fn redirect_method(
+    method: &::http_client::Method,
+    status: ::http_client::StatusCode,
+) -> ::http_client::Method {
+    match status {
+        ::http_client::StatusCode::MOVED_PERMANENTLY
+        | ::http_client::StatusCode::FOUND
+        | ::http_client::StatusCode::SEE_OTHER
+            if *method != ::http_client::Method::HEAD =>
+        {
+            ::http_client::Method::GET
+        }
+        _ => method.clone(),
+    }
+}
+
+/// How many hops a guest's redirect policy allows.
+fn redirect_hop_limit(policy: &http_client::RedirectPolicy) -> u32 {
+    match policy {
+        http_client::RedirectPolicy::NoFollow => 0,
+        http_client::RedirectPolicy::FollowLimit(limit) => *limit,
+        http_client::RedirectPolicy::FollowAll => MAX_REDIRECT_HOPS,
+    }
+}
+
+/// Authorises a request the host makes on the extension's behalf rather than on a guest-supplied
+/// URL. Those requests do not pass through `http_client.fetch`, so without an explicit check the
+/// extension's network grant would not constrain them at all.
+fn grant_host_request(granter: &CapabilityGranter, url: &str) -> Result<()> {
+    granter.grant_fetch(&Url::parse(url)?)
+}
+
+/// The registry URL a package lookup reads, for the same reason as [`grant_host_request`].
+///
+/// `npm info` performs its own request, so the host can only check the registry npm falls back to
+/// when the user has not pointed it elsewhere.
+fn npm_package_url(package_name: &str) -> Result<Url> {
+    let mut url = Url::parse("https://registry.npmjs.org")?;
+    url.path_segments_mut()
+        .map_err(|()| anyhow::anyhow!("the npm registry URL cannot be a base"))?
+        .extend(package_name.split('/'));
+    Ok(url)
 }
 
 async fn convert_response(
@@ -767,12 +953,23 @@ impl nodejs::Host for WasmState {
         &mut self,
         package_name: String,
     ) -> wasmtime::Result<Result<String, String>> {
-        self.host
-            .node_runtime
-            .npm_package_latest_version(&package_name)
-            .await
-            .map(|v| v.to_string())
-            .to_wasmtime_result()
+        maybe!(async {
+            // `npm info` reads from the registry without passing through `http_client.fetch`, so
+            // the extension's network grant has to be consulted here or an empty grant list still
+            // lets it out. The registry is the one npm falls back to when the user configured no
+            // other, which is the only URL the host can name for a request the npm CLI makes.
+            self.capability_granter
+                .grant_fetch(&npm_package_url(&package_name)?)?;
+
+            let version = self
+                .host
+                .node_runtime
+                .npm_package_latest_version(&package_name)
+                .await?;
+            Ok(version.to_string())
+        })
+        .await
+        .to_wasmtime_result()
     }
 
     async fn npm_package_installed_version(
@@ -833,6 +1030,11 @@ impl github::Host for WasmState {
         options: github::GithubReleaseOptions,
     ) -> wasmtime::Result<Result<github::GithubRelease, String>> {
         maybe!(async {
+            grant_host_request(
+                &self.capability_granter,
+                &::http_client::github::latest_release_url(&repo),
+            )?;
+
             let release = ::http_client::github::latest_github_release(
                 &repo,
                 options.require_assets,
@@ -852,6 +1054,11 @@ impl github::Host for WasmState {
         tag: String,
     ) -> wasmtime::Result<Result<github::GithubRelease, String>> {
         maybe!(async {
+            grant_host_request(
+                &self.capability_granter,
+                &::http_client::github::release_by_tag_name_url(&repo, &tag),
+            )?;
+
             let release = ::http_client::github::get_release_by_tag_name(
                 &repo,
                 &tag,
@@ -904,9 +1111,15 @@ impl process::Host for WasmState {
             self.capability_granter
                 .grant_exec(&command.command, &command.args)?;
 
-            let output = util::command::new_command(command.command.as_str())
+            // The grant approves a program by name, so resolve the name against the host's
+            // `PATH` and run that path. Letting the child resolve it would let the guest pick
+            // which binary answers to the granted name.
+            let program = resolve_granted_program(&command.command)?;
+            let env = checked_child_env(&command.env)?;
+
+            let output = util::command::new_command(program)
                 .args(&command.args)
-                .envs(command.env)
+                .envs(env)
                 .output()
                 .await?;
 
@@ -915,6 +1128,76 @@ impl process::Host for WasmState {
         .await
         .to_wasmtime_result()
     }
+}
+
+/// Environment variables that make the dynamic loader, a shell, an interpreter, or a tool's
+/// configuration lookup load code the extension supplies. A `process:exec` grant approves the
+/// program, not what it loads, so a guest may not set these on a granted command.
+///
+/// Two families are listed: the loader family (`LD_*`, `DYLD_*`, `PATH`) and the
+/// configuration-locating family. The second is what a deny-list alone cannot enumerate
+/// completely, which is why the entries name the locator each tool reads rather than one
+/// variable per exploit: `git` reads `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM` plus
+/// `core.fsmonitor`, `core.pager`, and `sshCommand` out of them, and the interpreters read
+/// their module and startup paths from the rest.
+const DENIED_EXEC_ENV: &[&str] = &[
+    "PATH",
+    "LD_PRELOAD",
+    "LD_AUDIT",
+    "LD_LIBRARY_PATH",
+    "DYLD_INSERT_LIBRARIES",
+    "DYLD_LIBRARY_PATH",
+    "DYLD_FRAMEWORK_PATH",
+    "NODE_OPTIONS",
+    "NODE_PATH",
+    "GIT_CONFIG",
+    "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_SYSTEM",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_EXEC_PATH",
+    "GIT_SSH",
+    "GIT_SSH_COMMAND",
+    "PYTHONHOME",
+    "PYTHONPATH",
+    "PYTHONSTARTUP",
+    "RUBYLIB",
+    "RUBYOPT",
+    "PERL5LIB",
+    "PERL5OPT",
+    "CLASSPATH",
+    "JAVA_TOOL_OPTIONS",
+    "JDK_JAVA_OPTIONS",
+    "_JAVA_OPTIONS",
+    "BASH_ENV",
+    "ENV",
+];
+
+/// Rejects guest-supplied environment variables that would let the extension choose code the
+/// granted command loads, and returns the variables that may be passed through.
+fn checked_child_env(env: &[(String, String)]) -> Result<Vec<(String, String)>> {
+    for (key, _) in env {
+        if DENIED_EXEC_ENV
+            .iter()
+            .any(|denied| key.eq_ignore_ascii_case(denied))
+        {
+            bail!("extensions may not set {key} on a process:exec command");
+        }
+    }
+    Ok(env.to_vec())
+}
+
+/// Resolves a granted command to an absolute path using the host environment, so a guest
+/// cannot influence which binary runs by supplying `PATH` or by racing the working directory.
+fn resolve_granted_program(command: &str) -> Result<PathBuf> {
+    let requested = Path::new(command);
+    if requested.is_absolute() {
+        return Ok(requested.to_path_buf());
+    }
+
+    let search_path = env::var_os("PATH").context("the host PATH is not set")?;
+    let current_dir = env::current_dir().context("reading the working directory")?;
+    which::which_in(requested, Some(search_path), current_dir)
+        .with_context(|| format!("resolving {command} on the host PATH"))
 }
 
 #[async_trait]
@@ -1078,7 +1361,6 @@ impl ExtensionImports for WasmState {
     ) -> wasmtime::Result<Result<(), String>> {
         maybe!(async {
             let parsed_url = Url::parse(&url)?;
-            self.capability_granter.grant_download_file(&parsed_url)?;
 
             let path = PathBuf::from(path);
             let extension_work_dir = self.host.work_dir.join(self.manifest.id.as_ref());
@@ -1090,12 +1372,21 @@ impl ExtensionImports for WasmState {
                 .writeable_path_from_extension(&self.manifest.id, &path)
                 .await?;
 
-            let mut response = self
-                .host
-                .http_client
-                .get(&url, Default::default(), true)
-                .await
-                .context("downloading release")?;
+            let http_client = self.host.http_client.clone();
+            let mut response = send_following_granted_redirects(
+                http_client.as_ref(),
+                &self.capability_granter,
+                NetworkGrant::DownloadFile,
+                parsed_url,
+                HopRequest {
+                    method: ::http_client::Method::GET,
+                    headers: Vec::new(),
+                    body: None,
+                },
+                MAX_REDIRECT_HOPS,
+            )
+            .await
+            .context("downloading release")?;
 
             anyhow::ensure!(
                 response.status().is_success(),
@@ -1177,5 +1468,320 @@ impl ExtensionImports for WasmState {
             .await
             .with_context(|| format!("setting permissions for path {path:?}"))
             .to_wasmtime_result()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    use extension::{DownloadFileCapability, ExtensionCapability};
+
+    use crate::capability_granter::stub_manifest;
+
+    use super::*;
+
+    /// Records every request the host sent, and answers with the redirect it was configured to
+    /// answer with so a test can see which hops were actually sent.
+    struct RecordingClient {
+        sent: Arc<Mutex<Vec<::http_client::http::request::Parts>>>,
+        redirects: Arc<HashMap<String, String>>,
+    }
+
+    impl RecordingClient {
+        fn new(redirects: &[(&str, &str)]) -> Self {
+            Self {
+                sent: Arc::default(),
+                redirects: Arc::new(
+                    redirects
+                        .iter()
+                        .map(|(from, to)| ((*from).to_string(), (*to).to_string()))
+                        .collect(),
+                ),
+            }
+        }
+
+        fn sent_urls(&self) -> Vec<String> {
+            self.sent
+                .lock()
+                .expect("the request log is not poisoned")
+                .iter()
+                .map(|parts| parts.uri.to_string())
+                .collect()
+        }
+
+        fn sent_header_names(&self) -> Vec<Vec<String>> {
+            self.sent
+                .lock()
+                .expect("the request log is not poisoned")
+                .iter()
+                .map(|parts| {
+                    let mut names = parts
+                        .headers
+                        .keys()
+                        .map(|name| name.as_str().to_string())
+                        .collect::<Vec<_>>();
+                    names.sort();
+                    names
+                })
+                .collect()
+        }
+    }
+
+    impl ::http_client::HttpClient for RecordingClient {
+        fn user_agent(&self) -> Option<&::http_client::http::HeaderValue> {
+            None
+        }
+
+        fn proxy(&self) -> Option<&Url> {
+            None
+        }
+
+        fn send(
+            &self,
+            request: ::http_client::Request<AsyncBody>,
+        ) -> futures::future::BoxFuture<'static, anyhow::Result<::http_client::Response<AsyncBody>>>
+        {
+            let (parts, _body) = request.into_parts();
+            let url = parts.uri.to_string();
+            let sent = self.sent.clone();
+            let redirects = self.redirects.clone();
+            Box::pin(async move {
+                sent.lock()
+                    .expect("the request log is not poisoned")
+                    .push(parts);
+
+                let mut response = ::http_client::Response::builder().status(200);
+                if let Some(next) = redirects.get(&url) {
+                    response = response
+                        .status(::http_client::StatusCode::FOUND)
+                        .header(::http_client::http::header::LOCATION, next);
+                }
+                Ok(response.body(AsyncBody::empty())?)
+            })
+        }
+    }
+
+    fn granter(hosts: &[&str]) -> CapabilityGranter {
+        CapabilityGranter::new(
+            hosts
+                .iter()
+                .map(|host| {
+                    ExtensionCapability::DownloadFile(DownloadFileCapability {
+                        host: (*host).to_string(),
+                        path: vec!["**".to_string()],
+                    })
+                })
+                .collect(),
+            Arc::new(stub_manifest()),
+        )
+    }
+
+    fn get_request() -> HopRequest {
+        HopRequest {
+            method: ::http_client::Method::GET,
+            headers: Vec::new(),
+            body: None,
+        }
+    }
+
+    fn send(
+        client: &RecordingClient,
+        granter: &CapabilityGranter,
+        url: &str,
+        request: HopRequest,
+        max_hops: u32,
+    ) -> Result<::http_client::Response<AsyncBody>> {
+        futures::executor::block_on(send_following_granted_redirects(
+            client,
+            granter,
+            NetworkGrant::Fetch,
+            Url::parse(url).expect("the test URL parses"),
+            request,
+            max_hops,
+        ))
+    }
+
+    #[test]
+    fn a_redirect_is_checked_before_the_next_hop_is_sent() {
+        let client = RecordingClient::new(&[(
+            "https://granted.tld/release.tar.gz",
+            "https://evil.tld/release.tar.gz",
+        )]);
+        let granter = granter(&["granted.tld"]);
+
+        let error = match send(
+            &client,
+            &granter,
+            "https://granted.tld/release.tar.gz",
+            get_request(),
+            MAX_REDIRECT_HOPS,
+        ) {
+            Ok(_) => panic!("the redirect target is not granted"),
+            Err(error) => error,
+        };
+
+        assert!(error.to_string().contains("evil.tld"), "{error}");
+        assert_eq!(
+            client.sent_urls(),
+            vec!["https://granted.tld/release.tar.gz".to_string()],
+            "the refused hop must not be requested"
+        );
+    }
+
+    #[test]
+    fn the_hop_budget_bounds_a_redirect_chain() {
+        let client = RecordingClient::new(&[
+            ("https://granted.tld/1", "https://granted.tld/2"),
+            ("https://granted.tld/2", "https://granted.tld/3"),
+        ]);
+        let granter = granter(&["granted.tld"]);
+
+        let response = send(&client, &granter, "https://granted.tld/1", get_request(), 1)
+            .expect("the exhausted budget hands the redirect back");
+        assert_eq!(response.status(), ::http_client::StatusCode::FOUND);
+        assert_eq!(
+            client.sent_urls(),
+            vec![
+                "https://granted.tld/1".to_string(),
+                "https://granted.tld/2".to_string()
+            ]
+        );
+
+        let response = send(&client, &granter, "https://granted.tld/1", get_request(), 2)
+            .expect("the chain ends inside the budget");
+        assert_eq!(response.status(), ::http_client::StatusCode::OK);
+        assert_eq!(
+            client.sent_urls(),
+            vec![
+                "https://granted.tld/1".to_string(),
+                "https://granted.tld/2".to_string(),
+                "https://granted.tld/1".to_string(),
+                "https://granted.tld/2".to_string(),
+                "https://granted.tld/3".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn the_guest_redirect_policy_sets_the_hop_budget() {
+        assert_eq!(
+            redirect_hop_limit(&http_client::RedirectPolicy::NoFollow),
+            0
+        );
+        assert_eq!(
+            redirect_hop_limit(&http_client::RedirectPolicy::FollowLimit(4)),
+            4
+        );
+        assert_eq!(
+            redirect_hop_limit(&http_client::RedirectPolicy::FollowAll),
+            MAX_REDIRECT_HOPS
+        );
+    }
+
+    #[test]
+    fn a_hop_to_another_host_drops_the_credentials() {
+        let client = RecordingClient::new(&[(
+            "https://api.github.com/repos/zed-industries/zed/releases",
+            "https://mirror.tld/repos/zed-industries/zed/releases",
+        )]);
+        let granter = granter(&["api.github.com", "mirror.tld"]);
+
+        let mut request = get_request();
+        request.headers = vec![
+            ("Authorization".to_string(), "Bearer token".to_string()),
+            ("Accept".to_string(), "application/json".to_string()),
+        ];
+
+        send(
+            &client,
+            &granter,
+            "https://api.github.com/repos/zed-industries/zed/releases",
+            request,
+            MAX_REDIRECT_HOPS,
+        )
+        .expect("both hosts are granted");
+
+        assert_eq!(
+            client.sent_header_names(),
+            vec![
+                vec!["accept".to_string(), "authorization".to_string()],
+                vec!["accept".to_string()]
+            ]
+        );
+    }
+
+    #[test]
+    fn host_side_requests_pass_through_the_network_capability() {
+        let releases_url = ::http_client::github::latest_release_url("zed-industries/zed");
+        assert_eq!(
+            releases_url,
+            "https://api.github.com/repos/zed-industries/zed/releases"
+        );
+        let release_url =
+            ::http_client::github::release_by_tag_name_url("zed-industries/zed", "v1");
+        assert_eq!(
+            release_url,
+            "https://api.github.com/repos/zed-industries/zed/releases/tags/v1"
+        );
+        let npm_url = npm_package_url("typescript-language-server").expect("the name is usable");
+
+        let denied = granter(&[]);
+        assert!(grant_host_request(&denied, &releases_url).is_err());
+        assert!(denied.grant_fetch(&npm_url).is_err());
+
+        let registry_only = granter(&["registry.npmjs.org"]);
+        assert!(registry_only.grant_fetch(&npm_url).is_ok());
+        assert!(grant_host_request(&registry_only, &releases_url).is_err());
+
+        let api_only = granter(&["api.github.com"]);
+        assert!(grant_host_request(&api_only, &releases_url).is_ok());
+        assert!(grant_host_request(&api_only, &release_url).is_ok());
+    }
+
+    #[test]
+    fn the_npm_lookup_is_checked_against_the_registry_it_reads() {
+        let unscoped = npm_package_url("typescript-language-server").expect("the name is usable");
+        assert_eq!(
+            unscoped.as_str(),
+            "https://registry.npmjs.org/typescript-language-server"
+        );
+
+        let scoped = npm_package_url("@types/node").expect("the name is usable");
+        assert_eq!(scoped.as_str(), "https://registry.npmjs.org/@types/node");
+
+        // A name is not allowed to move the request off the registry.
+        let escaping = npm_package_url("../evil").expect("the name is usable");
+        assert_eq!(escaping.host_str(), Some("registry.npmjs.org"));
+    }
+
+    #[test]
+    fn guest_environment_cannot_redirect_what_a_granted_command_loads() {
+        for key in [
+            "GIT_CONFIG_GLOBAL",
+            "GIT_CONFIG_SYSTEM",
+            "GIT_EXEC_PATH",
+            "GIT_SSH_COMMAND",
+            "PYTHONPATH",
+            "PYTHONSTARTUP",
+            "NODE_PATH",
+            "RUBYOPT",
+            "JAVA_TOOL_OPTIONS",
+            "BASH_ENV",
+            "LD_PRELOAD",
+        ] {
+            let error = checked_child_env(&[(key.to_string(), "x".to_string())])
+                .expect_err("the key must be refused");
+            assert!(error.to_string().contains(key), "{error}");
+        }
+
+        // Environment lookups on the child side are case-sensitive on unix but not on every
+        // platform, so the check compares without regard to case.
+        assert!(checked_child_env(&[("git_config_global".to_string(), "x".to_string())]).is_err());
+
+        let allowed = checked_child_env(&[("TERM".to_string(), "dumb".to_string())])
+            .expect("a benign variable is passed through");
+        assert_eq!(allowed, vec![("TERM".to_string(), "dumb".to_string())]);
     }
 }

@@ -6900,6 +6900,7 @@ async fn test_remote_file_vfs_identity_wire_validation(cx: &mut TestAppContext) 
         mtime: None,
         is_deleted: false,
         is_historic: false,
+        is_private: false,
         vfs_path: Some(proto::VfsPathV2::from_vfs_path(&vfs_path)),
         resource_id: Some(proto::ResourceIdV2::from_resource_id(resource_id)),
     };

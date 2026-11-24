@@ -7,7 +7,7 @@ edition.workspace = true
 [dependencies]
 log.workspace = true
 anyhow.workspace = true
-pin-project = "1.1.13"
+pin-project = "1.2.0"
 
 [lints]
 workspace = true

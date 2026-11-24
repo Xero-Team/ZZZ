@@ -40,8 +40,8 @@ use git::{
         Branch, BranchesScanResult, CommitData, CommitDetails, CommitDiff, CommitFile,
         CommitOptions, CreateWorktreeTarget, DiffType, FetchOptions, GitCommitTemplate,
         GitRepository, GitRepositoryCheckpoint, InitialGraphCommitData, LogOrder, LogSource,
-        PushOptions, Remote, RemoteCommandOutput, RepoPath, ResetMode, SearchCommitArgs,
-        UpstreamTrackingStatus, Worktree as GitWorktree, delete_branch_flag,
+        PushOptions, Remote, RemoteCommandOutput, RepoPath, RepositoryBackend, ResetMode,
+        SearchCommitArgs, UpstreamTrackingStatus, Worktree as GitWorktree, delete_branch_flag,
     },
     stash::{GitStash, StashEntry},
     status::{
@@ -392,6 +392,11 @@ pub struct RepositorySnapshot {
     pub remote_upstream_url: Option<String>,
     pub stash_entries: GitStash,
     pub linked_worktrees: Arc<[GitWorktree]>,
+    /// The backend behind this repository.
+    ///
+    /// Known before the backend is opened for a checkout we can recognize from
+    /// the filesystem, and refreshed from the backend once it is.
+    pub backend: RepositoryBackend,
 }
 
 type JobId = u64;
@@ -1167,8 +1172,6 @@ impl GitStore {
                         cx.subscribe(&buffer_diff, Self::on_buffer_diff_event)
                             .detach();
 
-                        this.loading_diffs.remove(&(buffer_id, diff_kind));
-
                         let git_store = cx.weak_entity();
                         let diff_state = this
                             .diffs
@@ -1188,6 +1191,11 @@ impl GitStore {
                     Ok(buffer_diff)
                 }
                 .await;
+                // Remove the entry on failure too, so the next call retries the load.
+                this.update(cx, |this, _| {
+                    this.loading_diffs.remove(&(buffer_id, diff_kind));
+                })
+                .ok();
                 result.map_err(Arc::new)
             })
             .shared();
@@ -4443,6 +4451,19 @@ impl RepositoryId {
     }
 }
 
+/// The backend for a repository whose common directory is `common_dir_abs_path`.
+///
+/// A Fossil checkout stores its metadata in a database in the checkout root and
+/// registers that path as both the repository and the common directory, so the
+/// path identifies the backend before anything is opened.
+fn backend_for_common_dir(common_dir_abs_path: &Path) -> RepositoryBackend {
+    if git::fossil::is_fossil_checkout_db_path(common_dir_abs_path) {
+        RepositoryBackend::Fossil
+    } else {
+        RepositoryBackend::Git
+    }
+}
+
 impl RepositorySnapshot {
     fn empty(
         id: RepositoryId,
@@ -4458,6 +4479,11 @@ impl RepositorySnapshot {
             dot_git_abs_path.unwrap_or_else(|| work_directory_abs_path.join(".git").into());
         let common_dir_abs_path =
             common_dir_abs_path.unwrap_or_else(|| repository_dir_abs_path.clone());
+        // A Fossil checkout keeps its metadata database in the checkout root, and
+        // the worktree registers that path as both the repository and the common
+        // directory. The path alone identifies the backend, for local checkouts
+        // and for the ones a remote project announces, before it is opened.
+        let backend = backend_for_common_dir(&common_dir_abs_path);
 
         Self {
             id,
@@ -4476,6 +4502,7 @@ impl RepositorySnapshot {
             remote_upstream_url: None,
             stash_entries: Default::default(),
             linked_worktrees: Arc::from([]),
+            backend,
             path_style,
         }
     }
@@ -4890,6 +4917,14 @@ impl Repository {
             Some(Ok(RepositoryState::Local(state))) => state.backend.is_trusted(),
             _ => false,
         }
+    }
+
+    /// The backend behind this repository.
+    ///
+    /// Each panel claims the repositories whose backend it can render, so a
+    /// Fossil checkout never reaches the Git panel's staging UI.
+    pub fn backend(&self) -> RepositoryBackend {
+        self.snapshot.backend
     }
 
     pub fn snapshot(&self) -> RepositorySnapshot {
@@ -10254,6 +10289,55 @@ mod tests {
     }
 
     #[gpui::test]
+    async fn test_open_diff_since_retries_after_failed_load(cx: &mut TestAppContext) {
+        init_test(cx);
+        let fs = FakeFs::new(cx.executor());
+        fs.insert_tree(
+            util::path!("/project"),
+            json!({ ".git": {}, "file.txt": "new\n" }),
+        )
+        .await;
+        let dot_git = Path::new(util::path!("/project/.git"));
+        let project = Project::test(fs.clone(), [Path::new(util::path!("/project"))], cx).await;
+        project
+            .update(cx, |project, cx| project.git_scans_complete(cx))
+            .await;
+        let repository = project.read_with(cx, |project, cx| {
+            project.active_repository(cx).expect("repository")
+        });
+        let buffer = project
+            .update(cx, |project, cx| {
+                project.open_local_buffer(util::path!("/project/file.txt"), cx)
+            })
+            .await
+            .expect("open buffer");
+        let git_store = project.read_with(cx, |project, _| project.git_store().clone());
+        let oid = git::Oid::from_bytes(&[1; 20]).expect("valid oid");
+
+        let error = git_store
+            .update(cx, |git_store, cx| {
+                git_store.open_diff_since(Some(oid), buffer.clone(), repository.clone(), cx)
+            })
+            .await
+            .expect_err("blob is missing");
+        assert_eq!(error.to_string(), "oid does not exist");
+
+        fs.with_git_state(dot_git, false, |state| {
+            state.oids.insert(oid, "old\n".to_string());
+        })
+        .expect("repository exists");
+        let diff = git_store
+            .update(cx, |git_store, cx| {
+                git_store.open_diff_since(Some(oid), buffer.clone(), repository, cx)
+            })
+            .await
+            .expect("retry loads the blob");
+        diff.read_with(cx, |diff, cx| {
+            assert_eq!(diff.base_text_string(cx).as_deref(), Some("old\n"));
+        });
+    }
+
+    #[gpui::test]
     async fn test_append_pattern_to_ignore_file_creates_and_deduplicates(cx: &mut TestAppContext) {
         let fs: Arc<dyn Fs> = FakeFs::new(cx.executor());
         let path = PathBuf::from("/root/.gitignore");
@@ -10845,6 +10929,7 @@ async fn compute_snapshot(
             remote_origin_url,
             remote_upstream_url,
             linked_worktrees,
+            backend: backend.backend(),
             scan_id: prev_snapshot.scan_id + 1,
             ..prev_snapshot
         };

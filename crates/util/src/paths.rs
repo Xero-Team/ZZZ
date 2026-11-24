@@ -2001,6 +2001,36 @@ impl UrlExt for url::Url {
     }
 }
 
+/// Returns the byte offset just past the first unbalanced `(` in `text`, or
+/// `None` if all parentheses are balanced.
+///
+/// Both the workspace path linker and the terminal hyperlink matcher use this to
+/// strip delimiter parens such as `Update(.claude/SKILL.md)` while preserving
+/// balanced parens in filenames like `file(copy).txt`.
+pub fn first_unbalanced_open_paren(text: &str) -> Option<usize> {
+    let mut balance: i32 = 0;
+    let mut first_unmatched = None;
+    for (index, character) in text.char_indices() {
+        match character {
+            '(' => {
+                if balance == 0 {
+                    first_unmatched = Some(index + character.len_utf8());
+                }
+                balance += 1;
+            }
+            ')' => {
+                balance -= 1;
+                if balance <= 0 {
+                    balance = 0;
+                    first_unmatched = None;
+                }
+            }
+            _ => {}
+        }
+    }
+    first_unmatched.filter(|_| balance > 0)
+}
+
 /// Converts the already-decoded path of a URL into a path on a host with `path_style`.
 ///
 /// URL paths keep a `/` before a Windows drive letter (`/C:/x`), which Windows cannot open.
@@ -2024,6 +2054,20 @@ mod tests {
 
     use super::*;
     use util_macros::perf;
+
+    #[test]
+    fn test_first_unbalanced_open_paren() {
+        assert_eq!(first_unbalanced_open_paren("src/file.rs"), None);
+        assert_eq!(first_unbalanced_open_paren("file(copy).txt"), None);
+        assert_eq!(
+            first_unbalanced_open_paren("x) Update(a/b"),
+            Some("x) Update(".len())
+        );
+        assert_eq!(
+            first_unbalanced_open_paren("Update(.claude/SKILL.md"),
+            Some("Update(".len())
+        );
+    }
 
     #[test]
     fn test_lenient_path_matcher() {

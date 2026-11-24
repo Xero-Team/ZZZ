@@ -52,7 +52,7 @@ use crate::{Agent, AgentInitialContent, ExternalSourcePrompt, NewExternalAgentTh
 use agent_settings::AgentSettings;
 use anyhow::Result;
 use collections::HashMap;
-use editor::{Editor, MultiBuffer};
+use editor::Editor;
 use fs::Fs;
 use gpui::{
     Action, Anchor, Animation, AnimationExt, AnyElement, App, AsyncWindowContext, Entity,
@@ -83,6 +83,73 @@ use workspace::{
     ToggleWorkspaceSidebar, ToggleZoom, Workspace, WorkspaceId,
     dock::{DockPosition, Panel, PanelEvent},
 };
+
+/// The active connection's account labels, rendered inside the panel's
+/// **Toggle Agent Menu** popover. The composer's **Agent Options** menu is for
+/// configuration, so account information belongs here instead.
+struct AgentAccountLabels {
+    status: watch::Receiver<Option<acp::AuthStatusResponse>>,
+    _updates: Task<()>,
+}
+
+impl AgentAccountLabels {
+    fn new(
+        status: watch::Receiver<Option<acp::AuthStatusResponse>>,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut updates = status.clone();
+        Self {
+            status,
+            _updates: cx.spawn(async move |this, cx| {
+                while updates.changed().await.is_ok() {
+                    if this.update(cx, |_, cx| cx.notify()).is_err() {
+                        break;
+                    }
+                }
+            }),
+        }
+    }
+}
+
+impl Render for AgentAccountLabels {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let status = self.status.borrow();
+        let mut rows = v_flex().px_2();
+        if let Some(status) = status.as_ref() {
+            // Several accounts may be active, for example one per provider, and an
+            // agent that reports any active account is telling us the rest are not in use.
+            let has_active = status
+                .accounts
+                .iter()
+                .any(|account| account.active == Some(true));
+            for account in &status.accounts {
+                if has_active && account.active != Some(true) {
+                    continue;
+                }
+                let detail = [
+                    &account.organization,
+                    &account.name,
+                    &account.email,
+                    &account.description,
+                ]
+                .into_iter()
+                .filter_map(|field| field.as_deref())
+                .find(|text| !text.is_empty());
+                let label = match detail {
+                    Some(detail) => format!("{} · {detail}", account.label),
+                    None => account.label.clone(),
+                };
+                rows = rows.child(
+                    Label::new(label)
+                        .size(LabelSize::Small)
+                        .color(Color::Muted)
+                        .truncate(),
+                );
+            }
+        }
+        rows
+    }
+}
 
 const AGENT_PANEL_KEY: &str = "agent_panel";
 const MIN_PANEL_WIDTH: Pixels = px(300.);
@@ -2963,37 +3030,15 @@ impl AgentPanel {
             .spawn(cx, async move |cx| {
                 let json_language = json_language.await.log_err();
 
-                let buffer = project
-                    .update(cx, |project, cx| {
-                        project.create_buffer(json_language, false, cx)
-                    })
-                    .await?;
-
-                buffer.update(cx, |buffer, cx| {
-                    buffer.set_text(text, cx);
-                    buffer.set_capability(language::Capability::ReadWrite, cx);
-                });
-
-                workspace.update_in(cx, |workspace, window, cx| {
-                    let buffer =
-                        cx.new(|cx| MultiBuffer::singleton(buffer, cx).with_title(title.clone()));
-
-                    workspace.add_item_to_active_pane(
-                        Box::new(cx.new(|cx| {
-                            let mut editor =
-                                Editor::for_multibuffer(buffer, Some(project.clone()), window, cx);
-                            editor.set_breadcrumb_header(title);
-                            editor.disable_mouse_wheel_zoom();
-                            editor
-                        })),
-                        None,
-                        true,
-                        window,
-                        cx,
-                    );
-                })?;
-
-                anyhow::Ok(())
+                editor::items::open_text_in_editor(
+                    project,
+                    workspace,
+                    json_language,
+                    title,
+                    text,
+                    cx,
+                )
+                .await
             })
             .detach_and_log_err(cx);
     }
@@ -4039,6 +4084,16 @@ impl AgentPanel {
                                 Box::new(ToggleWorkspaceSidebar),
                             );
 
+                        let auth_status = conversation_view
+                            .as_ref()
+                            .and_then(|view| view.read(cx).agent_auth_status());
+                        if has_auth_methods || supports_logout || auth_status.is_some() {
+                            menu = menu.separator()
+                        }
+                        if let Some(status) = auth_status {
+                            menu = menu
+                                .embedded_view(cx.new(|cx| AgentAccountLabels::new(status, cx)));
+                        }
                         if has_auth_methods {
                             menu = menu.action(
                                 tr(cx, "agent_ui.panel.reauthenticate", "Reauthenticate"),

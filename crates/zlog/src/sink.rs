@@ -128,7 +128,7 @@ pub fn submit(mut record: Record) {
         _ = writeln!(
             &mut stdout,
             "{} {ANSI_BOLD}{}{}{ANSI_RESET} {} {}",
-            jiff::Zoned::now().strftime("%Y-%m-%dT%H:%M:%S%:z"),
+            jiff::ZonedDateTime::now().strftime("%Y-%m-%dT%H:%M:%S%:z"),
             LEVEL_ANSI_COLORS[record.level as usize],
             LEVEL_OUTPUT_STRINGS[record.level as usize],
             SourceFmt {
@@ -144,7 +144,7 @@ pub fn submit(mut record: Record) {
         _ = writeln!(
             &mut stdout,
             "{} {ANSI_BOLD}{}{}{ANSI_RESET} {} {}",
-            jiff::Zoned::now().strftime("%Y-%m-%dT%H:%M:%S%:z"),
+            jiff::ZonedDateTime::now().strftime("%Y-%m-%dT%H:%M:%S%:z"),
             LEVEL_ANSI_COLORS[record.level as usize],
             LEVEL_OUTPUT_STRINGS[record.level as usize],
             SourceFmt {
@@ -181,7 +181,7 @@ pub fn submit(mut record: Record) {
             _ = writeln!(
                 &mut writer,
                 "{} {} {} {}",
-                jiff::Zoned::now().strftime("%Y-%m-%dT%H:%M:%S%:z"),
+                jiff::ZonedDateTime::now().strftime("%Y-%m-%dT%H:%M:%S%:z"),
                 LEVEL_OUTPUT_STRINGS[record.level as usize],
                 SourceFmt {
                     scope: record.scope,

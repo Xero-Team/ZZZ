@@ -4,7 +4,7 @@ use itertools::Itertools;
 use project::{Entry, Metadata, Project};
 use std::path::{Path, PathBuf};
 use util::{
-    paths::{PathStyle, PathWithPosition, normalize_lexically},
+    paths::{PathStyle, PathWithPosition, first_unbalanced_open_paren, normalize_lexically},
     rel_path::RelPath,
 };
 
@@ -103,32 +103,6 @@ pub fn sanitize_path_text(text: &str) -> &str {
     }
 
     sanitized
-}
-
-/// Returns the byte offset just past the first unbalanced `(` in `text`, or
-/// `None` if all parentheses are balanced.
-pub fn first_unbalanced_open_paren(text: &str) -> Option<usize> {
-    let mut balance: i32 = 0;
-    let mut first_unmatched = None;
-    for (index, character) in text.char_indices() {
-        match character {
-            '(' => {
-                if balance == 0 {
-                    first_unmatched = Some(index + character.len_utf8());
-                }
-                balance += 1;
-            }
-            ')' => {
-                balance -= 1;
-                if balance <= 0 {
-                    balance = 0;
-                    first_unmatched = None;
-                }
-            }
-            _ => {}
-        }
-    }
-    first_unmatched.filter(|_| balance > 0)
 }
 
 pub fn possible_open_target(

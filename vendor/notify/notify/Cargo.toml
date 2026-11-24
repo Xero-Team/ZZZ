@@ -1,6 +1,6 @@
 [package]
 name = "notify"
-version = "8.2.2"
+version = "9.0.0"
 description = "Cross-platform filesystem notification library"
 documentation = "https://docs.rs/notify"
 readme = "../README.md"
@@ -17,14 +17,21 @@ edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
 
+[package.metadata.docs.rs]
+# Enabling macos_kqueue would hide the default FSEvents backend.
+features = ["crossbeam-channel", "flume", "futures", "serde", "tokio"]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [features]
 default = ["macos_fsevent"]
 serde = ["notify-types/serde"]
 macos_kqueue = ["kqueue", "mio"]
-macos_fsevent = ["fsevent-sys"]
-# Preserve the feature previously exposed by the optional fsevent-sys dependency.
-fsevent-sys = ["objc2-core-foundation", "objc2-core-services"]
+macos_fsevent = ["objc2-core-foundation", "objc2-core-services"]
+# Force native inotify when cross-compiling for FreeBSD 14.5+.
+freebsd_inotify = []
 serialization-compat-6 = ["notify-types/serialization-compat-6"]
+tokio = ["dep:tokio"]
+futures = ["dep:futures"]
 
 [dependencies]
 notify-types.workspace = true
@@ -33,6 +40,9 @@ flume = { workspace = true, optional = true }
 libc.workspace = true
 log.workspace = true
 walkdir.workspace = true
+futures = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+xxhash-rust.workspace = true
 
 [target.'cfg(any(target_os="linux", target_os="android"))'.dependencies]
 inotify = { workspace = true, default-features = false }
@@ -65,18 +75,26 @@ windows-sys = { workspace = true, features = [
   "Win32_Security",
   "Win32_System_WindowsProgramming",
   "Win32_System_IO",
+  "Win32_System_LibraryLoader",
 ] }
 
-[target.'cfg(any(target_os="freebsd", target_os="openbsd", target_os = "netbsd", target_os = "dragonflybsd", target_os = "ios"))'.dependencies]
+# Both backends must be available for build-time selection.
+[target.'cfg(target_os="freebsd")'.dependencies]
+inotify = { workspace = true, default-features = false }
+kqueue.workspace = true
+mio.workspace = true
+
+[target.'cfg(any(target_os="openbsd", target_os = "netbsd", target_os = "dragonfly", target_os = "ios"))'.dependencies]
 kqueue.workspace = true
 mio.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
 tempfile.workspace = true
-nix.workspace = true
+nix = { workspace = true, features = ["fs", "time"] }
 insta.workspace = true
 pretty_assertions.workspace = true
+tokio = { workspace = true, default-features = true, features = ["time", "rt", "macros"]}
 
 [target.'cfg(target_os = "windows")'.dev-dependencies]
 trash.workspace = true

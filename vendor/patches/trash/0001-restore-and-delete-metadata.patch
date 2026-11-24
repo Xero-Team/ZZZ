@@ -1,8 +1,8 @@
 diff --git a/Cargo.toml b/Cargo.toml
-index a6a7d88..df92462 100644
+index 1f703c4..0c35c51 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
-@@ -49,6 +49,7 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = [
+@@ -51,6 +51,7 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = [
      "std",
      "NSError",
      "NSFileManager",
@@ -11,7 +11,7 @@ index a6a7d88..df92462 100644
      "NSURL",
  ] }
 diff --git a/src/freedesktop.rs b/src/freedesktop.rs
-index 08b6652..d72bc74 100644
+index b89e53b..1178bcd 100644
 --- a/src/freedesktop.rs
 +++ b/src/freedesktop.rs
 @@ -17,11 +17,12 @@ use std::{
@@ -240,7 +240,7 @@ index 08b6652..d72bc74 100644
                                  continue 'trash_item;
                              }
                          };
-@@ -207,14 +273,28 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
+@@ -206,14 +272,28 @@ pub fn list() -> Result<Vec<TrashItem>, Error> {
              if let Some(name) = name {
                  if let Some(original_parent) = original_parent {
                      if time_deleted.is_none() {
@@ -273,7 +273,7 @@ index 08b6652..d72bc74 100644
              }
          }
      }
-@@ -239,7 +319,10 @@ pub fn is_empty() -> Result<bool, Error> {
+@@ -238,7 +318,10 @@ pub fn is_empty() -> Result<bool, Error> {
                  }
              }
              Err(e) => {
@@ -285,7 +285,7 @@ index 08b6652..d72bc74 100644
              }
          }
      }
-@@ -248,13 +331,19 @@ pub fn is_empty() -> Result<bool, Error> {
+@@ -247,13 +330,19 @@ pub fn is_empty() -> Result<bool, Error> {
  }
  
  pub fn trash_folders() -> Result<HashSet<PathBuf>, Error> {
@@ -307,7 +307,7 @@ index 08b6652..d72bc74 100644
              }),
          };
      }
-@@ -303,7 +392,11 @@ fn eval_trash_folders() -> Result<EvaluatedTrashFolders, Error> {
+@@ -302,7 +391,11 @@ fn eval_trash_folders() -> Result<EvaluatedTrashFolders, Error> {
          .map_err(|(p, e)| fs_error(p, e))?;
      }
  
@@ -320,7 +320,7 @@ index 08b6652..d72bc74 100644
  }
  pub fn metadata(item: &TrashItem) -> Result<TrashItemMetadata, Error> {
      // When purging an item the "in-trash" filename must be parsed from the trashinfo filename
-@@ -342,7 +435,10 @@ fn ensure_virtually_exists(path: &Path) -> Result<(), Error> {
+@@ -341,7 +434,10 @@ fn ensure_virtually_exists(path: &Path) -> Result<(), Error> {
      if virtually_exists(path).map_err(|e| fs_error(path, e))? {
          Ok(())
      } else {
@@ -332,7 +332,7 @@ index 08b6652..d72bc74 100644
      }
  }
  
-@@ -406,7 +502,8 @@ where
+@@ -405,7 +501,8 @@ where
          // if it already exists.
          let original_path = item.original_path();
          // Make sure the parent exists so that `create_dir` doesn't faile due to that.
@@ -342,7 +342,7 @@ index 08b6652..d72bc74 100644
          let mut collision = false;
          if file.is_dir() {
              // NOTE create_dir_all succeeds when the path already exist but create_dir
-@@ -420,7 +517,11 @@ where
+@@ -419,7 +516,11 @@ where
              }
          } else {
              // File or symlink
@@ -355,7 +355,7 @@ index 08b6652..d72bc74 100644
                  if e.kind() == std::io::ErrorKind::AlreadyExists {
                      collision = true;
                  } else {
-@@ -430,7 +531,10 @@ where
+@@ -429,7 +530,10 @@ where
          }
          if collision {
              let remaining: Vec<_> = std::iter::once(item).chain(iter).collect();
@@ -367,7 +367,7 @@ index 08b6652..d72bc74 100644
          }
          std::fs::rename(&file, &original_path).map_err(|e| fs_error(&file, e))?;
          std::fs::remove_file(info_file).map_err(|e| fs_error(info_file, e))?;
-@@ -467,7 +571,10 @@ fn execute_on_mounted_trash_folders<F: FnMut(PathBuf) -> Result<(), FsError>>(
+@@ -466,7 +570,10 @@ fn execute_on_mounted_trash_folders<F: FnMut(PathBuf) -> Result<(), FsError>>(
                  }
              }
          } else {
@@ -379,7 +379,7 @@ index 08b6652..d72bc74 100644
          }
      }
      // See if there's a ".Trash-$UID" directory at the mounted location
-@@ -493,7 +600,7 @@ fn move_to_trash(
+@@ -492,7 +599,7 @@ fn move_to_trash(
      src: impl AsRef<Path>,
      trash_folder: impl AsRef<Path>,
      _topdir: impl AsRef<Path>,
@@ -388,7 +388,7 @@ index 08b6652..d72bc74 100644
      let src = src.as_ref();
      let trash_folder = trash_folder.as_ref();
      let files_folder = trash_folder.join("files");
-@@ -533,7 +640,10 @@ fn move_to_trash(
+@@ -532,7 +639,10 @@ fn move_to_trash(
          info_name.push(&in_trash_name);
          info_name.push(".trashinfo");
          let info_file_path = info_folder.join(&info_name);
@@ -400,7 +400,17 @@ index 08b6652..d72bc74 100644
          match info_result {
              Err(error) => {
                  if error.kind() == std::io::ErrorKind::AlreadyExists {
-@@ -567,10 +677,16 @@ fn move_to_trash(
+@@ -551,7 +661,8 @@ fn move_to_trash(
+                         writeln!(file, "Path={absolute_uri}").and_then(|_| {
+                             #[cfg(feature = "jiff")]
+                             {
+-                                let now = jiff::Timestamp::now().to_zoned_datetime(local_timezone());
++                                let now =
++                                    jiff::Timestamp::now().to_zoned_datetime(local_timezone());
+                                 writeln!(file, "DeletionDate={}", now.strftime("%Y-%m-%dT%H:%M:%S"))
+                             }
+                             #[cfg(not(feature = "jiff"))]
+@@ -566,10 +677,16 @@ fn move_to_trash(
          let path = files_folder.join(&in_trash_name);
          match move_items_no_replace(src, &path) {
              Err((path, error)) => {
@@ -419,7 +429,7 @@ index 08b6652..d72bc74 100644
                  }
                  if error.kind() == std::io::ErrorKind::AlreadyExists {
                      continue;
-@@ -580,12 +696,21 @@ fn move_to_trash(
+@@ -579,12 +696,21 @@ fn move_to_trash(
              }
              Ok(_) => {
                  // We did it!
@@ -444,7 +454,7 @@ index 08b6652..d72bc74 100644
  }
  
  /// An error may mean that a collision was found.
-@@ -596,14 +721,19 @@ fn move_items_no_replace(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result
+@@ -595,14 +721,19 @@ fn move_items_no_replace(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result
      try_creating_placeholders(src, dst)?;
  
      // Try to rename first (fastest option for same filesystem)
@@ -466,7 +476,7 @@ index 08b6652..d72bc74 100644
  
      // Copy the file/directory
      if src.is_dir() {
-@@ -631,7 +761,11 @@ fn try_creating_placeholders(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Re
+@@ -630,7 +761,11 @@ fn try_creating_placeholders(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Re
          std::fs::create_dir(dst).map_err(|e| (dst.to_owned(), e))?;
      } else {
          // Symlink or file
@@ -479,7 +489,7 @@ index 08b6652..d72bc74 100644
      }
      Ok(())
  }
-@@ -666,7 +800,10 @@ fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<(), FsEr
+@@ -665,7 +800,10 @@ fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> Result<(), FsEr
  fn decode_uri_path(path: impl AsRef<Path>) -> PathBuf {
      // Decode all bytes together: pushing a component beginning with an encoded
      // slash onto a PathBuf would discard the preceding path. Keep non-UTF-8 bytes.
@@ -491,7 +501,7 @@ index 08b6652..d72bc74 100644
  }
  
  fn encode_uri_path(path: impl AsRef<Path>) -> String {
-@@ -681,12 +818,18 @@ fn encode_uri_path(path: impl AsRef<Path>) -> String {
+@@ -680,12 +818,18 @@ fn encode_uri_path(path: impl AsRef<Path>) -> String {
              if let Component::Normal(part) = component {
                  urlencoding::encode_binary(part.as_bytes()).to_string()
              } else {
@@ -512,7 +522,7 @@ index 08b6652..d72bc74 100644
  }
  
  #[derive(Eq, PartialEq, Debug)]
-@@ -729,12 +872,18 @@ fn home_trash() -> Result<PathBuf, Error> {
+@@ -728,12 +872,18 @@ fn home_trash() -> Result<PathBuf, Error> {
              return Ok(home_path.join(".local/share/Trash"));
          }
      }
@@ -533,7 +543,7 @@ index 08b6652..d72bc74 100644
  }
  
  /// Canonicalize a path. If the path doesn't exist, the canonical form of the
-@@ -745,14 +894,26 @@ fn canonicalize_path_or_parents(mut path: &Path) -> Result<PathBuf, Error> {
+@@ -744,14 +894,26 @@ fn canonicalize_path_or_parents(mut path: &Path) -> Result<PathBuf, Error> {
      loop {
          match path.canonicalize() {
              Ok(canonical) => {
@@ -564,7 +574,7 @@ index 08b6652..d72bc74 100644
          }
      }
  }
-@@ -794,13 +955,20 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+@@ -793,13 +955,20 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
      //let file;
      let read_arg = CString::new("r").unwrap();
      let mounts_path = CString::new("/proc/mounts").unwrap();
@@ -587,7 +597,7 @@ index 08b6652..d72bc74 100644
      }
      defer! { unsafe { libc::fclose(file); } }
      let mut result = Vec::new();
-@@ -816,7 +984,10 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+@@ -815,7 +984,10 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
          let mount_point = unsafe {
              MountPoint {
                  mnt_dir: dir.into(),
@@ -599,7 +609,7 @@ index 08b6652..d72bc74 100644
                  _mnt_type: CStr::from_ptr((*mntent).mnt_type).to_str().unwrap().into(),
              }
          };
-@@ -824,7 +995,9 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+@@ -823,7 +995,9 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
      }
      if result.is_empty() {
          return Err(Error::Unknown {
@@ -610,7 +620,7 @@ index 08b6652..d72bc74 100644
          });
      }
      Ok(result)
-@@ -859,7 +1032,8 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+@@ -858,7 +1032,8 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
      if count < 1 {
          return Ok(Vec::new());
      }
@@ -620,7 +630,7 @@ index 08b6652..d72bc74 100644
  
      let mut result = Vec::new();
      for fs_info in fs_infos {
-@@ -877,8 +1051,11 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+@@ -876,8 +1051,11 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
          };
          let mount_from = c_buf_to_str(&fs_info.f_mntfromname).unwrap_or_default();
  
@@ -634,7 +644,7 @@ index 08b6652..d72bc74 100644
          result.push(mount_point);
      }
      Ok(result)
-@@ -914,7 +1091,8 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+@@ -913,7 +1091,8 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
      if count < 1 {
          return Ok(Vec::new());
      }
@@ -644,7 +654,7 @@ index 08b6652..d72bc74 100644
  
      let mut result = Vec::new();
      for fs_info in fs_infos {
-@@ -932,8 +1110,11 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+@@ -931,8 +1110,11 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
          };
          let mount_from = c_buf_to_str(&fs_info.f_mntfromname).unwrap_or_default();
  
@@ -658,7 +668,7 @@ index 08b6652..d72bc74 100644
          result.push(mount_point);
      }
      Ok(result)
-@@ -948,7 +1129,9 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
+@@ -947,7 +1129,9 @@ fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
  )))]
  fn get_mount_points() -> Result<Vec<MountPoint>, Error> {
      // On platforms that don't have support yet, return an error
@@ -668,8 +678,8 @@ index 08b6652..d72bc74 100644
 +    })
  }
  
- #[cfg(test)]
-@@ -956,7 +1139,7 @@ mod tests {
+ #[cfg(feature = "jiff")]
+@@ -983,7 +1167,7 @@ mod tests {
      use defer::defer;
      use serial_test::serial;
      use std::{
@@ -678,7 +688,7 @@ index 08b6652..d72bc74 100644
          env,
          ffi::{OsStr, OsString},
          fmt,
-@@ -970,11 +1153,10 @@ mod tests {
+@@ -997,11 +1181,10 @@ mod tests {
      use log::warn;
  
      use crate::{
@@ -691,20 +701,42 @@ index 08b6652..d72bc74 100644
      };
  
      use super::{canonicalize_path_or_parents, decode_uri_path};
-@@ -1006,7 +1188,11 @@ mod tests {
-         let date = "DeletionDate=2026-01-02T03:04:05\n";
-         let expected_time = if cfg!(feature = "chrono") {
-             use chrono::TimeZone;
--            chrono::Local.with_ymd_and_hms(2026, 1, 2, 3, 4, 5).earliest().unwrap().timestamp()
-+            chrono::Local
-+                .with_ymd_and_hms(2026, 1, 2, 3, 4, 5)
-+                .earliest()
+@@ -1014,13 +1197,17 @@ mod tests {
+         std::fs::write(&path, "Europe/Berlin\n").unwrap();
+         let tz = super::timezone_from_file(&path).unwrap();
+ 
+-        for (utc, local) in
+-            [("2026-01-02T02:04:05Z", "2026-01-02T03:04:05"), ("2026-07-02T01:04:05Z", "2026-07-02T03:04:05")]
+-        {
++        for (utc, local) in [
++            ("2026-01-02T02:04:05Z", "2026-01-02T03:04:05"),
++            ("2026-07-02T01:04:05Z", "2026-07-02T03:04:05"),
++        ] {
+             let timestamp: jiff::Timestamp = utc.parse().unwrap();
+             let zoned = timestamp.to_zoned_datetime(tz.clone());
+             assert_eq!(zoned.strftime("%Y-%m-%dT%H:%M:%S").to_string(), local);
+-            assert_eq!(super::deletion_timestamp(zoned.datetime(), &tz), Some(timestamp.as_second()));
++            assert_eq!(
++                super::deletion_timestamp(zoned.datetime(), &tz),
++                Some(timestamp.as_second())
++            );
+         }
+ 
+         std::fs::write(&path, "not-a-time-zone\n").unwrap();
+@@ -1079,7 +1266,11 @@ mod tests {
+         #[cfg(feature = "jiff")]
+         let expected_time = {
+             let deleted_at = jiff::civil::date(2026, 1, 2).at(3, 4, 5, 0);
+-            super::local_timezone().to_ambiguous_timestamp(deleted_at).earlier().unwrap().as_second()
++            super::local_timezone()
++                .to_ambiguous_timestamp(deleted_at)
++                .earlier()
 +                .unwrap()
-+                .timestamp()
-         } else {
-             -1
++                .as_second()
          };
-@@ -1030,30 +1216,56 @@ mod tests {
+         #[cfg(not(feature = "jiff"))]
+         let expected_time = -1;
+@@ -1103,30 +1294,56 @@ mod tests {
              ),
              (
                  "duplicate-valid-dates",
@@ -718,12 +750,12 @@ index 08b6652..d72bc74 100644
              (
                  "invalid-first-date",
 -                format!("[Trash Info]\nPath={}\nDeletionDate=invalid\n{date}", encode_uri_path(&first)),
--                if cfg!(feature = "chrono") { None } else { Some(first.clone()) },
+-                if cfg!(feature = "jiff") { None } else { Some(first.clone()) },
 +                format!(
 +                    "[Trash Info]\nPath={}\nDeletionDate=invalid\n{date}",
 +                    encode_uri_path(&first)
 +                ),
-+                if cfg!(feature = "chrono") {
++                if cfg!(feature = "jiff") {
 +                    None
 +                } else {
 +                    Some(first.clone())
@@ -768,7 +800,7 @@ index 08b6652..d72bc74 100644
              (
                  "relative",
                  format!("[Trash Info]\nPath=original/relative.txt\n{date}"),
-@@ -1071,21 +1283,60 @@ mod tests {
+@@ -1144,21 +1361,60 @@ mod tests {
              ),
              (
                  "absolute-encoded-separator",
@@ -839,7 +871,7 @@ index 08b6652..d72bc74 100644
          ];
          for (id, record, _) in &cases {
              std::fs::write(info.join(format!("{id}.trashinfo")), record).unwrap();
-@@ -1102,15 +1353,26 @@ mod tests {
+@@ -1175,15 +1431,26 @@ mod tests {
              let receipt = info.join(format!("{id}.trashinfo"));
              match expected {
                  Some(expected) => {
@@ -870,7 +902,7 @@ index 08b6652..d72bc74 100644
              let receipt = info.join(format!("{id}.trashinfo"));
              restore_all([items[receipt.as_os_str()].clone()]).unwrap();
              assert_eq!(std::fs::read(expected).unwrap(), b"payload");
-@@ -1127,7 +1389,9 @@ mod tests {
+@@ -1200,7 +1467,9 @@ mod tests {
          let file_name_prefix = get_unique_name();
          let batches: usize = 2;
          let files_per_batch: usize = 3;
@@ -881,7 +913,7 @@ index 08b6652..d72bc74 100644
          for _ in 0..batches {
              for path in &names {
                  File::create_new(path).unwrap();
-@@ -1136,7 +1400,9 @@ mod tests {
+@@ -1209,7 +1478,9 @@ mod tests {
              let result = delete_all_using_system_program(&names);
              if let Err(SystemTrashError::NoTrashProgram) = &result {
                  // For example may be the case on build systems that don't have a destop environment
@@ -892,7 +924,7 @@ index 08b6652..d72bc74 100644
                  delete_all(&names).unwrap();
              } else {
                  result.unwrap();
-@@ -1145,7 +1411,11 @@ mod tests {
+@@ -1218,7 +1489,11 @@ mod tests {
          let items = list().unwrap();
          let items: HashMap<_, Vec<_>> = items
              .into_iter()
@@ -905,7 +937,7 @@ index 08b6652..d72bc74 100644
              .fold(HashMap::new(), |mut map, x| {
                  match map.entry(x.name.clone()) {
                      Entry::Occupied(mut entry) => {
-@@ -1176,8 +1446,13 @@ mod tests {
+@@ -1249,8 +1524,13 @@ mod tests {
  
          let file_name_prefix = get_unique_name();
          let file_count = 2;
@@ -921,7 +953,7 @@ index 08b6652..d72bc74 100644
  
          // Test file symbolic link and directory symbolic link
          File::create_new(&names[0]).unwrap();
-@@ -1198,7 +1473,8 @@ mod tests {
+@@ -1271,7 +1551,8 @@ mod tests {
              delete(symlink).unwrap();
              let items = list().unwrap();
              let item = items.into_iter().find(|it| it.name == *symlink).unwrap();
@@ -931,7 +963,7 @@ index 08b6652..d72bc74 100644
  
              // Delete and Purge it without errors
              delete(symlink).unwrap();
-@@ -1211,10 +1487,17 @@ mod tests {
+@@ -1284,10 +1565,17 @@ mod tests {
          let fake = format!("/tmp/{}", get_unique_name());
          let path = decode_uri_path(&fake);
  
@@ -951,7 +983,7 @@ index 08b6652..d72bc74 100644
      }
  
      #[test]
-@@ -1225,7 +1508,10 @@ mod tests {
+@@ -1298,7 +1586,10 @@ mod tests {
          let mut bytes = base.into_encoded_bytes();
          bytes.push(168);
          let fake = OsString::from_vec(bytes);
@@ -963,7 +995,7 @@ index 08b6652..d72bc74 100644
  
          let path = decode_uri_path(&fake);
          assert_eq!(path.as_os_str().as_encoded_bytes(), fake.as_encoded_bytes());
-@@ -1281,8 +1567,11 @@ mod tests {
+@@ -1354,8 +1645,11 @@ mod tests {
                          unix::fs::symlink(resolve(case_root, target), path).unwrap();
                      }
                      CanonicalizeFixture::Chmod { path, mode } => {
@@ -977,7 +1009,7 @@ index 08b6652..d72bc74 100644
                      }
                  }
              }
-@@ -1326,17 +1615,25 @@ mod tests {
+@@ -1399,17 +1693,25 @@ mod tests {
                  name: "no perms to path",
                  setup: &[
                      CanonicalizeFixture::Dir("no-perms-path-parent/locked-path"),
@@ -1006,7 +1038,7 @@ index 08b6652..d72bc74 100644
                  teardown: &[],
              },
              CanonicalizeCase {
-@@ -1372,7 +1669,10 @@ mod tests {
+@@ -1445,7 +1747,10 @@ mod tests {
                  name: "no perms to parent",
                  setup: &[
                      CanonicalizeFixture::Dir("no-perms-parent-grandparent/locked-parent"),
@@ -1018,7 +1050,7 @@ index 08b6652..d72bc74 100644
                  ],
                  input: "no-perms-parent-grandparent/locked-parent/leaf/child",
                  expected: CanonicalizeExpectation::PermissionDenied,
-@@ -1393,30 +1693,45 @@ mod tests {
+@@ -1466,30 +1771,45 @@ mod tests {
                  setup: &[
                      CanonicalizeFixture::Dir("grandparent-symlink-target/parent"),
                      CanonicalizeFixture::File("grandparent-symlink-target/parent/leaf"),
@@ -1070,7 +1102,7 @@ index 08b6652..d72bc74 100644
                  teardown: &[],
              },
              CanonicalizeCase {
-@@ -1429,7 +1744,10 @@ mod tests {
+@@ -1502,7 +1822,10 @@ mod tests {
                          path: "grandparent-symlink-target/parent-link",
                          target: "gp-parent-symlink-target",
                      },
@@ -1082,7 +1114,7 @@ index 08b6652..d72bc74 100644
                  ],
                  input: "grandparent-link/parent-link/leaf",
                  expected: CanonicalizeExpectation::Canonical("gp-parent-symlink-target/leaf"),
-@@ -1444,7 +1762,10 @@ mod tests {
+@@ -1517,7 +1840,10 @@ mod tests {
                          path: "grandparent-symlink-target/parent/path-link",
                          target: "gp-path-symlink-target",
                      },
@@ -1094,7 +1126,7 @@ index 08b6652..d72bc74 100644
                  ],
                  input: "grandparent-link/parent/path-link",
                  expected: CanonicalizeExpectation::Canonical("gp-path-symlink-target"),
-@@ -1465,21 +1786,32 @@ mod tests {
+@@ -1538,21 +1864,32 @@ mod tests {
                          path: "grandparent-symlink-target/path-parent-link",
                          target: "gp-parent-path-parent-target",
                      },
@@ -1131,7 +1163,7 @@ index 08b6652..d72bc74 100644
              },
          ];
  
-@@ -1493,22 +1825,38 @@ mod tests {
+@@ -1566,22 +1903,38 @@ mod tests {
                  CanonicalizeExpectation::Canonical(expected) => {
                      let expected = resolve(&case_root, expected);
                      let canonical = canonicalize_path_or_parents(&input).unwrap_or_else(|err| {
@@ -1183,7 +1215,7 @@ index 08b6652..d72bc74 100644
              }
  
              apply_fixtures(&case_root, case.teardown);
-@@ -1545,7 +1893,9 @@ mod tests {
+@@ -1618,7 +1971,9 @@ mod tests {
  
      /// This is based on the electron library's implementation.
      /// See: https://github.com/electron/electron/blob/34c4c8d5088fa183f56baea28809de6f2a427e02/shell/common/platform_util_linux.cc#L96
@@ -1194,7 +1226,7 @@ index 08b6652..d72bc74 100644
          static DEFAULT_TRASH: &str = "gio";
          let trash = {
              // Determine desktop environment and set accordingly.
-@@ -1710,7 +2060,3 @@ mod tests {
+@@ -1783,7 +2138,3 @@ mod tests {
          DesktopEnvironment::Other
      }
  }
@@ -1203,7 +1235,7 @@ index 08b6652..d72bc74 100644
 -    Error::FileSystem { path: path.into(), source }
 -}
 diff --git a/src/lib.rs b/src/lib.rs
-index d5a2263..e5ea727 100644
+index 3da7261..ffbe60b 100644
 --- a/src/lib.rs
 +++ b/src/lib.rs
 @@ -103,7 +103,9 @@ pub struct TrashContext {
@@ -2414,7 +2446,7 @@ index af6fb99..c016e78 100644
          delete(&via_crate).unwrap();
  
 diff --git a/src/tests.rs b/src/tests.rs
-index 9dee1e7..b8966b6 100644
+index 9c05d34..49c0f2c 100644
 --- a/src/tests.rs
 +++ b/src/tests.rs
 @@ -23,16 +23,27 @@ pub use utils::{get_unique_name, init_logging};
@@ -2448,15 +2480,7 @@ index 9dee1e7..b8966b6 100644
      use std::os::unix::ffi::OsStringExt;
  
      use crate as trash;
-@@ -45,11 +56,16 @@ mod os_limited {
- 
-         let deletion_time = chrono::Utc::now();
-         let actual_unix_deletion_time = deletion_time.naive_utc().timestamp();
--        assert_eq!(actual_unix_deletion_time, deletion_time.naive_local().timestamp());
-+        assert_eq!(
-+            actual_unix_deletion_time,
-+            deletion_time.naive_local().timestamp()
-+        );
+@@ -47,7 +58,9 @@ mod os_limited {
          let file_name_prefix = get_unique_name();
          let batches: usize = 2;
          let files_per_batch: usize = 3;
@@ -2467,7 +2491,7 @@ index 9dee1e7..b8966b6 100644
          for _ in 0..batches {
              for path in names.iter() {
                  File::create_new(path).unwrap();
-@@ -59,7 +75,11 @@ mod os_limited {
+@@ -57,7 +70,11 @@ mod os_limited {
          let items = trash::os_limited::list().unwrap();
          let items: HashMap<_, Vec<_>> = items
              .into_iter()
@@ -2480,7 +2504,7 @@ index 9dee1e7..b8966b6 100644
              .fold(HashMap::new(), |mut map, x| {
                  match map.entry(x.name.clone()) {
                      Entry::Occupied(mut entry) => {
-@@ -81,8 +101,7 @@ mod os_limited {
+@@ -79,8 +96,7 @@ mod os_limited {
                              if diff > MAX_SECONDS_DIFFERENCE {
                                  panic!(
                                      "The deleted item does not have the timestamp that represents its deletion time. Expected: {}. Got: {}",
@@ -2490,7 +2514,7 @@ index 9dee1e7..b8966b6 100644
                                  );
                              }
                          }
-@@ -97,11 +116,18 @@ mod os_limited {
+@@ -95,11 +111,18 @@ mod os_limited {
          let _ = trash::os_limited::purge_all(items.iter().flat_map(|(_name, item)| item));
      }
  
@@ -2511,7 +2535,7 @@ index 9dee1e7..b8966b6 100644
          name.push(168);
          let name = OsString::from_vec(name);
          File::create_new(&name).unwrap();
-@@ -110,7 +136,11 @@ mod os_limited {
+@@ -108,7 +131,11 @@ mod os_limited {
          // Listing items is already exhaustively checked above, so this test is mainly concerned
          // with checking that listing non-Unicode names does not panic
          trash::delete(&name).unwrap();
@@ -2524,7 +2548,7 @@ index 9dee1e7..b8966b6 100644
          let _ = trash::os_limited::purge_all([item]);
      }
  
-@@ -133,7 +163,9 @@ mod os_limited {
+@@ -131,7 +158,9 @@ mod os_limited {
          let file_name_prefix = get_unique_name();
          let batches: usize = 2;
          let files_per_batch: usize = 3;
@@ -2535,7 +2559,7 @@ index 9dee1e7..b8966b6 100644
          for _ in 0..batches {
              for path in names.iter() {
                  File::create_new(path).unwrap();
-@@ -145,14 +177,22 @@ mod os_limited {
+@@ -143,14 +172,22 @@ mod os_limited {
          let targets: Vec<_> = trash::os_limited::list()
              .unwrap()
              .into_iter()
@@ -2560,7 +2584,7 @@ index 9dee1e7..b8966b6 100644
              .count();
          assert_eq!(remaining, 0);
      }
-@@ -163,7 +203,9 @@ mod os_limited {
+@@ -161,7 +198,9 @@ mod os_limited {
          init_logging();
          let file_name_prefix = get_unique_name();
          let file_count: usize = 3;
@@ -2571,7 +2595,7 @@ index 9dee1e7..b8966b6 100644
          for path in names.iter() {
              File::create_new(path).unwrap();
          }
-@@ -173,14 +215,22 @@ mod os_limited {
+@@ -171,14 +210,22 @@ mod os_limited {
          let targets: Vec<_> = trash::os_limited::list()
              .unwrap()
              .into_iter()
@@ -2596,7 +2620,7 @@ index 9dee1e7..b8966b6 100644
              .count();
          assert_eq!(remaining, 0);
  
-@@ -209,7 +259,10 @@ mod os_limited {
+@@ -207,7 +254,10 @@ mod os_limited {
      fn list_and_restore_keep_the_extension() {
          init_logging();
          let file_name_prefix = get_unique_name();
@@ -2608,7 +2632,7 @@ index 9dee1e7..b8966b6 100644
          for path in names.iter() {
              File::create_new(path).unwrap();
          }
-@@ -218,7 +271,11 @@ mod os_limited {
+@@ -216,7 +266,11 @@ mod os_limited {
          let targets: Vec<_> = trash::os_limited::list()
              .unwrap()
              .into_iter()
@@ -2621,7 +2645,7 @@ index 9dee1e7..b8966b6 100644
              .collect();
          let mut listed: Vec<OsString> = targets.iter().map(|item| item.name.clone()).collect();
          listed.sort();
-@@ -249,7 +306,9 @@ mod os_limited {
+@@ -247,7 +301,9 @@ mod os_limited {
          let file_name_prefix = get_unique_name();
          let file_count: usize = 3;
          let collision_remaining = file_count - 1;
@@ -2632,7 +2656,7 @@ index 9dee1e7..b8966b6 100644
          for path in names.iter() {
              File::create_new(path).unwrap();
          }
-@@ -260,12 +319,18 @@ mod os_limited {
+@@ -258,12 +314,18 @@ mod os_limited {
          let mut targets: Vec<_> = trash::os_limited::list()
              .unwrap()
              .into_iter()
@@ -2653,7 +2677,7 @@ index 9dee1e7..b8966b6 100644
                  let contains = |v: &Vec<trash::TrashItem>, name: &String| {
                      for curr in v.iter() {
                          if curr.name.as_encoded_bytes() == name.as_bytes() {
-@@ -275,7 +340,10 @@ mod os_limited {
+@@ -273,7 +335,10 @@ mod os_limited {
                      false
                  };
                  // Are all items that got restored reside in the folder?
@@ -2665,7 +2689,7 @@ index 9dee1e7..b8966b6 100644
                      assert!(File::open(path).is_ok());
                  }
                  remaining_items.len()
-@@ -284,13 +352,19 @@ mod os_limited {
+@@ -282,13 +347,19 @@ mod os_limited {
                  for path in names.iter() {
                      std::fs::remove_file(path).ok();
                  }
@@ -2687,7 +2711,7 @@ index 9dee1e7..b8966b6 100644
              .collect::<Vec<_>>();
          assert_eq!(remaining.len(), remaining_count);
          trash::os_limited::purge_all(remaining).unwrap();
-@@ -306,7 +380,9 @@ mod os_limited {
+@@ -304,7 +375,9 @@ mod os_limited {
          init_logging();
          let file_name_prefix = get_unique_name();
          let file_count: usize = 4;
@@ -2698,7 +2722,7 @@ index 9dee1e7..b8966b6 100644
          for path in names.iter() {
              File::create_new(path).unwrap();
          }
-@@ -319,7 +395,11 @@ mod os_limited {
+@@ -317,7 +390,11 @@ mod os_limited {
          let mut targets: Vec<_> = trash::os_limited::list()
              .unwrap()
              .into_iter()
@@ -2711,7 +2735,7 @@ index 9dee1e7..b8966b6 100644
              .collect();
          targets.sort_by(|a, b| a.name.cmp(&b.name));
          assert_eq!(targets.len(), file_count + 1); // plus one for one of the twins
-@@ -328,7 +408,9 @@ mod os_limited {
+@@ -326,7 +403,9 @@ mod os_limited {
                  assert_eq!(path.file_name().unwrap().to_str().unwrap(), twin_name);
                  trash::os_limited::purge_all(items).unwrap();
              }
@@ -2722,7 +2746,7 @@ index 9dee1e7..b8966b6 100644
          }
      }
  
-@@ -339,6 +421,9 @@ mod os_limited {
+@@ -337,6 +416,9 @@ mod os_limited {
  
          let is_empty_list = trash::os_limited::list().unwrap().is_empty();
          let is_empty = trash::os_limited::is_empty().unwrap();

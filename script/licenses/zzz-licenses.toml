@@ -26,3 +26,9 @@ accepted = [
     "CDLA-Permissive-2.0",
     "AGPL-3.0-or-later",
 ]
+
+# nvim-rs 0.10.0 relicensed from MIT to LGPL-3.0. `vim` depends on it only as a
+# dev-dependency for the Neovim connection test, so it never reaches a shipped
+# binary; the allowance stays scoped to this crate instead of the global list.
+[nvim-rs]
+accepted = ["LGPL-3.0-only"]
