@@ -4155,7 +4155,13 @@ impl Workspace {
         }
     }
 
-    /// Closes the active item across all panes.
+    /// Closes the active item, along with every other item for the same file,
+    /// across all panes.
+    ///
+    /// Items are matched across panes by `single_file_project_path`, so only
+    /// items that stand for a single file are closed together.
+    /// Any other item, such as a multibuffer, whose project path is just the
+    /// file under its cursor, is closed on its own in the active pane.
     pub fn close_item_in_all_panes(
         &mut self,
         action: &CloseItemInAllPanes,
@@ -4169,7 +4175,7 @@ impl Workspace {
         let save_intent = action.save_intent.unwrap_or(SaveIntent::Close);
         let close_pinned = action.close_pinned;
 
-        if let Some(project_path) = active_item.project_path(cx) {
+        if let Some(project_path) = active_item.single_file_project_path(cx) {
             self.close_items_with_project_path(
                 &project_path,
                 save_intent,
