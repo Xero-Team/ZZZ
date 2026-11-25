@@ -213,70 +213,117 @@ impl EventEmitter<AcpThreadViewEvent> for ThreadView {}
 /// prefixes and ready to render. Line numbers are guaranteed to be contiguous
 /// starting at `first_number`, so we only store the first number and the line
 /// count rather than allocating a per-line `Vec`.
+///
+/// `before` and `after` hold the lines an agent wrapped the numbered code in —
+/// OpenCode prefixes the file's path and line range and notes when the file has
+/// more lines — so those stay outside the code block instead of being
+/// highlighted as if they were source.
 struct ParsedCatNumberedCode {
     code: String,
     first_number: u32,
     line_count: usize,
+    before: String,
+    after: String,
 }
 
 fn parse_cat_numbered_markdown_code_block(markdown: &str) -> Option<ParsedCatNumberedCode> {
-    let (_tag, code) = parse_single_fenced_code_block(markdown)?;
-    parse_cat_numbered_code(code)
+    parse_cat_numbered_code(fenced_code_block_content(markdown)?)
 }
 
-fn parse_single_fenced_code_block(markdown: &str) -> Option<(&str, &str)> {
-    let first_non_backtick = markdown.find(|character| character != '`')?;
-    if first_non_backtick < 3 {
-        return None;
-    }
+/// Content of the first fenced code block in `markdown`.
+///
+/// Agents put their own text around read output — OpenCode appends a note when
+/// the file has more lines — so the block is located rather than required to
+/// span the whole message.
+fn fenced_code_block_content(markdown: &str) -> Option<&str> {
+    let fence_start = markdown.find("```")?;
+    let fence_len = markdown
+        .get(fence_start..)?
+        .bytes()
+        .take_while(|byte| *byte == b'`')
+        .count();
+    let fence_end = fence_start.checked_add(fence_len)?;
+    let fence = markdown.get(fence_start..fence_end)?;
 
-    let fence = &markdown[..first_non_backtick];
-    let after_opening_fence = &markdown[first_non_backtick..];
+    let after_opening_fence = markdown.get(fence_end..)?;
     let tag_end = after_opening_fence.find('\n')?;
-    let tag = &after_opening_fence[..tag_end];
-    let after_tag = &after_opening_fence[tag_end + 1..];
-    let closing_fence = format!("\n{fence}\n");
-    let code = after_tag.strip_suffix(&closing_fence)?;
-    Some((tag, code))
+    let code_start = fence_end.checked_add(tag_end)?.checked_add(1)?;
+    let code = markdown.get(code_start..)?;
+
+    let closing_fence = format!("\n{fence}");
+    code.split_once(&closing_fence).map(|(code, _)| code)
 }
 
 /// Walks `code` exactly once: for each line it validates and strips the
-/// `NNN\t` prefix, then pushes the line's content into the accumulating
-/// code buffer (with `\n` between lines, no trailing newline). Verifies that
-/// the line numbers form a contiguous, increasing sequence.
+/// `NNN<separator>` prefix, then pushes the line's content into the accumulating
+/// code buffer (with `\n` between lines, no trailing newline). Verifies that the
+/// line numbers form a contiguous, increasing sequence.
+///
+/// Lines before the first numbered line, and everything after the numbered run
+/// ends, are kept in `before` and `after`: agents put their own prose there, and
+/// it is not source code to be highlighted.
 fn parse_cat_numbered_code(code: &str) -> Option<ParsedCatNumberedCode> {
     if code.is_empty() {
         return None;
     }
 
-    let mut output = String::with_capacity(code.len());
+    let mut parsed_code = String::with_capacity(code.len());
+    let mut before = String::new();
+    let mut after = String::new();
     let mut first_number = None;
-    let mut expected_number = None;
-    let mut line_count: usize = 0;
+    let mut expected_number: Option<u32> = None;
+    let mut code_line_count = 0;
+    let mut before_line_count = 0;
+    let mut after_line_count = 0;
+    let mut numbered_run_ended = false;
+
     for raw_line in code.split_inclusive('\n') {
         let line = strip_line_ending(raw_line);
-        let (number, text) = parse_cat_numbered_line(line)?;
-        if let Some(expected) = expected_number {
-            if number != expected {
-                return None;
+
+        if !numbered_run_ended {
+            match parse_cat_numbered_line(line) {
+                Some((number, text)) => {
+                    let continues = match expected_number {
+                        Some(expected) => number == expected,
+                        None => first_number.is_none(),
+                    };
+                    if !continues {
+                        return None;
+                    }
+                    if code_line_count > 0 {
+                        parsed_code.push('\n');
+                    }
+                    parsed_code.push_str(text);
+                    code_line_count += 1;
+                    first_number.get_or_insert(number);
+                    expected_number = number.checked_add(1);
+                    continue;
+                }
+                None if first_number.is_some() => numbered_run_ended = true,
+                None => {
+                    if before_line_count > 0 {
+                        before.push('\n');
+                    }
+                    before.push_str(line);
+                    before_line_count += 1;
+                    continue;
+                }
             }
-        } else if first_number.is_some() {
-            return None;
-        } else {
-            first_number = Some(number);
         }
-        expected_number = number.checked_add(1);
-        if line_count > 0 {
-            output.push('\n');
+
+        if after_line_count > 0 {
+            after.push('\n');
         }
-        output.push_str(text);
-        line_count += 1;
+        after.push_str(line);
+        after_line_count += 1;
     }
 
     Some(ParsedCatNumberedCode {
-        code: output,
+        code: parsed_code,
         first_number: first_number?,
-        line_count,
+        line_count: code_line_count,
+        before: before.trim_matches('\n').to_string(),
+        after: after.trim_matches('\n').to_string(),
     })
 }
 
@@ -285,18 +332,31 @@ fn strip_line_ending(line: &str) -> &str {
     without_lf.trim_suffix('\r')
 }
 
+/// Separators that agents put between a line number and the line's content.
+///
+/// Zed's own read tool pads the number with spaces and ends it with a tab.
+/// Agents that follow `grep -n` — OpenCode returns `${line}: ${content}` —
+/// use a colon, and some use a pipe or an arrow. A single space after a
+/// punctuation separator belongs to the separator; any further leading
+/// whitespace is the line's own indentation.
+const LINE_NUMBER_SEPARATORS: [&str; 7] = ["\t", ": ", ":", "| ", "|", "→ ", "→"];
+
 fn parse_cat_numbered_line(line: &str) -> Option<(u32, &str)> {
-    let (prefix, text) = line.split_once('\t')?;
-    let number = prefix.trim();
-    if number.is_empty()
-        || !prefix
-            .chars()
-            .all(|character| character == ' ' || character.is_ascii_digit())
-    {
+    let number_end = line
+        .bytes()
+        .take_while(|byte| *byte == b' ' || byte.is_ascii_digit())
+        .count();
+    let number = line.get(..number_end)?.trim();
+    if number.is_empty() {
         return None;
     }
 
-    Some((number.parse().ok()?, text))
+    let rest = line.get(number_end..)?;
+    let content = LINE_NUMBER_SEPARATORS
+        .iter()
+        .find_map(|separator| rest.strip_prefix(*separator))?;
+
+    Some((number.parse().ok()?, content))
 }
 
 fn render_cat_numbered_code_block(
@@ -310,6 +370,8 @@ fn render_cat_numbered_code_block(
         code,
         first_number,
         line_count,
+        before,
+        after,
     } = parsed;
 
     // Line numbers are contiguous (verified during parsing), so the largest
@@ -379,7 +441,7 @@ fn render_cat_numbered_code_block(
         .child(div().flex_none().child(code_text));
     code_scroll.style().restrict_scroll_to_axis = Some(true);
 
-    container
+    let code_block = container
         .child(
             h_flex()
                 .items_start()
@@ -403,8 +465,25 @@ fn render_cat_numbered_code_block(
                         "Copy Code",
                     )),
                 ),
-        )
-        .into_any_element()
+        );
+
+    let mut output = v_flex().w_full().gap_1();
+    if !before.is_empty() {
+        output = output.child(
+            Label::new(before)
+                .size(LabelSize::XSmall)
+                .color(Color::Muted),
+        );
+    }
+    output = output.child(code_block);
+    if !after.is_empty() {
+        output = output.child(
+            Label::new(after)
+                .size(LabelSize::XSmall)
+                .color(Color::Muted),
+        );
+    }
+    output.into_any_element()
 }
 
 fn highlight_code_runs(
@@ -468,6 +547,58 @@ mod numbered_code_block_tests {
         assert_eq!(parsed.line_count, 2);
         assert_eq!(parsed.first_number, 1);
         assert_eq!(parsed.code, "line one\nline two");
+    }
+
+    #[test]
+    fn parses_colon_separated_line_numbers() {
+        let parsed = parse_cat_numbered_code("326:     });\n327:     assert_eq!(a, b);\n328: \n")
+            .expect("OpenCode separates line numbers from content with a colon");
+
+        assert_eq!(parsed.first_number, 326);
+        assert_eq!(parsed.line_count, 3);
+        assert_eq!(parsed.code, "    });\n    assert_eq!(a, b);\n");
+    }
+
+    #[test]
+    fn parses_other_line_number_separators() {
+        let parsed = parse_cat_numbered_code("1:one\n2|two\n3→three\n")
+            .expect("grep-style and arrow-separated line numbers should parse");
+
+        assert_eq!(parsed.first_number, 1);
+        assert_eq!(parsed.code, "one\ntwo\nthree");
+    }
+
+    #[test]
+    fn parses_numbered_code_block_surrounded_by_agent_text() {
+        let leading_note = parse_cat_numbered_markdown_code_block(
+            "Here are lines 80-81:\n\n```rust /test/src/diff.rs\n80: base_text,\n81: new_buffer,\n```\n",
+        )
+        .expect("agent text before the block should not hide the block");
+
+        assert_eq!(leading_note.first_number, 80);
+        assert_eq!(leading_note.code, "base_text,\nnew_buffer,");
+
+        let trailing_note = parse_cat_numbered_markdown_code_block(
+            "```rust\n80: base_text,\n81: new_buffer,\n```\n\n(Showing lines 80-81 of 400.)",
+        )
+        .expect("an agent's note after the closing fence should not hide the block");
+
+        assert_eq!(trailing_note.first_number, 80);
+        assert_eq!(trailing_note.code, "base_text,\nnew_buffer,");
+    }
+
+    #[test]
+    fn parses_numbered_code_block_with_notes_inside_the_block() {
+        let parsed = parse_cat_numbered_markdown_code_block(
+            "```/test/src/diff.rs\nRead file /test/src/diff.rs, lines 1-2\n1: use anyhow::Result;\n2: }\n\n(Showing lines 1-2 of 400.)\n```\n",
+        )
+        .expect("OpenCode's note lines should not block the numbered run");
+
+        assert_eq!(parsed.before, "Read file /test/src/diff.rs, lines 1-2");
+        assert_eq!(parsed.first_number, 1);
+        assert_eq!(parsed.line_count, 2);
+        assert_eq!(parsed.code, "use anyhow::Result;\n}");
+        assert_eq!(parsed.after, "(Showing lines 1-2 of 400.)");
     }
 
     #[test]
@@ -8116,7 +8247,6 @@ impl ThreadView {
                         markdown.cloned(),
                         entry_ix,
                         context_ix,
-                        tool_call,
                         card_layout,
                         window,
                         cx,
@@ -8128,7 +8258,6 @@ impl ThreadView {
                         markdown.clone(),
                         entry_ix,
                         context_ix,
-                        tool_call,
                         card_layout,
                         window,
                         cx,
@@ -8241,7 +8370,6 @@ impl ThreadView {
         markdown: Option<Entity<Markdown>>,
         entry_ix: usize,
         context_ix: usize,
-        tool_call: &ToolCall,
         card_layout: bool,
         window: &Window,
         cx: &Context<Self>,
@@ -8251,7 +8379,6 @@ impl ThreadView {
                 markdown,
                 entry_ix,
                 context_ix,
-                tool_call,
                 card_layout,
                 window,
                 cx,
@@ -8336,18 +8463,16 @@ impl ThreadView {
         markdown: Entity<Markdown>,
         entry_ix: usize,
         context_ix: usize,
-        tool_call: &ToolCall,
         card_layout: bool,
         window: &Window,
         cx: &Context<Self>,
     ) -> AnyElement {
         let markdown_style = MarkdownStyle::themed(MarkdownFont::Agent, window, cx);
         let output = self
-            .render_numbered_read_file_output(
+            .render_numbered_code_block_output(
                 markdown.clone(),
                 entry_ix,
                 context_ix,
-                tool_call,
                 markdown_style.clone(),
                 cx,
             )
@@ -8377,23 +8502,20 @@ impl ThreadView {
             .into_any_element()
     }
 
-    fn render_numbered_read_file_output(
+    /// Renders a fenced code block whose lines are prefixed with contiguous
+    /// line numbers as a gutter plus highlighted code.
+    ///
+    /// Which tool produced the block does not matter: an ACP agent may report a
+    /// read as `read`, `Read`, or something else entirely, and the output is
+    /// the only reliable signal that it is a numbered file.
+    fn render_numbered_code_block_output(
         &self,
         markdown: Entity<Markdown>,
         entry_ix: usize,
         context_ix: usize,
-        tool_call: &ToolCall,
         markdown_style: MarkdownStyle,
         cx: &Context<Self>,
     ) -> Option<AnyElement> {
-        let is_read_file = tool_call
-            .tool_name
-            .as_ref()
-            .is_some_and(|tool_name| tool_name.as_ref() == "read_file");
-        if !is_read_file {
-            return None;
-        }
-
         let markdown = markdown.read(cx);
         let parsed = parse_cat_numbered_markdown_code_block(markdown.source())?;
         let language = markdown.first_code_block_language();

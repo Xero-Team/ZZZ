@@ -39,7 +39,7 @@ use std::{fmt::Display, mem, path::PathBuf, sync::Arc};
 use task::{Shell, ShellBuilder};
 pub use terminal::*;
 use text::Bias;
-use util::markdown::MarkdownEscaped;
+use util::markdown::{MarkdownCodeBlock, MarkdownEscaped};
 use util::path_list::PathList;
 use util::{
     ResultExt, get_default_system_shell_preferring_bash,
@@ -721,6 +721,13 @@ impl ToolCall {
         } else {
             tool_call.title
         };
+        let tool_name = tool_name_from_meta(&tool_call.meta);
+        let read_output_path = read_output_path(
+            tool_call.kind,
+            tool_name.as_deref(),
+            &tool_call.locations,
+            tool_call.raw_input.as_ref(),
+        );
         let mut content = Vec::with_capacity(tool_call.content.len());
         for item in tool_call.content {
             if let Some(item) = ToolCallContent::from_acp(
@@ -733,13 +740,12 @@ impl ToolCall {
                 content.push(item);
             }
         }
+        fence_read_output(&mut content, read_output_path.as_deref(), cx);
 
         let raw_input_markdown = tool_call
             .raw_input
             .as_ref()
             .and_then(|input| markdown_for_raw_output(input, &language_registry, cx));
-
-        let tool_name = tool_name_from_meta(&tool_call.meta);
 
         let subagent_session_info = subagent_session_info_from_meta(&tool_call.meta);
         let sandbox_authorization_details =
@@ -826,6 +832,15 @@ impl ToolCall {
             });
         }
 
+        if let Some(locations) = locations {
+            self.locations = locations;
+        }
+
+        if let Some(raw_input) = raw_input {
+            self.raw_input_markdown = markdown_for_raw_output(&raw_input, &language_registry, cx);
+            self.raw_input = Some(raw_input);
+        }
+
         if let Some(content) = content {
             let mut new_content_len = content.len();
             let mut content = content.into_iter();
@@ -854,15 +869,6 @@ impl ToolCall {
             self.content.truncate(new_content_len);
         }
 
-        if let Some(locations) = locations {
-            self.locations = locations;
-        }
-
-        if let Some(raw_input) = raw_input {
-            self.raw_input_markdown = markdown_for_raw_output(&raw_input, &language_registry, cx);
-            self.raw_input = Some(raw_input);
-        }
-
         if let Some(raw_output) = raw_output {
             if self.content.is_empty()
                 && let Some(markdown) = markdown_for_raw_output(&raw_output, &language_registry, cx)
@@ -874,6 +880,14 @@ impl ToolCall {
             }
             self.raw_output = Some(raw_output);
         }
+
+        let read_output_path = read_output_path(
+            self.kind,
+            self.tool_name.as_deref(),
+            &self.locations,
+            self.raw_input.as_ref(),
+        );
+        fence_read_output(&mut self.content, read_output_path.as_deref(), cx);
         Ok(())
     }
 
@@ -4329,6 +4343,72 @@ impl AcpThread {
     }
 }
 
+/// Whether a tool call reads a file, and so has file contents as its output.
+///
+/// External agents declare this with ACP's `Read` kind. The `read_file` name is
+/// also honoured because that is what in-tree agents and their recorded threads
+/// use.
+fn reads_file(kind: acp::ToolKind, tool_name: Option<&str>) -> bool {
+    kind == acp::ToolKind::Read || tool_name == Some("read_file")
+}
+
+/// Path of the file a read tool call read.
+///
+/// The panel renders read output as a syntax-highlighted code block, and
+/// markdown only resolves a fenced block's language when the fence is tagged
+/// with a path that contains a slash (`CodeBlockKind::FencedSrc`).
+fn read_output_path(
+    kind: acp::ToolKind,
+    tool_name: Option<&str>,
+    locations: &[acp::ToolCallLocation],
+    raw_input: Option<&serde_json::Value>,
+) -> Option<SharedString> {
+    if !reads_file(kind, tool_name) {
+        return None;
+    }
+
+    let path = locations
+        .first()
+        .map(|location| location.path.to_string_lossy().into_owned())
+        .or_else(|| {
+            // Agents that report no location name the file in their input:
+            // `path` for OpenCode, `file_path` for Claude Code.
+            ["path", "file_path"]
+                .iter()
+                .find_map(|key| raw_input?.get(*key)?.as_str().map(str::to_owned))
+        })?;
+
+    path.contains('/').then(|| path.into())
+}
+
+/// Wraps read output in a code block tagged with the path of the file it came
+/// from, so the file's contents are highlighted as its source rather than
+/// parsed as markdown.
+fn fence_read_output(content: &mut [ToolCallContent], read_path: Option<&str>, cx: &mut App) {
+    let Some(read_path) = read_path else {
+        return;
+    };
+
+    for content in content {
+        let ToolCallContent::ContentBlock(ContentBlock::Markdown { markdown }) = content else {
+            continue;
+        };
+
+        let fenced = {
+            let source = markdown.read(cx).source();
+            if source.trim().is_empty() || source.trim_start().starts_with("```") {
+                continue;
+            }
+            MarkdownCodeBlock {
+                tag: read_path,
+                text: source,
+            }
+            .to_string()
+        };
+        markdown.update(cx, |markdown, cx| markdown.replace(fenced, cx));
+    }
+}
+
 fn markdown_for_raw_output(
     raw_output: &serde_json::Value,
     language_registry: &Arc<LanguageRegistry>,
@@ -5722,6 +5802,177 @@ mod tests {
             );
             assert_eq!(untyped.to_markdown(cx), "```\n# plain preview\n```");
             assert_eq!(untyped.text_content(cx), Some("# plain preview"));
+        });
+    }
+
+    #[gpui::test]
+    async fn test_read_tool_call_output_is_fenced_with_file_path(cx: &mut TestAppContext) {
+        init_test(cx);
+        let language_registry = Arc::new(LanguageRegistry::test(cx.executor()));
+
+        cx.update(|cx| {
+            let tool_call = ToolCall::from_acp(
+                acp::ToolCall::new("read-1", "Read file README.md")
+                    .kind(acp::ToolKind::Read)
+                    .status(acp::ToolCallStatus::Completed)
+                    .content(vec!["     1\t# Title\n     2\tbody\n".into()])
+                    .locations(vec![acp::ToolCallLocation::new("/test/README.md")]),
+                ToolCallStatus::Completed,
+                language_registry,
+                PathStyle::local(),
+                &HashMap::default(),
+                cx,
+            )
+            .expect("read tool call should build");
+
+            assert_eq!(
+                tool_call.content[0].to_markdown(cx),
+                "```/test/README.md\n     1\t# Title\n     2\tbody\n\n```\n"
+            );
+        });
+    }
+
+    #[gpui::test]
+    async fn test_read_tool_call_output_falls_back_to_raw_input_path(cx: &mut TestAppContext) {
+        init_test(cx);
+        let language_registry = Arc::new(LanguageRegistry::test(cx.executor()));
+
+        cx.update(|cx| {
+            let tool_call = ToolCall::from_acp(
+                acp::ToolCall::new("read-1", "Read file")
+                    .kind(acp::ToolKind::Read)
+                    .status(acp::ToolCallStatus::Completed)
+                    .raw_input(json!({"path": "src/main.rs"}))
+                    .content(vec!["fn main() {}".into()]),
+                ToolCallStatus::Completed,
+                language_registry,
+                PathStyle::local(),
+                &HashMap::default(),
+                cx,
+            )
+            .expect("read tool call should build");
+
+            assert_eq!(
+                tool_call.content[0].to_markdown(cx),
+                "```src/main.rs\nfn main() {}\n```\n"
+            );
+        });
+    }
+
+    #[gpui::test]
+    async fn test_non_read_tool_call_output_is_not_fenced(cx: &mut TestAppContext) {
+        init_test(cx);
+        let language_registry = Arc::new(LanguageRegistry::test(cx.executor()));
+
+        cx.update(|cx| {
+            let tool_call = ToolCall::from_acp(
+                acp::ToolCall::new("fetch-1", "Fetch https://example.com")
+                    .kind(acp::ToolKind::Fetch)
+                    .status(acp::ToolCallStatus::Completed)
+                    .content(vec!["inappropriate content".into()])
+                    .locations(vec![acp::ToolCallLocation::new("/test/page.html")]),
+                ToolCallStatus::Completed,
+                language_registry,
+                PathStyle::local(),
+                &HashMap::default(),
+                cx,
+            )
+            .expect("fetch tool call should build");
+
+            assert_eq!(
+                tool_call.content[0].to_markdown(cx),
+                "inappropriate content"
+            );
+        });
+    }
+
+    #[gpui::test]
+    async fn test_read_tool_call_output_keeps_its_own_code_fence(cx: &mut TestAppContext) {
+        init_test(cx);
+        let language_registry = Arc::new(LanguageRegistry::test(cx.executor()));
+
+        cx.update(|cx| {
+            let tool_call = ToolCall::from_acp(
+                acp::ToolCall::new("read-1", "Read file script.sh")
+                    .kind(acp::ToolKind::Read)
+                    .status(acp::ToolCallStatus::Completed)
+                    .content(vec!["```sh\nls\n```\n".into()])
+                    .locations(vec![acp::ToolCallLocation::new("/test/script.sh")]),
+                ToolCallStatus::Completed,
+                language_registry,
+                PathStyle::local(),
+                &HashMap::default(),
+                cx,
+            )
+            .expect("read tool call should build");
+
+            assert_eq!(tool_call.content[0].to_markdown(cx), "```sh\nls\n```\n");
+        });
+    }
+
+    #[gpui::test]
+    async fn test_read_tool_call_output_without_a_path_is_not_fenced(cx: &mut TestAppContext) {
+        init_test(cx);
+        let language_registry = Arc::new(LanguageRegistry::test(cx.executor()));
+
+        cx.update(|cx| {
+            let tool_call = ToolCall::from_acp(
+                acp::ToolCall::new("read-1", "Read file README.md")
+                    .kind(acp::ToolKind::Read)
+                    .status(acp::ToolCallStatus::Completed)
+                    .content(vec!["# Title\n".into()])
+                    // A bare file name carries no language for a fenced block to
+                    // resolve, so the fence would only mislead.
+                    .locations(vec![acp::ToolCallLocation::new("README.md")]),
+                ToolCallStatus::Completed,
+                language_registry,
+                PathStyle::local(),
+                &HashMap::default(),
+                cx,
+            )
+            .expect("read tool call should build");
+
+            assert_eq!(tool_call.content[0].to_markdown(cx), "# Title\n");
+        });
+    }
+
+    #[gpui::test]
+    async fn test_read_tool_call_update_fences_output_with_locations_from_the_same_update(
+        cx: &mut TestAppContext,
+    ) {
+        init_test(cx);
+        let language_registry = Arc::new(LanguageRegistry::test(cx.executor()));
+
+        cx.update(|cx| {
+            let mut tool_call = ToolCall::from_acp(
+                acp::ToolCall::new("read-1", "Read file main.rs")
+                    .kind(acp::ToolKind::Read)
+                    .status(acp::ToolCallStatus::Pending),
+                ToolCallStatus::Pending,
+                language_registry.clone(),
+                PathStyle::local(),
+                &HashMap::default(),
+                cx,
+            )
+            .expect("read tool call should build");
+
+            tool_call
+                .update_fields(
+                    acp::ToolCallUpdateFields::new()
+                        .content(vec!["     1\tfn main() {}\n".into()])
+                        .locations(vec![acp::ToolCallLocation::new("/test/src/main.rs")]),
+                    None,
+                    language_registry,
+                    PathStyle::local(),
+                    &HashMap::default(),
+                    cx,
+                )
+                .expect("content update should apply");
+
+            assert_eq!(
+                tool_call.content[0].to_markdown(cx),
+                "```/test/src/main.rs\n     1\tfn main() {}\n\n```\n"
+            );
         });
     }
 
