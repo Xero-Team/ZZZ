@@ -98,3 +98,10 @@ tokio = { workspace = true, default-features = true, features = ["time", "rt", "
 
 [target.'cfg(target_os = "windows")'.dev-dependencies]
 trash.workspace = true
+
+# `src/lib.rs` gates the FreeBSD inotify backend on `notify_freebsd_inotify`,
+# which upstream injects through rustflags in its own FreeBSD CI. Declaring it
+# keeps `-D warnings` builds from reading it as a typo'd condition.
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(notify_freebsd_inotify)']

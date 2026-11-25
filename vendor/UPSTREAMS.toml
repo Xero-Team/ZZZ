@@ -86,7 +86,10 @@ include = [
     "notify-types/LICENSE-MIT",
     "notify-types/src",
 ]
-patches = ["vendor/patches/notify/0001-zzz-local.patch"]
+patches = [
+    "vendor/patches/notify/0001-zzz-local.patch",
+    "vendor/patches/notify/0002-declare-freebsd-inotify-cfg.patch",
+]
 
 [[package]]
 name = "nvim-rs"
