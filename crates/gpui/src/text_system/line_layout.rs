@@ -979,12 +979,14 @@ mod tests {
         let runs = [FontRun {
             len: 2,
             font_id: FontId(1),
+            font_style: FontStyle::Normal,
+            font_weight: FontWeight::NORMAL,
         }];
 
-        let cold_cache = LineLayoutCache::new(Arc::new(NoopTextSystem::new()), Arc::default());
+        let cold_cache = LineLayoutCache::new(Arc::new(NoopTextSystem::new()));
         let cold = cold_cache.layout_wrapped_line("ab", px(0.), &runs, Some(px(0.)), None);
 
-        let warm_cache = LineLayoutCache::new(Arc::new(NoopTextSystem::new()), Arc::default());
+        let warm_cache = LineLayoutCache::new(Arc::new(NoopTextSystem::new()));
         warm_cache.layout_wrapped_line("ab", px(0.), &runs, Some(-px(0.)), None);
         let warm = warm_cache.layout_wrapped_line("ab", px(0.), &runs, Some(px(0.)), None);
 
