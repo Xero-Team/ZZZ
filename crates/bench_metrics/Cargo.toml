@@ -1,0 +1,23 @@
+[package]
+name = "bench_metrics"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+license = "AGPL-3.0-or-later"
+description = "Hardware, resource, and allocation counters for ZZZ perf workloads"
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/bench_metrics.rs"
+doctest = false
+
+[dependencies]
+anyhow.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+perf-event.workspace = true

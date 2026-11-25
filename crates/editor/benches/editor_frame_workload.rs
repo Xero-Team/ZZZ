@@ -1,11 +1,13 @@
 use std::{
-    alloc::{GlobalAlloc, Layout, System},
     path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     time::Instant,
 };
 
 use anyhow::{Context as _, Result, bail};
+use bench_metrics::{
+    AllocationCounter, AllocationMetric, CountingAllocator, HardwareCounter, HardwareEvent,
+    MetricScope,
+};
 use editor::{Editor, EditorMode, MultiBuffer};
 #[cfg(feature = "frame-diagnostics")]
 use gpui::profiler::{FrameDiagnosticsSnapshot, FrameEvent, FramePhase, FrameTimingCollector};
@@ -20,47 +22,44 @@ const WARMUP_FRAMES: usize = 20;
 const CACHED_FRAMES: usize = 1_000;
 const SCROLL_FRAMES: usize = 10 * 60;
 
-struct CountingAllocator;
-
-static COUNTING_ENABLED: AtomicBool = AtomicBool::new(false);
-static ALLOCATION_COUNT: AtomicUsize = AtomicUsize::new(0);
-static ALLOCATED_BYTES: AtomicUsize = AtomicUsize::new(0);
-
 #[global_allocator]
-static GLOBAL_ALLOCATOR: CountingAllocator = CountingAllocator;
+static GLOBAL_ALLOCATOR: CountingAllocator = CountingAllocator::new(std::alloc::System);
 
-unsafe impl GlobalAlloc for CountingAllocator {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        // SAFETY: The system allocator receives the layout supplied by Rust's allocation API.
-        let pointer = unsafe { System.alloc(layout) };
-        record_allocation(pointer, layout.size());
-        pointer
-    }
+/// Every counter one measured phase reports, opened once so the opening cost is
+/// not attributed to the phase.
+struct Counters {
+    allocations: AllocationCounter,
+    allocated_bytes: AllocationCounter,
+    instructions: Option<HardwareCounter>,
+    cycles: Option<HardwareCounter>,
+}
 
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        // SAFETY: The system allocator receives the layout supplied by Rust's allocation API.
-        let pointer = unsafe { System.alloc_zeroed(layout) };
-        record_allocation(pointer, layout.size());
-        pointer
-    }
-
-    unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
-        // SAFETY: The pointer and layout pair came from this allocator's allocation methods.
-        unsafe { System.dealloc(pointer, layout) };
-    }
-
-    unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        // SAFETY: The pointer and layout pair came from this allocator's allocation methods.
-        let pointer = unsafe { System.realloc(pointer, layout, new_size) };
-        record_allocation(pointer, new_size);
-        pointer
+impl Counters {
+    fn new() -> Result<Self> {
+        let allocations =
+            AllocationCounter::new(AllocationMetric::Allocations, MetricScope::CallingThread)
+                .context("the benchmark must install bench_metrics::CountingAllocator")?;
+        let allocated_bytes =
+            AllocationCounter::new(AllocationMetric::AllocatedBytes, MetricScope::CallingThread)
+                .context("the benchmark must install bench_metrics::CountingAllocator")?;
+        Ok(Self {
+            allocations,
+            allocated_bytes,
+            instructions: open_hardware_counter(HardwareEvent::Instructions),
+            cycles: open_hardware_counter(HardwareEvent::Cycles),
+        })
     }
 }
 
-fn record_allocation(pointer: *mut u8, bytes: usize) {
-    if !pointer.is_null() && COUNTING_ENABLED.load(Ordering::Relaxed) {
-        ALLOCATION_COUNT.fetch_add(1, Ordering::Relaxed);
-        ALLOCATED_BYTES.fetch_add(bytes, Ordering::Relaxed);
+/// Hardware counters need kernel support, so a machine that refuses them still
+/// runs the benchmark: the counter is simply absent from the report.
+fn open_hardware_counter(event: HardwareEvent) -> Option<HardwareCounter> {
+    match HardwareCounter::new(event, MetricScope::CallingThread) {
+        Ok(counter) => Some(counter),
+        Err(error) => {
+            eprintln!("bench_metrics: {error}");
+            None
+        }
     }
 }
 
@@ -71,11 +70,17 @@ struct WorkloadMeasurement {
     p50_nanoseconds: u128,
     p95_nanoseconds: u128,
     p99_nanoseconds: u128,
-    allocations: usize,
-    allocated_bytes: usize,
+    allocations: f64,
+    allocated_bytes: f64,
+    instructions: Option<f64>,
+    cycles: Option<f64>,
 }
 
-fn measure<I>(workload: I, mut run_operation: impl FnMut(I::Item)) -> WorkloadMeasurement
+fn measure<I>(
+    counters: &Counters,
+    workload: I,
+    mut run_operation: impl FnMut(I::Item),
+) -> WorkloadMeasurement
 where
     I: IntoIterator,
     I::IntoIter: ExactSizeIterator,
@@ -83,10 +88,10 @@ where
     let workload = workload.into_iter();
     let frames = workload.len();
     let mut frame_durations = Vec::with_capacity(frames);
-    COUNTING_ENABLED.store(false, Ordering::SeqCst);
-    ALLOCATION_COUNT.store(0, Ordering::SeqCst);
-    ALLOCATED_BYTES.store(0, Ordering::SeqCst);
-    COUNTING_ENABLED.store(true, Ordering::SeqCst);
+    let allocations_start = counters.allocations.start();
+    let allocated_bytes_start = counters.allocated_bytes.start();
+    let instructions_start = counters.instructions.as_ref().map(HardwareCounter::start);
+    let cycles_start = counters.cycles.as_ref().map(HardwareCounter::start);
     let started_at = Instant::now();
     for item in workload {
         let frame_started_at = Instant::now();
@@ -94,7 +99,6 @@ where
         frame_durations.push(frame_started_at.elapsed().as_nanos());
     }
     let elapsed_nanoseconds = started_at.elapsed().as_nanos();
-    COUNTING_ENABLED.store(false, Ordering::SeqCst);
 
     WorkloadMeasurement {
         frames,
@@ -102,14 +106,24 @@ where
         p50_nanoseconds: percentile(&mut frame_durations, 50),
         p95_nanoseconds: percentile(&mut frame_durations, 95),
         p99_nanoseconds: percentile(&mut frame_durations, 99),
-        allocations: ALLOCATION_COUNT.load(Ordering::SeqCst),
-        allocated_bytes: ALLOCATED_BYTES.load(Ordering::SeqCst),
+        allocations: counters.allocations.finish(allocations_start),
+        allocated_bytes: counters.allocated_bytes.finish(allocated_bytes_start),
+        instructions: counters
+            .instructions
+            .as_ref()
+            .zip(instructions_start)
+            .map(|(counter, start)| counter.finish(start)),
+        cycles: counters
+            .cycles
+            .as_ref()
+            .zip(cycles_start)
+            .map(|(counter, start)| counter.finish(start)),
     }
 }
 
 fn report_measurement(name: &str, measurement: WorkloadMeasurement) {
     println!(
-        "EDITOR_FRAME_WORKLOAD workload={name} frames={} elapsed_ns={} ns_per_frame={} p50_ns={} p95_ns={} p99_ns={} allocations={} allocated_bytes={} allocations_per_frame={:.3} bytes_per_frame={:.3}",
+        "EDITOR_FRAME_WORKLOAD workload={name} frames={} elapsed_ns={} ns_per_frame={} p50_ns={} p95_ns={} p99_ns={} allocations={:.0} allocated_bytes={:.0} allocations_per_frame={:.3} bytes_per_frame={:.3}",
         measurement.frames,
         measurement.elapsed_nanoseconds,
         measurement.elapsed_nanoseconds / measurement.frames as u128,
@@ -118,9 +132,16 @@ fn report_measurement(name: &str, measurement: WorkloadMeasurement) {
         measurement.p99_nanoseconds,
         measurement.allocations,
         measurement.allocated_bytes,
-        measurement.allocations as f64 / measurement.frames as f64,
-        measurement.allocated_bytes as f64 / measurement.frames as f64,
+        measurement.allocations / measurement.frames as f64,
+        measurement.allocated_bytes / measurement.frames as f64,
     );
+    if let (Some(instructions), Some(cycles)) = (measurement.instructions, measurement.cycles) {
+        println!(
+            "EDITOR_FRAME_HARDWARE workload={name} instructions={instructions:.0} cycles={cycles:.0} instructions_per_frame={:.3} ipc={:.3}",
+            instructions / measurement.frames as f64,
+            instructions / cycles,
+        );
+    }
 }
 
 fn percentile(samples: &mut [u128], percentage: usize) -> u128 {
@@ -343,7 +364,9 @@ fn main() -> Result<()> {
         })
         .context("benchmark editor window should remain open")?;
 
-    let cached = measure(0..CACHED_FRAMES, |_| {
+    let counters = Counters::new()?;
+
+    let cached = measure(&counters, 0..CACHED_FRAMES, |_| {
         draw_frame(&mut cx, window);
     });
     report_measurement("cached", cached);
@@ -353,7 +376,7 @@ fn main() -> Result<()> {
     #[cfg(feature = "frame-diagnostics")]
     collector.snapshot();
 
-    let typing = measure(&typing_keystrokes, |keystroke| {
+    let typing = measure(&counters, &typing_keystrokes, |keystroke| {
         cx.dispatch_keystroke(window, keystroke.clone());
         present_frame(&mut cx, window);
     });
@@ -364,7 +387,7 @@ fn main() -> Result<()> {
     #[cfg(feature = "frame-diagnostics")]
     collector.snapshot();
 
-    let scrolling = measure(0..SCROLL_FRAMES, |frame| {
+    let scrolling = measure(&counters, 0..SCROLL_FRAMES, |frame| {
         let row = frame as f64 * 99_999.0 / (SCROLL_FRAMES - 1) as f64;
         editor
             .update(&mut cx, |editor, window, cx| {
@@ -380,7 +403,7 @@ fn main() -> Result<()> {
     #[cfg(feature = "frame-diagnostics")]
     collector.snapshot();
 
-    let resizing = measure(resize_workload, |(width, height)| {
+    let resizing = measure(&counters, resize_workload, |(width, height)| {
         cx.simulate_window_resize(window, size(px(width), px(height)));
         present_frame(&mut cx, window);
     });

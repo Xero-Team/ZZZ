@@ -13,6 +13,7 @@ members = [
     "crates/assets",
     "crates/audio",
     "crates/audio_viewer",
+    "crates/bench_metrics",
     "crates/breadcrumbs",
     "crates/buffer_diff",
     "crates/cli",
@@ -280,6 +281,7 @@ assets = { path = "crates/assets" }
 audio = { path = "crates/audio" }
 breadcrumbs = { path = "crates/breadcrumbs" }
 buffer_diff = { path = "crates/buffer_diff" }
+bench_metrics = { path = "crates/bench_metrics" }
 cli = { path = "crates/cli" }
 client = { path = "crates/client" }
 clock = { path = "crates/clock" }
@@ -774,6 +776,7 @@ tempfile = "3.27.0"
 thiserror = "2.0.21"
 time = { version = "0.3", features = [
     "macros",
+perf-event = { package = "perf-event2", version = "0.7.4" }
     "parsing",
     "serde",
     "serde-well-known",

@@ -111,6 +111,7 @@ zzz_actions.workspace = true
 zlog.workspace = true
 
 [dev-dependencies]
+bench_metrics.workspace = true
 criterion.workspace = true
 ctor.workspace = true
 gpui = { workspace = true, features = ["test-support"] }
