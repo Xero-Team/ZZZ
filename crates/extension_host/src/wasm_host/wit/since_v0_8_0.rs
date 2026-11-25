@@ -1611,15 +1611,14 @@ mod tests {
         )]);
         let granter = granter(&["granted.tld"]);
 
-        let error = match send(
+        let Err(error) = send(
             &client,
             &granter,
             "https://granted.tld/release.tar.gz",
             get_request(),
             MAX_REDIRECT_HOPS,
-        ) {
-            Ok(_) => panic!("the redirect target is not granted"),
-            Err(error) => error,
+        ) else {
+            panic!("the redirect target is not granted")
         };
 
         assert!(error.to_string().contains("evil.tld"), "{error}");
