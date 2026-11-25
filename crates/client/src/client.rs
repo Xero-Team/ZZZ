@@ -21,7 +21,7 @@ use gpui::{App, AsyncApp, Entity, Global, Task, WeakEntity, actions};
 use http_client::{HttpClient, HttpClientWithUrl, http, read_proxy_from_env};
 use parking_lot::{Mutex, RwLock};
 use postage::watch;
-use proxy::connect_proxy_stream;
+use proxy::{connect_proxy_stream, excluded_from_proxy};
 use rand::prelude::*;
 use release_channel::{AppVersion, ReleaseChannel};
 use rpc::proto::{AnyTypedEnvelope, EnvelopedMessage, PeerId, RequestMessage};
@@ -1125,8 +1125,12 @@ impl Client {
                 async move {
                     let (rpc_host, rpc_port) = url_host_and_port(&rpc_url)?;
                     Ok(match proxy {
-                        Some(proxy) => connect_proxy_stream(&proxy, (&rpc_host, rpc_port)).await?,
-                        None => Box::new(TcpStream::connect((rpc_host.as_str(), rpc_port)).await?),
+                        Some(proxy) if !excluded_from_proxy(&rpc_host) => {
+                            connect_proxy_stream(&proxy, (&rpc_host, rpc_port)).await?
+                        }
+                        Some(_) | None => {
+                            Box::new(TcpStream::connect((rpc_host.as_str(), rpc_port)).await?)
+                        }
                     })
                 }
             })
