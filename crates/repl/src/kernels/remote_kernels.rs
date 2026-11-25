@@ -482,10 +482,7 @@ mod tests {
         assert!(!rendered.contains("secret-jupyter-token"), "{rendered}");
         assert!(rendered.contains("<redacted>"), "{rendered}");
 
-        let rendered = format!(
-            "{:?}",
-            KernelSpecification::JupyterServer(specification.clone())
-        );
+        let rendered = format!("{:?}", KernelSpecification::JupyterServer(specification));
         assert!(!rendered.contains("secret-jupyter-token"), "{rendered}");
     }
 
