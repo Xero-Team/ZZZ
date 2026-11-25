@@ -271,9 +271,9 @@ pub enum AppLifecyclePhase {
 
 /// Whether frames drawn for a window are being presented.
 ///
-/// Reported by [`PlatformWindow::visibility`](crate::PlatformWindow::visibility)
-/// and through
-/// [`PlatformWindow::on_visibility_change`](crate::PlatformWindow::on_visibility_change).
+/// Reported by [`WindowHost::visibility`](crate::WindowHost::visibility) and
+/// through
+/// [`WindowHost::on_visibility_change`](crate::WindowHost::on_visibility_change).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WindowVisibility {
     /// At least part of the window is being presented; frames drawn for it
