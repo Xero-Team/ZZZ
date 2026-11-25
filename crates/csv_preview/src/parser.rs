@@ -117,11 +117,11 @@ impl CsvPreviewView {
                 let (parsed_content, delimiter) = parsed_content;
                 log::debug!("Parsed {} rows", parsed_content.rows.len());
                 view.detected_delimiter = Some(delimiter);
-                view.engine.contents = parsed_content;
+                view.engine.set_contents(parsed_content);
                 view.sync_column_widths(cx);
                 view.last_parse_end_time = Some(parse_end_time);
 
-                view.apply_filter_sort();
+                view.apply_filter_sort(cx);
                 cx.notify();
             })
         })

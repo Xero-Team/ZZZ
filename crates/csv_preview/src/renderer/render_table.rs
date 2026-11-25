@@ -1,5 +1,5 @@
 use crate::types::TableCell;
-use gpui::{AnyElement, Div, Entity, Stateful};
+use gpui::{AnyElement, Div, Entity, Hsla, Stateful};
 use std::ops::Range;
 use ui::{ColumnWidthConfig, ResizableColumnsState, Table, UncheckedTableRow, div, prelude::*};
 
@@ -7,7 +7,7 @@ use crate::{
     CsvPreviewView,
     renderer::table_cell::create_table_cell,
     settings::RowRenderMechanism,
-    types::{AnyColumn, DisplayCellId, DisplayRow},
+    types::{AnyColumn, DataCellId, DisplayCellId, DisplayRow},
 };
 
 fn render_data_cell(cell: Stateful<Div>, debug_information: Option<AnyElement>) -> AnyElement {
@@ -31,7 +31,8 @@ impl CsvPreviewView {
         current_widths: &Entity<ResizableColumnsState>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        self.create_table_inner(self.engine.contents.rows.len(), current_widths, cx)
+        let row_count = self.engine.d2d_mapping().visible_row_count();
+        self.create_table_inner(row_count, current_widths, cx)
     }
 
     fn create_table_inner(
@@ -46,7 +47,7 @@ impl CsvPreviewView {
 
         headers.push(self.create_row_identifier_header(cx));
 
-        // Add the actual CSV headers with sort buttons
+        // Add the actual CSV headers with sort and filter buttons
         for i in 0..(cols - 1) {
             let header_text = self
                 .engine
@@ -86,15 +87,18 @@ impl CsvPreviewView {
                             cx.processor(move |this, display_row: usize, _window, cx| {
                                 this.performance_metrics.rendered_indices.push(display_row);
 
-                                let display_row = DisplayRow(display_row);
+                                // The mapping is transiently stale while a filter/sort
+                                // task is in flight, so an unresolvable row renders empty
+                                // rather than panicking.
                                 Self::render_single_table_row(
                                     this,
                                     cols,
-                                    display_row,
+                                    DisplayRow(display_row),
                                     row_identifier_text_color,
+                                    this.row_height,
                                     cx,
                                 )
-                                .unwrap_or_else(|| panic!("Expected to render a table row"))
+                                .unwrap_or_default()
                             })
                         })
                     }
@@ -106,6 +110,7 @@ impl CsvPreviewView {
                                     .rendered_indices
                                     .extend(range.clone());
 
+                                let row_height = this.row_height;
                                 range
                                     .filter_map(|display_index| {
                                         Self::render_single_table_row(
@@ -113,6 +118,7 @@ impl CsvPreviewView {
                                             cols,
                                             DisplayRow(display_index),
                                             row_identifier_text_color,
+                                            row_height,
                                             cx,
                                         )
                                     })
@@ -132,12 +138,18 @@ impl CsvPreviewView {
         this: &CsvPreviewView,
         cols: usize,
         display_row: DisplayRow,
-        row_identifier_text_color: gpui::Hsla,
+        row_identifier_text_color: Hsla,
+        row_height: Pixels,
         cx: &Context<CsvPreviewView>,
     ) -> Option<UncheckedTableRow<AnyElement>> {
         // Get the actual row index from our sorted indices
         let data_row = this.engine.d2d_mapping().get_data_row(display_row)?;
         let row = this.engine.contents.get_row(data_row)?;
+
+        let selection_bounds = this
+            .selection
+            .as_ref()
+            .and_then(|selection| selection.display_bounds(this.engine.d2d_mapping()));
 
         let mut elements = Vec::with_capacity(cols);
         elements.push(this.create_row_identifier_cell(display_row, data_row, cx)?);
@@ -150,6 +162,27 @@ impl CsvPreviewView {
             let cell_content = table_cell.display_value().cloned().unwrap_or_default();
 
             let display_cell_id = DisplayCellId::new(display_row, col);
+            let data_cell_id = DataCellId::new(data_row, col);
+
+            let is_in_selection =
+                selection_bounds
+                    .as_ref()
+                    .is_some_and(|(row_range, col_range)| {
+                        row_range.contains(&display_row.0) && col_range.contains(&col.0)
+                    });
+
+            let is_focus_cell = this
+                .selection
+                .as_ref()
+                .is_some_and(|selection| selection.focus == data_cell_id);
+
+            let cell_bg = if is_focus_cell {
+                Some(cx.theme().colors().element_selected)
+            } else if is_in_selection {
+                Some(cx.theme().colors().element_hover)
+            } else {
+                None
+            };
 
             let cell = create_table_cell(
                 display_cell_id,
@@ -157,6 +190,15 @@ impl CsvPreviewView {
                 this.settings.multiline_cells_enabled,
                 this.settings.vertical_alignment,
                 cx,
+            );
+            let cell = cell.size_full().when(
+                !this.settings.multiline_cells_effectively_enabled(),
+                |div| {
+                    div.whitespace_nowrap()
+                        .text_ellipsis()
+                        .h(row_height)
+                        .overflow_hidden()
+                },
             );
 
             let debug_information = this.settings.show_debug_info.then(|| {
@@ -179,7 +221,13 @@ impl CsvPreviewView {
                     .into_any_element()
             });
 
-            elements.push(render_data_cell(cell, debug_information));
+            elements.push(
+                div()
+                    .size_full()
+                    .when_some(cell_bg, |div, color| div.bg(color))
+                    .child(render_data_cell(cell, debug_information))
+                    .into_any_element(),
+            );
         }
 
         Some(elements)

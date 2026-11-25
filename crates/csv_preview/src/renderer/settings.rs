@@ -8,7 +8,7 @@ use ui::{
 
 use crate::{
     CsvPreviewView,
-    settings::{DelimiterSelection, HeaderMode, VerticalAlignment},
+    settings::{DelimiterSelection, FilterSortOrder, HeaderMode, VerticalAlignment},
 };
 
 ///// Settings related /////
@@ -93,6 +93,52 @@ impl CsvPreviewView {
                 })
             })
         });
+
+        let current_filter_sort_text = match self.settings.filter_sort_order {
+            FilterSortOrder::AlphaThenCount => tr(
+                cx,
+                "csv_preview.settings.filter_sort.alpha_then_count",
+                "A-Z, then Count",
+            ),
+            FilterSortOrder::CountThenAlpha => tr(
+                cx,
+                "csv_preview.settings.filter_sort.count_then_alpha",
+                "Count, then A-Z",
+            ),
+        };
+        let alpha_then_count_label = tr(
+            cx,
+            "csv_preview.settings.filter_sort.alpha_then_count",
+            "A-Z, then Count",
+        );
+        let count_then_alpha_label = tr(
+            cx,
+            "csv_preview.settings.filter_sort.count_then_alpha",
+            "Count, then A-Z",
+        );
+
+        let view = cx.entity();
+        let filter_sort_dropdown_menu =
+            ContextMenu::build(window, cx, move |menu, _window, _cx| {
+                menu.entry(alpha_then_count_label.clone(), None, {
+                    let view = view.clone();
+                    move |_window, cx| {
+                        view.update(cx, |this, cx| {
+                            this.settings.filter_sort_order = FilterSortOrder::AlphaThenCount;
+                            cx.notify();
+                        });
+                    }
+                })
+                .entry(count_then_alpha_label.clone(), None, {
+                    let view = view;
+                    move |_window, cx| {
+                        view.update(cx, |this, cx| {
+                            this.settings.filter_sort_order = FilterSortOrder::CountThenAlpha;
+                            cx.notify();
+                        });
+                    }
+                })
+            });
 
         let view = cx.entity();
         let header_dropdown_menu = ContextMenu::build(window, cx, move |menu, _window, cx| {
@@ -208,6 +254,31 @@ impl CsvPreviewView {
                         header_dropdown_menu,
                     )
                     .trigger_size(ButtonSize::Compact),
+                ),
+        );
+
+        let panel = panel.child(
+            h_flex()
+                .gap_2()
+                .items_center()
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().colors().text_muted)
+                        .child(tr(cx, "csv_preview.settings.filter_sort", "Filter Sort:")),
+                )
+                .child(
+                    DropdownMenu::new(
+                        ElementId::Name("filter-sort-dropdown".into()),
+                        current_filter_sort_text,
+                        filter_sort_dropdown_menu,
+                    )
+                    .trigger_size(ButtonSize::Compact)
+                    .trigger_tooltip(Tooltip::text(tr(
+                        cx,
+                        "csv_preview.settings.choose_filter_sort",
+                        "Choose how filter values are sorted in the filter menu",
+                    ))),
                 ),
         );
 

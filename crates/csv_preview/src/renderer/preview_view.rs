@@ -11,10 +11,14 @@ impl Render for CsvPreviewView {
 
         let render_prep_start = Instant::now();
         let table_with_settings = v_flex()
+            .key_context("CsvPreview")
             .size_full()
             .p_4()
             .bg(theme.colors().editor_background)
             .track_focus(&self.focus_handle)
+            .on_action(cx.listener(Self::move_focused_cell))
+            .on_action(cx.listener(Self::extend_selection))
+            .on_action(cx.listener(Self::clear_selection))
             .child(self.render_settings_panel(window, cx))
             .child({
                 if self.engine.contents.number_of_cols == 0 {

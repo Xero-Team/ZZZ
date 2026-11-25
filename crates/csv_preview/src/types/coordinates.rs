@@ -16,6 +16,11 @@ impl DisplayRow {
     pub fn new(row: usize) -> Self {
         Self(row)
     }
+
+    /// Get the inner row value
+    pub fn get(self) -> usize {
+        self.0
+    }
 }
 
 impl Deref for DisplayRow {
@@ -99,6 +104,24 @@ impl From<AnyColumn> for usize {
 }
 
 ///// Cells /////
+/// Original data-space cell position. Survives sort/filter changes because it refers to the
+/// source data row, not the visual row index.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DataCellId {
+    pub row: DataRow,
+    pub col: AnyColumn,
+}
+
+impl DataCellId {
+    /// Create a new data cell ID
+    pub fn new(row: impl Into<DataRow>, col: impl Into<AnyColumn>) -> Self {
+        Self {
+            row: row.into(),
+            col: col.into(),
+        }
+    }
+}
+
 /// Visual cell position in rendered table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DisplayCellId {

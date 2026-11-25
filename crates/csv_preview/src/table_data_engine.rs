@@ -1,62 +1,121 @@
-//! This module defines core operations and config of tabular data view (CSV table)
+//! This module defines core operations and config of the tabular data view (CSV table)
 //! It operates in 2 coordinate systems:
 //! - `DataCellId` - indices of src data cells
 //! - `DisplayCellId` - indices of data after applied transformations like sorting/filtering, which is used to render cell on the screen
 //!
 //! It's designed to contain core logic of operations without relying on `CsvPreviewView`, context or window handles.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use ui::table_row::TableRow;
 
 use crate::{
-    table_data_engine::sorting_by_column::{AppliedSorting, sort_data_rows},
-    types::{DataRow, DisplayRow, TableCell, TableLikeContent},
+    table_data_engine::{
+        filtering_by_column::{FilterEntry, FilterStack, calculate_available_filters, retain_rows},
+        sorting_by_column::{AppliedSorting, sort_data_rows},
+    },
+    types::{AnyColumn, DataRow, DisplayRow, TableCell, TableLikeContent},
 };
 
+pub mod filtering_by_column;
 pub mod sorting_by_column;
 
 #[derive(Default)]
 pub(crate) struct TableDataEngine {
+    pub filter_stack: FilterStack,
+    /// Pre-computed unique values per column, used to populate filter menus
+    all_filters: HashMap<AnyColumn, Vec<FilterEntry>>,
     pub applied_sorting: Option<AppliedSorting>,
     d2d_mapping: DisplayToDataMapping,
-    pub contents: TableLikeContent,
+    pub contents: Arc<TableLikeContent>,
 }
 
 impl TableDataEngine {
+    /// Replaces the table contents, dropping filters and sorting when the column
+    /// set changed since they name columns by index.
+    pub(crate) fn set_contents(&mut self, contents: TableLikeContent) {
+        if self
+            .contents
+            .headers
+            .as_slice()
+            .iter()
+            .map(TableCell::display_value)
+            .ne(contents
+                .headers
+                .as_slice()
+                .iter()
+                .map(TableCell::display_value))
+        {
+            self.filter_stack = FilterStack::default();
+            self.applied_sorting = None;
+        }
+        self.contents = Arc::new(contents);
+        // The previous mapping can reference rows removed by an edit. Keep it empty
+        // until the filter/sort pass builds a mapping for the new contents.
+        self.d2d_mapping = DisplayToDataMapping::default();
+        self.calculate_available_filters();
+    }
+
     pub(crate) fn d2d_mapping(&self) -> &DisplayToDataMapping {
         &self.d2d_mapping
     }
 
-    pub(crate) fn apply_sort(&mut self) {
-        self.d2d_mapping
-            .apply_sorting(self.applied_sorting, &self.contents.rows);
-        self.d2d_mapping.merge_mappings();
+    pub(crate) fn set_d2d_mapping(&mut self, mapping: DisplayToDataMapping) {
+        self.d2d_mapping = mapping;
     }
 
-    /// Applies sorting and filtering to the data and produces display to data mapping
-    pub(crate) fn calculate_d2d_mapping(&mut self) {
-        self.d2d_mapping
-            .apply_sorting(self.applied_sorting, &self.contents.rows);
-        self.d2d_mapping.merge_mappings();
+    /// Recomputes the unique filter entries for every column from the current table data.
+    /// Must be called after content changes (e.g. after parsing).
+    pub fn calculate_available_filters(&mut self) {
+        self.all_filters =
+            calculate_available_filters(&self.contents.rows, self.contents.number_of_cols);
     }
 }
 
 /// Relation of Display (rendered) rows to Data (src) rows with applied transformations
 /// Transformations applied:
 /// - sorting by column
+/// - filtering by column values
 #[derive(Debug, Default)]
 pub struct DisplayToDataMapping {
-    /// All rows sorted, regardless of applied filtering. Applied every time sorting changes
+    /// All rows sorted, regardless of applied filtering. Recomputed every time sorting changes
     pub sorted_rows: Vec<DataRow>,
-    /// Filtered and sorted rows. Computed cheaply from `sorted_mapping` and `filtered_out_rows`
+    /// Rows that survive the active filters. Recomputed every time filters change
+    pub retained_rows: HashSet<DataRow>,
+    /// Merged result: sorted rows intersected with retained rows
     pub mapping: Arc<HashMap<DisplayRow, DataRow>>,
+    /// Inverse of `mapping`, so a data row's display position is a lookup
+    /// instead of a scan. The renderer asks this for every visible row while a
+    /// selection is active, so a scan there would be quadratic per frame.
+    pub data_to_display: Arc<HashMap<DataRow, DisplayRow>>,
 }
 
 impl DisplayToDataMapping {
+    /// Computes the full display-to-data mapping from owned inputs.
+    /// Intended to be called from a background thread.
+    pub(crate) fn compute(
+        contents: &Arc<TableLikeContent>,
+        filter_stack: &FilterStack,
+        sorting: Option<AppliedSorting>,
+    ) -> Self {
+        let mut mapping = Self::default();
+        mapping.apply_sorting(sorting, &contents.rows);
+        mapping.apply_filtering(filter_stack, &contents.rows);
+        mapping.merge_mappings();
+        mapping
+    }
+
     /// Get the data row for a given display row
     pub fn get_data_row(&self, display_row: DisplayRow) -> Option<DataRow> {
         self.mapping.get(&display_row).copied()
+    }
+
+    /// Get the display row for a given data row
+    pub fn get_display_row(&self, data_row: DataRow) -> Option<DisplayRow> {
+        self.data_to_display.get(&data_row).copied()
     }
 
     /// Get the number of filtered rows
@@ -77,14 +136,26 @@ impl DisplayToDataMapping {
         self.sorted_rows = sorted_rows;
     }
 
-    /// Take pre-computed sorting and filtering results, and apply them to the mapping
+    fn apply_filtering(&mut self, filter_stack: &FilterStack, rows: &[TableRow<TableCell>]) {
+        self.retained_rows = retain_rows(rows, filter_stack, None);
+    }
+
+    /// Merges pre-computed sorting and filtering into the final display mapping
     fn merge_mappings(&mut self) {
-        self.mapping = Arc::new(
-            self.sorted_rows
+        let mapping: HashMap<DisplayRow, DataRow> = self
+            .sorted_rows
+            .iter()
+            .filter(|data_row| self.retained_rows.contains(data_row))
+            .enumerate()
+            .map(|(display, data)| (DisplayRow(display), *data))
+            .collect();
+
+        self.data_to_display = Arc::new(
+            mapping
                 .iter()
-                .enumerate()
-                .map(|(display, data)| (DisplayRow(display), *data))
+                .map(|(&display_row, &data_row)| (data_row, display_row))
                 .collect(),
         );
+        self.mapping = Arc::new(mapping);
     }
 }
