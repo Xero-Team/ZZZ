@@ -851,8 +851,7 @@ impl RequestHandler<'_> {
             "Binary files are not supported"
         );
 
-        let encoding = if let Some(encoding) = bom_encoding.or_else(|| byte_content.encoding())
-        {
+        let encoding = if let Some(encoding) = bom_encoding.or_else(|| byte_content.encoding()) {
             encoding
         } else {
             // Detection needs the whole source, so it runs over a reader that
