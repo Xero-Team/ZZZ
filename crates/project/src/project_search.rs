@@ -16,18 +16,16 @@ use fs::Fs;
 use futures::FutureExt as _;
 use futures::{SinkExt, StreamExt, select_biased, stream::FuturesOrdered};
 use gpui::{App, AppContext, AsyncApp, BackgroundExecutor, Entity, Priority, Task};
-use language::{Buffer, BufferSnapshot, Point};
+use language::{
+    Buffer, BufferSnapshot, ByteContent, DecodingReader, Point, detect_encoding, read_byte_header,
+};
 use parking_lot::Mutex;
 use postage::oneshot;
 use rpc::{AnyProtoClient, proto};
 
-use language::ByteContent;
 use util::{ResultExt, maybe, paths::compare_rel_paths, rel_path::RelPath};
 use vfs::ResourceId;
-use worktree::{
-    Entry, ProjectEntryId, Snapshot, Worktree, WorktreeSettings, decode_byte_header,
-    decode_file_text,
-};
+use worktree::{Entry, ProjectEntryId, Snapshot, Worktree, WorktreeSettings, decode_byte_header};
 
 use crate::{
     Project, ProjectItem, ProjectPath, RemotelyCreatedModels,
@@ -809,7 +807,7 @@ impl RequestHandler<'_> {
                 && is_utf8_prefix(file_start);
 
             let line_hint = if is_plain_utf8 {
-                match self.query.detect(file).await {
+                match self.query.detect(&mut file).await {
                     Ok(line_hint) => line_hint,
                     Err(error)
                         if error
@@ -834,14 +832,45 @@ impl RequestHandler<'_> {
         .ok();
     }
 
+    /// Finds the first match in a file that is not plain UTF-8, streaming it
+    /// through [`DecodingReader`] instead of decoding the whole file into a
+    /// `String` first.
     async fn detect_in_decoded_file(
         &self,
         fs: &dyn Fs,
         abs_path: &Path,
     ) -> anyhow::Result<Option<MatchPositionHint>> {
-        let (text, _encoding, _has_bom) = decode_file_text(fs, abs_path).await?;
-        let reader: Box<dyn Read + Send + Sync> = Box::new(Cursor::new(text.into_bytes()));
-        self.query.detect(BufReader::new(reader)).await
+        let mut header_source = fs
+            .open_sync(abs_path)
+            .await
+            .with_context(|| format!("opening file {abs_path:?}"))?;
+        let (header, _) = read_byte_header(&mut *header_source)?;
+        let (bom_encoding, byte_content) = decode_byte_header(&header);
+        anyhow::ensure!(
+            byte_content != ByteContent::Binary,
+            "Binary files are not supported"
+        );
+
+        let encoding = if let Some(encoding) = bom_encoding.or_else(|| byte_content.encoding())
+        {
+            encoding
+        } else {
+            // Detection needs the whole source, so it runs over a reader that
+            // replays the header and the file is reopened for decoding below.
+            let source = fs
+                .open_sync(abs_path)
+                .await
+                .with_context(|| format!("opening file {abs_path:?}"))?;
+            let mut probe = Cursor::new(header.clone()).chain(source);
+            detect_encoding(&mut probe).await?
+        };
+
+        let source = fs
+            .open_sync(abs_path)
+            .await
+            .with_context(|| format!("opening file {abs_path:?}"))?;
+        let mut decoded = DecodingReader::new(Cursor::new(header).chain(source), encoding);
+        self.query.detect(&mut decoded).await
     }
 
     async fn handle_scan_path(&self, req: InputPath) {

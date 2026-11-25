@@ -403,7 +403,7 @@ impl SearchQuery {
 
     pub async fn detect(
         &self,
-        mut reader: BufReader<Box<dyn Read + Send + Sync>>,
+        reader: &mut (dyn Read + Send),
     ) -> Result<Option<MatchPositionHint>> {
         let query_str = self.as_str();
         if query_str.is_empty() {
@@ -413,6 +413,7 @@ impl SearchQuery {
         // Yield from this function every 20KB scanned.
         const YIELD_THRESHOLD: usize = 20 * 1024;
 
+        let mut reader = BufReader::new(reader);
         match self {
             Self::Text { search, .. } => {
                 let mut text = String::new();

@@ -95,7 +95,10 @@ pub use buffer::Operation;
 pub use buffer::*;
 pub use diagnostic::{Diagnostic, DiagnosticSourceKind};
 pub use diagnostic_set::{DiagnosticEntry, DiagnosticEntryRef, DiagnosticGroup};
-pub use file_content::{ByteContent, FILE_ANALYSIS_BYTES, analyze_byte_content};
+pub use file_content::{
+    ByteContent, DecodingReader, FILE_ANALYSIS_BYTES, analyze_byte_content, detect_encoding,
+    read_byte_header,
+};
 pub use language_registry::{
     AvailableLanguage, BinaryStatus, LanguageNotFound, LanguageQueries, LanguageRegistry,
     QUERY_FILENAME_PREFIXES,

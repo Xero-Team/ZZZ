@@ -1,5 +1,3 @@
-use std::io::BufReader;
-
 use language::Buffer;
 use project::search::SearchQuery;
 use text::Rope;
@@ -196,10 +194,8 @@ async fn regex_with_eol_detects_lines() {
     )
     .unwrap();
     let input = " Bool\nsomething else";
-    let result = re
-        .detect(BufReader::new(Box::new(input.as_bytes())))
-        .await
-        .unwrap();
+    let mut reader = input.as_bytes();
+    let result = re.detect(&mut reader).await.unwrap();
     assert!(result.is_some());
 }
 
@@ -218,9 +214,7 @@ async fn multi_line_regex_detects_matches() {
     )
     .unwrap();
     let input = " Bool\nbool";
-    let result = re
-        .detect(BufReader::new(Box::new(input.as_bytes())))
-        .await
-        .unwrap();
+    let mut reader = input.as_bytes();
+    let result = re.detect(&mut reader).await.unwrap();
     assert!(result.is_some());
 }

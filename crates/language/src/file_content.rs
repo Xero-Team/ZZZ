@@ -1,4 +1,152 @@
+use std::io::{self, Read};
+
+use chardetng::{EncodingDetector, Iso2022JpDetection, Utf8Detection};
+use encoding_rs::{CoderResult, Decoder, Encoding};
+use futures_lite::future::yield_now;
+
+/// Number of leading bytes that [`analyze_byte_content`] inspects.
 pub const FILE_ANALYSIS_BYTES: usize = 1024;
+
+/// Number of bytes [`DecodingReader`] transcodes per read of its source.
+const DECODING_BLOCK_BYTES: usize = 64 * 1024;
+
+/// Reads up to [`FILE_ANALYSIS_BYTES`] from `reader`.
+///
+/// Returns the bytes actually read and whether the source ended before the full
+/// prefix was available, so a caller can decide from the prefix and still hand
+/// the same source on to a decoder.
+pub fn read_byte_header(reader: &mut dyn Read) -> io::Result<(Vec<u8>, bool)> {
+    let mut header = vec![0; FILE_ANALYSIS_BYTES];
+    let mut length = 0;
+    while length < header.len() {
+        let read = match reader.read(&mut header[length..]) {
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            result => result?,
+        };
+        if read == 0 {
+            header.truncate(length);
+            return Ok((header, true));
+        }
+        length += read;
+    }
+    Ok((header, false))
+}
+
+/// A [`Read`] adapter that transcodes its source into UTF-8 block by block, so no
+/// more than one block of the source is held in memory at a time.
+///
+/// [`Encoding::new_decoder`] removes a byte order mark, so a source that starts
+/// with one yields text without it.
+pub struct DecodingReader<R> {
+    inner: R,
+    decoder: Decoder,
+    input: Vec<u8>,
+    output: Vec<u8>,
+    output_position: usize,
+    finished: bool,
+}
+
+impl<R: Read> DecodingReader<R> {
+    /// Wraps `inner`, decoding it from `encoding` into UTF-8.
+    pub fn new(inner: R, encoding: &'static Encoding) -> Self {
+        Self {
+            inner,
+            decoder: encoding.new_decoder(),
+            input: vec![0; DECODING_BLOCK_BYTES],
+            output: Vec::new(),
+            output_position: 0,
+            finished: false,
+        }
+    }
+
+    /// The encoding the source is decoded from.
+    pub fn encoding(&self) -> &'static Encoding {
+        self.decoder.encoding()
+    }
+
+    fn fill_output(&mut self) -> io::Result<()> {
+        self.output.clear();
+        self.output_position = 0;
+        let read = self.inner.read(&mut self.input)?;
+        self.finished = read == 0;
+        decode_block(
+            &mut self.decoder,
+            &self.input[..read],
+            self.finished,
+            &mut self.output,
+        )
+    }
+}
+
+impl<R: Read> Read for DecodingReader<R> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        if buffer.is_empty() {
+            return Ok(0);
+        }
+        while self.output_position == self.output.len() {
+            if self.finished {
+                return Ok(0);
+            }
+            match self.fill_output() {
+                // A signal interrupting the read is not an error; retry.
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+                result => result?,
+            }
+        }
+
+        let available = &self.output[self.output_position..];
+        let count = available.len().min(buffer.len());
+        buffer[..count].copy_from_slice(&available[..count]);
+        self.output_position += count;
+        Ok(count)
+    }
+}
+
+fn decode_block(
+    decoder: &mut Decoder,
+    block: &[u8],
+    last: bool,
+    output: &mut Vec<u8>,
+) -> io::Result<()> {
+    let capacity = decoder
+        .max_utf8_buffer_length(block.len())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::OutOfMemory, "decoded block is too large"))?;
+    let start = output.len();
+    output.resize(start + capacity, 0);
+    let (result, consumed, written, _) = decoder.decode_to_utf8(block, &mut output[start..], last);
+    output.truncate(start + written);
+    if result != CoderResult::InputEmpty || consumed != block.len() {
+        return Err(io::Error::other("decoder did not consume the whole block"));
+    }
+    Ok(())
+}
+
+/// Detects the encoding of `reader` without holding the whole source in memory,
+/// yielding between blocks so a large file does not stall the executor.
+///
+/// Detection needs the whole stream, so a caller that wants to decode afterwards
+/// must be able to replay it — for example by re-opening the file.
+pub async fn detect_encoding(reader: &mut (dyn Read + Send)) -> io::Result<&'static Encoding> {
+    let mut detector = EncodingDetector::new(Iso2022JpDetection::Allow);
+    let mut block = vec![0; DECODING_BLOCK_BYTES];
+    let mut length = 0;
+    loop {
+        let read = match reader.read(&mut block[length..]) {
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            result => result?,
+        };
+        if read == 0 {
+            detector.feed(&block[..length], true);
+            return Ok(detector.guess(None, Utf8Detection::Allow));
+        }
+        length += read;
+        if length == block.len() {
+            detector.feed(&block, false);
+            yield_now().await;
+            length = 0;
+        }
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub enum ByteContent {
@@ -6,6 +154,17 @@ pub enum ByteContent {
     Utf16Be,
     Binary,
     Unknown,
+}
+
+impl ByteContent {
+    /// The encoding this classification pins down, if any.
+    pub fn encoding(&self) -> Option<&'static Encoding> {
+        match self {
+            Self::Utf16Le => Some(encoding_rs::UTF_16LE),
+            Self::Utf16Be => Some(encoding_rs::UTF_16BE),
+            Self::Binary | Self::Unknown => None,
+        }
+    }
 }
 
 // Heuristic check using null byte distribution plus a generic text-likeness
@@ -175,4 +334,55 @@ fn read_u16(bytes: &[u8], offset: usize, little_endian: bool) -> Option<u16> {
         return Some(u16::from_le_bytes(pair));
     }
     Some(u16::from_be_bytes(pair))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DecodingReader, read_byte_header};
+    use encoding_rs::{UTF_8, UTF_16LE};
+    use std::io::{Cursor, Read as _};
+
+    #[test]
+    fn decoding_reader_transcodes_across_blocks() {
+        // More than one 64 KiB block, so the transcoder has to stitch a
+        // multi-byte sequence that spans the read boundary together correctly.
+        let text = "Здравствуй, мир! ".repeat(8_000);
+        let mut encoded = Vec::new();
+        encoded.extend_from_slice(&[0xFF, 0xFE]);
+        encoded.extend(text.encode_utf16().flat_map(u16::to_le_bytes));
+
+        let mut reader = DecodingReader::new(Cursor::new(encoded), UTF_16LE);
+        let mut decoded = String::new();
+        reader
+            .read_to_string(&mut decoded)
+            .expect("in-memory source cannot fail");
+
+        assert_eq!(decoded, text);
+        assert_eq!(reader.encoding(), UTF_16LE);
+    }
+
+    #[test]
+    fn decoding_reader_passes_utf8_through() {
+        let mut reader = DecodingReader::new(Cursor::new(b"plain ascii".to_vec()), UTF_8);
+        let mut decoded = String::new();
+        reader
+            .read_to_string(&mut decoded)
+            .expect("in-memory source cannot fail");
+        assert_eq!(decoded, "plain ascii");
+    }
+
+    #[test]
+    fn read_byte_header_reports_short_sources() {
+        let mut short = Cursor::new(b"short".to_vec());
+        let (header, reached_eof) =
+            read_byte_header(&mut short).expect("in-memory read cannot fail");
+        assert_eq!(header, b"short");
+        assert!(reached_eof);
+
+        let mut long = Cursor::new(vec![b'x'; super::FILE_ANALYSIS_BYTES + 1]);
+        let (header, reached_eof) =
+            read_byte_header(&mut long).expect("in-memory read cannot fail");
+        assert_eq!(header.len(), super::FILE_ANALYSIS_BYTES);
+        assert!(!reached_eof);
+    }
 }
