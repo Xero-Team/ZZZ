@@ -9,6 +9,7 @@ module.exports = grammar({
         $.doctype,
         $.tag,
         $.component,
+        $.entity,
         $.text,
         $.comment,
         $.directive,
@@ -112,7 +113,8 @@ module.exports = grammar({
 
     special_attribute: ($) => seq($.special_attribute_name, "=", $.expression),
 
-    special_attribute_name: ($) => choice(":let", ":for", ":stream", ":if"),
+    special_attribute_name: ($) =>
+      choice(":let", ":for", ":key", ":stream", ":if"),
 
     attribute: ($) =>
       seq(
@@ -162,7 +164,7 @@ module.exports = grammar({
     partial_expression_value: ($) =>
       seq(
         repeat($._code),
-        choice("do", "->"),
+        choice("do", "catch", "rescue", "after", "else", "->"),
         optional(seq("#", repeat($._code)))
       ),
 
@@ -181,6 +183,8 @@ module.exports = grammar({
 
     attribute_name: ($) => token(prec(-1, /[^:<>{}"'/=\s][^<>{}"'/=\s]*/)),
 
-    text: ($) => /[^<>{}\s]([^<>{}]*[^<>{}\s])?/,
+    text: ($) => /[^<>{}&\s]([^<>{}&]*[^<>{}&\s])?/,
+
+    entity: ($) => /&(#([xX][0-9a-fA-F]{1,6}|[0-9]{1,5})|[A-Za-z]{1,30});?/,
   },
 });

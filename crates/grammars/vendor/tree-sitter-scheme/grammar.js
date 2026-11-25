@@ -1,202 +1,145 @@
-const PREC = {
-  first: $ => prec(100, $),
-  last: $ => prec(-1, $),
-};
+const {
+  core,
+  syntax,
+} = require("./grammar/index");
 
-const LEAF = {
-  // Unicode whitespace
-  whitespace: /[ \r\n\t\f\v\p{Zs}\p{Zl}\p{Zp}]+/,
-  intra_whitespace: /[ \n\t\p{Zs}]/,
-  line_ending: /[\n\r\u{2028}\u{0085}]|(\r\n)|(\r\u{0085})/,
-  any_char: /.|[\r\n\u{85}\u{2028}\u{2029}]/,
-
-  symbol_element: /[^ \r\n\t\f\v\p{Zs}\p{Zl}\p{Zp}#;"'`,(){}\[\]\\]/,
-};
-
-function paren(rule) {
-  return choice(
-    seq('(', rule, ')'),
-    seq('[', rule, ']'),
-    seq('{', rule, '}'));
-}
+// The default parser accepts the union of R5RS, R6RS, and R7RS reader syntax,
+// plus Steel Scheme #\u characters and #: keywords.
+// Standard-specific parsers live under dialects/.
 
 module.exports = grammar({
   name: "scheme",
 
   extras: _ => [],
 
+  // Identifiers follow R5RS/R6RS/R7RS lexical syntax, so they cannot start
+  // with a digit. R5RS 7.1.1 also requires a delimiter after a number; this
+  // parser does not. 123app123 is therefore a number then a symbol, not one
+  // identifier and not an error. Formal syntax: R5RS section 7.1
+  // (https://schemers.org/Documents/Standards/R5RS/HTML/).
+
   rules: {
+    // Keep the start rule first. Tree-sitter uses the first rule as the start.
     program: $ => repeat($._token),
 
-    _token: $ =>
-      choice(
-        LEAF.whitespace,
-        $._all_comment,
-        $.directive,
-        $._datum),
+    _token: $ => choice(
+      $._intertoken,
+      $._datum,
+    ),
 
-    _skip: $ => choice(LEAF.whitespace, $._all_comment),
+    _intertoken: $ => choice(
+      token(choice(
+        core.whitespace.r6rs,
+        core.whitespace.r7rs,
+        core.whitespace.r5rs,
+      )),
+      $.comment,
+      $.block_comment,
+      $.sexp_comment,
+      $.directive,
+    ),
 
-    _all_comment: $ =>
-      choice(
-        $.comment,
-        $.block_comment),
+    _datum: $ => choice(
+      $.boolean,
+      $.number,
+      $.character,
+      $.string,
+      $.keyword,
+      $.symbol,
+      $.list,
+      $.vector,
+      $.byte_vector,
+      $.quote,
+      $.quasiquote,
+      $.unquote,
+      $.unquote_splicing,
+      $.syntax_quote,
+      $.quasisyntax,
+      $.unsyntax,
+      $.unsyntax_splicing,
+      $.datum_label,
+      $.datum_reference,
+    ),
 
-    comment: $ =>
-      choice(
-        /;.*/,
-        seq("#;", repeat($._skip), $._datum)),
+    // R6RS line comments include the common R5RS/R7RS form and also stop at
+    // the Unicode line endings recognized by the default whitespace rule.
+    comment: _ => token(syntax.comment.line.r6rs),
+    block_comment: $ => syntax.comment.block(
+      $.block_comment,
+      value => prec(100, value),
+    ),
+    sexp_comment: $ => syntax.comment.datum($._intertoken, $._datum),
+    // `#!r6rs` is one leaf. R7RS fold-case keeps `#!` visible.
+    directive: _ => choice(
+      syntax.directive.r7rs,
+      token(syntax.directive.r6rs),
+    ),
 
-    directive: $ =>
-      seq("#!", repeat($._skip), $.symbol),
+    // Hash-dispatch forms keep `#` / `#\\` / `\\` visible so suffixes compete.
+    boolean: _ => choice(
+      syntax.boolean.r7rs,
+      syntax.boolean.r6rs,
+      syntax.boolean.r5rs,
+    ),
+    number: _ => token(choice(
+      syntax.number.r6rs,
+      syntax.number.r7rs,
+      syntax.number.r5rs,
+    )),
+    character: _ => choice(
+      syntax.character.r6rs,
+      syntax.character.r7rs,
+      syntax.character.r5rs,
+      syntax.character.steelScheme,
+    ),
 
-    block_comment: $ =>
-      seq("#|",
-        repeat(
-          choice(
-            PREC.first($.block_comment),
-            LEAF.any_char)),
-        PREC.first("|#")),
+    string: $ => syntax.string($.escape_sequence),
 
-    _datum: $ => choice($._simple_datum, $._compound_datum),
+    escape_sequence: _ => choice(
+      syntax.stringEscape.r6rs,
+      syntax.stringEscape.r7rs,
+      syntax.stringEscape.r5rs,
+    ),
 
-    // simple datum {{{
+    // R6RS identifiers contain the R5RS forms. This intentionally gives the
+    // R6RS reading priority where the standards disagree: ->name is one R6RS
+    // identifier, not the R5RS tokens - and >name.
+    symbol: _ => token(choice(
+      syntax.symbol.r6rs,
+      syntax.symbol.r7rs,
+      syntax.symbol.r5rs,
+    )),
+    keyword: _ => token(syntax.keyword.hashColonToken),
 
-    _simple_datum: $ =>
-      choice(
-        $.boolean,
-        $.number,
-        $.character,
-        $.string,
-        $.symbol),
+    // Dot is list punctuation, not a datum. Vectors keep only $._token.
+    list: $ => choice(
+      syntax.list.round(choice($._token, $.dot)),
+      syntax.list.square(choice($._token, $.dot)),
+    ),
+    dot: _ => ".",
+    vector: $ => syntax.vector.hash($._token),
+    byte_vector: $ => choice(
+      syntax.vector.vu8(choice($._intertoken, $.number)),
+      syntax.vector.u8(choice($._intertoken, $.number)),
+    ),
 
-    boolean: _ => token(choice("#t", "#f", "#T", "#F")),
+    quote: $ => syntax.abbrev.quote($._intertoken, $._datum),
+    quasiquote: $ => syntax.abbrev.quasiquote($._intertoken, $._datum),
+    unquote: $ => syntax.abbrev.unquote($._intertoken, $._datum),
+    unquote_splicing: $ => syntax.abbrev.unquoteSplicing($._intertoken, $._datum),
+    // `syntax` would make the Node binding generate a SyntaxNode subclass
+    // that shadows its SyntaxNode base class during initialization.
+    syntax_quote: $ => syntax.abbrev.syntax($._intertoken, $._datum),
+    quasisyntax: $ => syntax.abbrev.quasisyntax($._intertoken, $._datum),
+    unsyntax: $ => syntax.abbrev.unsyntax($._intertoken, $._datum),
+    unsyntax_splicing: $ => syntax.abbrev.unsyntaxSplicing($._intertoken, $._datum),
 
-    number: _ =>
-      token(
-        choice(
-          number_base(2),
-          number_base(8),
-          number_base(10),
-          number_base(16))),
-
-    character: _ =>
-      token(
-        seq(
-          "#\\",
-          choice(
-            "space", "newline",
-            "alarm", "backspace",
-            "delete", "esc",
-            "linefeed", "page",
-            "return", "space", "tab", "vtab",
-            "nul",
-            /x[0-9a-fA-F]+/,
-            /./))),
-
-    string: $ =>
-      seq(
-        '"',
-        repeat(
-          choice(
-            $.escape_sequence,
-            /[^"\\]+/)),
-        '"'),
-
-    escape_sequence: _ =>
-      token(
-        choice(
-          /\\["\\abfnrtv]/,
-          seq("\\", repeat(LEAF.intra_whitespace), LEAF.line_ending, repeat(LEAF.intra_whitespace)),
-          /\\x[0-9a-fA-F]+;/)),
-
-    symbol: _ => PREC.last(token(repeat1(LEAF.symbol_element))),
-
-    // simple datum }}}
-
-    // compound datum {{{
-
-    _compound_datum: $ =>
-      choice(
-        $._special_form,
-        $.abbreviation,
-        $.list),
-
-    list: $ => paren(repeat($._token)),
-
-    abbreviation: $ => seq($._abbreviation_prefix, repeat($._skip), $._datum),
-    _abbreviation_prefix: _ => choice("'", "`", ",", ",@", "#'", "#`", "#,", "#,@"),
-
-    _special_form: $ =>
-      choice(
-        $.vector,
-        $.byte_vector),
-
-    vector: $ => seq("#(", repeat($._token), ")"),
-
-    byte_vector: $ => seq("#vu8(", repeat($._token), ")"),
-    // compound datum }}}
+    datum_label: $ => syntax.label.definition.r7rs(
+      alias(/[0-9]+/, $.datum_label_id),
+      $._datum,
+    ),
+    datum_reference: $ => syntax.label.reference(
+      alias(/[0-9]+/, $.datum_label_id),
+    ),
   },
 });
-
-// number {{{
-
-function number_base(n) {
-  const radixn = {
-    2: choice("#b", "#B"),
-    8: choice("#o", "#O"),
-    10: choice("#d", "#D", ""),
-    16: choice("#x", "#X"),
-  };
-  const digitsn = {
-    2: /[01]/,
-    8: /[0-7]/,
-    10: /[0-9]/,
-    16: /[0-9a-fA-F]/,
-  };
-
-  const exactness = optional(choice("#i", "#e", "#I", "#E"));
-  const radix = radixn[n];
-  const prefix = choice(seq(radix, exactness), seq(exactness, radix));
-
-  const sign = optional(/[+-]/);
-  const digits = digitsn[n];
-
-  const exponent = /[eEsSfFdDlL]/;
-  const suffix = optional(choice(
-    seq(exponent, sign, repeat1(digitsn[10])),
-    seq("|", repeat1(digitsn[10])),
-  ));
-  const uinteger = seq(repeat1(digits), repeat("#"));
-  const decimal10 = choice(
-    seq(uinteger, suffix),
-    seq(".", repeat1(digits), repeat("#"), suffix),
-    seq(repeat1(digits), ".", repeat(digits), repeat("#"), suffix),
-    seq(repeat1(digits), repeat1("#"), ".", repeat("#"), suffix)
-  );
-  const decimal = {
-    2: "",
-    8: "",
-    10: decimal10,
-    16: "",
-  };
-
-  const ureal =
-    seq(
-      choice(
-        uinteger,
-        seq(uinteger, "/", uinteger),
-        decimal[n]),
-      suffix);
-  const imag = choice("i", seq(ureal, "i"), "inf.0i", "nan.0i");
-  const real = choice(seq(sign, ureal), "+nan.0", "-nan.0", "+inf.0", "-inf.0");
-  const complex = choice(
-    real,
-    seq(real, "@", real),
-    seq(optional(real), /[+-]/, imag)
-  );
-
-  return seq(prefix, complex);
-}
-
-// number }}}

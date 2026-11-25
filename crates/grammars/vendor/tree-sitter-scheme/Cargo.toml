@@ -1,7 +1,7 @@
 [package]
 name = "tree-sitter-scheme"
 description = "Scheme grammar for the tree-sitter parsing library"
-version = "0.2.0"
+version = "0.25.0"
 keywords = ["incremental", "parsing", "scheme"]
 categories = ["parsing", "text-editors"]
 repository = "https://github.com/6cdh/tree-sitter-scheme"
@@ -13,6 +13,7 @@ include = [
   "LICENSE",
   "bindings/rust/*",
   "grammar.js",
+  "grammar/*",
   "src/grammar.json",
   "src/node-types.json",
   "src/parser.c",

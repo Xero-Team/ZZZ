@@ -1,60 +1,5 @@
 [
   {
-    "type": "abbreviation",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": true,
-      "types": [
-        {
-          "type": "abbreviation",
-          "named": true
-        },
-        {
-          "type": "block_comment",
-          "named": true
-        },
-        {
-          "type": "boolean",
-          "named": true
-        },
-        {
-          "type": "byte_vector",
-          "named": true
-        },
-        {
-          "type": "character",
-          "named": true
-        },
-        {
-          "type": "comment",
-          "named": true
-        },
-        {
-          "type": "list",
-          "named": true
-        },
-        {
-          "type": "number",
-          "named": true
-        },
-        {
-          "type": "string",
-          "named": true
-        },
-        {
-          "type": "symbol",
-          "named": true
-        },
-        {
-          "type": "vector",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
     "type": "block_comment",
     "named": true,
     "fields": {},
@@ -70,6 +15,11 @@
     }
   },
   {
+    "type": "boolean",
+    "named": true,
+    "fields": {}
+  },
+  {
     "type": "byte_vector",
     "named": true,
     "fields": {},
@@ -78,23 +28,7 @@
       "required": false,
       "types": [
         {
-          "type": "abbreviation",
-          "named": true
-        },
-        {
           "type": "block_comment",
-          "named": true
-        },
-        {
-          "type": "boolean",
-          "named": true
-        },
-        {
-          "type": "byte_vector",
-          "named": true
-        },
-        {
-          "type": "character",
           "named": true
         },
         {
@@ -106,44 +40,40 @@
           "named": true
         },
         {
-          "type": "list",
-          "named": true
-        },
-        {
           "type": "number",
           "named": true
         },
         {
-          "type": "string",
-          "named": true
-        },
-        {
-          "type": "symbol",
-          "named": true
-        },
-        {
-          "type": "vector",
+          "type": "sexp_comment",
           "named": true
         }
       ]
     }
   },
   {
-    "type": "comment",
+    "type": "character",
     "named": true,
-    "fields": {},
+    "fields": {}
+  },
+  {
+    "type": "datum_label",
+    "named": true,
+    "fields": {
+      "label": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "datum_label_id",
+            "named": true
+          }
+        ]
+      }
+    },
     "children": {
-      "multiple": true,
-      "required": false,
+      "multiple": false,
+      "required": true,
       "types": [
-        {
-          "type": "abbreviation",
-          "named": true
-        },
-        {
-          "type": "block_comment",
-          "named": true
-        },
         {
           "type": "boolean",
           "named": true
@@ -157,7 +87,15 @@
           "named": true
         },
         {
-          "type": "comment",
+          "type": "datum_label",
+          "named": true
+        },
+        {
+          "type": "datum_reference",
+          "named": true
+        },
+        {
+          "type": "keyword",
           "named": true
         },
         {
@@ -169,11 +107,43 @@
           "named": true
         },
         {
+          "type": "quasiquote",
+          "named": true
+        },
+        {
+          "type": "quasisyntax",
+          "named": true
+        },
+        {
+          "type": "quote",
+          "named": true
+        },
+        {
           "type": "string",
           "named": true
         },
         {
           "type": "symbol",
+          "named": true
+        },
+        {
+          "type": "syntax_quote",
+          "named": true
+        },
+        {
+          "type": "unquote",
+          "named": true
+        },
+        {
+          "type": "unquote_splicing",
+          "named": true
+        },
+        {
+          "type": "unsyntax",
+          "named": true
+        },
+        {
+          "type": "unsyntax_splicing",
           "named": true
         },
         {
@@ -184,27 +154,30 @@
     }
   },
   {
+    "type": "datum_reference",
+    "named": true,
+    "fields": {
+      "label": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "datum_label_id",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "directive",
     "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": true,
-      "types": [
-        {
-          "type": "block_comment",
-          "named": true
-        },
-        {
-          "type": "comment",
-          "named": true
-        },
-        {
-          "type": "symbol",
-          "named": true
-        }
-      ]
-    }
+    "fields": {}
+  },
+  {
+    "type": "escape_sequence",
+    "named": true,
+    "fields": {}
   },
   {
     "type": "list",
@@ -215,10 +188,6 @@
       "required": false,
       "types": [
         {
-          "type": "abbreviation",
-          "named": true
-        },
-        {
           "type": "block_comment",
           "named": true
         },
@@ -239,7 +208,23 @@
           "named": true
         },
         {
+          "type": "datum_label",
+          "named": true
+        },
+        {
+          "type": "datum_reference",
+          "named": true
+        },
+        {
           "type": "directive",
+          "named": true
+        },
+        {
+          "type": "dot",
+          "named": true
+        },
+        {
+          "type": "keyword",
           "named": true
         },
         {
@@ -251,11 +236,47 @@
           "named": true
         },
         {
+          "type": "quasiquote",
+          "named": true
+        },
+        {
+          "type": "quasisyntax",
+          "named": true
+        },
+        {
+          "type": "quote",
+          "named": true
+        },
+        {
+          "type": "sexp_comment",
+          "named": true
+        },
+        {
           "type": "string",
           "named": true
         },
         {
           "type": "symbol",
+          "named": true
+        },
+        {
+          "type": "syntax_quote",
+          "named": true
+        },
+        {
+          "type": "unquote",
+          "named": true
+        },
+        {
+          "type": "unquote_splicing",
+          "named": true
+        },
+        {
+          "type": "unsyntax",
+          "named": true
+        },
+        {
+          "type": "unsyntax_splicing",
           "named": true
         },
         {
@@ -275,9 +296,108 @@
       "required": false,
       "types": [
         {
-          "type": "abbreviation",
+          "type": "block_comment",
           "named": true
         },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "byte_vector",
+          "named": true
+        },
+        {
+          "type": "character",
+          "named": true
+        },
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "datum_label",
+          "named": true
+        },
+        {
+          "type": "datum_reference",
+          "named": true
+        },
+        {
+          "type": "directive",
+          "named": true
+        },
+        {
+          "type": "keyword",
+          "named": true
+        },
+        {
+          "type": "list",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "quasiquote",
+          "named": true
+        },
+        {
+          "type": "quasisyntax",
+          "named": true
+        },
+        {
+          "type": "quote",
+          "named": true
+        },
+        {
+          "type": "sexp_comment",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "symbol",
+          "named": true
+        },
+        {
+          "type": "syntax_quote",
+          "named": true
+        },
+        {
+          "type": "unquote",
+          "named": true
+        },
+        {
+          "type": "unquote_splicing",
+          "named": true
+        },
+        {
+          "type": "unsyntax",
+          "named": true
+        },
+        {
+          "type": "unsyntax_splicing",
+          "named": true
+        },
+        {
+          "type": "vector",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "quasiquote",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
         {
           "type": "block_comment",
           "named": true
@@ -299,7 +419,19 @@
           "named": true
         },
         {
+          "type": "datum_label",
+          "named": true
+        },
+        {
+          "type": "datum_reference",
+          "named": true
+        },
+        {
           "type": "directive",
+          "named": true
+        },
+        {
+          "type": "keyword",
           "named": true
         },
         {
@@ -311,11 +443,356 @@
           "named": true
         },
         {
+          "type": "quasiquote",
+          "named": true
+        },
+        {
+          "type": "quasisyntax",
+          "named": true
+        },
+        {
+          "type": "quote",
+          "named": true
+        },
+        {
+          "type": "sexp_comment",
+          "named": true
+        },
+        {
           "type": "string",
           "named": true
         },
         {
           "type": "symbol",
+          "named": true
+        },
+        {
+          "type": "syntax_quote",
+          "named": true
+        },
+        {
+          "type": "unquote",
+          "named": true
+        },
+        {
+          "type": "unquote_splicing",
+          "named": true
+        },
+        {
+          "type": "unsyntax",
+          "named": true
+        },
+        {
+          "type": "unsyntax_splicing",
+          "named": true
+        },
+        {
+          "type": "vector",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "quasisyntax",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "block_comment",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "byte_vector",
+          "named": true
+        },
+        {
+          "type": "character",
+          "named": true
+        },
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "datum_label",
+          "named": true
+        },
+        {
+          "type": "datum_reference",
+          "named": true
+        },
+        {
+          "type": "directive",
+          "named": true
+        },
+        {
+          "type": "keyword",
+          "named": true
+        },
+        {
+          "type": "list",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "quasiquote",
+          "named": true
+        },
+        {
+          "type": "quasisyntax",
+          "named": true
+        },
+        {
+          "type": "quote",
+          "named": true
+        },
+        {
+          "type": "sexp_comment",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "symbol",
+          "named": true
+        },
+        {
+          "type": "syntax_quote",
+          "named": true
+        },
+        {
+          "type": "unquote",
+          "named": true
+        },
+        {
+          "type": "unquote_splicing",
+          "named": true
+        },
+        {
+          "type": "unsyntax",
+          "named": true
+        },
+        {
+          "type": "unsyntax_splicing",
+          "named": true
+        },
+        {
+          "type": "vector",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "quote",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "block_comment",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "byte_vector",
+          "named": true
+        },
+        {
+          "type": "character",
+          "named": true
+        },
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "datum_label",
+          "named": true
+        },
+        {
+          "type": "datum_reference",
+          "named": true
+        },
+        {
+          "type": "directive",
+          "named": true
+        },
+        {
+          "type": "keyword",
+          "named": true
+        },
+        {
+          "type": "list",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "quasiquote",
+          "named": true
+        },
+        {
+          "type": "quasisyntax",
+          "named": true
+        },
+        {
+          "type": "quote",
+          "named": true
+        },
+        {
+          "type": "sexp_comment",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "symbol",
+          "named": true
+        },
+        {
+          "type": "syntax_quote",
+          "named": true
+        },
+        {
+          "type": "unquote",
+          "named": true
+        },
+        {
+          "type": "unquote_splicing",
+          "named": true
+        },
+        {
+          "type": "unsyntax",
+          "named": true
+        },
+        {
+          "type": "unsyntax_splicing",
+          "named": true
+        },
+        {
+          "type": "vector",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "sexp_comment",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "block_comment",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "byte_vector",
+          "named": true
+        },
+        {
+          "type": "character",
+          "named": true
+        },
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "datum_label",
+          "named": true
+        },
+        {
+          "type": "datum_reference",
+          "named": true
+        },
+        {
+          "type": "directive",
+          "named": true
+        },
+        {
+          "type": "keyword",
+          "named": true
+        },
+        {
+          "type": "list",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "quasiquote",
+          "named": true
+        },
+        {
+          "type": "quasisyntax",
+          "named": true
+        },
+        {
+          "type": "quote",
+          "named": true
+        },
+        {
+          "type": "sexp_comment",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "symbol",
+          "named": true
+        },
+        {
+          "type": "syntax_quote",
+          "named": true
+        },
+        {
+          "type": "unquote",
+          "named": true
+        },
+        {
+          "type": "unquote_splicing",
+          "named": true
+        },
+        {
+          "type": "unsyntax",
+          "named": true
+        },
+        {
+          "type": "unsyntax_splicing",
           "named": true
         },
         {
@@ -341,22 +818,13 @@
     }
   },
   {
-    "type": "symbol",
-    "named": true,
-    "fields": {}
-  },
-  {
-    "type": "vector",
+    "type": "syntax_quote",
     "named": true,
     "fields": {},
     "children": {
       "multiple": true,
-      "required": false,
+      "required": true,
       "types": [
-        {
-          "type": "abbreviation",
-          "named": true
-        },
         {
           "type": "block_comment",
           "named": true
@@ -378,7 +846,19 @@
           "named": true
         },
         {
+          "type": "datum_label",
+          "named": true
+        },
+        {
+          "type": "datum_reference",
+          "named": true
+        },
+        {
           "type": "directive",
+          "named": true
+        },
+        {
+          "type": "keyword",
           "named": true
         },
         {
@@ -390,11 +870,562 @@
           "named": true
         },
         {
+          "type": "quasiquote",
+          "named": true
+        },
+        {
+          "type": "quasisyntax",
+          "named": true
+        },
+        {
+          "type": "quote",
+          "named": true
+        },
+        {
+          "type": "sexp_comment",
+          "named": true
+        },
+        {
           "type": "string",
           "named": true
         },
         {
           "type": "symbol",
+          "named": true
+        },
+        {
+          "type": "syntax_quote",
+          "named": true
+        },
+        {
+          "type": "unquote",
+          "named": true
+        },
+        {
+          "type": "unquote_splicing",
+          "named": true
+        },
+        {
+          "type": "unsyntax",
+          "named": true
+        },
+        {
+          "type": "unsyntax_splicing",
+          "named": true
+        },
+        {
+          "type": "vector",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "unquote",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "block_comment",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "byte_vector",
+          "named": true
+        },
+        {
+          "type": "character",
+          "named": true
+        },
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "datum_label",
+          "named": true
+        },
+        {
+          "type": "datum_reference",
+          "named": true
+        },
+        {
+          "type": "directive",
+          "named": true
+        },
+        {
+          "type": "keyword",
+          "named": true
+        },
+        {
+          "type": "list",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "quasiquote",
+          "named": true
+        },
+        {
+          "type": "quasisyntax",
+          "named": true
+        },
+        {
+          "type": "quote",
+          "named": true
+        },
+        {
+          "type": "sexp_comment",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "symbol",
+          "named": true
+        },
+        {
+          "type": "syntax_quote",
+          "named": true
+        },
+        {
+          "type": "unquote",
+          "named": true
+        },
+        {
+          "type": "unquote_splicing",
+          "named": true
+        },
+        {
+          "type": "unsyntax",
+          "named": true
+        },
+        {
+          "type": "unsyntax_splicing",
+          "named": true
+        },
+        {
+          "type": "vector",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "unquote_splicing",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "block_comment",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "byte_vector",
+          "named": true
+        },
+        {
+          "type": "character",
+          "named": true
+        },
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "datum_label",
+          "named": true
+        },
+        {
+          "type": "datum_reference",
+          "named": true
+        },
+        {
+          "type": "directive",
+          "named": true
+        },
+        {
+          "type": "keyword",
+          "named": true
+        },
+        {
+          "type": "list",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "quasiquote",
+          "named": true
+        },
+        {
+          "type": "quasisyntax",
+          "named": true
+        },
+        {
+          "type": "quote",
+          "named": true
+        },
+        {
+          "type": "sexp_comment",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "symbol",
+          "named": true
+        },
+        {
+          "type": "syntax_quote",
+          "named": true
+        },
+        {
+          "type": "unquote",
+          "named": true
+        },
+        {
+          "type": "unquote_splicing",
+          "named": true
+        },
+        {
+          "type": "unsyntax",
+          "named": true
+        },
+        {
+          "type": "unsyntax_splicing",
+          "named": true
+        },
+        {
+          "type": "vector",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "unsyntax",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "block_comment",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "byte_vector",
+          "named": true
+        },
+        {
+          "type": "character",
+          "named": true
+        },
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "datum_label",
+          "named": true
+        },
+        {
+          "type": "datum_reference",
+          "named": true
+        },
+        {
+          "type": "directive",
+          "named": true
+        },
+        {
+          "type": "keyword",
+          "named": true
+        },
+        {
+          "type": "list",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "quasiquote",
+          "named": true
+        },
+        {
+          "type": "quasisyntax",
+          "named": true
+        },
+        {
+          "type": "quote",
+          "named": true
+        },
+        {
+          "type": "sexp_comment",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "symbol",
+          "named": true
+        },
+        {
+          "type": "syntax_quote",
+          "named": true
+        },
+        {
+          "type": "unquote",
+          "named": true
+        },
+        {
+          "type": "unquote_splicing",
+          "named": true
+        },
+        {
+          "type": "unsyntax",
+          "named": true
+        },
+        {
+          "type": "unsyntax_splicing",
+          "named": true
+        },
+        {
+          "type": "vector",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "unsyntax_splicing",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "block_comment",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "byte_vector",
+          "named": true
+        },
+        {
+          "type": "character",
+          "named": true
+        },
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "datum_label",
+          "named": true
+        },
+        {
+          "type": "datum_reference",
+          "named": true
+        },
+        {
+          "type": "directive",
+          "named": true
+        },
+        {
+          "type": "keyword",
+          "named": true
+        },
+        {
+          "type": "list",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "quasiquote",
+          "named": true
+        },
+        {
+          "type": "quasisyntax",
+          "named": true
+        },
+        {
+          "type": "quote",
+          "named": true
+        },
+        {
+          "type": "sexp_comment",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "symbol",
+          "named": true
+        },
+        {
+          "type": "syntax_quote",
+          "named": true
+        },
+        {
+          "type": "unquote",
+          "named": true
+        },
+        {
+          "type": "unquote_splicing",
+          "named": true
+        },
+        {
+          "type": "unsyntax",
+          "named": true
+        },
+        {
+          "type": "unsyntax_splicing",
+          "named": true
+        },
+        {
+          "type": "vector",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "vector",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "block_comment",
+          "named": true
+        },
+        {
+          "type": "boolean",
+          "named": true
+        },
+        {
+          "type": "byte_vector",
+          "named": true
+        },
+        {
+          "type": "character",
+          "named": true
+        },
+        {
+          "type": "comment",
+          "named": true
+        },
+        {
+          "type": "datum_label",
+          "named": true
+        },
+        {
+          "type": "datum_reference",
+          "named": true
+        },
+        {
+          "type": "directive",
+          "named": true
+        },
+        {
+          "type": "keyword",
+          "named": true
+        },
+        {
+          "type": "list",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "quasiquote",
+          "named": true
+        },
+        {
+          "type": "quasisyntax",
+          "named": true
+        },
+        {
+          "type": "quote",
+          "named": true
+        },
+        {
+          "type": "sexp_comment",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "symbol",
+          "named": true
+        },
+        {
+          "type": "syntax_quote",
+          "named": true
+        },
+        {
+          "type": "unquote",
+          "named": true
+        },
+        {
+          "type": "unquote_splicing",
+          "named": true
+        },
+        {
+          "type": "unsyntax",
+          "named": true
+        },
+        {
+          "type": "unsyntax_splicing",
           "named": true
         },
         {
@@ -406,6 +1437,10 @@
   },
   {
     "type": "\"",
+    "named": false
+  },
+  {
+    "type": "#",
     "named": false
   },
   {
@@ -433,7 +1468,15 @@
     "named": false
   },
   {
+    "type": "#\\",
+    "named": false
+  },
+  {
     "type": "#`",
+    "named": false
+  },
+  {
+    "type": "#u8(",
     "named": false
   },
   {
@@ -465,7 +1508,15 @@
     "named": false
   },
   {
+    "type": "=",
+    "named": false
+  },
+  {
     "type": "[",
+    "named": false
+  },
+  {
+    "type": "\\",
     "named": false
   },
   {
@@ -477,15 +1528,19 @@
     "named": false
   },
   {
-    "type": "boolean",
+    "type": "comment",
     "named": true
   },
   {
-    "type": "character",
+    "type": "datum_label_id",
     "named": true
   },
   {
-    "type": "escape_sequence",
+    "type": "dot",
+    "named": true
+  },
+  {
+    "type": "keyword",
     "named": true
   },
   {
@@ -493,15 +1548,11 @@
     "named": true
   },
   {
-    "type": "{",
-    "named": false
+    "type": "symbol",
+    "named": true
   },
   {
     "type": "|#",
-    "named": false
-  },
-  {
-    "type": "}",
     "named": false
   }
 ]
