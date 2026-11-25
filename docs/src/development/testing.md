@@ -31,6 +31,23 @@ CI runs `cargo nextest run --workspace --no-fail-fast`. A test that passes
 locally under `cargo test` should pass there too; the difference is
 parallelism and the timeouts below.
 
+## Markdown conformance
+
+`crates/markdown/src/spec_compat.rs` measures the renderer against the
+published example suites. The suites are third-party data, so they are
+fetched instead of vendored, and the tests skip themselves when the fixtures
+are absent:
+
+```sh
+script/markdown-spec   # fetch CommonMark 0.31.2 and GFM 0.29, then run
+```
+
+The first run downloads into `target/markdown-spec`; later runs reuse those
+files. `ZZZ_MARKDOWN_SPEC_DIR` points the tests at another directory, and
+`ZZZ_MARKDOWN_SPEC_DUMP=<n>` prints that many mismatches instead of ten. Each
+layer asserts a recorded pass count, so a regression fails the test while an
+improvement only changes the report until the constant is raised.
+
 ## Timeouts
 
 `.config/nextest.toml` gives every test a 60 second slow timeout. A test that

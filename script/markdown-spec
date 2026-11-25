@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+# Fetches the CommonMark and GFM example suites and runs the conformance
+# harness in crates/markdown/src/spec_compat.rs against them.
+#
+# The suites are third-party data under their own licenses, so they are not
+# vendored: this keeps them out of the tree and keeps offline CI free of the
+# dependency. Files are cached in target/markdown-spec (or
+# $ZZZ_MARKDOWN_SPEC_DIR) and only downloaded once.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fixtures="${ZZZ_MARKDOWN_SPEC_DIR:-$repo_root/target/markdown-spec}"
+mkdir -p "$fixtures"
+
+fetch() {
+  local url="$1"
+  local destination="$2"
+
+  if [[ -s "$destination" ]]; then
+    return
+  fi
+
+  echo "fetching $url" >&2
+  curl --fail --silent --show-error --location --retry 3 \
+    --output "$destination" "$url"
+}
+
+fetch "https://spec.commonmark.org/0.31.2/spec.json" \
+  "$fixtures/commonmark-spec-0.31.2.json"
+fetch "https://raw.githubusercontent.com/github/cmark-gfm/master/test/spec.txt" \
+  "$fixtures/gfm-spec.txt"
+
+ZZZ_MARKDOWN_SPEC_DIR="$fixtures" \
+  cargo test -p markdown spec_compat:: -- --nocapture "$@"

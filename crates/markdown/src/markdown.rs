@@ -5,6 +5,8 @@ mod mermaid;
 pub mod parser;
 mod path_range;
 mod selection;
+#[cfg(test)]
+mod spec_compat;
 
 use base64::Engine as _;
 use gpui::EdgesRefinement;
@@ -5821,6 +5823,31 @@ mod tests {
                     .map(|language| language.name()),
                 None,
                 "The fallback language must not be loaded when no code block needs it"
+            );
+        });
+    }
+
+    #[gpui::test]
+    fn test_code_block_tagged_with_a_file_path_resolves_the_file_language(cx: &mut TestAppContext) {
+        let language = language::markdown_lang();
+        let language_registry = Arc::new(LanguageRegistry::test(cx.executor()));
+        language_registry.add(language.clone());
+
+        let source = indoc::indoc! {"
+            ```zzz/README.md
+            # Title
+            ```
+        "};
+        let markdown = cx.new(|cx| Markdown::new(source.into(), Some(language_registry), None, cx));
+        cx.run_until_parked();
+
+        markdown.read_with(cx, |markdown, _| {
+            assert_eq!(
+                markdown
+                    .first_code_block_language()
+                    .map(|language| language.name()),
+                Some(language.name()),
+                "A code block tagged with a file path must resolve that file's language"
             );
         });
     }

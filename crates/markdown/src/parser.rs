@@ -338,23 +338,38 @@ pub(crate) fn parse_markdown_with_options(
                 if matches!(&tag, pulldown_cmark::Tag::HtmlBlock) {
                     state.push_event(range.clone(), MarkdownEvent::Start(MarkdownTag::HtmlBlock));
 
-                    if parse_html
-                        && let Some(block) =
-                            html::html_parser::parse_html_block(&text[range.clone()], range.clone())
-                    {
-                        html_blocks.insert(range.start, block);
-
-                        while let Some((event, end_range)) = parser.next() {
+                    if parse_html {
+                        // A block's source span is contiguous, so it still contains the block
+                        // quote markers of every line after the first when the block sits
+                        // inside a quote. pulldown reports the block's HTML per line without
+                        // them, which is what the HTML parser needs to see.
+                        let mut html_source = String::new();
+                        let mut html_events = Vec::new();
+                        let mut end_range = range.clone();
+                        while let Some((event, event_range)) = parser.next() {
                             if event
                                 == pulldown_cmark::Event::End(pulldown_cmark::TagEnd::HtmlBlock)
                             {
-                                state.push_event(
-                                    end_range,
-                                    MarkdownEvent::End(MarkdownTagEnd::HtmlBlock),
-                                );
+                                end_range = event_range;
                                 break;
                             }
+                            if let pulldown_cmark::Event::Html(html) = &event {
+                                html_source.push_str(html);
+                            }
+                            html_events.push((event_range, MarkdownEvent::Html));
                         }
+
+                        match html::html_parser::parse_html_block(&html_source, range.clone()) {
+                            Some(block) => {
+                                html_blocks.insert(range.start, block);
+                            }
+                            None => {
+                                for (event_range, event) in html_events {
+                                    state.push_event(event_range, event);
+                                }
+                            }
+                        }
+                        state.push_event(end_range, MarkdownEvent::End(MarkdownTagEnd::HtmlBlock));
                     }
                     continue;
                 }
@@ -369,7 +384,16 @@ pub(crate) fn parse_markdown_with_options(
                         within_link = true;
                         MarkdownTag::Link {
                             link_type,
-                            dest_url: SharedString::from(dest_url.into_string()),
+                            // pulldown leaves the scheme off an email autolink, because its
+                            // HTML renderer adds `mailto:` at output time. This crate hands
+                            // `dest_url` to the link handler as-is, so add it here or clicking
+                            // `<someone@example.com>` opens a path instead of a mail client.
+                            dest_url: match link_type {
+                                LinkType::Email => {
+                                    SharedString::from(format!("mailto:{}", dest_url.as_ref()))
+                                }
+                                _ => SharedString::from(dest_url.into_string()),
+                            },
                             title: SharedString::from(title.into_string()),
                             id: SharedString::from(id.into_string()),
                         }
@@ -698,13 +722,26 @@ pub(crate) fn parse_markdown_with_options(
             }
             pulldown_cmark::Event::Code(parsed) => {
                 let content_range = extract_code_content_range(&text[range.clone()]);
-                let content_range =
+                let mut content_range =
                     content_range.start + range.start..content_range.end + range.start;
+
+                // CommonMark drops one space from each end of a code span, and the engine
+                // also normalizes a line ending inside one to a space. Keep the source span
+                // while it still matches what the engine parsed, and fall back to the parsed
+                // text when it does not.
                 let source = &text[content_range.clone()];
+                if strip_code_span_padding(source).len() != source.len() {
+                    // The removed padding is one ASCII space on each side.
+                    content_range = content_range.start + 1..content_range.end - 1;
+                }
+                let source = &text[content_range.clone()];
+
                 let event = if within_table && source.contains(r"\|") {
                     MarkdownEvent::SubstitutedCode(parsed.to_string())
-                } else {
+                } else if source == parsed.as_ref() {
                     MarkdownEvent::Code
+                } else {
+                    MarkdownEvent::SubstitutedCode(parsed.to_string())
                 };
                 state.push_event(content_range, event)
             }
@@ -978,6 +1015,20 @@ fn extract_code_content_range(text: &str) -> Range<usize> {
     }
 
     start_ticks..text_len - end_ticks
+}
+
+/// CommonMark removes one space from each end of a code span when the content both
+/// starts and ends with a space and is not made up of spaces only.
+fn strip_code_span_padding(source: &str) -> &str {
+    if source.len() >= 2
+        && source.starts_with(' ')
+        && source.ends_with(' ')
+        && !source.trim().is_empty()
+    {
+        &source[1..source.len() - 1]
+    } else {
+        source
+    }
 }
 
 pub(crate) fn extract_code_block_content_range(text: &str) -> Range<usize> {
@@ -1747,6 +1798,96 @@ mod tests {
                 .any(|(range, event)| range == &(1..5) && event == &Code),
             "expected escaped pipe outside a table to remain normal inline code: {:?}",
             parsed.events
+        );
+    }
+
+    #[test]
+    fn test_inline_code_drops_one_padding_space() {
+        let markdown = "` foo `";
+        let parsed = parse_markdown_with_options(markdown, false, false, false);
+
+        assert!(
+            parsed
+                .events
+                .iter()
+                .any(|(range, event)| range == &(2..5) && event == &Code),
+            "expected ` foo ` to span only `foo`: {:?}",
+            parsed.events
+        );
+    }
+
+    #[test]
+    fn test_inline_code_keeps_padding_when_it_is_the_whole_content() {
+        for (markdown, expected_range) in [("`  `", 1..3), ("` `", 1..2)] {
+            let parsed = parse_markdown_with_options(markdown, false, false, false);
+            assert!(
+                parsed
+                    .events
+                    .iter()
+                    .any(|(range, event)| range == &expected_range && event == &Code),
+                "expected {markdown} to keep its spaces: {:?}",
+                parsed.events
+            );
+        }
+    }
+
+    #[test]
+    fn test_inline_code_substitutes_text_the_source_does_not_contain() {
+        let markdown = "`a\nb`";
+        let parsed = parse_markdown_with_options(markdown, false, false, false);
+
+        assert!(
+            parsed
+                .events
+                .iter()
+                .any(|(_, event)| event == &SubstitutedCode("a b".into())),
+            "expected a line ending in inline code to render as a space: {:?}",
+            parsed.events
+        );
+    }
+
+    #[test]
+    fn test_email_autolink_keeps_its_scheme() {
+        let markdown = "<someone@example.com>";
+        let parsed = parse_markdown_with_options(markdown, false, false, false);
+
+        assert!(
+            parsed.events.iter().any(|(_, event)| matches!(
+                event,
+                Start(Link { link_type: LinkType::Email, dest_url, .. })
+                    if dest_url.as_ref() == "mailto:someone@example.com"
+            )),
+            "expected the email autolink to carry a mailto: scheme: {:?}",
+            parsed.events
+        );
+    }
+
+    #[test]
+    fn test_html_block_inside_block_quote_drops_markers() {
+        let markdown = "> <div>\n> foo\n\nbar\n";
+        let parsed = parse_markdown_with_options(markdown, true, false, false);
+
+        let block = parsed
+            .html_blocks
+            .values()
+            .next()
+            .expect("expected the block quote to contain a parsed HTML block");
+        assert_eq!(
+            block.children,
+            vec![html::html_parser::ParsedHtmlElement::Paragraph(
+                html::html_parser::ParsedHtmlParagraph {
+                    text_align: None,
+                    contents: vec![html::html_parser::HtmlParagraphChunk::Text(
+                        html::html_parser::ParsedHtmlText {
+                            source_range: block.source_range.clone(),
+                            contents: "foo".into(),
+                            highlights: Vec::new(),
+                            links: Vec::new(),
+                        }
+                    )],
+                }
+            )],
+            "expected the block quote markers to stay out of the parsed HTML"
         );
     }
 
