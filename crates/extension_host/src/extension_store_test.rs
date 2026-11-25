@@ -744,10 +744,13 @@ async fn test_extension_store_with_test_extension(cx: &mut TestAppContext) {
     }));
 
     let executor = cx.executor();
+    // Installing a dev extension compiles its Rust crate for wasm32-wasip2 and
+    // then builds its grammar, so the budget has to cover a toolchain build that
+    // is cold on a CI runner rather than just the bookkeeping around it.
     await_or_timeout(
         &executor,
         "awaiting install_dev_extension",
-        60,
+        180,
         extension_store.update(cx, |store, cx| {
             store.install_dev_extension(test_extension_dir.clone(), cx)
         }),

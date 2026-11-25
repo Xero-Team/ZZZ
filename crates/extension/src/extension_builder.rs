@@ -318,6 +318,31 @@ impl ExtensionBuilder {
                     url
                 );
             }
+
+            // A pinned commit that is already checked out makes the fetch below a
+            // no-op, so skip the network round-trip. Branch and tag names still
+            // fall through: the fetch is what advances them.
+            let resolved_head = util::command::new_command("git")
+                .arg("--git-dir")
+                .arg(&git_dir)
+                .args(["rev-parse", "HEAD"])
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .output()
+                .await?;
+            let resolved_target = util::command::new_command("git")
+                .arg("--git-dir")
+                .arg(&git_dir)
+                .args(["rev-parse", "--verify", &format!("{rev}^{{commit}}")])
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .output()
+                .await?;
+            if resolved_head.status.success()
+                && resolved_target.status.success()
+                && String::from_utf8_lossy(&resolved_head.stdout).trim()
+                    == String::from_utf8_lossy(&resolved_target.stdout).trim()
+            {
+                return Ok(());
+            }
         } else {
             fs::create_dir_all(directory).with_context(|| {
                 format!("failed to create grammar directory {}", directory.display(),)
