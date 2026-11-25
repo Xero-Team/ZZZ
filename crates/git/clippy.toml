@@ -1,3 +1,4 @@
+msrv = "1.100.0"
 allow-private-module-inception = true
 avoid-breaking-exported-api = false
 ignore-interior-mutability = [

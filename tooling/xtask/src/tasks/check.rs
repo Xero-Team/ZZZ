@@ -24,6 +24,7 @@ use anyhow::{Context as _, Result, bail};
 use clap::{Args, Subcommand, ValueEnum};
 
 mod ci_wiring;
+mod clippy_copies;
 mod gpui_api;
 mod keymaps;
 mod lints_inheritance;
@@ -49,9 +50,10 @@ pub struct CheckArgs {
 enum CheckCommand {
     /// Every gate CI runs: markers, keymaps, scroll handlers, licenses,
     /// module layout, MSRV consistency, release metadata, lint inheritance,
-    /// locale catalog structure, keys, i18n call sites and catalog values,
-    /// DCO, philosophy, ledger, workflows, CI gate wiring, the `gpui` public
-    /// API snapshot, documentation formatting, and shell scripts.
+    /// crate-level clippy configuration copies, locale catalog structure, keys,
+    /// i18n call sites and catalog values, DCO, philosophy, ledger, workflows,
+    /// CI gate wiring, the `gpui` public API snapshot, documentation
+    /// formatting, and shell scripts.
     All,
     /// Reject leftover markers for unfinished work.
     Todos,
@@ -72,6 +74,8 @@ enum CheckCommand {
     TestMarkers,
     /// Require every workspace member to opt into `[workspace.lints]`.
     LintsInheritance,
+    /// Require a crate-level `clippy.toml` to repeat the root configuration.
+    ClippyCopies,
     /// Reject duplicate keys, malformed keys, and blank values in the catalogs.
     LocaleCatalog,
     /// Require the locale catalogs to have identical key sets.
@@ -145,6 +149,7 @@ pub fn run_check(args: CheckArgs) -> Result<()> {
         CheckCommand::Release => release::check(),
         CheckCommand::TestMarkers => test_markers::check(),
         CheckCommand::LintsInheritance => lints_inheritance::check(),
+        CheckCommand::ClippyCopies => clippy_copies::check(),
         CheckCommand::LocaleCatalog => locale_catalog::check(),
         CheckCommand::LocaleKeys => check_locale_keys(),
         CheckCommand::LocaleFallbacks => locale_fallbacks::check(),
@@ -176,6 +181,7 @@ const GATES: &[(&str, fn() -> Result<()>)] = &[
     ("release metadata", release::check),
     ("test markers", test_markers::check),
     ("lint inheritance", lints_inheritance::check),
+    ("clippy configuration copies", clippy_copies::check),
     ("locale catalog structure", locale_catalog::check),
     ("locale catalog keys", check_locale_keys),
     ("i18n call sites", locale_fallbacks::check),
@@ -445,7 +451,7 @@ fn run_script(command: &[&str], description: &str) -> Result<()> {
 mod tests {
     /// Deleting a line from `GATES` silently disables a gate for both local
     /// runs and CI, so the list length is pinned; adding a gate bumps it.
-    const GATE_COUNT: usize = 21;
+    const GATE_COUNT: usize = 22;
 
     #[test]
     fn gate_list_keeps_every_gate() {

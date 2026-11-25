@@ -49,7 +49,7 @@ pub fn check_at(repo: &super::Repo) -> Result<()> {
     )
 }
 
-fn workspace_members(repo: &super::Repo) -> Result<Vec<String>> {
+pub(super) fn workspace_members(repo: &super::Repo) -> Result<Vec<String>> {
     let source = repo.read(WORKSPACE_MANIFEST)?;
     parse_members(&source)
 }

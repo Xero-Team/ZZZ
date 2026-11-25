@@ -26,6 +26,7 @@ enforced by gates instead of review alone:
 | File                             | Enforced by                                                                            |
 | -------------------------------- | -------------------------------------------------------------------------------------- |
 | `clippy.toml`                    | `cargo xtask clippy` (`disallowed-methods`, `msrv`)                                    |
+| crate-level `clippy.toml`        | `cargo xtask check clippy-copies`, which requires the root settings to be repeated     |
 | `Cargo.toml` `[workspace.lints]` | `cargo xtask check lints-inheritance`, plus the promotion bar recorded in that section |
 
 ## One authoritative copy
