@@ -540,15 +540,30 @@ async fn test_extension_store_with_test_extension(cx: &mut TestAppContext) {
     cx.executor().allow_parking();
 
     // The extension reaches GitHub and downloads its language server binary, and both of those
-    // host functions are now gated on the network capability the user grants.
+    // host functions are now gated on the network capability the user grants. It also runs a
+    // child process before returning the server command, which the manifest declares and the
+    // host only allows once the matching `process:exec` capability is granted.
     cx.update(|cx| {
         cx.update_global::<SettingsStore, _>(|store, cx| {
             store.update_user_settings(cx, |settings| {
-                settings.extension.granted_extension_capabilities =
-                    Some(vec![ExtensionCapabilityContent::DownloadFile {
+                settings.extension.granted_extension_capabilities = Some(vec![
+                    ExtensionCapabilityContent::DownloadFile {
                         host: "*".to_string(),
                         path: vec!["**".to_string()],
-                    }]);
+                    },
+                    ExtensionCapabilityContent::ProcessExec {
+                        command: "echo".to_string(),
+                        args: vec!["hello from a child process!".to_string()],
+                    },
+                    ExtensionCapabilityContent::ProcessExec {
+                        command: "cmd".to_string(),
+                        args: vec![
+                            "/C".to_string(),
+                            "echo".to_string(),
+                            "hello from a child process!".to_string(),
+                        ],
+                    },
+                ]);
             });
         });
     });
