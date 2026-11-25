@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+
+# Fetches the SVG reference suites and runs the conformance harness in
+# crates/svg_preview/tests/svg_conformance.rs against them.
+#
+# Two suites are used, because they answer different questions:
+#
+# - resvg v0.50.0 (`crates/resvg/tests`), the version this workspace pins. Its
+#   reference PNGs were produced by that same version at 300px, so agreement is
+#   expected to be pixel-exact and a mismatch is a finding.
+# - resvg-test-suite, whose reference PNGs were produced by other renderers at
+#   500px. Agreement there is scored as visual closeness, which is what tells us
+#   how far the shipped pipeline is from what a browser-class renderer draws.
+#
+# Both are third-party data under their own licenses, so they are not vendored:
+# this keeps them out of the tree and keeps offline CI free of the dependency.
+# The tarballs are cached in target/svg-spec (or $ZZZ_SVG_SPEC_DIR) and only
+# downloaded once.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+suite_root="${ZZZ_SVG_SPEC_DIR:-$repo_root/target/svg-spec}"
+mkdir -p "$suite_root"
+
+fetch() {
+  local url="$1"
+  local destination="$2"
+
+  if [[ -s "$destination" ]]; then
+    return
+  fi
+
+  echo "fetching $url" >&2
+  curl --fail --silent --show-error --location --retry 3 \
+    --output "$destination" "$url"
+}
+
+# The engine's own reference set, pinned to the version Cargo.lock resolves.
+if [[ ! -d "$suite_root/resvg/tests" ]]; then
+  fetch "https://github.com/linebender/resvg/archive/refs/tags/v0.50.0.tar.gz" \
+    "$suite_root/resvg-0.50.0.tar.gz"
+  # Tarball paths are resvg-0.50.0/crates/resvg/tests/..., so four components
+  # come off to land `tests/`, `extra/`, `fonts/` and `resources/` under resvg/.
+  mkdir -p "$suite_root/resvg"
+  tar --extract --gzip --file "$suite_root/resvg-0.50.0.tar.gz" \
+    --strip-components=4 --directory "$suite_root/resvg" \
+    'resvg-0.50.0/crates/resvg/tests'
+fi
+
+# The cross-renderer suite.
+if [[ ! -d "$suite_root/cross-renderer/tests" ]]; then
+  fetch "https://github.com/linebender/resvg-test-suite/archive/refs/heads/main.tar.gz" \
+    "$suite_root/resvg-test-suite.tar.gz"
+  mkdir -p "$suite_root/cross-renderer"
+  tar --extract --gzip --file "$suite_root/resvg-test-suite.tar.gz" \
+    --strip-components=1 --directory "$suite_root/cross-renderer"
+fi
+
+ZZZ_SVG_SPEC_DIR="$suite_root" \
+  cargo test -p svg_preview --test svg_conformance -- --nocapture "$@"

@@ -11,6 +11,21 @@ workspace = true
 [lib]
 path = "src/svg_preview.rs"
 
+[dev-dependencies]
+anyhow.workspace = true
+image.workspace = true
+# The conformance harness renders every suite case twice: once through the
+# shipped `gpui::SvgRenderer`, and once through usvg/resvg configured the way
+# the suite itself specifies. The second pass is the attribution baseline.
+resvg = { version = "0.50.0", default-features = false, features = [
+    "memmap-fonts",
+    "raster-images",
+    "svgz",
+    "system-fonts",
+    "text"
+] }
+usvg = { workspace = true, features = ["memmap-fonts", "svgz", "system-fonts", "text"] }
+
 [dependencies]
 multi_buffer.workspace = true
 file_icons.workspace = true

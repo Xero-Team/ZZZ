@@ -16459,13 +16459,17 @@ dependencies = [
 name = "svg_preview"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "file_icons",
  "gpui",
  "i18n",
+ "image",
  "language",
  "multi_buffer",
  "project",
+ "resvg",
  "ui",
+ "usvg 0.50.0",
  "util",
  "workspace",
  "zzz_actions",
