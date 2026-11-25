@@ -1,0 +1,92 @@
+[package]
+name = "gpui_apple"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+license = "AGPL-3.0-or-later"
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/gpui_apple.rs"
+doctest = false
+
+[features]
+default = ["gpui/default"]
+test-support = ["gpui/test-support"]
+runtime_shaders = []
+font-kit = [
+    "dep:font-kit",
+    "dep:core-graphics",
+    "dep:core-text",
+    "dep:objc2-core-text",
+    "dep:pathfinder_geometry",
+]
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+anyhow.workspace = true
+async-task.workspace = true
+block2.workspace = true
+collections.workspace = true
+core-foundation.workspace = true
+core-foundation-sys.workspace = true
+core-graphics = { workspace = true, optional = true }
+core-text = { version = "22", optional = true }
+core-video.workspace = true
+dispatch2 = { workspace = true, features = ["block2"] }
+# Vendored from https://github.com/servo/font-kit @ ab6bb2eb87e8ebcd7aa3a88442d8a079bce66200
+font-kit = { path = "../../vendor/font-kit", optional = true }
+gpui.workspace = true
+gpui_util.workspace = true
+image.workspace = true
+libc.workspace = true
+log.workspace = true
+mach2.workspace = true
+objc2.workspace = true
+objc2-core-foundation = { workspace = true, features = [
+    "std",
+    "CFBase",
+    "CFCGTypes",
+    "CFData",
+    "CFDictionary",
+    "CFNumber",
+    "CFString",
+] }
+objc2-core-graphics = { workspace = true, features = ["CGColorSpace"] }
+objc2-core-text = { workspace = true, optional = true }
+objc2-core-video = { workspace = true, features = [
+    "CVPixelBuffer",
+    "CVMetalTexture",
+    "CVMetalTextureCache",
+    "CVReturn",
+    "objc2",
+    "objc2-metal",
+] }
+objc2-foundation = { workspace = true, features = [
+    "NSObject",
+    "NSProcessInfo",
+    "NSRange",
+    "NSRunLoop",
+    "NSString",
+    "NSThread",
+] }
+objc2-metal.workspace = true
+objc2-quartz-core = { workspace = true, features = [
+    "objc2-core-foundation",
+    "objc2-core-graphics",
+    "objc2-metal",
+] }
+parking_lot.workspace = true
+pathfinder_geometry = { workspace = true, optional = true }
+smallvec.workspace = true
+
+[build-dependencies]
+cbindgen = { version = "0.29.4", default-features = false }
+
+# When this crate is itself being tested (cargo test -p gpui_apple), its own
+# cfg(test) flag enables impls of test-only traits like PlatformHeadlessRenderer.
+# Those traits/methods only exist in gpui when gpui's `test-support` feature is
+# on, so turn that feature on through a dev-dependency.
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }

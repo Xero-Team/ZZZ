@@ -48,6 +48,7 @@
 * use paint_quad::*
 * use path_builder::*
 * use platform::*
+* use platform_info::*
 * use profiler::*
 * use prompts::*
 * use refineable::*
@@ -102,6 +103,9 @@ ActionRegistry::build_action_type method & self , type_id : & TypeId -> Result <
 ActionRegistry::deprecated_aliases method & self -> & HashMap < & 'static str , & 'static str >
 ActionRegistry::deprecation_messages method & self -> & HashMap < & 'static str , & 'static str >
 ActionRegistry::documentation method & self -> & HashMap < & 'static str , & 'static str >
+ActivityGuard struct 
+ActivityGuard::new method release : impl FnOnce () + Send + 'static -> Self
+ActivityGuard::noop method  -> Self
 AlignContent enum Start,End,FlexStart,FlexEnd,Center,Stretch,SpaceBetween,SpaceEvenly,SpaceAround
 AlignItems enum Start,End,FlexStart,FlexEnd,Center,Baseline,Stretch
 AlignSelf type 
@@ -337,6 +341,7 @@ AppLifecycleCapabilities struct external_event_loop,quit,restart,activate,hide,h
 AppLifecycleCapabilities::BASIC_DESKTOP assoc-const 
 AppLifecycleCapabilities::EXTERNAL_EVENT_LOOP_ONLY assoc-const 
 AppLifecycleCapabilities::FULL_DESKTOP assoc-const 
+AppLifecyclePhase enum Active,Inactive,Background,Foreground,Disconnected
 AppRef struct 
 AppRefMut struct 
 Application struct 
@@ -453,11 +458,14 @@ AtlasUsage::insert method & mut self , tile : AtlasTile
 AtlasUsage::is_empty method & self -> bool
 AtlasUsage::texture_count method & self -> usize
 AtlasUsage::tile_count method & self -> usize
+Autocapitalize enum None,Words,Sentences,Characters
 AvailableSpace enum Definite,MinContent,MaxContent
 AvailableSpace use taffy::AvailableSpace
 AvailableSpace::min_size method const  -> Size < Self >
 Axis enum Vertical,Horizontal
 Axis::invert method self -> Self
+BackGestureEvent struct phase,start_position,progress
+BackGesturePhase enum Started,Progressed,Committed,Cancelled
 Background struct 
 Background::as_solid method & self -> Option < Hsla >
 Background::color_space method mut self , color_space : ColorSpace -> Self
@@ -1004,12 +1012,19 @@ InputHandler::accepts_text_input trait-method & mut self , _window : & mut Windo
 InputHandler::apple_press_and_hold_enabled trait-method & mut self -> bool
 InputHandler::bounds_for_range trait-method & mut self , range_utf16 : Range < usize > , window : & mut Window , cx : & mut App , -> Option < Bounds < Pixels > >
 InputHandler::character_index_for_point trait-method & mut self , point : Point < Pixels > , window : & mut Window , cx : & mut App , -> Option < usize >
+InputHandler::element_bounds trait-method & mut self , _window : & mut Window , _cx : & mut App -> Option < Bounds < Pixels > >
 InputHandler::marked_text_range trait-method & mut self , window : & mut Window , cx : & mut App -> Option < Range < usize > >
+InputHandler::paste trait-method & mut self , item : ClipboardItem , window : & mut Window , cx : & mut App
 InputHandler::prefers_ime_for_printable_keys trait-method & mut self , _window : & mut Window , _cx : & mut App -> bool
 InputHandler::replace_and_mark_text_in_range trait-method & mut self , range_utf16 : Option < Range < usize > > , new_text : & str , new_selected_range : Option < Range < usize > > , window : & mut Window , cx : & mut App ,
 InputHandler::replace_text_in_range trait-method & mut self , replacement_range : Option < Range < usize > > , text : & str , window : & mut Window , cx : & mut App ,
 InputHandler::selected_text_range trait-method & mut self , ignore_disabled_input : bool , window : & mut Window , cx : & mut App , -> Option < UTF16Selection >
+InputHandler::selection_bounds_for_range trait-method & mut self , _range_utf16 : Range < usize > , _window : & mut Window , _cx : & mut App , -> Vec < Bounds < Pixels > >
+InputHandler::set_selected_text_range trait-method & mut self , _range_utf16 : Range < usize > , _window : & mut Window , _cx : & mut App ,
 InputHandler::text_for_range trait-method & mut self , range_utf16 : Range < usize > , adjusted_range : & mut Option < Range < usize > > , window : & mut Window , cx : & mut App , -> Option < String >
+InputHandler::text_input_configuration trait-method & mut self , _window : & mut Window , _cx : & mut App , -> TextInputConfiguration
+InputHandler::text_input_editable_range trait-method & mut self , _window : & mut Window , _cx : & mut App , -> Option < Range < usize > >
+InputHandler::text_length_utf16 trait-method & mut self , _window : & mut Window , _cx : & mut App -> Option < usize >
 InputHandler::unmark_text trait-method & mut self , window : & mut Window , cx : & mut App
 InputLatencySnapshot struct latency_histogram,events_per_frame_histogram,mid_draw_events_dropped
 InputPreference enum CharacterInput,KeyBindings
@@ -1329,6 +1344,7 @@ NoopTextSystem::new method  -> Self
 ObjectFit enum Fill,Contain,Cover,ScaleDown,None
 ObjectFit::get_bounds method & self , bounds : Bounds < Pixels > , image_size : Size < DevicePixels > , -> Bounds < Pixels >
 Observation struct 
+OperatingSystem enum Mac,Windows,Linux,FreeBsd,Ios,Android,Unknown
 OsAction enum Cut,Copy,Paste,SelectAll,Undo,Redo
 OsMenu struct name,menu_type
 OsMenu::owned method self -> OwnedOsMenu
@@ -1416,9 +1432,14 @@ Platform::is_cursor_visible trait-method & self -> bool
 Platform::is_screen_capture_supported trait-method & self -> bool
 Platform::keyboard_layout trait-method & self -> Box < dyn PlatformKeyboardLayout >
 Platform::keyboard_mapper trait-method & self -> Rc < dyn PlatformKeyboardMapper >
+Platform::on_app_lifecycle trait-method & self , _callback : Box < dyn FnMut (AppLifecyclePhase) >
 Platform::on_app_menu_action trait-method & self , callback : Box < dyn FnMut (& dyn Action) >
+Platform::on_displays_changed trait-method & self , _callback : Box < dyn FnMut () >
 Platform::on_keyboard_layout_change trait-method & self , callback : Box < dyn FnMut () >
+Platform::on_memory_warning trait-method & self , _callback : Box < dyn FnMut () >
 Platform::on_open_urls trait-method & self , callback : Box < dyn FnMut (Vec < String >) >
+Platform::on_power_mode_change trait-method & self , _callback : Box < dyn FnMut () >
+Platform::on_system_sleep trait-method & self , _callback : Box < dyn FnMut () >
 Platform::on_system_wake trait-method & self , _callback : Box < dyn FnMut () >
 Platform::on_thermal_state_change trait-method & self , callback : Box < dyn FnMut () >
 Platform::on_validate_app_menu_command trait-method & self , callback : Box < dyn FnMut (& dyn Action) -> bool >
@@ -1428,7 +1449,9 @@ Platform::open_window trait-method & self , handle : AnyWindowHandle , options :
 Platform::open_with_system trait-method & self , path : & Path
 Platform::path_for_auxiliary_executable trait-method & self , name : & str -> Result < PathBuf >
 Platform::perform_dock_menu_action trait-method & self , _action : usize
+Platform::platform_info trait-method & self -> PlatformInfo
 Platform::power_mode trait-method & self -> PowerMode
+Platform::prevent_idle_sleep trait-method & self , _reason : & str -> Task < Result < ActivityGuard > >
 Platform::primary_display trait-method & self -> Option < Rc < dyn PlatformDisplay > >
 Platform::prompt_for_new_path trait-method & self , directory : & Path , suggested_name : Option < & str > , -> oneshot :: Receiver < Result < Option < PathBuf > > >
 Platform::prompt_for_paths trait-method & self , options : PathPromptOptions , -> oneshot :: Receiver < Result < Option < Vec < PathBuf > > > >
@@ -1478,12 +1501,15 @@ PlatformDisplay trait
 PlatformDisplay::bounds trait-method & self -> Bounds < Pixels >
 PlatformDisplay::default_bounds trait-method & self -> Bounds < Pixels >
 PlatformDisplay::id trait-method & self -> DisplayId
+PlatformDisplay::refresh_interval trait-method & self -> Option < Duration >
 PlatformDisplay::uuid trait-method & self -> Result < Uuid >
 PlatformDisplay::visible_bounds trait-method & self -> Bounds < Pixels >
 PlatformHeadlessRenderer trait 
 PlatformHeadlessRenderer::render_scene_to_image trait-method & mut self , scene : & Scene , size : Size < DevicePixels > , -> Result < RgbaImage >
 PlatformHeadlessRenderer::sprite_atlas trait-method & self -> Arc < dyn PlatformAtlas >
-PlatformInput enum KeyDown,KeyUp,ModifiersChanged,MouseDown,MouseUp,MousePressure,MouseMove,MouseExited,ScrollWheel,Pinch,FileDrop
+PlatformInfo struct os,target
+PlatformInfo::is_mac method self -> bool
+PlatformInput enum KeyDown,KeyUp,ModifiersChanged,MouseDown,MouseUp,MousePressure,MouseMove,MouseExited,ScrollWheel,Pinch,Touch,BackGesture,FileDrop
 PlatformInputHandler type 
 PlatformKeyboardLayout trait 
 PlatformKeyboardLayout::id trait-method & self -> & str
@@ -1500,6 +1526,7 @@ PlatformRenderTarget::sprite_atlas trait-method & self -> Arc < dyn PlatformAtla
 PlatformScheduler struct 
 PlatformScheduler::allocate_session_id method & self -> SessionId
 PlatformScheduler::new method dispatcher : Arc < dyn PlatformDispatcher > -> Self
+PlatformTarget enum Native,Web
 PlatformTextSystem trait 
 PlatformTextSystem::add_fonts trait-method & self , fonts : Vec < Cow < 'static , [u8] > > -> Result < () >
 PlatformTextSystem::advance trait-method & self , font_id : FontId , glyph_id : GlyphId -> Result < Size < f32 > >
@@ -2142,9 +2169,12 @@ TestWindow::simulate_input method & mut self , event : PlatformInput -> bool
 TestWindow::simulate_resize method & mut self , size : Size < Pixels >
 TestWindow::simulate_scale_factor_change method & mut self , scale_factor : f32
 TextAlign enum Left,Center,Right
+TextInputAction enum Unspecified,Enter,Done,Go,Next,Previous,Search,Send
 TextInputBridge trait 
 TextInputBridge::set_input_handler trait-method & mut self , input_handler : TextInputClient
+TextInputBridge::set_text_input_configuration trait-method & mut self , _configuration : TextInputConfiguration
 TextInputBridge::take_input_handler trait-method & mut self -> Option < TextInputClient >
+TextInputBridge::text_input_state_changed trait-method & self , _change : TextInputStateChange
 TextInputBridge::update_ime_position trait-method & self , bounds : Bounds < Pixels >
 TextInputClient struct 
 TextInputClient::accepts_text_input method & mut self , window : & mut Window , cx : & mut App -> bool
@@ -2153,17 +2183,28 @@ TextInputClient::bounds_for_range method & mut self , range_utf16 : Range < usiz
 TextInputClient::character_index_for_point method & mut self , point : Point < Pixels > -> Option < usize >
 TextInputClient::compute_ime_candidate_bounds method marked_range : Option < Range < usize > > , selection : & UTF16Selection , mut bounds_for_range : impl FnMut (Range < usize >) -> Option < Bounds < Pixels > > , -> Option < Bounds < Pixels > >
 TextInputClient::dispatch_input method & mut self , input : & str , window : & mut Window , cx : & mut App
+TextInputClient::element_bounds method & mut self -> Option < Bounds < Pixels > >
+TextInputClient::focus_id method & self -> Option < crate :: FocusId >
 TextInputClient::ime_candidate_bounds method & mut self -> Option < Bounds < Pixels > >
 TextInputClient::marked_text_range method & mut self -> Option < Range < usize > >
 TextInputClient::new method cx : AsyncWindowContext , handler : Box < dyn InputHandler > -> Self
+TextInputClient::paste method & mut self , item : ClipboardItem
+TextInputClient::query_accepts_focused_text_input method & mut self -> bool
 TextInputClient::query_accepts_text_input method & mut self -> bool
 TextInputClient::query_prefers_ime_for_printable_keys method & mut self -> bool
 TextInputClient::replace_and_mark_text_in_range method & mut self , range_utf16 : Option < Range < usize > > , new_text : & str , new_selected_range : Option < Range < usize > > ,
 TextInputClient::replace_text_in_range method & mut self , replacement_range : Option < Range < usize > > , text : & str
 TextInputClient::selected_bounds method & mut self , window : & mut Window , cx : & mut App -> Option < Bounds < Pixels > >
 TextInputClient::selected_text_range method & mut self , ignore_disabled_input : bool -> Option < UTF16Selection >
+TextInputClient::selection_bounds_for_range method & mut self , range_utf16 : Range < usize > -> Vec < Bounds < Pixels > >
+TextInputClient::set_selected_text_range method & mut self , range_utf16 : Range < usize >
 TextInputClient::text_for_range method & mut self , range_utf16 : Range < usize > , adjusted : & mut Option < Range < usize > > , -> Option < String >
+TextInputClient::text_input_configuration method & mut self , window : & mut Window , cx : & mut App , -> TextInputConfiguration
+TextInputClient::text_input_editable_range method & mut self -> Option < Range < usize > >
+TextInputClient::text_length_utf16 method & mut self -> Option < usize >
 TextInputClient::unmark_text method & mut self
+TextInputConfiguration struct autocorrect,autocapitalize,suggestions,input_action
+TextInputStateChange enum FocusGained,FocusLost,SelectionChanged,ContentChanged
 TextLayout struct 
 TextLayout::bounds method & self -> Bounds < Pixels >
 TextLayout::index_for_position method & self , mut position : Point < Pixels > -> Result < usize , usize >
@@ -2237,7 +2278,9 @@ TimerResolutionGuard type
 TitlebarOptions struct title,appears_transparent,traffic_light_position
 TooltipId struct 
 TooltipId::is_hovered method & self , window : & Window -> bool
-TouchPhase enum Started,Moved,Ended
+TouchEvent struct id,phase,position,predicted_position,force
+TouchId struct 0
+TouchPhase enum Started,Moved,Ended,Cancelled
 Transform use lyon::math::Transform
 Transformation struct 
 Transformation::rotate method rotate : impl Into < Radians > -> Self
@@ -2582,6 +2625,8 @@ WindowHost::completed_frame trait-method & self
 WindowHost::content_size trait-method & self -> Size < Pixels >
 WindowHost::display trait-method & self -> Option < Rc < dyn PlatformDisplay > >
 WindowHost::frame_waker trait-method & self -> Option < Rc < dyn Fn () > >
+WindowHost::hide_soft_keyboard trait-method & self
+WindowHost::insets trait-method & self -> WindowInsets
 WindowHost::is_active trait-method & self -> bool
 WindowHost::is_fullscreen trait-method & self -> bool
 WindowHost::is_hovered trait-method & self -> bool
@@ -2591,21 +2636,28 @@ WindowHost::on_active_status_change trait-method & self , callback : Box < dyn F
 WindowHost::on_appearance_changed trait-method & self , callback : Box < dyn FnMut () >
 WindowHost::on_button_layout_changed trait-method & self , _callback : Box < dyn FnMut () >
 WindowHost::on_close trait-method & self , callback : Box < dyn FnOnce () >
+WindowHost::on_display_changed trait-method & self , _callback : Box < dyn FnMut () >
 WindowHost::on_hit_test_window_control trait-method & self , callback : Box < dyn FnMut () -> Option < WindowControlArea > >
 WindowHost::on_hover_status_change trait-method & self , callback : Box < dyn FnMut (bool) >
+WindowHost::on_insets_changed trait-method & self , _callback : Box < dyn FnMut (WindowInsets) >
 WindowHost::on_moved trait-method & self , callback : Box < dyn FnMut () >
 WindowHost::on_request_frame trait-method & self , callback : Box < dyn FnMut (RequestFrameOptions) >
 WindowHost::on_resize trait-method & self , callback : Box < dyn FnMut (Size < Pixels > , f32) >
 WindowHost::on_should_close trait-method & self , callback : Box < dyn FnMut () -> bool >
+WindowHost::on_visibility_change trait-method & self , _callback : Box < dyn FnMut (WindowVisibility) >
 WindowHost::request_attention trait-method & self
 WindowHost::resize trait-method & mut self , size : Size < Pixels >
 WindowHost::scale_factor trait-method & self -> f32
 WindowHost::set_background_appearance trait-method & self , background_appearance : WindowBackgroundAppearance
 WindowHost::set_title trait-method & mut self , title : & str
+WindowHost::show_soft_keyboard trait-method & self
 WindowHost::toggle_fullscreen trait-method & self
+WindowHost::visibility trait-method & self -> WindowVisibility
 WindowHost::window_bounds trait-method & self -> WindowBounds
 WindowHost::zoom trait-method & self -> Result < () >
 WindowId::as_u64 method & self -> u64
+WindowInsets struct safe_area,ime,corner_radii
+WindowInsets::effective method & self -> Edges < Pixels >
 WindowInvalidator::debug_assert_paint method & self
 WindowInvalidator::debug_assert_paint_or_prepaint method & self
 WindowInvalidator::debug_assert_prepaint method & self
@@ -2630,6 +2682,8 @@ WindowTextSystem::layout_line method <Text> where Text : AsRef < str > , SharedS
 WindowTextSystem::new method text_system : Arc < TextSystem > -> Self
 WindowTextSystem::shape_line method & self , text : SharedString , font_size : Pixels , runs : & [TextRun] , force_width : Option < Pixels > , -> ShapedLine
 WindowTextSystem::shape_text method & self , text : SharedString , font_size : Pixels , runs : & [TextRun] , wrap_width : Option < Pixels > , line_clamp : Option < usize > , -> Result < SmallVec < [WrappedLine ; 1] > >
+WindowVisibility enum Visible,Hidden
+WindowVisibility::is_visible method self -> bool
 WithTimeout struct 
 WrapBoundary struct run_ix,glyph_ix
 WrapBoundaryCandidate::len_utf8 method & self -> usize
@@ -2726,6 +2780,7 @@ quad fn bounds : Bounds < Pixels > , corner_radii : impl Into < Corners < Pixels
 queue mod 
 radians fn value : f32 -> Radians
 red fn const  -> Hsla
+refresh_interval_from_hz fn hertz : f64 -> Option < Duration >
 register_action use gpui_macros::register_action
 relative fn const fraction : f32 -> DefiniteLength
 rems fn const rems : f32 -> Rems

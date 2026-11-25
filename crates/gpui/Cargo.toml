@@ -118,6 +118,9 @@ getrandom = { version = "0.4.3", features = ["wasm_js"] }
 uuid = { workspace = true, features = ["js"] }
 
 
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+core-video.workspace = true
+
 [target.'cfg(target_os = "macos")'.dependencies]
 block = "0.1"
 cocoa.workspace = true
@@ -125,7 +128,6 @@ cocoa-foundation.workspace = true
 core-foundation.workspace = true
 core-foundation-sys.workspace = true
 core-graphics = "0.25"
-core-video.workspace = true
 core-text = "22"
 # Vendored from https://github.com/servo/font-kit @ ab6bb2eb87e8ebcd7aa3a88442d8a079bce66200
 font-kit = { path = "../../vendor/font-kit", optional = true }

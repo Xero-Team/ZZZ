@@ -2358,6 +2358,8 @@ impl Terminal {
                 Some(new_offset - old_offset)
             }
             TouchPhase::Ended => None,
+            /* A cancelled touch never commits, so it produces no scroll lines */
+            TouchPhase::Cancelled => None,
         }
     }
 

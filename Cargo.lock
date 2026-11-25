@@ -1821,6 +1821,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "c-enum"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd17eb909a8c6a894926bfcc3400a4bb0e732f5a57d37b1f14e8b29e329bace8"
+
+[[package]]
 name = "cached"
 version = "0.59.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3578,14 +3584,19 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "editor",
+ "fuzzy",
  "gpui",
  "i18n",
  "log",
+ "picker",
+ "schemars 1.2.3",
+ "serde",
  "settings",
  "text",
  "theme",
  "theme_settings",
  "ui",
+ "util",
  "workspace",
 ]
 
@@ -4240,7 +4251,6 @@ checksum = "1e0e367e4e7da84520dedcac1901e4da967309406d1e51017ae1abfb97adbd38"
 dependencies = [
  "bitflags 2.13.2",
  "block2 0.6.2",
- "libc",
  "objc2 0.6.5",
 ]
 
@@ -4473,6 +4483,7 @@ dependencies = [
  "anyhow",
  "assets",
  "base64 0.23.1",
+ "bench_metrics",
  "breadcrumbs",
  "buffer_diff",
  "client",
@@ -4483,7 +4494,6 @@ dependencies = [
  "ctor",
  "db",
  "emojis",
- "bench_metrics",
  "feature_flags",
  "file_icons",
  "fs",
@@ -6412,6 +6422,65 @@ dependencies = [
 ]
 
 [[package]]
+name = "gpui_apple"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-task",
+ "block2 0.6.2",
+ "cbindgen",
+ "collections",
+ "core-foundation 0.10.1",
+ "core-foundation-sys",
+ "core-graphics 0.25.0",
+ "core-text",
+ "core-video",
+ "dispatch2",
+ "font-kit",
+ "gpui",
+ "gpui_util",
+ "image",
+ "libc",
+ "log",
+ "mach2 0.7.0",
+ "objc2 0.6.5",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
+ "objc2-core-text",
+ "objc2-core-video",
+ "objc2-foundation 0.3.2",
+ "objc2-metal 0.3.2",
+ "objc2-quartz-core 0.3.2",
+ "parking_lot 0.13.0",
+ "pathfinder_geometry",
+ "smallvec",
+]
+
+[[package]]
+name = "gpui_ios"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "block2 0.6.2",
+ "futures",
+ "gpui",
+ "gpui_apple",
+ "gpui_platform",
+ "log",
+ "objc2 0.6.5",
+ "objc2-core-foundation",
+ "objc2-foundation 0.3.2",
+ "objc2-quartz-core 0.3.2",
+ "objc2-security",
+ "objc2-ui-kit",
+ "parking_lot 0.13.0",
+ "raw-window-handle",
+ "slotmap",
+ "thiserror 2.0.21",
+ "uuid 1.29.3",
+]
+
+[[package]]
 name = "gpui_linux"
 version = "0.1.0"
 dependencies = [
@@ -6467,37 +6536,30 @@ dependencies = [
  "accesskit",
  "accesskit_macos",
  "anyhow",
- "async-task",
- "block",
  "block2 0.6.2",
- "cbindgen",
- "cocoa 0.27.0",
  "collections",
  "core-foundation 0.10.1",
  "core-foundation-sys",
  "core-graphics 0.25.0",
- "core-text",
  "core-video",
  "ctor",
- "derive_more",
  "dispatch2",
- "font-kit",
- "foreign-types 0.5.0",
  "futures",
  "gpui",
+ "gpui_apple",
  "image",
  "itertools 0.15.0",
- "libc",
  "log",
- "mach2 0.7.0",
- "media",
- "metal",
- "objc",
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",
+ "objc2-core-graphics",
+ "objc2-core-media",
+ "objc2-core-video",
  "objc2-foundation 0.3.2",
+ "objc2-quartz-core 0.3.2",
+ "objc2-screen-capture-kit",
+ "objc2-uniform-type-identifiers",
  "parking_lot 0.13.0",
- "pathfinder_geometry",
  "raw-window-handle",
  "semver",
  "smallvec",
@@ -6523,6 +6585,7 @@ version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
  "gpui",
+ "gpui_ios",
  "gpui_linux",
  "gpui_macos",
  "gpui_web",
@@ -8739,6 +8802,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "chardetng",
  "clock",
  "collections",
  "criterion",
@@ -9518,6 +9582,7 @@ dependencies = [
  "ratex-parser",
  "ratex-svg",
  "ratex-types",
+ "serde_json",
  "settings",
  "smallvec",
  "spider-html5ever",
@@ -10833,6 +10898,7 @@ dependencies = [
  "objc2 0.6.5",
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
+ "objc2-uniform-type-identifiers",
 ]
 
 [[package]]
@@ -10976,6 +11042,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "objc2-core-media"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05ec576860167a15dd9fce7fbee7512beb4e31f532159d3482d1f9c6caedf31d"
+dependencies = [
+ "bitflags 2.13.2",
+ "dispatch2",
+ "objc2 0.6.5",
+ "objc2-core-audio",
+ "objc2-core-audio-types",
+ "objc2-core-foundation",
+ "objc2-core-video",
+]
+
+[[package]]
 name = "objc2-core-services"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10995,6 +11076,20 @@ dependencies = [
  "objc2 0.6.5",
  "objc2-core-foundation",
  "objc2-core-graphics",
+]
+
+[[package]]
+name = "objc2-core-video"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d425caf1df73233f29fd8a5c3e5edbc30d2d4307870f802d18f00d83dc5141a6"
+dependencies = [
+ "bitflags 2.13.2",
+ "objc2 0.6.5",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
+ "objc2-io-surface",
+ "objc2-metal 0.3.2",
 ]
 
 [[package]]
@@ -11108,8 +11203,32 @@ dependencies = [
  "bitflags 2.13.2",
  "objc2 0.6.5",
  "objc2-core-foundation",
+ "objc2-core-graphics",
  "objc2-foundation 0.3.2",
  "objc2-metal 0.3.2",
+]
+
+[[package]]
+name = "objc2-screen-capture-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74b7c5390f477482f001bc354d6571a70db7e4f8d5288e860c45521fbce11394"
+dependencies = [
+ "block2 0.6.2",
+ "dispatch2",
+ "objc2 0.6.5",
+ "objc2-core-graphics",
+ "objc2-core-media",
+ "objc2-foundation 0.3.2",
+]
+
+[[package]]
+name = "objc2-security"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "709fe137109bd1e8b5a99390f77a7d8b2961dafc1a1c5db8f2e60329ad6d895a"
+dependencies = [
+ "objc2-core-foundation",
 ]
 
 [[package]]
@@ -11131,6 +11250,16 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "objc2-quartz-core 0.3.2",
  "objc2-user-notifications",
+]
+
+[[package]]
+name = "objc2-uniform-type-identifiers"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7902ac02859fc1f7045f8b598c63f1ae0cc7efeaa06a9bc9f3d9a3c955974fa4"
+dependencies = [
+ "objc2 0.6.5",
+ "objc2-foundation 0.3.2",
 ]
 
 [[package]]
@@ -11845,6 +11974,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "perf-event-data"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "575828d9d7d205188048eb1508560607a03d21eafdbba47b8cade1736c1c28e1"
+dependencies = [
+ "bitflags 2.13.2",
+ "c-enum",
+ "perf-event-open-sys2",
+]
+
+[[package]]
+name = "perf-event-open-sys2"
+version = "5.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9c25955321465255e437600b54296983fab1feac2cd0c38958adeb26dbae49e"
+dependencies = [
+ "libc",
+ "memoffset",
+]
+
+[[package]]
+name = "perf-event2"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0939b8fad77dfaeb29ebbd35faaeaadbf833167f30975f1b8993bbba09ea0a0f"
+dependencies = [
+ "bitflags 2.13.2",
+ "c-enum",
+ "libc",
+ "memmap2",
+ "perf-event-data",
+ "perf-event-open-sys2",
+]
+
+[[package]]
 name = "pest"
 version = "2.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11973,41 +12137,6 @@ dependencies = [
  "serde",
  "serde_json",
 ]
-[[package]]
-name = "perf-event-data"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "575828d9d7d205188048eb1508560607a03d21eafdbba47b8cade1736c1c28e1"
-dependencies = [
- "bitflags 2.13.2",
- "c-enum",
- "perf-event-open-sys2",
-]
-
-[[package]]
-name = "perf-event-open-sys2"
-version = "5.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9c25955321465255e437600b54296983fab1feac2cd0c38958adeb26dbae49e"
-dependencies = [
- "libc",
- "memoffset",
-]
-
-[[package]]
-name = "perf-event2"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0939b8fad77dfaeb29ebbd35faaeaadbf833167f30975f1b8993bbba09ea0a0f"
-dependencies = [
- "bitflags 2.13.2",
- "c-enum",
- "libc",
- "memmap2",
- "perf-event-data",
- "perf-event-open-sys2",
-]
-
 
 [[package]]
 name = "pet-env-var-path"

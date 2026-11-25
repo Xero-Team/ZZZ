@@ -2,14 +2,20 @@
 
 fn main() {
     println!("cargo::rustc-check-cfg=cfg(gpui_cross_runtime_shaders)");
-    if std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default() == "macos" {
-        macos_build::run();
+    // Build scripts run on the host, so the target platform must come from
+    // Cargo's environment rather than `cfg!`.
+    if matches!(
+        std::env::var("CARGO_CFG_TARGET_OS").as_deref(),
+        Ok("macos" | "ios")
+    ) {
+        apple_build::run();
     }
 }
 
-mod macos_build {
+mod apple_build {
     use std::{
         env,
+        ffi::OsString,
         path::{Path, PathBuf},
         process::{self, Command},
     };
@@ -24,6 +30,8 @@ mod macos_build {
         } else {
             println!("cargo:rustc-cfg=gpui_cross_runtime_shaders");
         }
+        // The runtime-shader feature and the cross-compilation fallback both
+        // read this file, so stage it even when a metallib was also produced.
         emit_stitched_shaders(&header_path);
     }
 
@@ -107,12 +115,41 @@ mod macos_build {
         PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("../gpui")
     }
 
+    /// Resolves the SDK and minimum-version flag for the Metal toolchain.
+    ///
+    /// Build scripts run on the host, so the target platform must come from
+    /// Cargo's environment rather than `cfg!`. The target environment, not the
+    /// target name, identifies simulators: `x86_64-apple-ios` has no `-sim`
+    /// suffix.
+    fn metal_toolchain() -> Option<(OsString, &'static str)> {
+        let target_os = env::var("CARGO_CFG_TARGET_OS").ok()?;
+        let target_env = env::var("CARGO_CFG_TARGET_ENV").ok()?;
+        let (sdk, minimum_version_argument) = match (target_os.as_str(), target_env.as_str()) {
+            ("macos", _) => ("macosx", "-mmacosx-version-min=12.0"),
+            ("ios", "sim") => ("iphonesimulator", "-mios-simulator-version-min=15.0"),
+            ("ios", "") => ("iphoneos", "-mios-version-min=15.0"),
+            _ => return None,
+        };
+
+        let sdk = if target_os == "macos" {
+            env::var_os("SDKROOT").unwrap_or_else(|| OsString::from(sdk))
+        } else {
+            OsString::from(sdk)
+        };
+        Some((sdk, minimum_version_argument))
+    }
+
+    /// The metal toolchain only exists with the Apple developer tools that ship
+    /// `xcrun`; without it the renderer falls back to compiling the stitched
+    /// shader source at runtime.
     fn metal_compiler_available() -> bool {
-        if !cfg!(target_os = "macos") {
+        let Some((sdk, _)) = metal_toolchain() else {
             return false;
-        }
+        };
         Command::new("xcrun")
-            .args(["-sdk", "macosx", "-f", "metal"])
+            .arg("-sdk")
+            .arg(&sdk)
+            .args(["-f", "metal"])
             .output()
             .is_ok_and(|output| output.status.success())
     }
@@ -128,6 +165,14 @@ mod macos_build {
     }
 
     fn compile_metal_shaders(header_path: &Path) {
+        println!("cargo:rerun-if-env-changed=SDKROOT");
+        println!("cargo:rerun-if-env-changed=DEVELOPER_DIR");
+
+        let Some((sdk, minimum_version_argument)) = metal_toolchain() else {
+            println!("cargo::error=unsupported Metal shader target");
+            process::exit(1);
+        };
+
         let shader_path = "./src/shaders.metal";
         let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
         let air_output_path = out_dir.join("shaders.air");
@@ -145,12 +190,12 @@ mod macos_build {
         // isn't the checkout either.
         let output = Command::new("xcrun")
             .current_dir(&out_dir)
+            .arg("-sdk")
+            .arg(&sdk)
             .args([
-                "-sdk",
-                "macosx",
                 "metal",
                 "-gline-tables-only",
-                "-mmacosx-version-min=10.15.7",
+                minimum_version_argument,
                 "-MO",
                 "-c",
             ])
@@ -170,10 +215,12 @@ mod macos_build {
 
         let output = Command::new("xcrun")
             .current_dir(&out_dir)
-            .args(["-sdk", "macosx", "metallib"])
+            .arg("-sdk")
+            .arg(&sdk)
+            .arg("metallib")
             .arg(&air_output_path)
             .arg("-o")
-            .arg(metallib_output_path)
+            .arg(&metallib_output_path)
             .output()
             .unwrap();
 
@@ -184,5 +231,8 @@ mod macos_build {
             );
             process::exit(1);
         }
+
+        // Nothing reads the .air intermediate after this point.
+        std::fs::remove_file(&air_output_path).unwrap();
     }
 }

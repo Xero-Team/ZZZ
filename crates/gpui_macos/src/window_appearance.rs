@@ -1,27 +1,36 @@
-use cocoa::{
-    appkit::{NSAppearanceNameVibrantDark, NSAppearanceNameVibrantLight},
-    base::id,
-    foundation::NSString,
-};
+use crate::NSStringExt;
 use gpui::WindowAppearance;
-use objc::{msg_send, sel, sel_impl};
-use std::ffi::CStr;
+use objc2::{msg_send, rc::Retained, runtime::AnyObject};
+use objc2_app_kit::{NSAppearance, NSAppearanceNameVibrantDark, NSAppearanceNameVibrantLight};
+use objc2_foundation::NSString;
 
-pub(crate) unsafe fn window_appearance_from_native(appearance: id) -> WindowAppearance {
-    let name: id = msg_send![appearance, name];
+pub(crate) fn window_appearance_from_native(appearance: Option<&NSAppearance>) -> WindowAppearance {
+    let Some(appearance) = appearance else {
+        return WindowAppearance::Light;
+    };
+
+    // SAFETY: `-name` returns an autoreleased string; the observed name is
+    // stable for the lifetime of the returned appearance.
+    let name: Option<Retained<NSString>> = unsafe { msg_send![appearance, name] };
+    let Some(name) = name else {
+        return WindowAppearance::Light;
+    };
+    let name_ptr = Retained::as_ptr(&name).cast::<AnyObject>();
+
+    // SAFETY: comparing two object identities never dereferences either.
     unsafe {
-        if name == NSAppearanceNameVibrantLight {
+        if name_ptr == std::ptr::from_ref(NSAppearanceNameVibrantLight).cast() {
             WindowAppearance::VibrantLight
-        } else if name == NSAppearanceNameVibrantDark {
+        } else if name_ptr == std::ptr::from_ref(NSAppearanceNameVibrantDark).cast() {
             WindowAppearance::VibrantDark
-        } else if name == NSAppearanceNameAqua {
+        } else if name_ptr == NSAppearanceNameAqua {
             WindowAppearance::Light
-        } else if name == NSAppearanceNameDarkAqua {
+        } else if name_ptr == NSAppearanceNameDarkAqua {
             WindowAppearance::Dark
         } else {
             println!(
                 "unknown appearance: {:?}",
-                CStr::from_ptr(name.UTF8String())
+                (name_ptr as *mut AnyObject).to_str()
             );
             WindowAppearance::Light
         }
@@ -30,6 +39,6 @@ pub(crate) unsafe fn window_appearance_from_native(appearance: id) -> WindowAppe
 
 #[link(name = "AppKit", kind = "framework")]
 unsafe extern "C" {
-    pub static NSAppearanceNameAqua: id;
-    pub static NSAppearanceNameDarkAqua: id;
+    pub static NSAppearanceNameAqua: *mut AnyObject;
+    pub static NSAppearanceNameDarkAqua: *mut AnyObject;
 }

@@ -19,9 +19,9 @@ impl Window {
 
         if focus_handle.is_focused(self) {
             let cx = self.to_async(cx);
-            self.text_input
-                .next_handlers
-                .push(Some(TextInputClient::new(cx, Box::new(input_handler))));
+            self.text_input.next_handlers.push(Some(
+                TextInputClient::new(cx, Box::new(input_handler)).with_focus(focus_handle.id),
+            ));
         }
     }
 
@@ -223,6 +223,8 @@ impl Window {
                 | PlatformInput::MouseExited(_)
                 | PlatformInput::ScrollWheel(_)
                 | PlatformInput::Pinch(_)
+                | PlatformInput::Touch(_)
+                | PlatformInput::BackGesture(_)
                 | PlatformInput::FileDrop(_) => FrameInputProvenance::Pointer,
             },
         );
@@ -327,6 +329,14 @@ impl Window {
                     PlatformInput::FileDrop(FileDropEvent::Exited)
                 }
             },
+            PlatformInput::Touch(touch) => {
+                self.interaction.mouse_position = touch.position;
+                PlatformInput::Touch(touch)
+            }
+            PlatformInput::BackGesture(back_gesture) => {
+                self.interaction.mouse_position = back_gesture.start_position;
+                PlatformInput::BackGesture(back_gesture)
+            }
             PlatformInput::KeyDown(_) | PlatformInput::KeyUp(_) => event,
         };
 

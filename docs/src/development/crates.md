@@ -5,7 +5,7 @@ description: "How the crates are classified, where per-crate rules live, and why
 
 # Crate Map
 
-The workspace has 206 crate directories under `crates/`, plus `vendor/`,
+The workspace has 216 crate directories under `crates/`, plus `vendor/`,
 `extensions/`, and the tooling crates. They are not one kind of code, and
 the rules that apply to them differ. This page says which kind a crate is
 and where a rule about it belongs.

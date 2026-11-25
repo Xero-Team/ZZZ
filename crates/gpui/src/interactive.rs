@@ -93,6 +93,52 @@ pub enum TouchPhase {
     Moved,
     /// The touch phase has ended
     Ended,
+    /// The touch was cancelled: the system took it and it will not end
+    /// normally. Consumers must fully unwind any in-progress interaction,
+    /// treating the touch as if it never committed.
+    Cancelled,
+}
+
+/// Identifies one touch (finger or stylus contact) for its lifetime, from
+/// [`TouchPhase::Started`] through [`TouchPhase::Ended`] or a cancellation.
+///
+/// The value is opaque and assigned by the platform. A platform window must
+/// not reuse an identifier for a later touch.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct TouchId(pub u64);
+
+/// A raw touch event from the platform.
+///
+/// Dispatch contract (core implementation pending): a touch is hit-tested
+/// once, at [`TouchPhase::Started`], occlusion-aware; all subsequent events
+/// for the same [`TouchId`] are delivered to the elements under the starting
+/// position, even after the touch moves outside them.
+#[derive(Clone, Debug, Default)]
+pub struct TouchEvent {
+    /// Which touch this event belongs to.
+    pub id: TouchId,
+    /// The phase of the touch.
+    pub phase: TouchPhase,
+    /// The position of the touch in window coordinates.
+    pub position: Point<Pixels>,
+    /// Where the platform predicts the touch will be roughly one frame from
+    /// now, in the same coordinate space as `position`, when the platform
+    /// offers a prediction for a [`TouchPhase::Moved`] event.
+    ///
+    /// Best-effort latency compensation only: it may influence how far a
+    /// recognized pan scrolls within a frame, but never hit testing, gesture
+    /// classification, or velocity estimation, and any error it introduces
+    /// must be corrected by later events for the same touch.
+    pub predicted_position: Option<Point<Pixels>>,
+    /// Normalized touch force in `0.0..=1.0`, if the hardware reports it.
+    pub force: Option<f32>,
+}
+
+impl Sealed for TouchEvent {}
+impl InputEvent for TouchEvent {
+    fn to_platform_input(self) -> PlatformInput {
+        PlatformInput::Touch(self)
+    }
 }
 
 /// A mouse down event from the platform
@@ -507,6 +553,46 @@ impl Deref for PinchEvent {
     }
 }
 
+/// A back-navigation gesture, such as the iOS swipe from the leading screen
+/// edge.
+///
+/// The innermost element under [`Self::start_position`] claims the whole
+/// gesture when it starts; the platform cancels the gesture if no element does.
+/// Every phase is delivered at the start position, so the claiming element
+/// should stay in place while it animates its contents.
+#[derive(Clone, Debug, Default)]
+pub struct BackGestureEvent {
+    /// The phase of the gesture.
+    pub phase: BackGesturePhase,
+    /// Where the gesture started.
+    pub start_position: Point<Pixels>,
+    /// How far the gesture has travelled toward going back, from 0 to 1.
+    pub progress: f32,
+}
+
+/// The phase of a [`BackGestureEvent`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BackGesturePhase {
+    /// The gesture began. Claiming it here routes the remaining phases to the
+    /// same element.
+    #[default]
+    Started,
+    /// The gesture moved; [`BackGestureEvent::progress`] changed.
+    Progressed,
+    /// The gesture ended and the platform decided to go back.
+    Committed,
+    /// The gesture ended without going back.
+    Cancelled,
+}
+
+impl Sealed for BackGestureEvent {}
+impl InputEvent for BackGestureEvent {
+    fn to_platform_input(self) -> PlatformInput {
+        PlatformInput::BackGesture(self)
+    }
+}
+impl GestureEvent for BackGestureEvent {}
+
 impl ScrollDelta {
     /// Returns true if this is a precise scroll delta in pixels.
     pub fn precise(&self) -> bool {
@@ -668,6 +754,10 @@ pub enum PlatformInput {
     ScrollWheel(ScrollWheelEvent),
     /// A pinch gesture was performed.
     Pinch(PinchEvent),
+    /// A touch began, moved, or ended.
+    Touch(TouchEvent),
+    /// A back-navigation gesture progressed.
+    BackGesture(BackGestureEvent),
     /// Files were dragged and dropped onto the window.
     FileDrop(FileDropEvent),
 }
@@ -686,6 +776,9 @@ impl PlatformInput {
             PlatformInput::ScrollWheel(event) => Some(event),
             PlatformInput::Pinch(event) => Some(event),
             PlatformInput::FileDrop(event) => Some(event),
+            // Gesture dispatch is not wired into this fork's window core yet.
+            PlatformInput::BackGesture(_) => None,
+            PlatformInput::Touch(_) => None,
         }
     }
 
@@ -701,6 +794,8 @@ impl PlatformInput {
             PlatformInput::MouseExited(_) => None,
             PlatformInput::ScrollWheel(_) => None,
             PlatformInput::Pinch(_) => None,
+            PlatformInput::Touch(_) => None,
+            PlatformInput::BackGesture(_) => None,
             PlatformInput::FileDrop(_) => None,
         }
     }

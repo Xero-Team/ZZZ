@@ -1,8 +1,10 @@
+use async_task::Runnable;
 use dispatch2::{DispatchQueue, DispatchQueueGlobalPriority, DispatchTime, GlobalQueueIdentifier};
 use gpui::{
     GLOBAL_THREAD_TIMINGS, PlatformDispatcher, Priority, RunnableMeta, RunnableVariant, TaskTiming,
     ThreadTaskTimings, add_task_timing,
 };
+use gpui_util::ResultExt;
 use mach2::{
     kern_return::KERN_SUCCESS,
     mach_time::mach_timebase_info_data_t,
@@ -13,29 +15,29 @@ use mach2::{
         thread_precedence_policy_data_t, thread_time_constraint_policy_data_t,
     },
 };
-use util::ResultExt;
-
-use async_task::Runnable;
-use objc::{
-    class, msg_send,
-    runtime::{BOOL, YES},
-    sel, sel_impl,
-};
+use objc2_foundation::NSThread;
 use std::{
     ffi::c_void,
     ptr::NonNull,
     time::{Duration, Instant},
 };
 
-pub(crate) struct MacDispatcher;
+/// Dispatches GPUI tasks onto Apple dispatch queues.
+pub struct AppleDispatcher;
 
-impl MacDispatcher {
+impl AppleDispatcher {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl PlatformDispatcher for MacDispatcher {
+impl Default for AppleDispatcher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PlatformDispatcher for AppleDispatcher {
     fn get_all_timings(&self) -> Vec<ThreadTaskTimings> {
         let global_timings = GLOBAL_THREAD_TIMINGS.lock();
         ThreadTaskTimings::convert(&global_timings)
@@ -51,8 +53,7 @@ impl PlatformDispatcher for MacDispatcher {
     }
 
     fn is_main_thread(&self) -> bool {
-        let is_main_thread: BOOL = unsafe { msg_send![class!(NSThread), isMainThread] };
-        is_main_thread == YES
+        NSThread::isMainThread_class()
     }
 
     fn dispatch(&self, runnable: RunnableVariant, priority: Priority) {

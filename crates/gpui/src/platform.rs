@@ -1,6 +1,7 @@
 mod app_menu;
 mod keyboard;
 mod keystroke;
+mod platform_info;
 
 #[cfg(all(any(target_os = "linux", target_os = "freebsd"), feature = "wayland"))]
 #[expect(missing_docs)]
@@ -33,11 +34,12 @@ pub(crate) type PlatformScreenCaptureFrame = core_video::image_buffer::CVImageBu
 
 use crate::{
     Action, AnyWindowHandle, App, AsyncWindowContext, BackgroundExecutor, Bounds, Corners,
-    DEFAULT_WINDOW_SIZE, DevicePixels, DispatchEventResult, Font, FontId, FontMetrics, FontRun,
-    ForegroundExecutor, GlyphId, GlyphRasterFormat, GlyphRasterInfo, GpuSpecs, Hsla, ImageSource,
-    Keymap, LineLayout, Pixels, PlatformAtlas, PlatformInput, Point, Priority, RasterizedGlyph,
-    RenderGlyphParams, RenderImage, Scene, ShapedGlyph, ShapedRun, SharedString, Size, SvgRenderer,
-    SystemWindowTab, Task, ThreadTaskTimings, Window, WindowControlArea, hash, point, px, size,
+    DEFAULT_WINDOW_SIZE, DevicePixels, DispatchEventResult, Edges, Font, FontId, FontMetrics,
+    FontRun, ForegroundExecutor, GlyphId, GlyphRasterFormat, GlyphRasterInfo, GpuSpecs, Hsla,
+    ImageSource, Keymap, LineLayout, Pixels, PlatformAtlas, PlatformInput, Point, Priority,
+    RasterizedGlyph, RenderGlyphParams, RenderImage, Scene, ShapedGlyph, ShapedRun, SharedString,
+    Size, SvgRenderer, SystemWindowTab, Task, ThreadTaskTimings, Window, WindowControlArea, hash,
+    point, px, size,
 };
 use anyhow::Result;
 use async_task::Runnable;
@@ -70,6 +72,7 @@ use uuid::Uuid;
 pub use app_menu::*;
 pub use keyboard::*;
 pub use keystroke::*;
+pub use platform_info::*;
 
 #[cfg(any(test, feature = "test-support"))]
 pub(crate) use test::*;
@@ -112,6 +115,48 @@ pub fn guess_compositor() -> &'static str {
         "X11"
     } else {
         "Headless"
+    }
+}
+
+/// Converts a refresh rate in hertz to the time between refreshes, rejecting
+/// the zero, negative, and non-finite rates platforms use to mean "unknown".
+pub fn refresh_interval_from_hz(hertz: f64) -> Option<Duration> {
+    (hertz.is_finite() && hertz > 0.0).then(|| Duration::from_secs_f64(1.0 / hertz))
+}
+
+/// The host operating system selected at compile time, for the default
+/// [`Platform::platform_info`] implementation.
+fn default_operating_system() -> OperatingSystem {
+    #[cfg(target_os = "macos")]
+    {
+        OperatingSystem::Mac
+    }
+    #[cfg(target_os = "ios")]
+    {
+        OperatingSystem::Ios
+    }
+    #[cfg(target_os = "windows")]
+    {
+        OperatingSystem::Windows
+    }
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    {
+        OperatingSystem::Linux
+    }
+    #[cfg(target_os = "freebsd")]
+    {
+        OperatingSystem::FreeBsd
+    }
+    #[cfg(not(any(
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "windows",
+        target_os = "linux",
+        target_os = "android",
+        target_os = "freebsd"
+    )))]
+    {
+        OperatingSystem::Unknown
     }
 }
 
@@ -202,11 +247,66 @@ impl AppLifecycleCapabilities {
     };
 }
 
+/// A phase of the application's native lifecycle.
+///
+/// The phases are reported through
+/// [`Platform::on_app_lifecycle`](crate::Platform::on_app_lifecycle). Platforms
+/// that cannot observe a phase never report it.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum AppLifecyclePhase {
+    /// Foreground and receiving input.
+    Active,
+    /// Foreground (visible) but not receiving input.
+    Inactive,
+    /// Not visible. The GPU surface may be destroyed while backgrounded and
+    /// the process may be killed without further notice.
+    Background,
+    /// Becoming visible again, before input is restored.
+    Foreground,
+    /// The native scene has disconnected. Its windows may reconnect later.
+    /// This is not a process-termination notification or a guaranteed final
+    /// opportunity to save state.
+    Disconnected,
+}
+
+/// Whether frames drawn for a window are being presented.
+///
+/// Reported by [`PlatformWindow::visibility`](crate::PlatformWindow::visibility)
+/// and through
+/// [`PlatformWindow::on_visibility_change`](crate::PlatformWindow::on_visibility_change).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowVisibility {
+    /// At least part of the window is being presented; frames drawn for it
+    /// will be shown.
+    Visible,
+    /// No part of the window is being presented. The platform will not
+    /// request frames for it until it becomes visible again.
+    Hidden,
+}
+
+impl WindowVisibility {
+    /// Whether frames drawn for the window will be shown.
+    pub fn is_visible(self) -> bool {
+        self == Self::Visible
+    }
+}
+
 #[expect(missing_docs)]
 pub trait Platform: AppLifecycle + 'static {
     fn background_executor(&self) -> BackgroundExecutor;
     fn foreground_executor(&self) -> ForegroundExecutor;
     fn text_system(&self) -> Arc<dyn PlatformTextSystem>;
+
+    /// The host operating system and application target this backend delivers.
+    fn platform_info(&self) -> PlatformInfo {
+        PlatformInfo {
+            os: default_operating_system(),
+            target: PlatformTarget::Native,
+        }
+    }
+
+    /// Registers the callback invoked when the set of connected displays changes.
+    fn on_displays_changed(&self, _callback: Box<dyn FnMut()>) {}
 
     fn displays(&self) -> Vec<Rc<dyn PlatformDisplay>>;
     fn primary_display(&self) -> Option<Rc<dyn PlatformDisplay>>;
@@ -291,7 +391,27 @@ pub trait Platform: AppLifecycle + 'static {
     fn power_mode(&self) -> PowerMode {
         PowerMode::Unknown
     }
+
+    /// Registers the callback invoked when [`Self::power_mode`] changes.
+    fn on_power_mode_change(&self, _callback: Box<dyn FnMut()>) {}
     fn on_system_wake(&self, _callback: Box<dyn FnMut()>) {}
+
+    /// Registers the callback invoked when the system is about to sleep.
+    fn on_system_sleep(&self, _callback: Box<dyn FnMut()>) {}
+
+    /// Registers the callback invoked when the application's native lifecycle
+    /// phase changes. Platforms that cannot observe phases never call it.
+    fn on_app_lifecycle(&self, _callback: Box<dyn FnMut(AppLifecyclePhase)>) {}
+
+    /// Registers the callback invoked when the system reports memory pressure.
+    fn on_memory_warning(&self, _callback: Box<dyn FnMut()>) {}
+
+    /// Prevents idle sleep for as long as the returned guard is alive.
+    fn prevent_idle_sleep(&self, _reason: &str) -> Task<Result<ActivityGuard>> {
+        Task::ready(Err(anyhow::anyhow!(
+            "idle sleep prevention is not supported by this platform"
+        )))
+    }
 
     fn compositor_name(&self) -> &'static str {
         ""
@@ -347,6 +467,13 @@ pub trait PlatformDisplay: Debug {
     /// Get the bounds for this display
     fn bounds(&self) -> Bounds<Pixels>;
 
+    /// The time between refreshes, when the platform can report it.
+    ///
+    /// Use [`refresh_interval_from_hz`] to build this from a refresh rate.
+    fn refresh_interval(&self) -> Option<Duration> {
+        None
+    }
+
     /// Get the visible bounds for this display, excluding taskbar/dock areas.
     /// This is the usable area where windows can be placed without being obscured.
     /// Defaults to the full display bounds if not overridden.
@@ -391,6 +518,26 @@ pub enum PowerMode {
     Balanced,
     /// The system prioritizes performance over energy use.
     HighPower,
+}
+
+/// Keeps an operating system activity, such as an idle sleep inhibitor, alive
+/// until dropped.
+pub struct ActivityGuard {
+    _release: gpui_util::Deferred<Box<dyn FnOnce() + Send>>,
+}
+
+impl ActivityGuard {
+    /// Runs `release` when the guard is dropped.
+    pub fn new(release: impl FnOnce() + Send + 'static) -> Self {
+        Self {
+            _release: gpui_util::defer(Box::new(release)),
+        }
+    }
+
+    /// A guard for platforms without a corresponding activity.
+    pub fn noop() -> Self {
+        Self::new(|| {})
+    }
 }
 
 /// Metadata for a given [ScreenCaptureSource]
@@ -841,12 +988,64 @@ pub struct RequestFrameOptions {
     pub force_render: bool,
 }
 
+/// Regions of a window that are obscured or reserved by the system.
+///
+/// Mobile applications often share space in their window with system-specific
+/// geometry, from keyboards to camera notches. In GPUI, all this is abstracted
+/// into a single "inset" which should be overlaid on the window's bounds.
+/// It is up to the application developer to determine how to handle these cases.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct WindowInsets {
+    /// Regions covered by system UI or hardware: status bar, display
+    /// cutouts/notch, home indicator, navigation bars.
+    pub safe_area: Edges<Pixels>,
+    /// The region covered by the keyboard, when present.
+    pub ime: Edges<Pixels>,
+    /// The radii of the window's visible corners where the display rounds
+    /// them, and zero where corners are square or the platform can't say.
+    pub corner_radii: Corners<Pixels>,
+}
+
+impl WindowInsets {
+    /// The combined inset content should avoid.
+    pub fn effective(&self) -> Edges<Pixels> {
+        Edges {
+            top: self.safe_area.top.max(self.ime.top),
+            right: self.safe_area.right.max(self.ime.right),
+            bottom: self.safe_area.bottom.max(self.ime.bottom),
+            left: self.safe_area.left.max(self.ime.left),
+        }
+    }
+}
+
+/// A change in the state of the focused text input.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum TextInputStateChange {
+    /// The window changed from having no active text input to having one.
+    FocusGained,
+    /// The window no longer has an active text input.
+    FocusLost,
+    /// The selection or caret moved.
+    SelectionChanged,
+    /// The document content changed outside of platform-initiated edits.
+    ContentChanged,
+}
+
 /// Platform bridge for native text input and IME candidate positioning.
 #[expect(missing_docs)]
 pub trait TextInputBridge {
     fn set_input_handler(&mut self, input_handler: TextInputClient);
     fn take_input_handler(&mut self) -> Option<TextInputClient>;
     fn update_ime_position(&self, bounds: Bounds<Pixels>);
+
+    /// Applies the focused text region's [`TextInputConfiguration`] to the
+    /// platform's text input session. Called only when the configuration
+    /// changes, because reconfiguring a live input session can restart the IME
+    /// connection.
+    fn set_text_input_configuration(&mut self, _configuration: TextInputConfiguration) {}
+
+    /// Informs the operating system that the text input state has changed.
+    fn text_input_state_changed(&self, _change: TextInputStateChange) {}
 }
 
 /// Platform source for pointer and keyboard input state and events.
@@ -872,6 +1071,11 @@ pub trait WindowHost {
     fn activate(&self);
     fn request_attention(&self) {}
     fn is_active(&self) -> bool;
+    /// The current [`WindowVisibility`]. Read once when the window is created;
+    /// afterwards changes arrive through [`Self::on_visibility_change`].
+    fn visibility(&self) -> WindowVisibility {
+        WindowVisibility::Visible
+    }
     fn is_hovered(&self) -> bool;
     fn background_appearance(&self) -> WindowBackgroundAppearance;
     fn set_title(&mut self, title: &str);
@@ -891,9 +1095,26 @@ pub trait WindowHost {
     }
     fn on_request_frame(&self, callback: Box<dyn FnMut(RequestFrameOptions)>);
     fn on_active_status_change(&self, callback: Box<dyn FnMut(bool)>);
+    /// Registers the callback invoked when [`Self::visibility`] changes. Only
+    /// transitions are reported.
+    fn on_visibility_change(&self, _callback: Box<dyn FnMut(WindowVisibility)>) {}
     fn on_hover_status_change(&self, callback: Box<dyn FnMut(bool)>);
     fn on_resize(&self, callback: Box<dyn FnMut(Size<Pixels>, f32)>);
     fn on_moved(&self, callback: Box<dyn FnMut()>);
+    /// Registers the callback invoked when the window moves to another
+    /// display. Calls may be spurious.
+    fn on_display_changed(&self, _callback: Box<dyn FnMut()>) {}
+    /// The regions of this window currently obscured or reserved by the
+    /// system. Zero on platforms without such regions.
+    fn insets(&self) -> WindowInsets {
+        WindowInsets::default()
+    }
+    /// Registers a callback invoked whenever [`Self::insets`] change.
+    fn on_insets_changed(&self, _callback: Box<dyn FnMut(WindowInsets)>) {}
+    /// Requests that the soft keyboard be shown.
+    fn show_soft_keyboard(&self) {}
+    /// Requests that the soft keyboard be hidden.
+    fn hide_soft_keyboard(&self) {}
     fn on_should_close(&self, callback: Box<dyn FnMut() -> bool>);
     fn on_hit_test_window_control(&self, callback: Box<dyn FnMut() -> Option<WindowControlArea>>);
     fn on_close(&self, callback: Box<dyn FnOnce()>);
@@ -1314,6 +1535,7 @@ pub fn get_gamma_correction_ratios(gamma: f32) -> [f32; 4] {
 pub struct TextInputClient {
     cx: AsyncWindowContext,
     handler: Box<dyn InputHandler>,
+    focus_id: Option<crate::FocusId>,
 }
 
 /// Backward-compatible name for [`TextInputClient`].
@@ -1335,7 +1557,24 @@ pub type PlatformInputHandler = TextInputClient;
 )]
 impl TextInputClient {
     pub fn new(cx: AsyncWindowContext, handler: Box<dyn InputHandler>) -> Self {
-        Self { cx, handler }
+        Self {
+            cx,
+            handler,
+            focus_id: None,
+        }
+    }
+
+    pub(crate) fn with_focus(mut self, focus_id: crate::FocusId) -> Self {
+        self.focus_id = Some(focus_id);
+        self
+    }
+
+    /// Identifies the input field registered through [`Window::handle_input`].
+    ///
+    /// This identity survives adapter replacement during repaint. Backends can
+    /// use it to detect a field change without restarting the keyboard session.
+    pub fn focus_id(&self) -> Option<crate::FocusId> {
+        self.focus_id
     }
 
     pub fn selected_text_range(&mut self, ignore_disabled_input: bool) -> Option<UTF16Selection> {
@@ -1501,6 +1740,79 @@ impl TextInputClient {
             })
             .unwrap_or(false)
     }
+
+    /// Unlike the legacy acceptance query, this fails closed when the window cannot
+    /// be updated and requires registration through `Window::handle_input`.
+    pub fn query_accepts_focused_text_input(&mut self) -> bool {
+        let focus_id = self.focus_id;
+        self.cx
+            .update(|window, cx| {
+                focus_id.is_some()
+                    && window.focused(cx).map(|handle| handle.id) == focus_id
+                    && self.handler.accepts_text_input(window, cx)
+            })
+            .unwrap_or(false)
+    }
+
+    /// See [`InputHandler::paste`].
+    pub fn paste(&mut self, item: ClipboardItem) {
+        self.cx
+            .update(|window, cx| self.handler.paste(item, window, cx))
+            .ok();
+    }
+
+    /// See [`InputHandler::selection_bounds_for_range`].
+    pub fn selection_bounds_for_range(&mut self, range_utf16: Range<usize>) -> Vec<Bounds<Pixels>> {
+        self.cx
+            .update(|window, cx| {
+                self.handler
+                    .selection_bounds_for_range(range_utf16, window, cx)
+            })
+            .unwrap_or_default()
+    }
+
+    /// See [`InputHandler::set_selected_text_range`].
+    pub fn set_selected_text_range(&mut self, range_utf16: Range<usize>) {
+        self.cx
+            .update(|window, cx| {
+                self.handler
+                    .set_selected_text_range(range_utf16, window, cx)
+            })
+            .ok();
+    }
+
+    /// See [`InputHandler::element_bounds`].
+    pub fn element_bounds(&mut self) -> Option<Bounds<Pixels>> {
+        self.cx
+            .update(|window, cx| self.handler.element_bounds(window, cx))
+            .ok()
+            .flatten()
+    }
+
+    /// See [`InputHandler::text_length_utf16`].
+    pub fn text_length_utf16(&mut self) -> Option<usize> {
+        self.cx
+            .update(|window, cx| self.handler.text_length_utf16(window, cx))
+            .ok()
+            .flatten()
+    }
+
+    /// See [`InputHandler::text_input_configuration`].
+    pub fn text_input_configuration(
+        &mut self,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> TextInputConfiguration {
+        self.handler.text_input_configuration(window, cx)
+    }
+
+    /// See [`InputHandler::text_input_editable_range`].
+    pub fn text_input_editable_range(&mut self) -> Option<Range<usize>> {
+        self.cx
+            .update(|window, cx| self.handler.text_input_editable_range(window, cx))
+            .ok()
+            .flatten()
+    }
 }
 
 /// A struct representing a selection in a text buffer, in UTF16 characters.
@@ -1580,6 +1892,16 @@ pub trait InputHandler: 'static {
     /// Corresponds to [unmarkText()](https://developer.apple.com/documentation/appkit/nstextinputclient/1438239-unmarktext)
     fn unmark_text(&mut self, window: &mut Window, cx: &mut App);
 
+    /// Platforms that deliver paste as an input event rather than through an
+    /// application-defined action (e.g. the DOM `paste` event on web) call
+    /// this with the full clipboard contents. The default implementation
+    /// inserts only the plain-text portion of the item.
+    fn paste(&mut self, item: ClipboardItem, window: &mut Window, cx: &mut App) {
+        if let Some(text) = item.text() {
+            self.replace_text_in_range(None, &text, window, cx);
+        }
+    }
+
     /// Get the bounds of the given document range in screen coordinates
     /// Corresponds to [firstRect(forCharacterRange:actualRange:)](https://developer.apple.com/documentation/appkit/nstextinputclient/1438240-firstrect)
     ///
@@ -1591,6 +1913,21 @@ pub trait InputHandler: 'static {
         cx: &mut App,
     ) -> Option<Bounds<Pixels>>;
 
+    /// Returns selection rectangles in document order, in window coordinates.
+    ///
+    /// Return line or shaped-run fragments, not one rectangle per character. The
+    /// first and last rectangles contain the range's start and end respectively.
+    /// Empty means native selection geometry is unavailable; caret/IME geometry can
+    /// still be supplied by `bounds_for_range`.
+    fn selection_bounds_for_range(
+        &mut self,
+        _range_utf16: Range<usize>,
+        _window: &mut Window,
+        _cx: &mut App,
+    ) -> Vec<Bounds<Pixels>> {
+        Vec::new()
+    }
+
     /// Get the character offset for the given point in terms of UTF16 characters
     ///
     /// Corresponds to [characterIndexForPoint:](https://developer.apple.com/documentation/appkit/nstextinputclient/characterindex(for:))
@@ -1600,6 +1937,25 @@ pub trait InputHandler: 'static {
         window: &mut Window,
         cx: &mut App,
     ) -> Option<usize>;
+
+    /// Move the selection to the given document range.
+    fn set_selected_text_range(
+        &mut self,
+        _range_utf16: Range<usize>,
+        _window: &mut Window,
+        _cx: &mut App,
+    ) {
+    }
+
+    /// Get the bounds of the focused text element in window coordinates, if known.
+    fn element_bounds(&mut self, _window: &mut Window, _cx: &mut App) -> Option<Bounds<Pixels>> {
+        None
+    }
+
+    /// Get the length of the document in UTF-16 characters, if known.
+    fn text_length_utf16(&mut self, _window: &mut Window, _cx: &mut App) -> Option<usize> {
+        None
+    }
 
     /// Allows a given input context to opt into getting raw key repeats instead of
     /// sending these to the platform.
@@ -1625,6 +1981,85 @@ pub trait InputHandler: 'static {
     fn prefers_ime_for_printable_keys(&mut self, _window: &mut Window, _cx: &mut App) -> bool {
         false
     }
+
+    /// The document range the platform may edit, when it is narrower than the
+    /// whole document (for example when the caret sits inside an immutable
+    /// region). `None` means the whole document is editable.
+    fn text_input_editable_range(
+        &mut self,
+        _window: &mut Window,
+        _cx: &mut App,
+    ) -> Option<Range<usize>> {
+        None
+    }
+
+    /// The native text-assistance preferences for the focused text region.
+    fn text_input_configuration(
+        &mut self,
+        _window: &mut Window,
+        _cx: &mut App,
+    ) -> TextInputConfiguration {
+        TextInputConfiguration::default()
+    }
+}
+
+/// Platform text-assistance preferences for the focused text region.
+///
+/// Platforms map the fields onto their native input-session attributes (for
+/// example `autocorrect` and `enterkeyhint` on the web, or the keyboard traits
+/// of a hidden UIKit responder).
+///
+/// The default disables all text assistance and requests no particular action
+/// key presentation.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TextInputConfiguration {
+    /// Whether the platform may automatically correct entered text.
+    pub autocorrect: bool,
+    /// How software keyboards automatically capitalize entered text.
+    pub autocapitalize: Autocapitalize,
+    /// Whether software keyboards may offer word suggestions and spellcheck.
+    pub suggestions: bool,
+    /// The action advertised on a software keyboard's confirm ("enter") key.
+    pub input_action: TextInputAction,
+}
+
+/// Automatic capitalization applied by software keyboards.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Autocapitalize {
+    /// No automatic capitalization.
+    #[default]
+    None,
+    /// Capitalize the first letter of each word.
+    Words,
+    /// Capitalize the first letter of each sentence.
+    Sentences,
+    /// Capitalize every letter.
+    Characters,
+}
+
+/// The action a software keyboard advertises on its confirm ("enter") key.
+///
+/// This affects only how the key is presented (icon or label); pressing it is
+/// still delivered as ordinary input.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TextInputAction {
+    /// Let the platform choose its default presentation.
+    #[default]
+    Unspecified,
+    /// Inserting a line break.
+    Enter,
+    /// Committing the field's value.
+    Done,
+    /// Navigating to the typed target.
+    Go,
+    /// Moving to the next field.
+    Next,
+    /// Moving to the previous field.
+    Previous,
+    /// Executing a search.
+    Search,
+    /// Sending a message.
+    Send,
 }
 
 /// The variables that can be configured when creating a new window
