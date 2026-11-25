@@ -294,7 +294,15 @@ fn rasterize_tree(tree: &usvg::Tree, size: SvgSize) -> Result<Pixmap, usvg::Erro
     width *= scale;
     height *= scale;
 
-    let mut pixmap = resvg::tiny_skia::Pixmap::new(width as u32, height as u32)
+    // A sub-pixel edge (a 1000:1 viewport painted into a 1x1 box, say) truncates
+    // to zero columns, and `Pixmap::new` rejects that, which silently drops the
+    // icon. Keep one pixel so the caller paints a hairline instead of nothing.
+    let pixel_extent =
+        |length: f32| (length.is_finite() && length > 0.0).then(|| (length as u32).max(1));
+    let pixmap_width = pixel_extent(width).ok_or(usvg::Error::InvalidSize)?;
+    let pixmap_height = pixel_extent(height).ok_or(usvg::Error::InvalidSize)?;
+
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(pixmap_width, pixmap_height)
         .ok_or(usvg::Error::InvalidSize)?;
     let transform = resvg::tiny_skia::Transform::from_scale(
         width / svg_size.width(),
