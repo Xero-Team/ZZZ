@@ -500,11 +500,11 @@ accesskit = { version = "0.25.2", features = ["enumn"] }
 accesskit_macos = "0.27.2"
 accesskit_unix = "0.24.1"
 accesskit_windows = "0.35.2"
-agent-client-protocol = { version = "=5.5.1", features = ["unstable"] }
+agent-client-protocol = { version = "=5.6.1", features = ["unstable"] }
 aho-corasick = "1.1"
 alacritty_terminal = "0.26.0"
 any_vec = "0.15"
-anyhow = "1.0.104"
+anyhow = "1.0.105"
 ashpd = { version = "0.14", default-features = false, features = [
     "async-io",
     "notification",
@@ -524,7 +524,7 @@ event-listener = "5.4.2"
 # Vendored from https://github.com/routerify/async-pipe-rs @ 14aed755ea9fb016a63498fa8c0ec479757fa5f6
 async-pipe = { path = "vendor/async-pipe" }
 async-recursion = "1.2.0"
-async-tar = "0.6.1"
+async-tar = "0.7.0"
 async-task = "4.7"
 async-trait = "0.1"
 async-tungstenite = "0.35.0"
@@ -605,7 +605,7 @@ html5ever = { package = "spider-html5ever", version = "0.40.0" }
 http = "1.5"
 http-body = "1.1"
 icu_segmenter = { version = "2.4.0", default-features = false, features = ["compiled_data"] }
-ignore = "0.4.34"
+ignore = "0.4.35"
 # image's default features minus "avif", which only adds an encoder (rav1e);
 # decoding AVIF would additionally need the non-default "avif-native" feature.
 image = { version = "0.25.10", default-features = false, features = [
@@ -630,10 +630,10 @@ indexmap = { version = "2.14.2", features = ["serde"] }
 indoc = "2"
 inventory = "0.3.25"
 itertools = "0.15.0"
-jiff = { version = "1.0.2", features = ["serde"] }
+jiff = { version = "1.0.3", features = ["serde"] }
 json_dotpath = "1.1"
-jsonschema = "0.62.0"
-jupyter-protocol = "2.0.3"
+jsonschema = "0.63.1"
+jupyter-protocol = "2.0.4"
 jupyter-websocket-client = "3.0.1"
 libc = "0.2"
 libsqlite3-sys = { version = "0.40.0", features = ["bundled"] }
@@ -789,8 +789,7 @@ postage = { version = "0.5", features = ["futures-traits"] }
 pretty_assertions = { version = "1.4.1", features = ["unstable"] }
 proc-macro2 = "1.0.107"
 profiling = "1"
-# replace this with main when #635 is merged
-proptest = { git = "https://github.com/proptest-rs/proptest", rev = "3dca198a8fef1b32e3a66f1e1897c955b4dc5b5b", features = ["attr-macro"] }
+proptest = { version = "1.12.0", features = ["attr-macro"] }
 proptest-derive = "0.9.0"
 prost = "0.14"
 prost-build = "0.14"
