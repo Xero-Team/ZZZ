@@ -141,6 +141,16 @@ mod tests {
             .collect()
     }
 
+    /// A workflow source that runs every step required of that workflow.
+    fn all_steps(path: &str) -> Option<String> {
+        let commands: Vec<&str> = REQUIRED_STEPS
+            .iter()
+            .filter(|(workflow, _)| *workflow == path)
+            .map(|(_, command)| *command)
+            .collect();
+        (!commands.is_empty()).then(|| format!("run: {}\n", commands.join(" ")))
+    }
+
     #[test]
     fn passes_when_every_required_command_is_present() {
         assert!(missing_commands(&all_runs()).is_empty());
@@ -186,7 +196,7 @@ mod tests {
 
     #[test]
     fn a_present_step_satisfies_the_requirement() {
-        let missing = missing_steps(|_| Some("run: ./script/check-pr-metadata\n".to_owned()));
+        let missing = missing_steps(all_steps);
         assert!(missing.is_empty(), "{missing:?}");
     }
 
