@@ -1,4 +1,4 @@
-["(" ")" "[" "]" "{" "}"] @punctuation.bracket
+["(" ")" "[" "]"] @punctuation.bracket
 
 (number) @number
 (character) @constant.builtin
