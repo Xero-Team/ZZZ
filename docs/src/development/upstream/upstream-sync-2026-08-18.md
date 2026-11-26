@@ -150,7 +150,7 @@ resolve; they now name the commits that landed on `main`.
 | 7bddd16a | A     | bdce4cc5     | Cherry-picked with `-x -s`.                                    |
 | 07a0bd12 | C     | --           | Unused frame-time debug overlay.                               |
 | 6721ea2e | B     | cfe7c99672   | Dock reset covers every panel in the sizing mode.              |
-| 64d14ea8 | C     | --           | System pinentry; askpass conflict.                             |
+| 64d14ea8 | B     | 95b3b8e65f | System pinentry; askpass conflict. Absorbed later as `95b3b8e65f`; see `upstream-sync-2026-11-26-medium.md`. |
 | fd90c0af | A     | 20b57034     | Cherry-picked with `-x -s`.                                    |
 | aa371861 | C     | --           | Autofix workflow clippy flag.                                  |
 

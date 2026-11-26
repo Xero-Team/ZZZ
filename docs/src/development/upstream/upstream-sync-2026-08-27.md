@@ -38,7 +38,7 @@ fixed default.
 | -------- | ----- | ------------ | --------------------------------------------------------------- |
 | 83f3a8e3 | C     | --           | ChatGPT Subscription Responses transport; `HttpSend` absent.    |
 | 78712609 | C     | 3762f194     | Absorbed by `3762f194`; `91a2911a68` deleted the crate.         |
-| 4bdf188c | C     | --           | Stash tracked/staged options; git_panel and git.proto conflict. |
+| 4bdf188c | B     | 442846f3be | Stash tracked/staged options; git_panel and git.proto conflict. Absorbed later as `442846f3be`; see `upstream-sync-2026-11-26-medium.md`. |
 | 2893b86b | B     | ee6b0e7e     | macOS simple fullscreen covering the notch.                     |
 | 1274a5dc | B     | c4632655     | VS Code npm task `path` property.                               |
 | cf08569e | B     | 94954ebf     | `file_scan_exclusions` `"..."` splice.                          |
@@ -939,9 +939,9 @@ queried live head.
 | c595091b | C     | --           | Dependency, lockfile, and crate-graph churn without independent behavior. |
 | 34241d5f | B     | 6ee8fa5e1b   | Flattened settings sections deserialize by path.                          |
 | ea701d40 | C     | --           | Agent persistence worker targets deleted/diverged native-agent paths.     |
-| 4a9a863c | C     | --           | Auto-indentation patch requires deleted `editor/src/input.rs`.            |
+| 4a9a863c | B     | 621d602afc | Auto-indentation patch requires deleted `editor/src/input.rs`. Absorbed later as `621d602afc`; see `upstream-sync-2026-11-26-medium.md`. |
 | ac099b4a | B     | 8ad9315d1e   | Version follow to v1.19.0; local version bump retained.                   |
-| 7ecab315 | C     | --           | Depends on the rejected project-search rewrite from `1475887f`.           |
+| 7ecab315 | B     | 9482d09402 | Depends on the rejected project-search rewrite from `1475887f`. Absorbed later as `9482d09402`; see `upstream-sync-2026-11-26-medium.md`. |
 | 5ed5bf95 | C     | --           | Stream-mapping rewrite spans deleted and conflicting provider APIs.       |
 
 ### Applied work

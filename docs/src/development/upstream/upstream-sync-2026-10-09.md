@@ -156,7 +156,7 @@ fixed at twenty commits; later commits remain queued.
 | 285d975043 | B     | f9aad5ee6d   | Retained independent migration and theme-cache startup work; the deleted upstream `crates/zed` path remains omitted.       |
 | 7c4f6ddad1 | A     | 26e205db8b   | Clean absorption fixing JetBrains `Shift-Enter` precedence in buffer search.                                               |
 | 93a9c1a0bc | C     | --           | Nix WebRTC update is collaboration infrastructure, which ZZZ does not ship.                                                |
-| 2240542744 | C     | --           | Single-file matching depends on upstream's divergent `File` and language-registry path architecture.                       |
+| 2240542744 | B     | 879ee0fd61 | Single-file matching depends on upstream's divergent `File` and language-registry path architecture. Absorbed later as `879ee0fd61`; see `upstream-sync-2026-11-26-medium.md`. |
 | a1b71072e5 | C     | --           | Lockfile-only cleanup depends on the omitted upstream `crates/zed` Nix dependency change.                                  |
 | aecb6364b3 | B     | 6d6d503124   | Captured inlay-hint filtering snapshots after local response conversion in ZZZ's VFS-aware dispatcher.                     |
 

@@ -45,7 +45,7 @@ contains 26 commits, so the whole visible range fits in this batch.
 | 73a6e0ba61 | A     | 70dfbc3c0d   | Clean absorption: tail proximity bonus in `fuzzy_nucleo` path matching plus the file-finder regression test.                                 |
 | f91e908cad | C     | --           | Parent-owned subagent registries depend on the absent ACP v2/receipt thread ownership and native subagent session machinery.                 |
 | d38a754e1b | C     | --           | Adds ACP v2 session deletion on top of the absent v2 session state machine.                                                                  |
-| 1416404b88 | C     | --           | Seven-hundred-line rework of discard selection, trash-untracked filtering, git transport, and the git panel; not isolatable onto ZZZ's flow. |
+| 1416404b88 | B     | 97d7f6ba3f | Seven-hundred-line rework of discard selection, trash-untracked filtering, git transport, and the git panel; not isolatable onto ZZZ's flow. Absorbed later as `97d7f6ba3f`; see `upstream-sync-2026-11-26-medium.md`. |
 | a484d108da | C     | --           | Renders subagent cards from state introduced by the rejected `f91e908cad` subagent registry.                                                 |
 | 41e9dc5837 | C     | --           | Shares OpenCode catalog parsing and completion dispatch; ZZZ has no `opencode` crate.                                                        |
 | f26375b83b | C     | --           | Omits an OpenCode thinking block binding in the absent `crates/opencode`.                                                                    |
@@ -208,7 +208,7 @@ machinery this refactor builds on.
 Implements session deletion in `agent_servers/src/acp/v2.rs`. The file
 and its session state are absent.
 
-#### 1416404b88 — keep staged changes when discarding (C)
+#### 1416404b88 — keep staged changes when discarding (B)
 
 Reworks discard targets and selection scope in the git panel, adds
 `RevertedUnstaged`, threads an optional checkout commit through git and
@@ -217,6 +217,11 @@ conflicts across the git panel's selection, revert, trash, and test
 flows, which have diverged locally; porting the whole rework is not an
 isolatable B change, and the backend option alone would not change
 behavior without the panel rewrite.
+
+Correction: landed later as `97d7f6ba3f` on the narrower scope that does change
+behavior — `checkout_files(None)` restores the worktree from the index and keeps
+staged content, wired through the local panel's own selection model. See
+`upstream-sync-2026-11-26-medium.md`.
 
 #### a484d108da — source-independent subagent cards (C)
 

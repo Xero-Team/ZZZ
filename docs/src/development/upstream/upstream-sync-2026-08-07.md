@@ -97,7 +97,7 @@ until that port is committed (issue #61).
 | 410a8a06 | B     | f5292f42           | Targeted semantic-token refresh preserves other servers.                                     |
 | 3652f301 | C     | --                 | Copilot authentication split.                                                                |
 | d88f6821 | B     | c67516df           | Windows Vim/Helix Escape dismisses notifications.                                            |
-| a473ea63 | C     | --                 | Broad GPUI/image lifecycle contract cannot be safely isolated.                               |
+| a473ea63 | B     | e57186f731 | Broad GPUI/image lifecycle contract cannot be safely isolated. Absorbed later as `e57186f731`; see `upstream-sync-2026-11-26-medium.md`. |
 | 27ca0526 | B     | f2ef295c           | Font fallback docs ported; unrelated formatting restored.                                    |
 | c9d1d0dd | C     | --                 | Dependency-only helper relocation has no independent behavior.                               |
 | 9677f83f | C     | --                 | Triage automation.                                                                           |
