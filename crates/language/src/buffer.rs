@@ -360,6 +360,14 @@ pub trait File: Send + Sync + Any {
     /// includes the name of the worktree's root folder).
     fn full_path(&self, cx: &App) -> PathBuf;
 
+    /// Returns the absolute path to this file in its backing file system.
+    ///
+    /// Unlike [`Self::full_path`], which is the display path and carries the worktree
+    /// name as its first component, this is the real path used for glob matching.
+    fn file_system_abs_path(&self, cx: &App) -> Option<PathBuf> {
+        self.as_local().map(|file| file.abs_path(cx))
+    }
+
     /// Returns the path style of this file.
     fn path_style(&self, cx: &App) -> PathStyle;
 
@@ -1796,7 +1804,7 @@ impl Buffer {
                 Ok(())
             )
         {
-            self.did_finish_parsing(syntax_snapshot, Some(Duration::from_millis(300)), cx);
+            self.did_finish_parsing(syntax_snapshot, Some(Duration::from_millis(300)), false, cx);
             self.reparse = None;
             return;
         }
@@ -1827,7 +1835,7 @@ impl Buffer {
                 let parse_again = this.version.changed_since(&parsed_version)
                     || language_registry_changed()
                     || grammar_changed();
-                this.did_finish_parsing(new_syntax_map, None, cx);
+                this.did_finish_parsing(new_syntax_map, None, parse_again, cx);
                 this.reparse = None;
                 if parse_again {
                     this.reparse(cx, false);
@@ -1841,14 +1849,24 @@ impl Buffer {
         &mut self,
         syntax_snapshot: SyntaxSnapshot,
         block_budget: Option<Duration>,
+        parse_again: bool,
         cx: &mut Context<Self>,
     ) {
         self.non_text_state_update_count += 1;
         self.syntax_map.lock().did_parse(syntax_snapshot);
         self.was_changed();
-        self.request_autoindent(cx, block_budget);
-        if let Err(error) = self.parse_status.0.send(ParseStatus::Idle) {
-            log::debug!("no parse status observers for buffer: {error}");
+
+        // A parse that is about to be superseded reports stale syntax, so auto-indent and the
+        // `Idle` status both wait for the follow-up parse instead.
+        let parsing_complete = !parse_again || self.language.is_none();
+        if self.language.is_none() {
+            self.syntax_map.lock().clear(&self.text);
+        }
+        if parsing_complete {
+            self.request_autoindent(cx, block_budget);
+            if let Err(error) = self.parse_status.0.send(ParseStatus::Idle) {
+                log::debug!("no parse status observers for buffer: {error}");
+            }
         }
         Self::invalidate_tree_sitter_data(&mut self.tree_sitter_data, &self.text.snapshot());
         cx.emit(BufferEvent::Reparsed);
@@ -5885,6 +5903,16 @@ impl File for TestFile {
 
     fn path_style(&self, _cx: &App) -> PathStyle {
         PathStyle::local()
+    }
+
+    fn file_system_abs_path(&self, _: &App) -> Option<PathBuf> {
+        let abs_path = self.local_root.as_ref()?.join(&self.root_name);
+        // An empty relative path refers to the root itself, matching `Worktree::absolutize`.
+        Some(if self.path.as_std_path().as_os_str().is_empty() {
+            abs_path
+        } else {
+            abs_path.join(self.path.as_std_path())
+        })
     }
 }
 

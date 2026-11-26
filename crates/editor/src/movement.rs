@@ -303,9 +303,9 @@ pub fn previous_word_start(
         return word_start;
     };
 
-    let punctuation_is_single = chars_before_word
-        .next()
-        .is_none_or(|character| !classifier.is_punctuation(character));
+    let char_before_punctuation = chars_before_word.next();
+    let punctuation_is_single =
+        char_before_punctuation.is_none_or(|character| !classifier.is_punctuation(character));
     let punctuation_prefixes_word = buffer_snapshot
         .chars_at(word_start_offset)
         .next()
@@ -318,7 +318,15 @@ pub fn previous_word_start(
 
     // Skip-punctuation movement treats a single punctuation prefix as part of the following word.
     // Include it when moving back from the word's end so `|@word` and `@word|` are symmetric.
-    if cursor_is_at_word_end && punctuation_is_single && punctuation_prefixes_word {
+    // Only when the punctuation is a true prefix (not preceded by a word character), otherwise
+    // `a-b-c|` would land on `a-b|-c` instead of `a-b-|c`.
+    let punctuation_is_prefix =
+        char_before_punctuation.is_none_or(|character| !classifier.is_word(character));
+    if cursor_is_at_word_end
+        && punctuation_is_single
+        && punctuation_prefixes_word
+        && punctuation_is_prefix
+    {
         let mut punctuation_offset = word_start_offset;
         punctuation_offset -= punctuation.len_utf8();
         punctuation_offset.to_display_point(map)
@@ -1214,6 +1222,14 @@ mod tests {
             (WordMovement::PreviousStart, "foo ..ˇbarˇ baz"),
             (WordMovement::PreviousStart, "ˇ.helloˇ"),
             (WordMovement::PreviousStart, "[2001:4860:4860::8888ˇ] ˇ"),
+            // Punctuation between words is a separator, not a prefix: movement stops to the
+            // right of it rather than absorbing it into the following word.
+            (WordMovement::PreviousStart, "a-b-ˇcˇ"),
+            (WordMovement::PreviousStart, "a.b.ˇcˇ"),
+            (WordMovement::PreviousStart, "foo.ˇbarˇ"),
+            (WordMovement::PreviousStart, "a@ˇbˇ"),
+            // Punctuation at the start of the buffer is a true prefix.
+            (WordMovement::PreviousStart, "ˇ@wordˇ"),
             (WordMovement::NextEnd, "foo ˇ.ˇ bar"),
             (WordMovement::NextEnd, "fooˇ.ˇ bar"),
             (WordMovement::NextEnd, "foo ˇ@barˇ baz"),
