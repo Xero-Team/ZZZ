@@ -1205,6 +1205,11 @@ codegen-units = 16
 # `panic = "abort"` so the profiled binary matches the shipped one.
 strip = "none"
 
+[workspace.lints.cargo]
+# Production-only dependencies appear unused in test-support builds.
+# cargo-machete serves the same purpose without these configuration-dependent warnings.
+unused_dependencies = "allow"
+
 [workspace.lints.rust]
 unexpected_cfgs = { level = "allow" }
 # New in Rust 1.98: flags unsuffixed float literals that fall back to `f32`.
