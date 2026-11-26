@@ -5127,6 +5127,7 @@ impl Editor {
                         menu.initial_position.to_offset(&snapshot) == position.to_offset(&snapshot)
                     };
                     if position_matches {
+                        self.completion_tasks.clear();
                         return;
                     }
                 }
