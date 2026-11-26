@@ -170,6 +170,12 @@ pub trait PlatformAtlas {
         build: &mut dyn FnMut() -> Result<Option<(Size<DevicePixels>, Cow<'a, [u8]>)>>,
     ) -> Result<Option<AtlasTile>>;
     fn remove(&self, key: &AtlasKey);
+
+    #[cfg(any(test, feature = "test-support"))]
+    fn contains(&self, _key: &AtlasKey) -> bool {
+        false
+    }
+
     fn begin_frame(&self) -> AtlasFrame;
     fn finish_frame(&self, frame: AtlasFrame, usage: &AtlasUsage) -> AtlasEpoch;
     fn current_epoch(&self) -> AtlasEpoch;
@@ -1140,6 +1146,11 @@ impl<Backend: AtlasBackend> PlatformAtlas for Atlas<Backend> {
         self.remove(key);
     }
 
+    #[cfg(any(test, feature = "test-support"))]
+    fn contains(&self, key: &AtlasKey) -> bool {
+        self.state.lock().tile_ids_by_key.contains_key(key)
+    }
+
     fn begin_frame(&self) -> AtlasFrame {
         self.begin_frame()
     }
@@ -1204,6 +1215,11 @@ impl PlatformAtlas for HeadlessAtlas {
 
     fn remove(&self, key: &AtlasKey) {
         self.0.remove(key);
+    }
+
+    #[cfg(test)]
+    fn contains(&self, key: &AtlasKey) -> bool {
+        self.0.contains(key)
     }
 
     fn begin_frame(&self) -> AtlasFrame {
