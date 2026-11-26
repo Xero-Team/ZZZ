@@ -294,11 +294,15 @@ pub struct LocalSnapshot {
     /// The file handle of the worktree root
     /// (so we can find it after it's been moved)
     root_file_handle: Option<Arc<dyn fs::FileHandle>>,
+    /// Symlinked directories whose canonical target lies elsewhere, indexed by
+    /// that canonical target, holding the paths within this worktree that reach
+    /// it. Populated during scanning, so a lookup before the symlink is
+    /// discovered finds nothing.
+    symlink_paths_by_target: HashMap<Arc<Path>, SmallVec<[Arc<RelPath>; 1]>>,
 }
 
 struct BackgroundScannerState {
     snapshot: LocalSnapshot,
-    symlink_paths_by_target: HashMap<Arc<Path>, SmallVec<[Arc<RelPath>; 1]>>,
     scanned_dirs: HashSet<ProjectEntryId>,
     watched_dir_abs_paths_by_entry_id: HashMap<ProjectEntryId, Arc<Path>>,
     path_prefixes_to_scan: HashSet<Arc<RelPath>>,
@@ -561,6 +565,7 @@ impl Worktree {
                 global_gitignore: Default::default(),
                 repo_exclude_by_work_dir_abs_path: Default::default(),
                 git_repositories: Default::default(),
+                symlink_paths_by_target: Default::default(),
                 snapshot: Snapshot::new(
                     worktree_id,
                     abs_path.file_name().and_then(|f| f.to_str()).map_or(
@@ -1827,7 +1832,6 @@ impl LocalWorktree {
                     state: async_lock::Mutex::new(BackgroundScannerState {
                         prev_snapshot: snapshot.snapshot.clone(),
                         snapshot,
-                        symlink_paths_by_target: Default::default(),
                         scanned_dirs: Default::default(),
                         watched_dir_abs_paths_by_entry_id: Default::default(),
                         scanning_enabled,
@@ -2099,6 +2103,10 @@ impl LocalWorktree {
 
     pub fn snapshot(&self) -> LocalSnapshot {
         self.snapshot.clone()
+    }
+
+    pub fn local_snapshot(&self) -> &LocalSnapshot {
+        &self.snapshot
     }
 
     pub fn settings(&self) -> WorktreeSettings {
@@ -3559,6 +3567,31 @@ impl Snapshot {
 }
 
 impl LocalSnapshot {
+    /// Maps an absolute path inside a scanned external (symlinked) directory,
+    /// given by its canonical form, to its path within this worktree.
+    ///
+    /// Language servers report files in such directories by their canonical
+    /// path, which no worktree matches. The mapping is recorded while scanning,
+    /// so a path inside a symlink that has not been expanded yet finds nothing.
+    pub fn relative_path_for_external_abs_path(&self, abs_path: &Path) -> Option<RelPathBuf> {
+        let (_, symlink_paths, suffix) = self
+            .symlink_paths_by_target
+            .iter()
+            .filter_map(|(canonical, symlink_paths)| {
+                let suffix = abs_path.strip_prefix(canonical.as_ref()).ok()?;
+                Some((canonical, symlink_paths, suffix))
+            })
+            // Nested symlinks are keyed under both the parent and the child target;
+            // the deepest target is the one the path is actually reached through.
+            .max_by_key(|(canonical, _, _)| canonical.components().count())?;
+
+        let suffix = RelPath::new(suffix, PathStyle::local()).ok()?;
+        // A directory symlinked in from two places yields two answers; the first
+        // recorded path is stable across scans, so the lookup stays deterministic.
+        let symlink_path = symlink_paths.first()?;
+        Some(symlink_path.join(&suffix).to_rel_path_buf())
+    }
+
     fn local_repo_for_work_directory_path(&self, path: &RelPath) -> Option<&LocalRepositoryEntry> {
         self.git_repositories
             .iter()
@@ -5425,7 +5458,7 @@ impl BackgroundScanner {
             fs_events_rx = Box::pin(events.map(|events| events.into_iter().collect()));
 
             let state = self.state.lock().await;
-            for target in state.symlink_paths_by_target.keys() {
+            for target in state.snapshot.symlink_paths_by_target.keys() {
                 if !target.starts_with(root_abs_path.as_path()) {
                     self.watcher.add(target).log_err();
                 }
@@ -5655,7 +5688,7 @@ impl BackgroundScanner {
         root_canonical_path: &SanitizedPath,
         mut events: Vec<PathEvent>,
     ) -> Vec<PathEvent> {
-        if state.symlink_paths_by_target.is_empty() {
+        if state.snapshot.symlink_paths_by_target.is_empty() {
             return events;
         }
         let mut mapped_events = Vec::new();
@@ -5665,7 +5698,7 @@ impl BackgroundScanner {
 
             let mut best_match: Option<(&Arc<Path>, &SmallVec<[Arc<RelPath>; 1]>)> = None;
             let mut best_depth = 0;
-            for (target_root, symlink_paths) in &state.symlink_paths_by_target {
+            for (target_root, symlink_paths) in &state.snapshot.symlink_paths_by_target {
                 if abs_path.as_path().starts_with(target_root.as_ref()) {
                     let depth = target_root.as_ref().components().count();
                     if depth > best_depth {
@@ -6525,6 +6558,7 @@ impl BackgroundScanner {
                 if child_metadata.is_dir {
                     let mut state = self.state.lock().await;
                     let paths = state
+                        .snapshot
                         .symlink_paths_by_target
                         .entry(Arc::from(canonical_path.clone()))
                         .or_default();
