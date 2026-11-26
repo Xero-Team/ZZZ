@@ -248,9 +248,11 @@ Git stash allows you to temporarily save your uncommitted changes and revert you
 
 ### Creating Stashes
 
-To stash all your current changes, use the {#action git::StashAll} action. This will save both staged and unstaged changes to a new stash entry and clean your working directory.
+To stash all your current changes, use the {#action git::StashAll} action. This will save both staged and unstaged changes, including untracked files, to a new stash entry and clean your working directory.
 
-The action first prompts for an optional stash name. Confirming with an empty prompt lets git generate its usual `WIP on ...` description.
+To stash only tracked changes and leave untracked files in place, use the {#action git::StashTracked} action. The Git Panel's overflow menu offers it whenever the list is grouped into **Tracked** and **Untracked** sections, so the menu matches the sections you can see; **Stash All** is always available.
+
+Each of these actions first prompts for an optional stash name. Confirming with an empty prompt lets git generate its usual `WIP on ...` description.
 
 ### Managing Stashes
 
@@ -375,6 +377,7 @@ When viewing files with changes, ZZZ displays diff hunks that can be expanded or
 | {#action git::Worktree}                   | {#kb git::Worktree}                   |
 | {#action git::Blame}                      | {#kb git::Blame}                      |
 | {#action git::StashAll}                   | {#kb git::StashAll}                   |
+| {#action git::StashTracked}               | {#kb git::StashTracked}               |
 | {#action git::StashPop}                   | {#kb git::StashPop}                   |
 | {#action git::StashApply}                 | {#kb git::StashApply}                 |
 | {#action git::ViewStash}                  | {#kb git::ViewStash}                  |
