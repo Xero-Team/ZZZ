@@ -467,7 +467,7 @@ impl GitRepository for FossilRepository {
 
     fn checkout_files(
         &self,
-        commit: String,
+        commit: Option<String>,
         paths: Vec<RepoPath>,
         env: Arc<HashMap<String, String>>,
     ) -> BoxFuture<'_, Result<()>> {
@@ -479,7 +479,12 @@ impl GitRepository for FossilRepository {
                 }
 
                 let mut args = vec![OsString::from("revert")];
-                if commit != "HEAD" {
+                // Fossil has no index, so `None` reverts to the current checkout
+                // revision, which is the closest equivalent to restoring the
+                // working tree from the index.
+                if let Some(commit) = commit.as_deref()
+                    && commit != "HEAD"
+                {
                     args.push(OsString::from("--revision"));
                     args.push(OsString::from(commit));
                 }

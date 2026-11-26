@@ -565,6 +565,29 @@ type GitTreeStatusEntry = ChangesListTreeStatusRow<GitStatusEntry>;
 type GitTreeDirEntry = ChangesListDirectoryRow;
 type TreeViewState = ChangesListTreeViewState<GitStatusEntry>;
 
+/// A file to discard and whether its staged changes survive.
+#[derive(Debug, Clone)]
+struct DiscardTarget {
+    entry: GitStatusEntry,
+    /// Restore the working tree from the index instead of `HEAD`, keeping the
+    /// staged half of a partially staged file.
+    keep_staged: bool,
+}
+
+impl DiscardTarget {
+    fn new(entry: GitStatusEntry, keep_staged: bool) -> Self {
+        Self { entry, keep_staged }
+    }
+}
+
+/// Discarding only unstaged changes leaves the index alone, so such an op says
+/// nothing about whether the file is staged.
+fn last_op_keeps_staged_changes(ops: &pending_op::PendingOps) -> bool {
+    ops.ops
+        .last()
+        .is_some_and(|op| op.git_status == pending_op::GitStatus::RevertedUnstaged)
+}
+
 impl GitListEntry {
     fn status_entry(&self) -> Option<&GitStatusEntry> {
         self.file()
@@ -1825,7 +1848,8 @@ impl GitPanel {
                     }
 
                     this.update_in(cx, |this, window, cx| {
-                        this.revert_entry(&entry, window, cx);
+                        let keep_staged = entry.status.staging().has_unstaged();
+                        this.revert_entry(&entry, keep_staged, window, cx);
                     })?;
 
                     Ok(())
@@ -1913,6 +1937,7 @@ impl GitPanel {
     fn revert_entry(
         &mut self,
         entry: &GitStatusEntry,
+        keep_staged: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1923,12 +1948,15 @@ impl GitPanel {
                 .repo_path_to_project_path(&entry.repo_path, cx)?;
             let workspace = self.workspace.clone();
 
-            if entry.status.staging().has_staged() {
+            let keeps_staged = keep_staged && entry.status.staging().has_staged();
+            // Discarding only the unstaged half leaves the index untouched. A
+            // fully staged file is unstaged first so the checkout reaches HEAD.
+            if !keeps_staged && entry.status.staging().has_staged() {
                 self.change_file_stage(false, vec![entry.clone()], cx);
             }
             let filename = path.path.file_name()?.to_owned();
 
-            if entry.status.is_created() {
+            if entry.status.is_created() && !keeps_staged {
                 let trash = tr(cx, "git_ui.git_panel.trash", "Trash");
                 let cancel = tr(cx, "prompt.common.cancel", "Cancel");
                 let prompt = window.prompt(
@@ -1965,7 +1993,11 @@ impl GitPanel {
                     |e, _, _| Some(format!("{e}")),
                 );
             } else {
-                self.perform_checkout(vec![entry.clone()], window, cx);
+                self.perform_checkout(
+                    vec![DiscardTarget::new(entry.clone(), keeps_staged)],
+                    window,
+                    cx,
+                );
             }
             Some(())
         });
@@ -1973,7 +2005,7 @@ impl GitPanel {
 
     fn perform_checkout(
         &mut self,
-        entries: Vec<GitStatusEntry>,
+        targets: Vec<DiscardTarget>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1985,12 +2017,12 @@ impl GitPanel {
         let task = cx.spawn_in(window, async move |this, cx| {
             let tasks: Vec<_> = workspace.update(cx, |workspace, cx| {
                 workspace.project().update(cx, |project, cx| {
-                    entries
+                    targets
                         .iter()
-                        .filter_map(|entry| {
+                        .filter_map(|target| {
                             let path = active_repository
                                 .read(cx)
-                                .repo_path_to_project_path(&entry.repo_path, cx)?;
+                                .repo_path_to_project_path(&target.entry.repo_path, cx)?;
                             Some(project.open_buffer(path, cx))
                         })
                         .collect()
@@ -1999,21 +2031,34 @@ impl GitPanel {
 
             let buffers = futures::future::join_all(tasks).await;
 
-            this.update_in(cx, |this, window, cx| {
-                let task = active_repository.update(cx, |repo, cx| {
-                    repo.checkout_files(
-                        "HEAD",
-                        entries
-                            .into_iter()
-                            .map(|entries| entries.repo_path)
-                            .collect(),
-                        cx,
-                    )
+            let (keep_staged, discard_all): (Vec<_>, Vec<_>) =
+                targets.into_iter().partition(|target| target.keep_staged);
+            let checkouts = this.update_in(cx, |this, window, cx| {
+                let checkouts = active_repository.update(cx, |repo, cx| {
+                    [(Some("HEAD"), discard_all), (None, keep_staged)]
+                        .into_iter()
+                        .filter(|(_, targets)| !targets.is_empty())
+                        .map(|(commit, targets)| {
+                            repo.checkout_files(
+                                commit,
+                                targets
+                                    .into_iter()
+                                    .map(|target| target.entry.repo_path)
+                                    .collect(),
+                                cx,
+                            )
+                        })
+                        .collect::<Vec<_>>()
                 });
                 this.update_visible_entries(window, cx);
-                task
-            })?
-            .await?;
+                checkouts
+            })?;
+            // Dropping a checkout task cancels it and leaves its pending op
+            // running, so wait for both before reporting the first error.
+            futures::future::join_all(checkouts)
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?;
 
             let tasks: Vec<_> = cx.update(|_, cx| {
                 buffers
@@ -2062,7 +2107,7 @@ impl GitPanel {
 
         match entries.len() {
             0 => return,
-            1 => return self.revert_entry(&entries[0], window, cx),
+            1 => return self.revert_entry(&entries[0], false, window, cx),
             _ => {}
         }
         let details = truncated_file_list(
@@ -2094,7 +2139,11 @@ impl GitPanel {
         cx.spawn_in(window, async move |this, cx| {
             if prompt.await == Ok(0) {
                 this.update_in(cx, |this, window, cx| {
-                    this.perform_checkout(entries, window, cx);
+                    let targets = entries
+                        .into_iter()
+                        .map(|entry| DiscardTarget::new(entry, false))
+                        .collect();
+                    this.perform_checkout(targets, window, cx);
                 })
                 .ok();
             }
@@ -2111,13 +2160,13 @@ impl GitPanel {
             .entries
             .iter()
             .filter_map(|entry| entry.status_entry())
-            .filter(|status_entry| status_entry.status.is_created())
+            .filter(|status_entry| status_entry.status.is_untracked())
             .cloned()
             .collect::<Vec<_>>();
 
         match to_delete.len() {
             0 => return,
-            1 => return self.revert_entry(&to_delete[0], window, cx),
+            1 => return self.revert_entry(&to_delete[0], false, window, cx),
             _ => {}
         }
 
@@ -2146,7 +2195,7 @@ impl GitPanel {
             &[trash.as_str(), cancel.as_str()],
             cx,
         );
-        cx.spawn_in(window, async move |this, cx| {
+        cx.spawn_in(window, async move |_this, cx| {
             match prompt.await? {
                 0 => {}
                 _ => return Ok(()),
@@ -2165,11 +2214,6 @@ impl GitPanel {
                     .collect::<Vec<_>>()
             })?;
             let total_count = tasks.len();
-            let to_unstage = to_delete
-                .into_iter()
-                .filter(|entry| !entry.status.staging().is_fully_unstaged())
-                .collect();
-            this.update(cx, |this, cx| this.change_file_stage(false, to_unstage, cx))?;
 
             let results = futures::future::join_all(tasks).await;
             let errors: Vec<anyhow::Error> = results.into_iter().filter_map(|r| r.err()).collect();
@@ -2239,6 +2283,12 @@ impl GitPanel {
                 // need to fallback to the actual state in the repo.
                 if ops.last_op_errored() {
                     return None;
+                }
+
+                // A working-tree-only restore keeps the staged half, so the file
+                // is fully staged until the next status scan confirms it.
+                if last_op_keeps_staged_changes(&ops) {
+                    return Some(StageStatus::Staged);
                 }
 
                 if ops.staging() || ops.staged() {
@@ -3923,14 +3973,27 @@ impl GitPanel {
             let is_new = entry.status.is_created();
             let staging = entry.status.staging();
 
-            if let Some(pending) = repo.pending_ops_for_path(&entry.repo_path)
-                && pending
-                    .ops
-                    .iter()
-                    .any(|op| op.git_status == pending_op::GitStatus::Reverted && op.finished())
-            {
+            let pending_ops = repo.pending_ops_for_path(&entry.repo_path);
+            let finished_revert = |git_status| {
+                pending_ops.as_ref().is_some_and(|pending| {
+                    pending
+                        .ops
+                        .iter()
+                        .any(|op| op.git_status == git_status && op.finished())
+                })
+            };
+            // Hide discarded changes until the next status scan confirms them. A
+            // working-tree-only restore keeps the staged half, so the row stays
+            // and reports as fully staged.
+            let unstaged_reverted = finished_revert(pending_op::GitStatus::RevertedUnstaged);
+            if finished_revert(pending_op::GitStatus::Reverted) {
                 continue;
             }
+            let staging = if unstaged_reverted && staging.has_staged() {
+                StageStatus::Staged
+            } else {
+                staging
+            };
 
             let entry = GitStatusEntry {
                 repo_path: entry.repo_path.clone(),
