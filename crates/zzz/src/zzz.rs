@@ -979,6 +979,12 @@ fn register_actions(
             if workspace.project().read(cx).is_local() {
                 return;
             }
+            let create_new_window = action.create_new_window.unwrap_or_else(|| {
+                matches!(
+                    WorkspaceSettings::get_global(cx).default_open_behavior,
+                    DefaultOpenBehavior::NewWindow
+                )
+            });
             let paths = workspace.prompt_for_open_path(
                 PathPromptOptions {
                     files: true,
@@ -996,7 +1002,13 @@ fn register_actions(
                 };
                 if let Some(task) = this
                     .update_in(cx, |this, window, cx| {
-                        open_new_ssh_project_from_project(this, paths, window, cx)
+                        open_new_ssh_project_from_project(
+                            this,
+                            paths,
+                            create_new_window,
+                            window,
+                            cx,
+                        )
                     })
                     .log_err()
                 {
@@ -2287,6 +2299,7 @@ fn initialize_new_window(
 pub fn open_new_ssh_project_from_project(
     workspace: &mut Workspace,
     paths: Vec<PathBuf>,
+    create_new_window: bool,
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) -> Task<anyhow::Result<()>> {
@@ -2295,6 +2308,11 @@ pub fn open_new_ssh_project_from_project(
         return Task::ready(Err(anyhow::anyhow!("Not an ssh project")));
     };
     let connection_options = ssh_client.read(cx).connection_options();
+    let requesting_window = if create_new_window {
+        None
+    } else {
+        window.window_handle().downcast::<MultiWorkspace>()
+    };
     cx.spawn_in(window, async move |_, cx| {
         open_remote_project(
             connection_options,
@@ -2302,6 +2320,7 @@ pub fn open_new_ssh_project_from_project(
             app_state,
             workspace::OpenOptions {
                 workspace_matching: workspace::WorkspaceMatching::None,
+                requesting_window,
                 ..Default::default()
             },
             cx,
