@@ -360,6 +360,14 @@ pub trait File: Send + Sync + Any {
     /// includes the name of the worktree's root folder).
     fn full_path(&self, cx: &App) -> PathBuf;
 
+    /// Returns the absolute path to this file in its backing file system.
+    ///
+    /// Unlike [`Self::full_path`], which is the display path and carries the worktree
+    /// name as its first component, this is the real path used for glob matching.
+    fn file_system_abs_path(&self, cx: &App) -> Option<PathBuf> {
+        self.as_local().map(|file| file.abs_path(cx))
+    }
+
     /// Returns the path style of this file.
     fn path_style(&self, cx: &App) -> PathStyle;
 
@@ -5895,6 +5903,16 @@ impl File for TestFile {
 
     fn path_style(&self, _cx: &App) -> PathStyle {
         PathStyle::local()
+    }
+
+    fn file_system_abs_path(&self, _: &App) -> Option<PathBuf> {
+        let abs_path = self.local_root.as_ref()?.join(&self.root_name);
+        // An empty relative path refers to the root itself, matching `Worktree::absolutize`.
+        Some(if self.path.as_std_path().as_os_str().is_empty() {
+            abs_path
+        } else {
+            abs_path.join(self.path.as_std_path())
+        })
     }
 }
 
