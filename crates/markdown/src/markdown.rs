@@ -3243,23 +3243,33 @@ impl Element for MarkdownElement {
                         builder.table.start(alignments.clone());
 
                         let column_count = alignments.len();
+                        let mut table = div()
+                            .id(("table", range.start))
+                            .grid()
+                            .grid_cols(column_count as u16)
+                            .when(self.style.table_columns_min_size, |this| {
+                                this.grid_cols_min_content(column_count as u16)
+                            })
+                            .when(!self.style.table_columns_min_size, |this| {
+                                this.grid_cols(column_count as u16)
+                            })
+                            .w_full()
+                            .mb_2()
+                            .border(px(1.5))
+                            .border_color(cx.theme().colors().border)
+                            .rounded_sm()
+                            .overflow_x_scroll();
+                        // Keep vertical scroll events going to the surrounding pane so the
+                        // scrollbar below only takes horizontal ones.
+                        table.style().restrict_scroll_to_axis = Some(true);
                         builder.push_div(
-                            div()
-                                .id(("table", range.start))
-                                .grid()
-                                .grid_cols(column_count as u16)
-                                .when(self.style.table_columns_min_size, |this| {
-                                    this.grid_cols_min_content(column_count as u16)
-                                })
-                                .when(!self.style.table_columns_min_size, |this| {
-                                    this.grid_cols(column_count as u16)
-                                })
-                                .w_full()
-                                .mb_2()
-                                .border(px(1.5))
-                                .border_color(cx.theme().colors().border)
-                                .rounded_sm()
-                                .overflow_x_scroll(),
+                            table.custom_scrollbars(
+                                Scrollbars::new(ScrollAxes::Horizontal)
+                                    .id(("markdown-table-scrollbar", range.start))
+                                    .notify_content(),
+                                window,
+                                cx,
+                            ),
                             range,
                             markdown_end,
                         );
@@ -5296,13 +5306,35 @@ impl InputHandler for MarkdownInputHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gpui::{RenderImage, TestAppContext, UpdateGlobal, VisualTestContext, size};
+    use gpui::{
+        Modifiers, RenderImage, ScrollDelta, ScrollWheelEvent, TestAppContext, TouchPhase,
+        UpdateGlobal, VisualTestContext, size,
+    };
     use language::{Language, LanguageConfig, LanguageMatcher};
     use std::cell::RefCell;
     use std::sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     };
+
+    struct MarkdownTestView {
+        markdown: Entity<Markdown>,
+        style: MarkdownStyle,
+        rendered_text: Rc<RefCell<Option<RenderedText>>>,
+    }
+
+    impl Render for MarkdownTestView {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let rendered_text = self.rendered_text.clone();
+            MarkdownElement::new(self.markdown.clone(), self.style.clone())
+                .on_render(move |text| *rendered_text.borrow_mut() = Some(text))
+                .code_block_renderer(CodeBlockRenderer::Default {
+                    copy_button_visibility: CopyButtonVisibility::Hidden,
+                    wrap_button_visibility: WrapButtonVisibility::Hidden,
+                    border: false,
+                })
+        }
+    }
 
     struct TestWindow;
 
@@ -5421,25 +5453,6 @@ mod tests {
 
     #[gpui::test]
     fn test_lookup_rejects_clipped_text(cx: &mut TestAppContext) {
-        struct MarkdownTestView {
-            markdown: Entity<Markdown>,
-            style: MarkdownStyle,
-            rendered_text: Rc<RefCell<Option<RenderedText>>>,
-        }
-
-        impl Render for MarkdownTestView {
-            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-                let rendered_text = self.rendered_text.clone();
-                MarkdownElement::new(self.markdown.clone(), self.style.clone())
-                    .on_render(move |text| *rendered_text.borrow_mut() = Some(text))
-                    .code_block_renderer(CodeBlockRenderer::Default {
-                        copy_button_visibility: CopyButtonVisibility::Hidden,
-                        wrap_button_visibility: WrapButtonVisibility::Hidden,
-                        border: false,
-                    })
-            }
-        }
-
         struct ClippedMarkdownView(Entity<MarkdownTestView>);
 
         impl Render for ClippedMarkdownView {
@@ -7735,5 +7748,80 @@ mod tests {
                 px(24.0)
             );
         });
+    }
+
+    #[gpui::test]
+    fn test_wide_table_scrolls_horizontally(cx: &mut TestAppContext) {
+        ensure_theme_initialized(cx);
+        let source = indoc::indoc! {r#"
+            | left | right |
+            | --- | --- |
+            | value | far_right_cell_content_that_is_much_wider_than_the_viewport |
+        "#};
+        let left_cell_start = source.find("left").expect("left cell should be present");
+        let left_cell_range = left_cell_start..left_cell_start + "left".len();
+        let right_cell = "far_right_cell_content_that_is_much_wider_than_the_viewport";
+        let right_cell_start = source
+            .find(right_cell)
+            .expect("right cell should be present");
+        let right_cell_range = right_cell_start..right_cell_start + right_cell.len();
+
+        let markdown = cx.new(|cx| Markdown::new(source.into(), None, None, cx));
+        let rendered_text = Rc::new(RefCell::new(None));
+        let (_, cx) = cx.add_window_view({
+            let rendered_text = rendered_text.clone();
+            move |_, _| MarkdownTestView {
+                markdown,
+                style: MarkdownStyle {
+                    table_columns_min_size: true,
+                    ..MarkdownStyle::default()
+                },
+                rendered_text,
+            }
+        });
+        cx.simulate_resize(size(px(300.), px(200.)));
+        cx.run_until_parked();
+
+        let (event_position, right_cell_before_scroll) = {
+            let rendered_text = rendered_text.borrow();
+            let rendered_text = rendered_text
+                .as_ref()
+                .expect("markdown should be rendered before scrolling");
+            let event_position = rendered_text
+                .bounds_for_source_range(left_cell_range)
+                .into_iter()
+                .next()
+                .expect("left cell should have bounds")
+                .center();
+            let right_cell_bounds = rendered_text
+                .bounds_for_source_range(right_cell_range.clone())
+                .into_iter()
+                .next()
+                .expect("right cell should have bounds");
+            (event_position, right_cell_bounds)
+        };
+
+        cx.simulate_event(ScrollWheelEvent {
+            position: event_position,
+            delta: ScrollDelta::Pixels(point(px(-100.), px(0.))),
+            modifiers: Modifiers::default(),
+            touch_phase: TouchPhase::Moved,
+        });
+        cx.run_until_parked();
+
+        let right_cell_after_scroll = rendered_text
+            .borrow()
+            .as_ref()
+            .expect("markdown should be rendered after scrolling")
+            .bounds_for_source_range(right_cell_range)
+            .into_iter()
+            .next()
+            .expect("right cell should have bounds after scrolling");
+
+        assert!(right_cell_after_scroll.left() < right_cell_before_scroll.left());
+        assert_eq!(
+            right_cell_after_scroll.top(),
+            right_cell_before_scroll.top()
+        );
     }
 }
