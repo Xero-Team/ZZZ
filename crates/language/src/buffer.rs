@@ -1796,7 +1796,7 @@ impl Buffer {
                 Ok(())
             )
         {
-            self.did_finish_parsing(syntax_snapshot, Some(Duration::from_millis(300)), cx);
+            self.did_finish_parsing(syntax_snapshot, Some(Duration::from_millis(300)), false, cx);
             self.reparse = None;
             return;
         }
@@ -1827,7 +1827,7 @@ impl Buffer {
                 let parse_again = this.version.changed_since(&parsed_version)
                     || language_registry_changed()
                     || grammar_changed();
-                this.did_finish_parsing(new_syntax_map, None, cx);
+                this.did_finish_parsing(new_syntax_map, None, parse_again, cx);
                 this.reparse = None;
                 if parse_again {
                     this.reparse(cx, false);
@@ -1841,14 +1841,24 @@ impl Buffer {
         &mut self,
         syntax_snapshot: SyntaxSnapshot,
         block_budget: Option<Duration>,
+        parse_again: bool,
         cx: &mut Context<Self>,
     ) {
         self.non_text_state_update_count += 1;
         self.syntax_map.lock().did_parse(syntax_snapshot);
         self.was_changed();
-        self.request_autoindent(cx, block_budget);
-        if let Err(error) = self.parse_status.0.send(ParseStatus::Idle) {
-            log::debug!("no parse status observers for buffer: {error}");
+
+        // A parse that is about to be superseded reports stale syntax, so auto-indent and the
+        // `Idle` status both wait for the follow-up parse instead.
+        let parsing_complete = !parse_again || self.language.is_none();
+        if self.language.is_none() {
+            self.syntax_map.lock().clear(&self.text);
+        }
+        if parsing_complete {
+            self.request_autoindent(cx, block_budget);
+            if let Err(error) = self.parse_status.0.send(ParseStatus::Idle) {
+                log::debug!("no parse status observers for buffer: {error}");
+            }
         }
         Self::invalidate_tree_sitter_data(&mut self.tree_sitter_data, &self.text.snapshot());
         cx.emit(BufferEvent::Reparsed);
