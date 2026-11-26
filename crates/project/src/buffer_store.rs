@@ -1730,6 +1730,18 @@ impl BufferStore {
         !self.shared_buffers.is_empty()
     }
 
+    /// Whether `buffer_id` is shared with a peer, and so is still reachable even
+    /// when no open item holds it.
+    ///
+    /// Only the outbound direction is modelled locally: `RemoteBufferStore` has
+    /// no `shared_with_me` list, so a buffer a peer shares with us is not
+    /// tracked here.
+    pub fn is_shared(&self, buffer_id: BufferId, _cx: &App) -> bool {
+        self.shared_buffers
+            .values()
+            .any(|buffers| buffers.contains_key(&buffer_id))
+    }
+
     pub fn create_local_buffer(
         &mut self,
         text: &str,
