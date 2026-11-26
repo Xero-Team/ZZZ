@@ -23,9 +23,9 @@ read only the sections the current step needs.
 Override only when the user supplies a value.
 
 ```text
-LAST_REVIEWED_UPSTREAM=f00a94318c059f03892e04f82343e899fbfaa844
+LAST_REVIEWED_UPSTREAM=831229fe70bbb126d49cde0b703ae6a8b25893d8
 LOCAL_BASE_BRANCH=main
-LOCAL_BASE_COMMIT=e3ca693341
+LOCAL_BASE_COMMIT=b3a1def633
 UPSTREAM_URL=https://github.com/zed-industries/zed.git
 UPSTREAM_REF=refs/heads/main
 WORK_BRANCH=sync/upstream-YYYY-MM-DD
@@ -36,21 +36,24 @@ CREATE_PR=no
 PUSH=no
 ```
 
-As of 2026-11-24, local `main` was `e3ca693341`. The last new upstream
-window is `docs/src/development/upstream/upstream-sync-2026-11-24.md` on
-`sync/upstream-2026-11-24`; it reviews `f4fe0be1f8..f00a94318c`, the first
-twenty commits after batch E, and advances the reviewed baseline to
-`f00a94318c`. The live head at query time was `f98c2c100d`, forty-five
+As of 2026-11-26, local `main` was `b3a1def633`. The last new upstream
+window is `docs/src/development/upstream/upstream-sync-2026-11-26.md` on
+`sync/upstream-2026-11-26`; it reviews `f00a94318c..831229fe70`, the first
+twenty commits after batch F, and advances the reviewed baseline to
+`831229fe70`. The live head at query time was `e4fa1642`, forty-five
 commits later, so those stay unreviewed until the next run. The preceding
-window is `docs/src/development/upstream/upstream-sync-2026-11-22.md`,
-which reviews `54fff2ff5b..f4fe0be1f8`, the seven commits that landed
-after batch E. The preceding chain reviews `4a7d10473a..54fff2ff5b`
-in the 2026-11-20-e report, which drained the backlog that batches B
-through D left behind, after the `6ceb6fee87..4a7d10473a` window covered
-by the 2026-11-13, 2026-11-16, 2026-11-17, 2026-11-20, 2026-11-20-b,
-2026-11-20-c and 2026-11-20-d reports. The most recent full re-audit is
+window is `docs/src/development/upstream/upstream-sync-2026-11-24.md`,
+which reviews `f4fe0be1f8..f00a94318c`, the first twenty commits after
+batch E. Before that,
+`docs/src/development/upstream/upstream-sync-2026-11-22.md` reviews
+`54fff2ff5b..f4fe0be1f8`, the seven commits that landed after batch E, and
+`4a7d10473a..54fff2ff5b` is the 2026-11-20-e report, which drained the
+backlog that batches B through D left behind, after the
+`6ceb6fee87..4a7d10473a` window covered by the 2026-11-13, 2026-11-16,
+2026-11-17, 2026-11-20, 2026-11-20-b, 2026-11-20-c and 2026-11-20-d
+reports. The most recent full re-audit is
 `docs/src/development/upstream/upstream-sync-audit-2026-11-17.md`; the tree
-holds 59 sync reports and 6 audit reports. Query live upstream again at run
+holds 60 sync reports and 6 audit reports. Query live upstream again at run
 start; never trust these recorded values as the live head.
 The next range starts after `LAST_REVIEWED_UPSTREAM`.
 
