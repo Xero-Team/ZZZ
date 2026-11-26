@@ -543,9 +543,22 @@ fn render_gpg_wrapper_script(
 ) -> String {
     // The wrapper only prompts for a passphrase when git asks gpg to *sign*
     // (for example `gpg -bsau <key>`). Other invocations, `--verify` in
-    // particular, run gpg unchanged so no spurious modal appears. When signing,
-    // the passphrase is handed to gpg on fd 3 in loopback mode, so no
-    // pinentry/terminal is required.
+    // particular, run gpg unchanged so no spurious modal appears. Signing runs in
+    // three stages, most silent first, so every pinentry configuration works
+    // without ZZZ getting in the way:
+    //   1. `--pinentry-mode error`: succeeds only via gpg-agent's passphrase
+    //      cache or an unprotected key; guaranteed to never prompt anywhere.
+    //   2. Default pinentry mode: lets the configured pinentry run. GUI
+    //      pinentries (e.g. pinentry-mac reading the macOS Keychain) need no
+    //      TTY and can sign silently or show their native dialog, exactly like
+    //      terminal git; TTY pinentries fail fast ("Inappropriate ioctl for
+    //      device") because git spawns gpg without a TTY.
+    //   3. Loopback mode with the passphrase from ZZZ's askpass modal (fd 3),
+    //      for setups where gpg cannot prompt at all.
+    //
+    // git streams the payload on stdin (readable once) and reads the signature
+    // from stdout, so buffer stdin to replay it into each attempt and buffer
+    // each attempt's output, forwarding it only if it succeeds.
     format!(
         r#"#!/bin/sh
 for arg in "$@"; do
@@ -564,11 +577,40 @@ if [ -z "${{is_signing}}" ]; then
     exec {gpg_program} "$@"
 fi
 
-# Signing: ask ZZZ for the passphrase, then hand it to gpg on fd 3.
+# Signing. Buffer stdin (the payload) and each attempt's output
+# so we can retry cleanly on failure without git seeing partial output.
+tmpdir=$(mktemp -d) || exit 1
+trap 'rm -rf "$tmpdir"' EXIT
+payload="$tmpdir/payload"
+signature="$tmpdir/signature"
+status="$tmpdir/status"
+cat > "$payload" || exit 1
+
+# Stage 1: fully silent. Only succeeds if gpg-agent already has the passphrase
+# cached or the key is unprotected; `--pinentry-mode error` forbids launching
+# any pinentry, so this can never prompt anywhere.
+if {gpg_program} --pinentry-mode error "$@" < "$payload" > "$signature" 2> "$status"; then
+    cat "$status" >&2
+    cat "$signature"
+    exit 0
+fi
+
+# Stage 2: let gpg launch the configured pinentry, matching terminal git. GUI
+# pinentries work without a TTY and may fetch the passphrase from an OS
+# keychain silently (or show their native dialog); TTY pinentries fail fast
+# with "Inappropriate ioctl for device" since gpg has no TTY here.
+if {gpg_program} "$@" < "$payload" > "$signature" 2> "$status"; then
+    cat "$status" >&2
+    cat "$signature"
+    exit 0
+fi
+
+# Stage 3: gpg cannot obtain the passphrase on its own. Ask ZZZ for it, then
+# hand it to gpg on fd 3 using loopback mode so no pinentry/terminal is
+# required.
 passphrase=$(printf '%s\0' {prompt} | {askpass_program} --askpass={askpass_socket} 2>/dev/null)
-exec {gpg_program} --pinentry-mode loopback --passphrase-fd 3 "$@" 3<<EOF
-${{passphrase}}
-EOF
+printf '%s\n' "$passphrase" |
+{gpg_program} --pinentry-mode loopback --passphrase-fd 3 "$@" 3<&0 < "$payload"
 "#
     )
 }
@@ -636,6 +678,10 @@ mod tests {
         assert!(script.contains("--sign|--detach-sign|--clearsign|--clear-sign) is_signing=1"));
         assert!(script.contains("-*s*) is_signing=1"));
         assert!(script.contains("exec '/usr/bin/gpg' \"$@\""));
+        // Stage 1 never prompts, stage 2 lets the configured pinentry run, and
+        // stage 3 falls back to the askpass modal.
+        assert!(script.contains("'/usr/bin/gpg' --pinentry-mode error \"$@\" < \"$payload\""));
+        assert!(script.contains("if '/usr/bin/gpg' \"$@\" < \"$payload\""));
         assert!(script.contains("--pinentry-mode loopback --passphrase-fd 3"));
         assert!(script.contains("'/opt/zzz/bin/zzz' --askpass='/tmp/zzz askpass.sock'"));
     }
