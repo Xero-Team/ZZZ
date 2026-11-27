@@ -39,6 +39,7 @@ mod release;
 mod repo;
 mod scroll_handlers;
 mod test_markers;
+mod unsafe_surface;
 
 pub use repo::Repo;
 
@@ -53,9 +54,10 @@ enum CheckCommand {
     /// Every gate CI runs: markers, keymaps, scroll handlers, licenses,
     /// module layout, MSRV consistency, release metadata, lint inheritance,
     /// lint suppressions, crate-level clippy configuration copies, locale
-    /// catalog structure, keys, i18n call sites and catalog values, DCO,
-    /// philosophy, ledger, workflows, CI gate wiring, the `gpui` public API
-    /// snapshot, documentation formatting, and shell scripts.
+    /// catalog structure, keys, i18n call sites and catalog values, the
+    /// `unsafe` surface ledger, DCO, philosophy, ledger, workflows, CI gate
+    /// wiring, the `gpui` public API snapshot, documentation formatting, and
+    /// shell scripts.
     All,
     /// Reject leftover markers for unfinished work.
     Todos,
@@ -76,6 +78,8 @@ enum CheckCommand {
     LintSuppressions,
     /// Require every ignored test to carry a reason.
     TestMarkers,
+    /// Require every crate that contains `unsafe` to be listed in the ledger.
+    UnsafeSurface,
     /// Require every workspace member to opt into `[workspace.lints]`.
     LintsInheritance,
     /// Require a crate-level `clippy.toml` to repeat the root configuration.
@@ -153,6 +157,7 @@ pub fn run_check(args: CheckArgs) -> Result<()> {
         CheckCommand::Release => release::check(),
         CheckCommand::LintSuppressions => lint_suppressions::check(),
         CheckCommand::TestMarkers => test_markers::check(),
+        CheckCommand::UnsafeSurface => unsafe_surface::check(),
         CheckCommand::LintsInheritance => lints_inheritance::check(),
         CheckCommand::ClippyCopies => clippy_copies::check(),
         CheckCommand::LocaleCatalog => locale_catalog::check(),
@@ -185,6 +190,7 @@ const GATES: &[(&str, fn() -> Result<()>)] = &[
     ("MSRV consistency", msrv::check),
     ("release metadata", release::check),
     ("test markers", test_markers::check),
+    ("unsafe surface", unsafe_surface::check),
     ("lint inheritance", lints_inheritance::check),
     ("lint suppressions", lint_suppressions::check),
     ("clippy configuration copies", clippy_copies::check),
@@ -457,7 +463,7 @@ fn run_script(command: &[&str], description: &str) -> Result<()> {
 mod tests {
     /// Deleting a line from `GATES` silently disables a gate for both local
     /// runs and CI, so the list length is pinned; adding a gate bumps it.
-    const GATE_COUNT: usize = 23;
+    const GATE_COUNT: usize = 24;
 
     #[test]
     fn gate_list_keeps_every_gate() {
