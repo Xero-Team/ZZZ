@@ -95,10 +95,6 @@ extend-ignore-re = [
     "#fof",
     # Stripped version of reserved keyword `type`
     "typ",
-    # AMD GPU Services
-    "ags",
-    # AMD GPU Services
-    "AGS",
     # "noet" is a vim variable (ideally to ignore locally)
     "noet",
     # Yarn Plug'n'Play
@@ -110,8 +106,6 @@ extend-ignore-re = [
     # ScreenCaptureKit bindings keep Apple's own naming.
     "scap",
     "Scap",
-    # AMD GPU Services, same as the `ags`/`AGS` entries above.
-    "Ags",
     # Deliberate search-token prefix in the repository-research skill script.
     "retriev",
     # Vim's `:elete` command.

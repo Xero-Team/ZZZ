@@ -27,13 +27,6 @@ use crate::tasks::build::model::{Channel, Format, Platform};
 use crate::tasks::build::msvc::{self, MsvcEnvironment};
 use crate::tasks::bundle::{Context, ffmpeg, github_release, licenses, remote_server, util};
 
-/// The AGS SDK is pinned: the shim in `gpui_windows` is compiled against this
-/// exact `amd_ags_x64.dll`, so a newer release is not a drop-in replacement.
-const AGS_URL: &str =
-    "https://codeload.github.com/GPUOpen-LibrariesAndSDKs/AGS_SDK/zip/refs/tags/v6.3.0";
-const AGS_SHA256: &str = "292c5ce0c7f51d44a1e56f2a73d82f1e7304bb14d2b8e39a05708877210de884";
-const AGS_DIRECTORY: &str = "AGS_SDK-6.3.0";
-
 const CONPTY_REPOSITORY: &str = "microsoft/terminal";
 const CONPTY_PATTERN: &str = "Microsoft.Windows.Console.ConPTY.*.nupkg";
 
@@ -599,8 +592,6 @@ fn collect_inno_files(context: &Context, inno_dir: &Path) -> Result<()> {
         )?;
     }
 
-    let ags = ags_runtime(context)?;
-    util::copy(&ags, &inno_dir.join("amd_ags_x64.dll"))?;
     Ok(())
 }
 
@@ -732,29 +723,6 @@ fn conpty_runtime(context: &Context) -> Result<ConptyRuntime> {
             .join("OpenConsole.exe"),
         open_console_arm64: extracted.join("build/native/runtimes/arm64/OpenConsole.exe"),
     })
-}
-
-fn ags_runtime(context: &Context) -> Result<PathBuf> {
-    let downloads = context.target_dir.join("downloads");
-    util::create_dir(&downloads)?;
-    let archive = downloads.join("AGS_SDK_v6.3.0.zip");
-    util::download(AGS_URL, &archive, AGS_SHA256, context.offline)?;
-
-    let extracted = downloads.join("ags");
-    let library = extracted
-        .join(AGS_DIRECTORY)
-        .join("ags_lib/lib/amd_ags_x64.dll");
-    if !library.is_file() {
-        util::remove(&extracted)?;
-        extract_zip(&archive, &extracted)?;
-    }
-    if !library.is_file() {
-        bail!(
-            "{} does not contain ags_lib/lib/amd_ags_x64.dll",
-            archive.display()
-        );
-    }
-    Ok(library)
 }
 
 fn extract_zip(archive: &Path, destination: &Path) -> Result<()> {

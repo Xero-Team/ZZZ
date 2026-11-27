@@ -16,8 +16,6 @@ internal static class WindowsMsiBuilder
     private const string WixUiExtensionVersion = "7.0.0";
     private const string ConptyUrl = "https://github.com/microsoft/terminal/releases/download/v1.23.13503.0/Microsoft.Windows.Console.ConPTY.1.23.251216003.nupkg";
     private const string ConptyArchiveName = "Microsoft.Windows.Console.ConPTY.1.23.251216003.nupkg";
-    private const string AgsUrl = "https://codeload.github.com/GPUOpen-LibrariesAndSDKs/AGS_SDK/zip/refs/tags/v6.3.0";
-    private const string AgsArchiveName = "AGS_SDK_v6.3.0.zip";
     private static readonly string[] SupportedLanguages = ["en-US", "zh-CN"];
     private static readonly HttpClient HttpClient = new();
 
@@ -202,11 +200,6 @@ internal static class WindowsMsiBuilder
 
         await StageConptyAsync(workspaceRoot, releaseDirectory, cacheDirectory, stagingDirectory, stagedFiles, architecture);
 
-        if (architecture.Equals("x86_64", StringComparison.OrdinalIgnoreCase))
-        {
-            await StageAmdGpuServicesAsync(cacheDirectory, stagingDirectory, stagedFiles);
-        }
-
         await StageExplorerShellFilesAsync(workspaceRoot, releaseDirectory, stagingDirectory, stagedFiles, channelConfig, architecture);
 
         return stagedFiles
@@ -299,27 +292,6 @@ internal static class WindowsMsiBuilder
             var arm64ConsoleDestinationPath = Path.Combine(stagingDirectory, "arm64", "OpenConsole.exe");
             CopyFile(arm64ConsoleSourcePathFallback, arm64ConsoleDestinationPath);
             stagedFiles.Add(new StagedFile(arm64ConsoleDestinationPath, Path.Combine("arm64", "OpenConsole.exe")));
-        }
-    }
-
-    private static async Task StageAmdGpuServicesAsync(
-        string cacheDirectory,
-        string stagingDirectory,
-        List<StagedFile> stagedFiles)
-    {
-        var archivePath = Path.Combine(cacheDirectory, AgsArchiveName);
-        var extractDirectory = Path.Combine(cacheDirectory, "ags");
-        var expectedDllPath = Path.Combine(extractDirectory, "AGS_SDK-6.3.0", "ags_lib", "lib", "amd_ags_x64.dll");
-        if (!File.Exists(expectedDllPath))
-        {
-            await EnsureArchiveExtractedAsync(AgsUrl, archivePath, extractDirectory);
-        }
-
-        if (File.Exists(expectedDllPath))
-        {
-            var destinationPath = Path.Combine(stagingDirectory, "amd_ags_x64.dll");
-            CopyFile(expectedDllPath, destinationPath);
-            stagedFiles.Add(new StagedFile(destinationPath, "amd_ags_x64.dll"));
         }
     }
 
