@@ -25,6 +25,7 @@ use clap::{Args, Subcommand, ValueEnum};
 
 mod ci_wiring;
 mod clippy_copies;
+mod file_size;
 mod gpui_api;
 mod keymaps;
 mod lint_suppressions;
@@ -53,12 +54,13 @@ pub struct CheckArgs {
 #[derive(Subcommand)]
 enum CheckCommand {
     /// Every gate CI runs: markers, keymaps, scroll handlers, licenses,
-    /// module layout, MSRV consistency, release metadata, lint inheritance,
-    /// lint suppressions, crate-level clippy configuration copies, locale
-    /// catalog structure, keys, i18n call sites and catalog values, the
-    /// nightly tool configuration (Miri and sanitizers), the `unsafe` surface
-    /// ledger, DCO, philosophy, ledger, workflows, CI gate wiring, the `gpui`
-    /// public API snapshot, documentation formatting, and shell scripts.
+    /// module layout, source file size, MSRV consistency, release metadata,
+    /// lint inheritance, lint suppressions, crate-level clippy configuration
+    /// copies, locale catalog structure, keys, i18n call sites and catalog
+    /// values, the nightly tool configuration (Miri and sanitizers), the
+    /// `unsafe` surface ledger, DCO, philosophy, ledger, workflows, CI gate
+    /// wiring, the `gpui` public API snapshot, documentation formatting, and
+    /// shell scripts.
     All,
     /// Reject leftover markers for unfinished work.
     Todos,
@@ -71,6 +73,8 @@ enum CheckCommand {
     Licenses,
     /// Reject new `mod.rs` module files outside vendored sources.
     ModuleLayout,
+    /// Reject source files past their recorded size ceiling.
+    FileSize,
     /// Require the pinned Rust toolchain version to agree across its sources.
     Msrv,
     /// Require the manifest, lockfile, and changelog to agree on one version.
@@ -157,6 +161,7 @@ pub fn run_check(args: CheckArgs) -> Result<()> {
         CheckCommand::ScrollHandlers => scroll_handlers::check(),
         CheckCommand::Licenses => check_licenses(),
         CheckCommand::ModuleLayout => module_layout::check(),
+        CheckCommand::FileSize => file_size::check(),
         CheckCommand::Msrv => msrv::check(),
         CheckCommand::Release => release::check(),
         CheckCommand::LintSuppressions => lint_suppressions::check(),
@@ -192,6 +197,7 @@ const GATES: &[(&str, fn() -> Result<()>)] = &[
     ("scroll handlers", scroll_handlers::check),
     ("crate licenses", check_licenses),
     ("module layout", module_layout::check),
+    ("source file size", file_size::check),
     ("MSRV consistency", msrv::check),
     ("release metadata", release::check),
     ("test markers", test_markers::check),
@@ -469,7 +475,7 @@ fn run_script(command: &[&str], description: &str) -> Result<()> {
 mod tests {
     /// Deleting a line from `GATES` silently disables a gate for both local
     /// runs and CI, so the list length is pinned; adding a gate bumps it.
-    const GATE_COUNT: usize = 25;
+    const GATE_COUNT: usize = 26;
 
     #[test]
     fn gate_list_keeps_every_gate() {
