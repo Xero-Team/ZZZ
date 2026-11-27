@@ -201,6 +201,7 @@
   - [Releasing ZZZ](./development/releasing.md)
   - [Testing](./development/testing.md)
   - [Code Review Policy](./development/review-policy.md)
+  - [Fork Hardening Plan](./development/hardening-plan.md)
   - [Coding Standards](./development/coding-standards.md)
   - [Crate Map](./development/crates.md)
   - [Glossary](./development/glossary.md)

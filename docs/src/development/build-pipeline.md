@@ -170,11 +170,17 @@ checks (glibc floor, `--version`).
 Everything that does not need a compiler is `cargo xtask check`. The default
 run covers the unfinished-work markers, the keymaps (shared files must not spell
 the primary modifier `cmd-`, and no binding object may repeat a key), the
-`LICENSE-AGPL` symlink in every crate directory, the philosophy boundary, the
-upstream rejection ledger, and the `run:` patterns in the workflow files.
-`cargo xtask check shellcheck`, `cargo xtask check vendor`, and
-`cargo xtask check links` are opt-in, because they need tools the default
-runner does not install.
+`LICENSE-AGPL` symlink in every crate directory, the source file-size ceilings,
+the philosophy boundary, both upstream decision ledgers, and the `run:` patterns
+in the workflow files. `cargo xtask check shellcheck`, `cargo xtask check
+vendor`, and `cargo xtask check links` are opt-in, because they need tools the
+default runner does not install.
+
+The file-size gate reads
+`tooling/xtask/src/tasks/check/file_size_baseline.tsv`: a counted source file
+over 800 lines needs a row recording its current size, and a file that grows
+past that row fails. Lowering a number is how a split keeps the ground it
+gained; raising one is a reviewed edit, not a side effect.
 
 `cargo xtask clippy` is the lint gate. It runs the philosophy preflight, then
 three `cargo clippy` passes: workspace lints with `--all-targets`, the manifest
@@ -498,11 +504,21 @@ On a machine without a GPU, or inside a container, the trainer sets
 `LIBGL_ALWAYS_SOFTWARE=1` so Mesa falls back to its software rasterizer.
 
 State lives under `target/pgo/<fingerprint>`: `raw/*.profraw` from the training
-run, `bundle/` for the extracted instrumented bundle, and `merged.profdata`. The
-fingerprint hashes the target, the profile, `rust-toolchain.toml`, and
-`Cargo.toml`, so a toolchain bump invalidates the profile instead of reusing one
-that no longer applies. `cargo xtask pgo status` prints the path for the host
-target.
+run, `bundle/` for the extracted instrumented bundle, `merged.profdata`, and
+`training.txt`. The fingerprint hashes the target, the profile,
+`rust-toolchain.toml`, and `Cargo.toml`, so a toolchain bump invalidates the
+profile instead of reusing one that no longer applies. `cargo xtask pgo status`
+prints the path for the host target.
+
+The fingerprint answers "is this profile still valid". `training.txt` answers the
+other question — "does it still describe this tree" — by naming the commit the
+training run started from. A build that finds the profile more than
+`MAX_PROFILE_AGE` (500) commits behind `HEAD`, or finds no stamp at all, fails
+and asks for `cargo xtask pgo train`. `--stale-profile-ok` builds anyway,
+`cargo xtask build`, `cargo xtask dist`, and `cargo xtask pgo build` all accept
+it, and CI only warns: it trains a profile in the same run, so a stale one there
+means the stamp is wrong, not the build.
+
 `llvm-profdata` has to match the LLVM version of the Rust toolchain that
 produced the raw profiles: the tool prefers the copy shipped with that
 toolchain, falls back to `PATH`, and refuses a merger from a different LLVM
