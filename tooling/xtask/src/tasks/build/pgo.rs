@@ -34,6 +34,11 @@ use crate::tasks::build::remote_server;
 use crate::tasks::build::scheduler::{self, ExecuteOptions};
 use crate::tasks::bundle::{self, linux, util};
 
+mod age;
+
+pub use age::{MAX_PROFILE_AGE, check_freshness};
+use age::{profile_age, write_training_stamp};
+
 /// A profile that covers fewer functions was not produced by a real training
 /// run. Both `pgo verify` and the release gate use the same floor.
 pub const MIN_FUNCTIONS: u64 = 100_000;
@@ -94,6 +99,9 @@ struct PgoBuildArgs {
     dry_run: bool,
     #[arg(long)]
     keep_going: bool,
+    /// Build even when the profile is older than the age limit.
+    #[arg(long)]
+    stale_profile_ok: bool,
 }
 
 /// The arguments the internal steps need. The planner supplies the target
@@ -171,6 +179,7 @@ fn run_training(workspace: &Path, args: PgoBuildArgs) -> Result<()> {
         sccache: !args.no_sccache,
         min_pgo_functions: MIN_FUNCTIONS,
         require_pgo: false,
+        allow_stale_pgo: false,
     };
 
     let (fingerprint, profile) = pgo_profile_path(workspace, target, Profile::Release)?;
@@ -292,6 +301,7 @@ fn run_build(workspace: &Path, args: PgoBuildArgs) -> Result<()> {
         sccache: !args.no_sccache,
         min_pgo_functions: MIN_FUNCTIONS,
         require_pgo: true,
+        allow_stale_pgo: args.stale_profile_ok,
     };
 
     let (fingerprint, profile) = pgo_profile_path(workspace, target, Profile::Release)?;
@@ -304,6 +314,7 @@ fn run_build(workspace: &Path, args: PgoBuildArgs) -> Result<()> {
     // Fail here, on the host, instead of after a container has compiled for
     // twenty minutes and only then rejected the profile.
     verify_profile(&profile, MIN_FUNCTIONS)?;
+    check_freshness(workspace, &profile, args.stale_profile_ok)?;
 
     let spec = container_spec(workspace, &request)?;
     let target_dir = if spec.is_some() {
@@ -526,6 +537,11 @@ fn run_generate(workspace: &Path, args: PgoStageArgs) -> Result<()> {
         .args(&raw_profiles);
     util::run(&mut command, "llvm-profdata merge")?;
     verify_profile(&profile, MIN_FUNCTIONS)?;
+    // Best effort: a training run must not fail because the stamp could not be
+    // written, but a profile without one cannot be dated later.
+    if let Err(error) = write_training_stamp(workspace, &profile) {
+        eprintln!("warning: could not record the training commit: {error:#}");
+    }
 
     // The instrumented archive shares its name with the release artifact, and
     // shipping it by accident is hard to notice: it is several times slower.
@@ -627,6 +643,11 @@ fn run_status(workspace: &Path, target: Option<Target>) -> Result<()> {
         }
         let size = std::fs::metadata(&profile).map_or(0, |metadata| metadata.len());
         println!("  size:        {} MiB", size / (1024 * 1024));
+        match profile_age(workspace, &profile) {
+            Some(age) if age <= MAX_PROFILE_AGE => println!("  age:         {age} commits"),
+            Some(age) => println!("  age:         {age} commits (stale, limit {MAX_PROFILE_AGE})"),
+            None => println!("  age:         unknown (no training stamp)"),
+        }
         match profile_function_count(&profile) {
             Ok(count) => println!("  functions:   {count}"),
             Err(error) => println!("  functions:   unknown ({error})"),

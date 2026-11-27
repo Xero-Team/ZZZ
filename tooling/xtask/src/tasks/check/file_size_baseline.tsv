@@ -373,8 +373,8 @@ crates/zzz/src/zzz.rs	7765
 tooling/compliance/src/checks.rs	1248
 tooling/perf/src/implementation.rs	910
 tooling/perf/src/main.rs	901
-tooling/xtask/src/tasks/build/pgo.rs	829
-tooling/xtask/src/tasks/build/plan.rs	1197
+tooling/xtask/src/tasks/build/pgo.rs	850
+tooling/xtask/src/tasks/build/plan.rs	1210
 tooling/xtask/src/tasks/build/remote_server.rs	1343
 tooling/xtask/src/tasks/bundle/linux.rs	1152
 tooling/xtask/src/tasks/bundle/macos.rs	1049

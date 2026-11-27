@@ -140,6 +140,9 @@ pub struct BuildRequest {
     pub sccache: bool,
     pub min_pgo_functions: u64,
     pub require_pgo: bool,
+    /// Build with a profile older than `pgo::MAX_PROFILE_AGE` instead of
+    /// failing.
+    pub allow_stale_pgo: bool,
 }
 
 impl Plan {
@@ -808,6 +811,15 @@ impl Planner<'_> {
             return Ok(None);
         }
 
+        // The profile is valid for this build, but the tree may have moved far
+        // enough that it no longer describes it. Refuse now rather than ship a
+        // build whose optimisations target code that is gone.
+        crate::tasks::build::pgo::check_freshness(
+            &self.workspace,
+            &profile,
+            self.request.allow_stale_pgo,
+        )?;
+
         Ok(Some(PgoPlan {
             mode: resolved,
             fingerprint,
@@ -1122,6 +1134,7 @@ mod tests {
             sccache: false,
             min_pgo_functions: 100_000,
             require_pgo: false,
+            allow_stale_pgo: true,
         }
     }
 

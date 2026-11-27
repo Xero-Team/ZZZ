@@ -80,6 +80,9 @@ pub struct BuildArgs {
     /// Minimum function count a PGO profile must cover to be accepted.
     #[arg(long, default_value_t = 100_000)]
     min_pgo_functions: u64,
+    /// Build with a PGO profile older than the age limit instead of failing.
+    #[arg(long)]
+    stale_profile_ok: bool,
 }
 
 #[derive(Args)]
@@ -134,6 +137,9 @@ pub struct DistArgs {
     /// Minimum function count a PGO profile must cover to be accepted.
     #[arg(long, default_value_t = 100_000)]
     min_pgo_functions: u64,
+    /// Build with a PGO profile older than the age limit instead of failing.
+    #[arg(long)]
+    stale_profile_ok: bool,
 }
 
 pub fn run_build(args: BuildArgs) -> Result<()> {
@@ -152,6 +158,7 @@ pub fn run_build(args: BuildArgs) -> Result<()> {
         sccache: !args.no_sccache,
         min_pgo_functions: args.min_pgo_functions,
         require_pgo: require_pgo(args.require_pgo, pgo),
+        allow_stale_pgo: args.stale_profile_ok,
     };
 
     let plan = plan::assemble(&workspace, &request)?;
@@ -194,6 +201,7 @@ pub fn run_dist(args: DistArgs) -> Result<()> {
         sccache: !args.no_sccache,
         min_pgo_functions: args.min_pgo_functions,
         require_pgo: require_pgo(false, pgo),
+        allow_stale_pgo: args.stale_profile_ok,
     };
 
     let plan = plan::assemble(&workspace, &request)?;
