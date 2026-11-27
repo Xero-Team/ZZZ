@@ -598,13 +598,13 @@ async fn consume_search_stream(
             project_search
                 .update(cx, |project_search, cx| {
                     let workspace = project_search.workspace.upgrade();
-                    if !is_buffer_stale(&project_search.project, workspace.as_ref(), &buffer, cx) {
-                        project_search.match_ranges.extend(new_ranges);
-                    } else {
+                    if is_buffer_stale(&project_search.project, workspace.as_ref(), &buffer, cx) {
                         let buffer_id = buffer.read(cx).remote_id();
                         project_search.excerpts.update(cx, |excerpts, cx| {
                             excerpts.remove_excerpts_for_buffer(buffer_id, cx)
                         });
+                    } else {
+                        project_search.match_ranges.extend(new_ranges);
                     }
                     cx.notify();
                 })
