@@ -1653,6 +1653,9 @@ fn parse_url_arg(arg: &str) -> String {
 }
 
 #[cfg(test)]
+mod settings_coverage_tests;
+
+#[cfg(test)]
 mod tests {
     use super::parse_url_arg;
 
