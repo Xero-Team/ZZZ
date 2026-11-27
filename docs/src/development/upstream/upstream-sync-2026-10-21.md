@@ -22,34 +22,34 @@ contains 26 commits, so the whole visible range fits in this batch.
 
 ## Decisions
 
-| Upstream   | Class | Local commit | Disposition                                                                                                                                  |
-| ---------- | ----- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| 294169aeed | C     | --           | Patches the OpenCode language-model provider, which ZZZ does not carry.                                                                      |
-| 1e9923014d | B     | 7e1fa1e3fb   | Saves configuration defaults only after the agent accepts, using the response value. ZZZ's secondary-click toggle keeps its explicit write.  |
-| 3c8e3b5a01 | C     | --           | Changes `agent_servers/src/acp/v1.rs` and `v2.rs`; ZZZ has a flat v1 `acp.rs` and no v2 session state.                                       |
-| 3c11d49cbf | C     | --           | Needs the structured `DiffPatch`/`PatchFile` parser that ZZZ's simplified `acp_thread/src/diff.rs` does not carry.                           |
-| a4a3a968d1 | C     | --           | Rewrites `crates/path`'s `PathStyle`; ZZZ has no `path` crate and its shared `util::paths` call sites do not need this refactor.             |
-| b0f1e1cb2f | C     | --           | Preserves receipt sessions across authentication, which depends on the rejected ACP v2 receipt transport.                                    |
-| 065d7ae597 | B     | 58fb00da32   | Ports `fuzzy_nucleo` search for model and configuration-option pickers. The benchmark crate and runner are omitted.                          |
-| 92e8e2b8a0 | C     | --           | Pure upstream refactor to prepare extension-development work; it moves APIs into `extension` without changing ZZZ behavior.                  |
-| d94887e08e | B     | ca64cf138d   | Reports both sides of a conflicting app borrow in GPUI panic messages.                                                                       |
-| e70e0250a0 | C     | --           | Shuts down ACP v2 connections on teardown; ZZZ has no v2 connection module or runtime teardown path.                                         |
-| 1d8a29e1e2 | C     | --           | Patches `crates/google_ai`, which ZZZ does not carry.                                                                                        |
-| fae8a35482 | C     | --           | Selects ACP v2 for beta connections and extends v2 debug logging; the v2 architecture is absent.                                             |
-| 92447a17cc | C     | --           | Lockfile-only `certifi` bump for the upstream issue-ranking helper, with no independent ZZZ behavior.                                        |
-| 9f03ff88e4 | B     | 51fab18479   | Resolves notebook cell injections and re-parses on language changes. Adds a local `json_lang` test helper.                                   |
-| d7adf3e7e2 | B     | 591344b5f3   | Adds the `extension` project-panel sort order with util and panel tests.                                                                     |
-| 4c7ce998ad | C     | --           | Attaches ACP v2 permission requests to tool calls; ZZZ has no v2 permission model.                                                           |
-| 3762891a55 | C     | --           | Fixes structured content in the OpenAI-compatible stream mapper in `language_model_core/src/chat_completion.rs`, which ZZZ does not carry.   |
-| 70277c0193 | C     | --           | Splits agent-reported activity from prompt submission; ZZZ has no `submission.rs`, receipt transport, or `SessionActivity`.                  |
-| 73a6e0ba61 | A     | 70dfbc3c0d   | Clean absorption: tail proximity bonus in `fuzzy_nucleo` path matching plus the file-finder regression test.                                 |
-| f91e908cad | C     | --           | Parent-owned subagent registries depend on the absent ACP v2/receipt thread ownership and native subagent session machinery.                 |
-| d38a754e1b | C     | --           | Adds ACP v2 session deletion on top of the absent v2 session state machine.                                                                  |
-| 1416404b88 | B     | 97d7f6ba3f | Seven-hundred-line rework of discard selection, trash-untracked filtering, git transport, and the git panel; not isolatable onto ZZZ's flow. Absorbed later as `97d7f6ba3f`; see `upstream-sync-2026-11-26-medium.md`. |
-| a484d108da | C     | --           | Renders subagent cards from state introduced by the rejected `f91e908cad` subagent registry.                                                 |
-| 41e9dc5837 | C     | --           | Shares OpenCode catalog parsing and completion dispatch; ZZZ has no `opencode` crate.                                                        |
-| f26375b83b | C     | --           | Omits an OpenCode thinking block binding in the absent `crates/opencode`.                                                                    |
-| 5adae449a3 | C     | --           | Fixes duplicated reasoning in the OpenAI-compatible stream mapper that ZZZ's `language_model_core` does not contain.                         |
+| Upstream   | Class | Local commit | Disposition                                                                                                                                                                                                            |
+| ---------- | ----- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 294169aeed | C     | --           | Patches the OpenCode language-model provider, which ZZZ does not carry.                                                                                                                                                |
+| 1e9923014d | B     | 7e1fa1e3fb   | Saves configuration defaults only after the agent accepts, using the response value. ZZZ's secondary-click toggle keeps its explicit write.                                                                            |
+| 3c8e3b5a01 | C     | --           | Changes `agent_servers/src/acp/v1.rs` and `v2.rs`; ZZZ has a flat v1 `acp.rs` and no v2 session state.                                                                                                                 |
+| 3c11d49cbf | C     | --           | Needs the structured `DiffPatch`/`PatchFile` parser that ZZZ's simplified `acp_thread/src/diff.rs` does not carry.                                                                                                     |
+| a4a3a968d1 | C     | --           | Rewrites `crates/path`'s `PathStyle`; ZZZ has no `path` crate and its shared `util::paths` call sites do not need this refactor.                                                                                       |
+| b0f1e1cb2f | C     | --           | Preserves receipt sessions across authentication, which depends on the rejected ACP v2 receipt transport.                                                                                                              |
+| 065d7ae597 | B     | 58fb00da32   | Ports `fuzzy_nucleo` search for model and configuration-option pickers. The benchmark crate and runner are omitted.                                                                                                    |
+| 92e8e2b8a0 | C     | --           | Pure upstream refactor to prepare extension-development work; it moves APIs into `extension` without changing ZZZ behavior.                                                                                            |
+| d94887e08e | B     | ca64cf138d   | Reports both sides of a conflicting app borrow in GPUI panic messages.                                                                                                                                                 |
+| e70e0250a0 | C     | --           | Shuts down ACP v2 connections on teardown; ZZZ has no v2 connection module or runtime teardown path.                                                                                                                   |
+| 1d8a29e1e2 | C     | --           | Patches `crates/google_ai`, which ZZZ does not carry.                                                                                                                                                                  |
+| fae8a35482 | C     | --           | Selects ACP v2 for beta connections and extends v2 debug logging; the v2 architecture is absent.                                                                                                                       |
+| 92447a17cc | C     | --           | Lockfile-only `certifi` bump for the upstream issue-ranking helper, with no independent ZZZ behavior.                                                                                                                  |
+| 9f03ff88e4 | B     | 51fab18479   | Resolves notebook cell injections and re-parses on language changes. Adds a local `json_lang` test helper.                                                                                                             |
+| d7adf3e7e2 | B     | 591344b5f3   | Adds the `extension` project-panel sort order with util and panel tests.                                                                                                                                               |
+| 4c7ce998ad | C     | --           | Attaches ACP v2 permission requests to tool calls; ZZZ has no v2 permission model.                                                                                                                                     |
+| 3762891a55 | C     | --           | Fixes structured content in the OpenAI-compatible stream mapper in `language_model_core/src/chat_completion.rs`, which ZZZ does not carry.                                                                             |
+| 70277c0193 | C     | --           | Splits agent-reported activity from prompt submission; ZZZ has no `submission.rs`, receipt transport, or `SessionActivity`.                                                                                            |
+| 73a6e0ba61 | A     | 70dfbc3c0d   | Clean absorption: tail proximity bonus in `fuzzy_nucleo` path matching plus the file-finder regression test.                                                                                                           |
+| f91e908cad | C     | --           | Parent-owned subagent registries depend on the absent ACP v2/receipt thread ownership and native subagent session machinery.                                                                                           |
+| d38a754e1b | C     | --           | Adds ACP v2 session deletion on top of the absent v2 session state machine.                                                                                                                                            |
+| 1416404b88 | B     | 97d7f6ba3f   | Seven-hundred-line rework of discard selection, trash-untracked filtering, git transport, and the git panel; not isolatable onto ZZZ's flow. Absorbed later as `97d7f6ba3f`; see `upstream-sync-2026-11-26-medium.md`. |
+| a484d108da | C     | --           | Renders subagent cards from state introduced by the rejected `f91e908cad` subagent registry.                                                                                                                           |
+| 41e9dc5837 | C     | --           | Shares OpenCode catalog parsing and completion dispatch; ZZZ has no `opencode` crate.                                                                                                                                  |
+| f26375b83b | C     | --           | Omits an OpenCode thinking block binding in the absent `crates/opencode`.                                                                                                                                              |
+| 5adae449a3 | C     | --           | Fixes duplicated reasoning in the OpenAI-compatible stream mapper that ZZZ's `language_model_core` does not contain.                                                                                                   |
 
 Totals: one `A`, five `B`, twenty `C` across twenty-six commits.
 
