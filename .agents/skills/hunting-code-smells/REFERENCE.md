@@ -139,10 +139,12 @@ authoritative text. So never cite either model as "the rule". Cite the
 Reference's `r[undefined.alias]` outline, and treat Miri as the executable
 oracle:
 
-- Miri needs a nightly toolchain; `rust-toolchain.toml` pins `1.100.0`, so this
-  is `cargo +nightly miri test -p <crate>`, a manual lead and not a gate.
-- Miri is not wired into CI here. Do not report "Miri is clean" unless you ran
-  it, and say which crate and toolchain.
+- Miri needs a nightly toolchain; `rust-toolchain.toml` pins `1.100.0`, so the
+  entry point is `cargo xtask miri -p <crate>`, which addresses `cargo +nightly
+  miri` itself. The curated list in `tooling/xtask/src/tasks/miri.rs` is a CI
+  gate, so a crate on that list is covered; one that is not is a manual lead.
+- Do not report "Miri is clean" unless you ran it, and say which crate and
+  toolchain.
 
 ### 2.4 What not to do
 
@@ -395,7 +397,7 @@ Tests for a behavior-affecting change:
 ```sh
 cargo test -p <crate>
 # optional, manual, needs nightly in addition to the pinned 1.100.0
-cargo +nightly miri test -p <crate>
+cargo xtask miri -p <crate>
 ```
 
 ## 9. Review report template

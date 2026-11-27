@@ -35,6 +35,7 @@ mod locale_fallbacks;
 mod locale_placeholders;
 mod module_layout;
 mod msrv;
+mod nightly_tools;
 mod release;
 mod repo;
 mod scroll_handlers;
@@ -55,9 +56,9 @@ enum CheckCommand {
     /// module layout, MSRV consistency, release metadata, lint inheritance,
     /// lint suppressions, crate-level clippy configuration copies, locale
     /// catalog structure, keys, i18n call sites and catalog values, the
-    /// `unsafe` surface ledger, DCO, philosophy, ledger, workflows, CI gate
-    /// wiring, the `gpui` public API snapshot, documentation formatting, and
-    /// shell scripts.
+    /// nightly tool configuration (Miri and sanitizers), the `unsafe` surface
+    /// ledger, DCO, philosophy, ledger, workflows, CI gate wiring, the `gpui`
+    /// public API snapshot, documentation formatting, and shell scripts.
     All,
     /// Reject leftover markers for unfinished work.
     Todos,
@@ -92,6 +93,9 @@ enum CheckCommand {
     LocaleFallbacks,
     /// Require en/zh catalog values to agree on format placeholders.
     LocalePlaceholders,
+    /// Require the curated Miri and sanitizer lists and the
+    /// `.cargo/config.toml` defaults they rely on to stay runnable.
+    NightlyTools,
     /// Require DCO sign-off on recent non-merge commits.
     Dco,
     /// Run ShellCheck over the scripts in the repository root's `script/`.
@@ -164,6 +168,7 @@ pub fn run_check(args: CheckArgs) -> Result<()> {
         CheckCommand::LocaleKeys => check_locale_keys(),
         CheckCommand::LocaleFallbacks => locale_fallbacks::check(),
         CheckCommand::LocalePlaceholders => locale_placeholders::check(),
+        CheckCommand::NightlyTools => nightly_tools::check(),
         CheckCommand::Dco => check_dco(),
         CheckCommand::Shellcheck { severity } => check_shellcheck(severity),
         CheckCommand::Docs => check_docs(),
@@ -198,6 +203,7 @@ const GATES: &[(&str, fn() -> Result<()>)] = &[
     ("locale catalog keys", check_locale_keys),
     ("i18n call sites", locale_fallbacks::check),
     ("i18n catalog values", locale_placeholders::check),
+    ("nightly tool configuration", nightly_tools::check),
     ("DCO sign-off", check_dco),
     ("philosophy boundary", check_philosophy),
     ("upstream rejection ledger", check_upstream_ledger),
@@ -463,7 +469,7 @@ fn run_script(command: &[&str], description: &str) -> Result<()> {
 mod tests {
     /// Deleting a line from `GATES` silently disables a gate for both local
     /// runs and CI, so the list length is pinned; adding a gate bumps it.
-    const GATE_COUNT: usize = 24;
+    const GATE_COUNT: usize = 25;
 
     #[test]
     fn gate_list_keeps_every_gate() {

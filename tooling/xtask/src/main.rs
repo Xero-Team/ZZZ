@@ -34,6 +34,10 @@ enum CliCommand {
     /// Builds and installs a local Linux tarball into `~/.local`.
     Install(tasks::local::InstallArgs),
     Licenses(tasks::licenses::LicensesArgs),
+    /// Runs the curated Miri suite on a nightly toolchain.
+    Miri(tasks::miri::MiriArgs),
+    /// Runs the curated sanitizer suite on a nightly toolchain.
+    Sanitize(tasks::sanitize::SanitizeArgs),
     /// Checks that packages conform to a set of standards.
     PackageConformity(tasks::package_conformity::PackageConformityArgs),
     /// Profile-guided optimization.
@@ -66,6 +70,8 @@ fn main() -> Result<()> {
         CliCommand::Grammars(args) => tasks::grammars::run_grammars(args),
         CliCommand::Install(args) => tasks::local::run_install(args),
         CliCommand::Licenses(args) => tasks::licenses::run_licenses(args),
+        CliCommand::Miri(args) => tasks::miri::run_miri(args),
+        CliCommand::Sanitize(args) => tasks::sanitize::run_sanitize(args),
         CliCommand::PackageConformity(args) => {
             tasks::package_conformity::run_package_conformity(args)
         }
