@@ -9,9 +9,14 @@ Every upstream absorption batch writes a report named
 `upstream-sync-YYYY-MM-DD.md`; re-audits use
 `upstream-sync-audit-YYYY-MM-DD.md`. This page indexes them newest first.
 
-The rejection ledger lives at
-[`../upstream-rejected.tsv`](../upstream-rejected.tsv). Regenerate it with
-`./script/backfill-upstream-ledger` after editing a report.
+The decision ledgers live next to this page:
+[`../upstream-ledger.tsv`](../upstream-ledger.tsv) records the absorbed
+commits and whether local history proves each one, and
+[`../upstream-rejected.tsv`](../upstream-rejected.tsv) records the skipped
+ones. Regenerate both with `./script/backfill-upstream-ledger` after editing
+a report; see
+[Upstream Cherry-Pick](../upstream-cherrypick.md#decision-ledgers) for what
+each column means.
 
 ## 2026-11
 

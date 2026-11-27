@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Validate docs/src/development/upstream-rejected.tsv.
+"""Validate the two upstream decision ledgers.
 
-Checks that the ledger is current against the sync reports, is well formed,
-has no duplicate SHA prefixes, and does not list a commit that was actually
-absorbed. Known absorbed-but-still-listed commits live in
-script/upstream-ledger-allowlist; a stale allowlist entry is itself a failure.
+`upstream-ledger.tsv` records the A and B decisions - what a batch absorbed, and
+whether local history can prove it happened. `upstream-rejected.tsv` records the
+C decisions a batch skipped. Both are generated from the decision tables in the
+sync reports, so this checks that each reproduces byte for byte, that the rows
+are well formed, and that the two accounts agree: a SHA is in one file or the
+other, and a rejection row never names a commit that was actually absorbed.
+
+Known absorbed-but-still-listed commits live in script/upstream-ledger-allowlist;
+a stale allowlist entry is itself a failure.
 """
 
 import difflib
@@ -15,7 +20,10 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LEDGER = ROOT / "docs" / "src" / "development" / "upstream-rejected.tsv"
+DEVELOPMENT = ROOT / "docs" / "src" / "development"
+REPORTS = DEVELOPMENT / "upstream"
+LEDGER = DEVELOPMENT / "upstream-rejected.tsv"
+ABSORBED = DEVELOPMENT / "upstream-ledger.tsv"
 ALLOWLIST = ROOT / "script" / "upstream-ledger-allowlist"
 BACKFILL = ROOT / "script" / "backfill-upstream-ledger"
 
@@ -42,6 +50,11 @@ REASONS = (
     "untriaged",
 )
 
+# Keep in sync with VERIFY_STATUSES in script/backfill-upstream-ledger.
+VERIFY_STATUSES = ("verified", "equivalent", "unverified", "unknown")
+
+CLASSES = ("A", "B")
+
 failures = 0
 
 
@@ -64,25 +77,28 @@ def data_rows(text):
 
 
 def regenerate():
-    handle = tempfile.NamedTemporaryFile("w", suffix=".tsv", delete=False)
-    temp = Path(handle.name)
-    handle.close()
+    """Runs the backfill into a scratch directory and returns both files."""
+    directory = Path(tempfile.mkdtemp(suffix="-upstream-ledger"))
     try:
         subprocess.run(
-            [str(BACKFILL), str(temp)],
+            [str(BACKFILL), str(directory)],
             check=True,
             stdout=subprocess.DEVNULL,
         )
-        return temp.read_text(encoding="utf-8")
+        return {
+            path.name: (directory / path.name).read_text(encoding="utf-8")
+            for path in (LEDGER, ABSORBED)
+        }
     finally:
-        temp.unlink(missing_ok=True)
+        for path in (LEDGER, ABSORBED):
+            (directory / path.name).unlink(missing_ok=True)
+        directory.rmdir()
 
 
-def check_stale(actual):
-    expected = regenerate()
+def check_stale(name, actual, expected):
     if actual == expected:
         return
-    fail("ledger is stale; run ./script/backfill-upstream-ledger")
+    fail(name + " is stale; run ./script/backfill-upstream-ledger")
     diff = difflib.unified_diff(
         actual.splitlines(),
         expected.splitlines(),
@@ -117,6 +133,61 @@ def check_rows(rows):
             fail("duplicate sha prefix " + prefix + ": " + sha + " and " + seen[prefix])
         seen[prefix] = sha
     return seen
+
+
+def check_absorbed_rows(rows):
+    seen = {}
+    for fields in rows:
+        if len(fields) != 4:
+            fail("absorbed row does not have 4 fields: " + repr(fields))
+            continue
+        sha, cls, verify, report = fields
+        if not SHA_RE.match(sha):
+            fail("bad sha in the absorbed ledger: " + sha)
+        if cls not in CLASSES:
+            fail("non-A/B row in the absorbed ledger: " + sha)
+        if verify not in VERIFY_STATUSES:
+            fail("unknown verify_status " + verify + " for " + sha)
+        if not (REPORTS / report).is_file():
+            fail("absorbed row " + sha + " names a missing report: " + report)
+        prefix = sha[:8]
+        if prefix in seen:
+            fail("duplicate sha prefix " + prefix + ": " + sha + " and " + seen[prefix])
+        seen[prefix] = sha
+    return seen
+
+
+def check_disjoint(absorbed, rejected):
+    for prefix in absorbed:
+        if prefix in rejected:
+            fail(
+                "sha prefix "
+                + prefix
+                + " is both absorbed ("
+                + absorbed[prefix]
+                + ") and rejected ("
+                + rejected[prefix]
+                + ")"
+            )
+
+
+def check_unverified(rows):
+    """A recorded absorption with no local evidence is the gap this ledger exists
+    to surface, so it fails instead of sitting in the file as a detail."""
+    for fields in rows:
+        if len(fields) != 4:
+            continue
+        sha, _, verify, report = fields
+        if verify != "unverified":
+            continue
+        fail(
+            "absorbed row "
+            + sha
+            + " ("
+            + report
+            + ") has no local commit carrying its trailer; absorb it, or record in"
+            " the report that the tree already matched upstream"
+        )
 
 
 def load_allowlist():
@@ -182,16 +253,26 @@ def check_infra_notes(rows):
 
 
 def main():
-    if not LEDGER.is_file():
-        print("FAIL: missing " + str(LEDGER), file=sys.stderr)
+    missing = [path for path in (LEDGER, ABSORBED) if not path.is_file()]
+    if missing:
+        for path in missing:
+            print("FAIL: missing " + str(path), file=sys.stderr)
         return 1
 
-    actual = LEDGER.read_text(encoding="utf-8")
-    check_stale(actual)
-    rows = data_rows(actual)
-    seen = check_rows(rows)
-    check_absorbed(seen)
-    check_infra_notes(rows)
+    expected = regenerate()
+    rejected_text = LEDGER.read_text(encoding="utf-8")
+    absorbed_text = ABSORBED.read_text(encoding="utf-8")
+    check_stale(LEDGER.name, rejected_text, expected[LEDGER.name])
+    check_stale(ABSORBED.name, absorbed_text, expected[ABSORBED.name])
+
+    rejected_rows = data_rows(rejected_text)
+    absorbed_rows = data_rows(absorbed_text)
+    rejected_seen = check_rows(rejected_rows)
+    absorbed_seen = check_absorbed_rows(absorbed_rows)
+    check_disjoint(absorbed_seen, rejected_seen)
+    check_unverified(absorbed_rows)
+    check_absorbed(rejected_seen)
+    check_infra_notes(rejected_rows)
 
     if failures:
         print(
@@ -199,7 +280,18 @@ def main():
             file=sys.stderr,
         )
         return 1
-    print("upstream ledger check passed (" + str(len(rows)) + " rejection rows)")
+    verified = sum(
+        1 for fields in absorbed_rows if len(fields) == 4 and fields[2] == "verified"
+    )
+    print(
+        "upstream ledger check passed ("
+        + str(len(absorbed_rows))
+        + " absorbed rows, "
+        + str(verified)
+        + " verified; "
+        + str(len(rejected_rows))
+        + " rejection rows)"
+    )
     return 0
 
 

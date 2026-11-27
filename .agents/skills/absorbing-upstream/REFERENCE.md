@@ -269,22 +269,30 @@ the same version or the check will disagree. Read `PRETTIER_VERSION` from
 `docs/src/`. Advance the reviewed baseline only through commits you
 classified.
 
-## Rejection Ledger
+## Decision Ledgers
 
-Every class C decision also lands in
-`docs/src/development/upstream-rejected.tsv`. After writing the report,
-run:
+One backfill writes both ledgers from the report decision tables:
+`docs/src/development/upstream-ledger.tsv` for the A and B decisions, and
+`docs/src/development/upstream-rejected.tsv` for the C decisions. After
+writing the report, run:
 
 ```sh
 ./script/backfill-upstream-ledger
 cargo xtask check upstream-ledger
 ```
 
-The backfill derives the ledger from the report decision tables. Do not
-hand-edit the ledger; improve the report and regenerate. The checker
-fails on a stale ledger, a malformed row, a duplicate SHA prefix, or a
-row whose commit was actually absorbed. Known exceptions are listed in
-`script/upstream-ledger-allowlist`.
+Do not hand-edit either ledger; improve the report and regenerate. The
+checker fails on a stale ledger, a malformed row, a duplicate SHA prefix, a
+SHA listed in both files, a recent row whose absorption no local commit
+proves, or a rejection row whose commit was actually absorbed. Known
+exceptions are listed in `script/upstream-ledger-allowlist`.
+
+The `verify` column is why the absorbed ledger exists. For the newest three
+batches that absorbed anything, a row must be `verified` (an `Upstream:` or
+`cherry picked from commit` trailer names the SHA), or `equivalent` (the
+report states the local tree already matched upstream). Anything else is
+`unverified` and fails the check, so record which case applies while the
+evidence is still in front of you.
 
 ## Hard Stops
 

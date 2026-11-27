@@ -59,8 +59,10 @@ extend-exclude = [
     "crates/grammars/vendor/",
     # Vendored third-party crates are not ours to spellcheck.
     "vendor/",
-    # These files quote upstream commit subjects verbatim.
+    # These files quote upstream commit subjects verbatim, and both carry bare
+    # SHA fragments that read as words.
     "docs/src/development/upstream-rejected.tsv",
+    "docs/src/development/upstream-ledger.tsv",
     "docs/src/development/upstream/",
     # Upstream tree-sitter query files.
     "crates/grammars/src/powershell/",

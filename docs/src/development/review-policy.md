@@ -22,7 +22,7 @@ highest matching path wins; a path that matches nothing falls back to `medium`.
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ------------- |
 | `low`    | `docs/**`, `legal/**`, `*.md`                                                                                                                                                                     | 1               | no            |
 | `medium` | `crates/**`, `extensions/**`, `assets/**`, and anything unmatched                                                                                                                                 | 1               | no            |
-| `high`   | `.github/**`, `script/**`, `tooling/**`, `.agents/**`, dependency pins (`Cargo.toml`, `Cargo.lock`, `vendor/**`, toolchain and lint configs), `.rules`, `assets/locales/**`, the rejection ledger | 2               | yes           |
+| `high`   | `.github/**`, `script/**`, `tooling/**`, `.agents/**`, dependency pins (`Cargo.toml`, `Cargo.lock`, `vendor/**`, toolchain and lint configs), `.rules`, `assets/locales/**`, the decision ledgers | 2               | yes           |
 
 Run it locally before opening a pull request:
 

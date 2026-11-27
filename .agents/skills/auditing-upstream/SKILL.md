@@ -60,8 +60,9 @@ those.
   silent edits.
 - Correct the report table, narrative, and counts. Add a dated correction
   note to the report scope instead of rewriting history.
-- Regenerate the ledger with `./script/backfill-upstream-ledger`. Never
-  hand-edit `upstream-rejected.tsv`.
+- Regenerate the ledgers with `./script/backfill-upstream-ledger`. Never hand-edit
+  `upstream-ledger.tsv` or `upstream-rejected.tsv`; a corrected class moves a row
+  from one file to the other on the next regeneration.
 - Empty stale `script/upstream-ledger-allowlist` entries once the report
   is corrected.
 - Do not add an `upstream` remote, push, open a PR, or run

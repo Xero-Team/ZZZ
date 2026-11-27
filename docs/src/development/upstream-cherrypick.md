@@ -84,22 +84,44 @@ every later batch, because a failing baseline hides the next regression.
 Each run appends or creates
 `docs/src/development/upstream/upstream-sync-YYYY-MM-DD.md`.
 
-## Rejection Ledger
+## Decision Ledgers
 
-Every class C decision is recorded in
-`docs/src/development/upstream-rejected.tsv`. The ledger is the dedup
-index for re-review: a SHA listed there was already rejected and does
-not need another look unless a later report supersedes it.
+Two generated files make the reports machine-readable, and they split every
+decision between them: a SHA appears in exactly one.
 
-The file is generated from the decision tables in the sync reports:
+| File                                         | Holds                              |
+| -------------------------------------------- | ---------------------------------- |
+| `docs/src/development/upstream-ledger.tsv`   | Classes A and B: what was absorbed |
+| `docs/src/development/upstream-rejected.tsv` | Class C: what was skipped, and why |
+
+Both come from the decision tables in the sync reports:
 
 ```sh
 ./script/backfill-upstream-ledger
 ```
 
-`cargo xtask check upstream-ledger` fails when the ledger is stale, is
-malformed, has duplicate SHA prefixes, or lists a commit that was
-actually absorbed. It runs in CI next to `check-philosophy`.
+The absorbed ledger carries a `verify` column, because "class A" records a
+decision and not an outcome. For the three most recent batches that absorbed
+anything, the column says which of these is true:
+
+- `verified` - local history has a commit whose `Upstream:` or
+  `cherry picked from commit` trailer names the SHA.
+- `equivalent` - the report found the local tree already matched upstream,
+  so no commit was needed.
+- `unverified` - neither, which is a gap: the batch claims an absorption
+  nothing proves.
+
+Older batches are `unknown`. The backfill does not re-litigate history, so a
+row that old is neither credited nor accused.
+
+The rejection ledger is the dedup index for re-review: a SHA listed there was
+already rejected and does not need another look unless a later report
+supersedes it.
+
+`cargo xtask check upstream-ledger` fails when either ledger is stale, is
+malformed, has duplicate SHA prefixes, lists a commit in both files, records
+an `unverified` absorption, or lists a rejected commit that was actually
+absorbed. It runs in CI next to `check-philosophy`.
 
 Known absorbed-but-still-listed commits are documented in
 `script/upstream-ledger-allowlist` until the report is corrected.

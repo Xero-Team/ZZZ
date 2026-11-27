@@ -1,7 +1,18 @@
 #!/usr/bin/env python3
-"""Backfill the upstream rejection ledger from the sync reports."""
+"""Backfill both upstream decision ledgers from the sync reports.
+
+The reports carry every decision in prose tables. Two ledgers make those
+decisions machine-readable from one pass, so they cannot disagree:
+
+- `upstream-ledger.tsv` records the A and B commits, with the verification
+  status the local history can prove for the most recent batches.
+- `upstream-rejected.tsv` records the C commits that were skipped.
+
+Both files are generated, never hand-edited.
+"""
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -9,9 +20,25 @@ ROOT = Path(__file__).resolve().parent.parent
 DIR = ROOT / "docs" / "src" / "development"
 REPORTS = DIR / "upstream"
 LEDGER = DIR / "upstream-rejected.tsv"
+ABSORBED = DIR / "upstream-ledger.tsv"
+
+# How many batches keep a verification status. Past this many reports the
+# backfill will not re-litigate history: the rows are `unknown`, which the gate
+# accepts, rather than a claim nobody can check today.
+RECENT_REPORTS = 3
 
 SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+ABSORBED_RE = re.compile(r"(?:Upstream: |cherry picked from commit )([0-9a-f]{7,40})")
 CLASSES = ("A", "B", "C")
+VERIFY_STATUSES = ("verified", "equivalent", "unverified", "unknown")
+
+# A disposition that says the local tree already matched upstream describes a
+# batch with no commit to find, which is a different fact from a missing
+# trailer. The phrasing is the reports' own convention for that case.
+EQUIVALENT_RE = re.compile(
+    r"\balready equivalent\b|\balready matches\b|\bno (?:code|local) change\b",
+    re.IGNORECASE,
+)
 REASONS = (
     "philosophy",
     "absent-api",
@@ -150,11 +177,93 @@ def render(decisions):
     return "\n".join(header + body) + "\n"
 
 
+def absorbed_prefixes():
+    """The upstream SHAs local history says it absorbed.
+
+    A commit that carries an `Upstream: <sha>` or `cherry picked from commit
+    <sha>` trailer is the only local evidence that an upstream change is
+    present, so that is what `verified` means.
+    """
+    log = subprocess.run(
+        ["git", "-C", str(ROOT), "log", "--format=%B"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    return {match.group(1)[:8] for match in ABSORBED_RE.finditer(log)}
+
+
+def recent_reports(reports):
+    """The newest reports that recorded an absorbed commit.
+
+    Reports with no A or B row cannot carry a verification status, so they are
+    skipped when counting: the window is the last RECENT_REPORTS batches that
+    actually absorbed something.
+    """
+    contributing = [
+        path.name
+        for path in reports
+        if any(cls != "C" for _, cls, _ in table_rows(path) + block_rows(path))
+    ]
+    return set(contributing[-RECENT_REPORTS:])
+
+
+def verify_for(prefix, note, report, absorbed, recent):
+    if report not in recent:
+        return "unknown"
+    if EQUIVALENT_RE.search(note):
+        return "equivalent"
+    return "verified" if prefix in absorbed else "unverified"
+
+
+def render_absorbed(decisions, absorbed, recent):
+    header = []
+    header.append("# ZZZ upstream absorbed ledger (classes A and B).")
+    header.append("#")
+    header.append("# One row per upstream commit ZZZ classified A or B: the decision")
+    header.append("# to absorb it, and whether local history can prove it happened.")
+    header.append("# The skipped half of each batch is in upstream-rejected.tsv; a SHA")
+    header.append("# appears in exactly one of the two files.")
+    header.append("#")
+    header.append("# Columns (tab-separated): sha, class, verify, report")
+    header.append("# verify is one of: " + ", ".join(VERIFY_STATUSES) + ".")
+    header.append(
+        "# verified   - an absorbed-commit trailer in local history names this SHA"
+    )
+    header.append(
+        "# equivalent - the batch found the local tree already matched upstream,"
+    )
+    header.append("#              so no local commit carries a trailer")
+    header.append(
+        "# unverified - the batch recorded the decision, but nothing proves it"
+    )
+    header.append(
+        "# unknown    - the row predates the newest "
+        + str(RECENT_REPORTS)
+        + " absorbing batches"
+    )
+    header.append("# Regenerate: ./script/backfill-upstream-ledger")
+    header.append("# Validate:   ./script/check-upstream-ledger")
+    header.append("sha\tclass\tverify\treport")
+    body = []
+    for prefix in sorted(decisions):
+        sha, cls, note, report = decisions[prefix]
+        if cls == "C":
+            continue
+        fields = [sha, cls, verify_for(prefix, note, report, absorbed, recent), report]
+        body.append("\t".join(fields))
+    return "\n".join(header + body) + "\n"
+
+
+def shown(path):
+    try:
+        return path.relative_to(ROOT)
+    except ValueError:
+        return path
+
+
 def main():
-    if len(sys.argv) > 1:
-        output = Path(sys.argv[1]).resolve()
-    else:
-        output = LEDGER
+    directory = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else DIR
     reports = []
     for path in sorted(REPORTS.glob("upstream-sync-*.md")):
         if path.name.startswith("upstream-sync-audit-"):
@@ -164,16 +273,32 @@ def main():
         print("no sync reports found", file=sys.stderr)
         return 1
     decisions = collect(reports)
-    output.write_text(render(decisions), encoding="utf-8")
-    count = 0
-    for prefix in decisions:
-        if decisions[prefix][1] == "C":
-            count = count + 1
-    try:
-        shown = output.relative_to(ROOT)
-    except ValueError:
-        shown = output
-    print("wrote " + str(count) + " rejection rows to " + str(shown))
+    recent = recent_reports(reports)
+    absorbed = absorbed_prefixes()
+    (directory / LEDGER.name).write_text(render(decisions), encoding="utf-8")
+    (directory / ABSORBED.name).write_text(
+        render_absorbed(decisions, absorbed, recent), encoding="utf-8"
+    )
+    rejected = sum(1 for prefix in decisions if decisions[prefix][1] == "C")
+    taken = len(decisions) - rejected
+    verified = sum(
+        1
+        for prefix, (_, cls, note, report) in decisions.items()
+        if cls != "C"
+        and verify_for(prefix, note, report, absorbed, recent) == "verified"
+    )
+    print(
+        "wrote "
+        + str(rejected)
+        + " rejection rows to "
+        + str(shown(directory / LEDGER.name))
+        + " and "
+        + str(taken)
+        + " absorbed rows ("
+        + str(verified)
+        + " verified) to "
+        + str(shown(directory / ABSORBED.name))
+    )
     return 0
 
 

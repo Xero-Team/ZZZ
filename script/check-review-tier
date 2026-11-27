@@ -63,9 +63,11 @@ TIERS = {
         "typos.toml",
         "deny.toml",
         "vendor/**",
-        # Rules and the philosophy ledger: project policy, not product code.
+        # Rules and the upstream decision ledgers: project policy, not product
+        # code.
         ".rules",
         "docs/src/development/upstream-rejected.tsv",
+        "docs/src/development/upstream-ledger.tsv",
         # Every user-visible string, plus the fallback parity the gates enforce.
         "assets/locales/**",
     ),
@@ -190,6 +192,7 @@ def self_test():
         ("a locale catalog is high", ["assets/locales/zh-CN.json"], "high"),
         ("a skill change is high", [".agents/skills/hunting-code-smells/SKILL.md"], "high"),
         ("the philosophy ledger is high", ["docs/src/development/upstream-rejected.tsv"], "high"),
+        ("the absorbed ledger is high", ["docs/src/development/upstream-ledger.tsv"], "high"),
         (
             "the highest path wins",
             ["docs/src/development/testing.md", "script/check-philosophy"],
