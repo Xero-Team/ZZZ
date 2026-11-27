@@ -38,6 +38,7 @@ crates/language_model	String::from_utf8_unchecked over decoded image bytes
 crates/language_model_core	Pin::map_unchecked_mut in the rate limiter
 crates/lsp	Pin projections on the request future, and ctor
 crates/media	Core Foundation CFArray ownership
+crates/memory_report	mimalloc v3 per-thread heap walk and `mi_collect`
 crates/net	WinSock and libc socket calls
 crates/paths	env::set_var in the test setup
 crates/platform_title_bar	RtlGetVersion for the Windows build number

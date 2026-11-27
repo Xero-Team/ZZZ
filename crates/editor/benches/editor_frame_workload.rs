@@ -1,6 +1,6 @@
 use std::{
     path::{Path, PathBuf},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context as _, Result, bail};
@@ -279,6 +279,103 @@ fn resolve_input_path(path: PathBuf) -> PathBuf {
     }
 }
 
+/// Keeps the scroll workload running after its fixed phases finish, so the run
+/// produces a series instead of a single point.
+///
+/// A leak in a long-lived process shows up as a line that drifts upward over
+/// hours; one sample cannot separate that from a large baseline.
+struct LongRun {
+    duration: Duration,
+    sample_interval: Duration,
+}
+
+const DEFAULT_MEMORY_SAMPLE_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Parses the flags that follow the three fixture paths.
+///
+/// `None` means no `--duration` was given, which leaves the fixed-phase
+/// behaviour that existing callers rely on untouched.
+fn parse_long_run_arguments(arguments: impl Iterator<Item = PathBuf>) -> Result<Option<LongRun>> {
+    let mut duration = None;
+    let mut sample_interval = DEFAULT_MEMORY_SAMPLE_INTERVAL;
+
+    for argument in arguments {
+        let argument = argument
+            .to_str()
+            .with_context(|| format!("argument {argument:?} is not valid UTF-8"))?;
+        if argument == "--bench" {
+            continue;
+        }
+        if let Some(value) = argument.strip_prefix("--duration=") {
+            duration = Some(Duration::from_secs(parse_seconds(value, "--duration")?));
+        } else if let Some(value) = argument.strip_prefix("--sample-interval=") {
+            sample_interval = Duration::from_secs(parse_seconds(value, "--sample-interval")?);
+        } else {
+            bail!(
+                "usage: editor_frame_workload <source> <typing> <resize-tsv> \
+                 [--duration=<secs>] [--sample-interval=<secs>]"
+            );
+        }
+    }
+
+    Ok(duration.map(|duration| LongRun {
+        duration,
+        sample_interval,
+    }))
+}
+
+fn parse_seconds(value: &str, flag: &str) -> Result<u64> {
+    let seconds = value
+        .parse()
+        .with_context(|| format!("{flag} needs a whole number of seconds, got {value:?}"))?;
+    if seconds == 0 {
+        bail!("{flag} must be greater than zero");
+    }
+    Ok(seconds)
+}
+
+/// Repeats the scroll workload until the requested duration elapses, printing a
+/// memory sample per interval.
+///
+/// Each sample carries the workload's own `elapsed_secs`. `cargo perf-soak`
+/// otherwise stamps every line of one run with the time the run finished, which
+/// would give the whole series a single x value and no slope.
+fn run_long_run(
+    mut cx: TestAppContext,
+    editor: WindowHandle<Editor>,
+    window: AnyWindowHandle,
+    long_run: LongRun,
+) -> Result<()> {
+    let mut reporter = memory_report::MemoryReporter::new().context("memory reporter")?;
+    let started = Instant::now();
+    let mut next_sample_at = Duration::ZERO;
+    let mut frame = 0_usize;
+
+    while started.elapsed() < long_run.duration {
+        let elapsed = started.elapsed();
+        if elapsed >= next_sample_at {
+            let report = reporter.report().context("memory sample")?;
+            println!(
+                "ZZZ_MEMORY elapsed_secs={:.1} frames={frame} {}",
+                elapsed.as_secs_f64(),
+                report.metrics_fields()
+            );
+            next_sample_at += long_run.sample_interval;
+        }
+
+        let row = (frame % SCROLL_FRAMES) as f64 * 99_999.0 / (SCROLL_FRAMES - 1) as f64;
+        editor
+            .update(&mut cx, |editor, window, cx| {
+                editor.set_scroll_position(point(0.0, row), window, cx);
+            })
+            .context("benchmark editor window should remain open")?;
+        present_frame(&mut cx, window);
+        frame += 1;
+    }
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let mut arguments = std::env::args_os().skip(1).map(PathBuf::from);
     let source_path = resolve_input_path(
@@ -296,9 +393,7 @@ fn main() -> Result<()> {
             .next()
             .context("usage: editor_frame_workload <source> <typing> <resize-tsv>")?,
     );
-    if arguments.any(|argument| argument.as_os_str() != "--bench") {
-        bail!("usage: editor_frame_workload <source> <typing> <resize-tsv>");
-    }
+    let long_run = parse_long_run_arguments(arguments)?;
 
     let source = std::fs::read_to_string(&source_path)
         .with_context(|| format!("failed to read source fixture {}", source_path.display()))?;
@@ -415,6 +510,10 @@ fn main() -> Result<()> {
     match peak_rss_kib()? {
         Some(peak_rss_kib) => println!("EDITOR_FRAME_RSS peak_kib={peak_rss_kib}"),
         None => println!("EDITOR_FRAME_RSS peak_kib=unavailable"),
+    }
+
+    if let Some(long_run) = long_run {
+        run_long_run(cx, editor, window, long_run)?;
     }
 
     Ok(())

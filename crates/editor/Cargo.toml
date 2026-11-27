@@ -63,6 +63,7 @@ linkify.workspace = true
 log.workspace = true
 lsp.workspace = true
 markdown.workspace = true
+memory_report.workspace = true
 menu.workspace = true
 multi_buffer.workspace = true
 ordered-float.workspace = true

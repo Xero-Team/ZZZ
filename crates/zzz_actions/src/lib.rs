@@ -67,6 +67,8 @@ actions!(
         OpenLicenses,
         /// Opens the performance profiler.
         OpenPerformanceProfiler,
+        /// Reports this process's memory usage.
+        ReportMemoryUsage,
         /// Opens the onboarding view.
         OpenOnboarding,
     ]

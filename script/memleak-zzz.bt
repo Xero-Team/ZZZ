@@ -1,0 +1,70 @@
+# bpftrace probe: attribute ZZZ's outstanding allocations to call sites.
+#
+# ZZZ links mimalloc statically, so LD_PRELOAD-based tools and probes on libc
+# `malloc` see nothing. The mimalloc entry points are symbols in the binary
+# itself, so uprobes attach to them directly and no rebuild is needed.
+#
+#   sudo bpftrace script/memleak-zzz.bt /path/to/zzz [min-bytes]
+#
+# Every 10 seconds it prints the number and total size of allocations that have
+# not been freed. On exit it prints the allocation stacks of outstanding blocks
+# at or above `min-bytes` (default 1 MiB), which is the list to read: the
+# count/size line tells you whether memory is accumulating, and the stacks tell
+# you where from.
+#
+# Probe the aligned entry points, not `mi_malloc`: Rust's global allocator calls
+# `mi_malloc_aligned` / `mi_zalloc_aligned` / `mi_free`, so the plain ones see
+# almost nothing.
+
+BEGIN
+{
+    if ($1 == 0) {
+        printf("usage: bpftrace script/memleak-zzz.bt <binary> [min-bytes]\n");
+        exit();
+    }
+    $threshold = $2 ? $2 : 1048576;
+    printf("tracking allocations over %d bytes in %s, ctrl-c to report\n",
+           $threshold, str($1));
+}
+
+// The size argument is only available on entry, the pointer only on return.
+uprobe:$1:mi_malloc_aligned,
+uprobe:$1:mi_zalloc_aligned
+{
+    @requested[tid] = arg0;
+}
+
+uretprobe:$1:mi_malloc_aligned,
+uretprobe:$1:mi_zalloc_aligned
+{
+    $size = @requested[tid];
+    delete(@requested[tid]);
+    if (retval != 0) {
+        @outstanding[retval] = $size;
+        if ($size >= ($2 ? $2 : 1048576)) {
+            @large[retval] = ustack;
+        }
+    }
+}
+
+uprobe:$1:mi_free
+{
+    delete(@outstanding[arg0]);
+    delete(@large[arg0]);
+}
+
+interval:s:10
+{
+    printf("outstanding: %llu blocks, %llu bytes\n", count(@outstanding), sum(@outstanding));
+}
+
+END
+{
+    printf("\noutstanding blocks at or above the threshold, by allocation site:\n");
+    print(@large);
+    printf("\nfinal outstanding: %llu blocks, %llu bytes\n",
+           count(@outstanding), sum(@outstanding));
+    clear(@requested);
+    clear(@outstanding);
+    clear(@large);
+}
