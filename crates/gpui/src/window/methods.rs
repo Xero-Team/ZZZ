@@ -2061,7 +2061,15 @@ impl Window {
                 .sort_by_key(|ix| self.interaction.next_frame.deferred_draws[*ix].priority);
 
             for deferred_draw_ix in traversal_order {
-                let (element, parent_node, current_view, rem_size, absolute_offset, prepaint_range) = {
+                let (
+                    element,
+                    parent_node,
+                    current_view,
+                    rem_size,
+                    absolute_offset,
+                    content_mask,
+                    prepaint_range,
+                ) = {
                     let deferred_draw =
                         &mut self.interaction.next_frame.deferred_draws[deferred_draw_ix];
                     self.frame_builder
@@ -2074,6 +2082,7 @@ impl Window {
                         deferred_draw.current_view,
                         deferred_draw.rem_size,
                         deferred_draw.absolute_offset,
+                        deferred_draw.content_mask,
                         deferred_draw.prepaint_range.clone(),
                     )
                 };
@@ -2088,7 +2097,9 @@ impl Window {
                         self.with_rendered_view(current_view, |window| {
                             window.with_rem_size(Some(rem_size), |window| {
                                 window.with_absolute_element_offset(absolute_offset, |window| {
-                                    element.prepaint(window, cx);
+                                    window.with_content_mask(content_mask, |window| {
+                                        element.prepaint(window, cx);
+                                    });
                                 });
                             });
                         });
