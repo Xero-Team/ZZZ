@@ -12718,7 +12718,10 @@ enum NavigationOverlayPaintCommand {
 
 struct NavigationLabelLayout {
     element: AnyElement,
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg_attr(
+        not(test),
+        allow(dead_code, reason = "only the navigation-label tests read this field")
+    )]
     origin: gpui::Point<Pixels>,
 }
 
@@ -13391,7 +13394,10 @@ mod tests {
         );
     }
 
-    #[allow(clippy::empty_enums)] // uninhabited marker; the overlay key must stay distinct
+    #[expect(
+        clippy::empty_enums,
+        reason = "uninhabited marker; the overlay key must stay distinct"
+    )]
     enum PrimaryNavigationOverlay {}
 
     const PRIMARY_NAVIGATION_OVERLAY_KEY: NavigationOverlayKey =

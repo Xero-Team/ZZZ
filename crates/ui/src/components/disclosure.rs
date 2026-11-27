@@ -113,7 +113,13 @@ impl VisibleOnHover for Disclosure {
 }
 
 impl RenderOnce for Disclosure {
-    #[cfg_attr(not(feature = "accessibility"), allow(unused_variables))]
+    #[cfg_attr(
+        not(feature = "accessibility"),
+        allow(
+            unused_variables,
+            reason = "the parameter is only read when the accessibility feature is on"
+        )
+    )]
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let disclosure = IconButton::new(
             self.id,

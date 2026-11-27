@@ -126,7 +126,10 @@ struct ProjectImageSource {
     path: ProjectPath,
 }
 
-#[allow(clippy::empty_enums)] // uninhabited marker; distinct from the other Asset markers
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker; distinct from the other Asset markers"
+)]
 enum ProjectImageAsset {}
 
 impl Asset for ProjectImageAsset {
@@ -335,7 +338,10 @@ pub struct ImageStore {
     image_ids_by_entry_id: HashMap<ProjectEntryId, ImageId>,
     worktree_store: Entity<WorktreeStore>,
     _subscriptions: Vec<Subscription>,
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the nested type is the field's real shape; an alias would hide it"
+    )]
     loading_images_by_path: HashMap<
         ProjectPath,
         postage::watch::Receiver<Option<Result<Entity<ImageItem>, Arc<anyhow::Error>>>>,

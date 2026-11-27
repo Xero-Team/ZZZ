@@ -88,7 +88,11 @@ fn relative_day_label(
 fn format_absolute_date(
     timestamp: OffsetDateTime,
     reference: OffsetDateTime,
-    #[allow(unused_variables)] enhanced_date_formatting: bool,
+    #[allow(
+        unused_variables,
+        reason = "only the macOS formatter reads this parameter"
+    )]
+    enhanced_date_formatting: bool,
 ) -> String {
     #[cfg(target_os = "macos")]
     {
@@ -145,7 +149,11 @@ fn format_absolute_time(timestamp: OffsetDateTime) -> String {
 fn format_absolute_timestamp(
     timestamp: OffsetDateTime,
     reference: OffsetDateTime,
-    #[allow(unused_variables)] enhanced_date_formatting: bool,
+    #[allow(
+        unused_variables,
+        reason = "only the macOS formatter reads this parameter"
+    )]
+    enhanced_date_formatting: bool,
 ) -> String {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     {

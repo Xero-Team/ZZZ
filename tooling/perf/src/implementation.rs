@@ -614,6 +614,19 @@ pub struct PerfReport {
     deltas: HashMap<Importance, PerfDelta>,
 }
 
+/// Reads the workload's own timestamp from one of its metric lines.
+///
+/// A workload that samples on an interval inside a single long run prints many
+/// lines before it exits, so the scraper's per-run clock cannot order them: they
+/// would all share one x value and a slope would be undefined. A line carrying
+/// `elapsed_secs` supplies the missing axis.
+#[must_use]
+pub fn parse_sample_elapsed_secs(line: &str) -> Option<f64> {
+    line.split_whitespace()
+        .filter_map(|token| token.split_once('='))
+        .find_map(|(key, value)| (key == "elapsed_secs").then(|| value.parse::<f64>().ok())?)
+}
+
 /// Parses the numeric `key=value` fields out of one line of workload output.
 ///
 /// The leading token names the emitting phase (for example
@@ -813,6 +826,19 @@ mod tests {
                     1.5
                 ),
             ]
+        );
+    }
+
+    #[test]
+    fn parse_sample_elapsed_secs_reads_a_workload_supplied_axis() {
+        assert_eq!(
+            parse_sample_elapsed_secs("ZZZ_MEMORY elapsed_secs=120 resident_bytes=1"),
+            Some(120.0)
+        );
+        assert_eq!(parse_sample_elapsed_secs("ZZZ_MEMORY 120"), None);
+        assert_eq!(
+            parse_sample_elapsed_secs("ZZZ_MEMORY elapsed_secs=abc"),
+            None
         );
     }
 

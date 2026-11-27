@@ -44,7 +44,10 @@ impl SplitEditorState {
         }
     }
 
-    #[allow(clippy::misnamed_getters)]
+    #[expect(
+        clippy::misnamed_getters,
+        reason = "the getter is named for the field it exposes, not for what it returns"
+    )]
     pub fn left_ratio(&self) -> f32 {
         self.visible_left_ratio
     }

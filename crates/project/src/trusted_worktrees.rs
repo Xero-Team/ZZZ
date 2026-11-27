@@ -164,7 +164,10 @@ impl From<RemoteConnectionOptions> for RemoteHostLocation {
                 (None, SharedString::new(format!("mock-{}", mock.id)))
             }
             #[cfg(not(any(test, feature = "test-support")))]
-            #[allow(unreachable_patterns)]
+            #[allow(
+                unreachable_patterns,
+                reason = "the arm only exists when test-support is off"
+            )]
             _ => (None, SharedString::new("mock")),
         };
         Self {

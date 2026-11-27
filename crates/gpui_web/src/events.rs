@@ -653,8 +653,10 @@ fn capslock_from_keyboard_event(event: &web_sys::KeyboardEvent) -> Capslock {
 pub(crate) fn is_mac_platform(browser_window: &web_sys::Window) -> bool {
     let navigator = browser_window.navigator();
 
-    #[allow(deprecated)]
-    // navigator.platform() is deprecated but navigator.userAgentData is not widely available yet
+    #[allow(
+        deprecated,
+        reason = "the browser API is deprecated but is the only one that reports this value"
+    )]
     if let Ok(platform) = navigator.platform() {
         if platform.contains("Mac") {
             return true;

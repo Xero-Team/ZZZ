@@ -26,7 +26,10 @@ use std::{
 use task::TaskTemplate;
 use text::{BufferId, PointUtf16, ToPointUtf16};
 
-#[allow(clippy::empty_enums)] // uninhabited marker; each LSP request needs a distinct type
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker; each LSP request needs a distinct type"
+)]
 pub enum LspExtExpandMacro {}
 
 impl lsp::request::Request for LspExtExpandMacro {
@@ -156,7 +159,10 @@ impl LspCommand for ExpandMacro {
     }
 }
 
-#[allow(clippy::empty_enums)] // uninhabited marker; each LSP request needs a distinct type
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker; each LSP request needs a distinct type"
+)]
 pub enum LspOpenDocs {}
 
 impl lsp::request::Request for LspOpenDocs {
@@ -289,7 +295,10 @@ impl LspCommand for OpenDocs {
     }
 }
 
-#[allow(clippy::empty_enums)] // uninhabited marker; each LSP request needs a distinct type
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker; each LSP request needs a distinct type"
+)]
 pub enum LspSwitchSourceHeader {}
 
 impl lsp::request::Request for LspSwitchSourceHeader {
@@ -538,7 +547,10 @@ impl LspCommand for GoToParentModule {
 // that, the Shell and Cargo variants are similar enough that serde(untagged)
 // deserialization has been observed to confuse one for the other. So we rely on
 // RunnableKind to determine which variant to deserialize.
-#[allow(clippy::empty_enums)] // uninhabited marker; each LSP request needs a distinct type
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker; each LSP request needs a distinct type"
+)]
 pub enum Runnables {}
 
 impl lsp::request::Request for Runnables {

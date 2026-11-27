@@ -1,0 +1,62 @@
+# Crates that may contain `unsafe`, one row per crate.
+#
+# The gate `cargo xtask check unsafe-surface` fails when a crate outside this
+# ledger contains its first `unsafe` block, and when a row here outlives the
+# `unsafe` it was written for. The reason column names the FFI boundary the
+# crate crosses, because that boundary is what the next reviewer has to check.
+#
+# Generated tree-sitter sources under `crates/grammars` are excluded from the
+# scan rather than listed here.
+#
+# Per-block `// SAFETY:` comments are a separate requirement (`.rules`). This
+# ledger only answers "may this crate contain `unsafe` at all".
+crates/askpass	Windows CryptProtectMemory for in-memory credential encryption
+crates/bench_metrics	Mach task info and proc_pid_rusage sampling
+crates/cli	env::set_var and BorrowedFd::borrow_raw
+crates/client	RtlGetVersion for the Windows build number
+crates/crashes	crash-handler attach, mach2 task ports, env::set_var
+crates/database_core	SQLite handle Send/Sync once the connection is open
+crates/debugger_ui	static mut globals in the debugger test fixtures
+crates/editor	str::from_utf8_unchecked over the static whitespace tables
+crates/env_var	env::set_var and env::remove_var
+crates/etw_tracing	ETW provider registration through an extern block
+crates/explorer_command_injector	Win32 DLL entry point behind a shell verb
+crates/extension_api	wasm host ABI implemented by the extension runtime
+crates/fs	libc fcntl(F_GETPATH), statfs, pathconf, getattrlist
+crates/git	env::set_var for GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM in tests
+crates/gpui	arena raw pointers, Pin projections, layout-id transmutes
+crates/gpui_apple	Core Foundation and the Objective-C runtime
+crates/gpui_ios	UIKit and the Objective-C runtime
+crates/gpui_linux	X11 and Wayland C bindings
+crates/gpui_macos	AppKit and the Objective-C runtime
+crates/gpui_web	wasm raw window handles and JS thread Send/Sync impls
+crates/gpui_wgpu	wgpu raw instance and surface handles
+crates/gpui_windows	Win32, COM, and DirectX
+crates/http_client	Pin projection in the AsyncRead and AsyncWrite impls
+crates/language	tree-sitter cursor lifetimes and Send for BufferChunks
+crates/language_model	String::from_utf8_unchecked over decoded image bytes
+crates/language_model_core	Pin::map_unchecked_mut in the rate limiter
+crates/lsp	Pin projections on the request future, and ctor
+crates/media	Core Foundation CFArray ownership
+crates/memory_report	mimalloc v3 per-thread heap walk and `mi_collect`
+crates/net	WinSock and libc socket calls
+crates/paths	env::set_var in the test setup
+crates/platform_title_bar	RtlGetVersion for the Windows build number
+crates/project	mem::transmute between lsp::SymbolKind and its wire i32
+crates/prompt_store	heed LMDB EnvOpenOptions::open
+crates/release_channel	env::set_var in the test setup
+crates/remote	Send/Sync for the mock transport context
+crates/remote_server	libc geteuid and the privilege drop
+crates/reqwest_client	Pin projection and MaybeUninit IO buffers
+crates/scheduler	Waker vtable, ManuallyDrop, Pin::get_unchecked_mut
+crates/settings_ui	MaybeUninit array assembly for generated page data
+crates/sqlez	SQLite C API
+crates/system_specs	env::set_var in the test setup
+crates/terminal	SearchPathW, tcgetpgrp, and GetProcessId
+crates/text	SmallVec::from_const_with_len_unchecked locator sentinels
+crates/time_format	Core Foundation CFAbsoluteTime conversion
+crates/util	libc getuid/killpg, Path and RelPath layout transmutes, Arc::from_raw, darwin fork/exec
+crates/video	AVFoundation and ffmpeg decoders
+crates/vim	Sync for the global Vim command table
+crates/windows_resources	env::set_var(RC) before embed_resource runs
+crates/zzz	LoadLibraryW for conpty, env::remove_var, Windows single-instance pipe

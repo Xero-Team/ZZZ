@@ -255,7 +255,10 @@ impl Transformation {
     }
 }
 
-#[allow(clippy::empty_enums)] // Distinct marker type: `!` would collide with the other Asset markers.
+#[expect(
+    clippy::empty_enums,
+    reason = "Distinct marker type: `!` would collide with the other Asset markers."
+)]
 enum SvgAsset {}
 
 impl Asset for SvgAsset {

@@ -880,9 +880,14 @@ pub trait GitRepository: Send + Sync {
         env: Arc<HashMap<String, String>>,
     ) -> BoxFuture<'_, Result<()>>;
 
+    /// Restores `paths` in the working tree.
+    ///
+    /// With `Some(commit)`, both the index and the working tree are reset to the
+    /// commit's version, discarding staged and unstaged changes. With `None`, only
+    /// the working tree is restored from the index, so staged changes are kept.
     fn checkout_files(
         &self,
-        commit: String,
+        commit: Option<String>,
         paths: Vec<RepoPath>,
         env: Arc<HashMap<String, String>>,
     ) -> BoxFuture<'_, Result<()>>;
@@ -1515,7 +1520,7 @@ impl GitRepository for RealGitRepository {
 
     fn checkout_files(
         &self,
-        commit: String,
+        commit: Option<String>,
         paths: Vec<RepoPath>,
         env: Arc<HashMap<String, String>>,
     ) -> BoxFuture<'_, Result<()>> {
@@ -1526,8 +1531,12 @@ impl GitRepository for RealGitRepository {
             }
 
             let git = git_binary?;
+            let mut args = vec!["checkout"];
+            args.extend(commit.as_deref());
+            args.push("--");
+
             let output = git
-                .build_command(&["checkout", &commit, "--"])
+                .build_command(&args)
                 .envs(env.iter())
                 .args(paths.iter().map(|path| path.as_unix_str()))
                 .output()
@@ -3079,7 +3088,7 @@ impl GitRepository for RealGitRepository {
             {
                 let hook_abs_path = repository.lock().path().join("hooks").join(hook.as_str());
                 if hook_abs_path.is_file() && git_binary.is_trusted {
-                    #[allow(clippy::disallowed_methods)]
+                    #[expect(clippy::disallowed_methods, reason = "hooks run through std::process::Command because a hook is synchronous")]
                     let output = new_command(&hook_abs_path)
                         .envs(env.iter())
                         .current_dir(&working_directory)
@@ -3622,7 +3631,10 @@ impl GitBinary {
         self.build_command_with_config(&[], args)
     }
 
-    #[allow(clippy::disallowed_methods)]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "the command is built for the synchronous git plumbing calls"
+    )]
     fn build_command_with_config<S>(
         &self,
         config: &[(&str, &str)],
@@ -4097,7 +4109,10 @@ mod tests {
         }
     }
 
-    #[allow(clippy::disallowed_methods)]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "git plumbing is invoked synchronously from a background executor"
+    )]
     #[track_caller]
     fn git_command_output<I, S>(working_directory: &Path, arguments: I) -> String
     where
@@ -4227,6 +4242,51 @@ mod tests {
         assert_same_path(
             original_repo_path_from_common_dir(&repository.main_repository_path()).unwrap(),
             repo_dir.path(),
+        );
+    }
+
+    #[gpui::test]
+    async fn test_checkout_files_from_index_keeps_staged_changes(cx: &mut TestAppContext) {
+        disable_git_global_config();
+        cx.executor().allow_parking();
+
+        let repo_dir = tempfile::tempdir().unwrap();
+        git_init_repo(repo_dir.path());
+        let file_path = repo_dir.path().join("file.txt");
+        fs::write(&file_path, "head\n").unwrap();
+        git_command(repo_dir.path(), ["add", "file.txt"]);
+        git_command(repo_dir.path(), ["commit", "-m", "head"]);
+        fs::write(&file_path, "staged\n").unwrap();
+        git_command(repo_dir.path(), ["add", "file.txt"]);
+        fs::write(&file_path, "unstaged\n").unwrap();
+
+        let repository = RealGitRepository::new(
+            &repo_dir.path().join(".git"),
+            None,
+            Some("git".into()),
+            cx.executor(),
+        )
+        .unwrap();
+        let paths = vec![RepoPath::new("file.txt").unwrap()];
+
+        repository
+            .checkout_files(None, paths.clone(), Arc::default())
+            .await
+            .unwrap();
+        assert_eq!(fs::read_to_string(&file_path).unwrap(), "staged\n");
+        assert_eq!(
+            git_command_output(repo_dir.path(), ["show", ":file.txt"]),
+            "staged"
+        );
+
+        repository
+            .checkout_files(Some("HEAD".into()), paths, Arc::default())
+            .await
+            .unwrap();
+        assert_eq!(fs::read_to_string(&file_path).unwrap(), "head\n");
+        assert_eq!(
+            git_command_output(repo_dir.path(), ["show", ":file.txt"]),
+            "head"
         );
     }
 
@@ -5439,7 +5499,10 @@ mod tests {
     #[test]
     fn test_branches_parsing() {
         // suppress "help: octal escapes are not supported, `\0` is always null"
-        #[allow(clippy::octal_escapes)]
+        #[expect(
+            clippy::octal_escapes,
+            reason = "the escape is git's packet-line data, where the leading zero is meaningful"
+        )]
         let input = "*\0060964da10574cd9bf06463a53bf6e0769c5c45e\0\0refs/heads/zzz-patches\0refs/remotes/origin/zzz-patches\0\01733187470\0John Doe\0generated protobuf\n";
         assert_eq!(
             parse_branch_input(input).unwrap(),
@@ -5466,7 +5529,10 @@ mod tests {
 
     #[test]
     fn test_branches_parsing_containing_refs_with_missing_fields() {
-        #[allow(clippy::octal_escapes)]
+        #[expect(
+            clippy::octal_escapes,
+            reason = "the escape is git's packet-line data, where the leading zero is meaningful"
+        )]
         let input = " \090012116c03db04344ab10d50348553aa94f1ea0\0refs/heads/broken\n \0eb0cae33272689bd11030822939dd2701c52f81e\0895951d681e5561478c0acdd6905e8aacdfd2249\0refs/heads/dev\0\0\01762948725\0Zed\0Add feature\n*\0895951d681e5561478c0acdd6905e8aacdfd2249\0\0refs/heads/main\0\0\01762948695\0Zed\0Initial commit\n";
 
         let branches = parse_branch_input(input).unwrap();

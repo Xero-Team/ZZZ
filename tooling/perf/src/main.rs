@@ -564,11 +564,12 @@ fn soak(args: &[String]) -> PerfResult<()> {
             eprint!("\rSoaking: {elapsed_minutes:.1}/{minutes:.0} min");
         }
         let stdout = String::from_utf8_lossy(&output.stdout);
-        for (metric, value) in stdout.lines().flat_map(parse_metric_line) {
-            samples
-                .entry(metric)
-                .or_default()
-                .push((elapsed_minutes, value));
+        for line in stdout.lines() {
+            let minutes = implementation::parse_sample_elapsed_secs(line)
+                .map_or(elapsed_minutes, |seconds| seconds / 60.0);
+            for (metric, value) in parse_metric_line(line) {
+                samples.entry(metric).or_default().push((minutes, value));
+            }
         }
 
         let remaining = duration.saturating_sub(started_at.elapsed());

@@ -35,10 +35,17 @@ MACOSX_DEPLOYMENT_TARGET = "10.15.7"
 # from the CLI launcher in crates/cli/src/main.rs.
 MIMALLOC_ALLOW_THP = { value = "0", force = false }
 # `cargo miri test` keeps the harness's global executor threads alive until the
-# process exits, which Miri rejects as a leak. Ignore that check so the test
-# suite can run under Miri; an explicit MIRIFLAGS in the environment still wins.
+# process exits, which Miri rejects as a leak. Ignore that check so a bare
+# `cargo +nightly miri test` can run the suite; an explicit MIRIFLAGS in the
+# environment still wins, because this entry is not forced.
+#
+# `cargo xtask miri` is the gate, and it passes `MIRIFLAGS` per crate instead of
+# inheriting these two flags: the curated crates keep leak detection on unless
+# their tests really do leave an executor alive. `cargo xtask check miri` fails
+# if `force` becomes `true` here, because the per-crate flags would then lose
+# silently. See docs/src/development/testing.md.
 #
 # The suite also exercises the real filesystem (temporary workspaces, trace
-# pruning), so Miri's isolation has to be off for those tests to reach the code
-# they are meant to check.
+# pruning), so Miri's isolation has to be off for a bare run to reach the code
+# those tests mean to check.
 MIRIFLAGS = { value = "-Zmiri-ignore-leaks -Zmiri-disable-isolation", force = false }

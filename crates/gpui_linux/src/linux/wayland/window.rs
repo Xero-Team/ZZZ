@@ -925,7 +925,10 @@ impl WaylandWindowStatePtr {
         }
     }
 
-    #[allow(clippy::mutable_key_type)]
+    #[expect(
+        clippy::mutable_key_type,
+        reason = "the Eq and Hash impls do not read the interior-mutable field"
+    )]
     pub fn handle_surface_event(
         &self,
         event: wl_surface::Event,
@@ -1059,7 +1062,10 @@ impl WaylandWindowStatePtr {
     pub fn close(&self) {
         let state = self.state.borrow();
         let client = state.client.get_client();
-        #[allow(clippy::mutable_key_type)]
+        #[expect(
+            clippy::mutable_key_type,
+            reason = "the Eq and Hash impls do not read the interior-mutable field"
+        )]
         let children = state.children.clone();
         drop(state);
 

@@ -147,7 +147,10 @@ impl FakeServer {
         self.peer.send(self.connection_id(), message).unwrap();
     }
 
-    #[allow(clippy::await_holding_lock)]
+    #[allow(
+        clippy::await_holding_lock,
+        reason = "the test holds the lock across the await to serialize the received messages"
+    )]
     pub async fn receive<M: proto::EnvelopedMessage>(&self) -> Result<TypedEnvelope<M>> {
         let message = self
             .state

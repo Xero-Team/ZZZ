@@ -189,7 +189,10 @@ pub struct WorktreeStore {
     retain_worktrees: bool,
     worktrees: Vec<WorktreeHandle>,
     scanning_enabled: bool,
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the nested type is the field's real shape; an alias would hide it"
+    )]
     loading_worktrees:
         HashMap<Arc<SanitizedPath>, Shared<Task<Result<Entity<Worktree>, Arc<anyhow::Error>>>>>,
     initial_scan_complete: (watch::Sender<bool>, watch::Receiver<bool>),

@@ -32,7 +32,7 @@ use git::status::{DiffStat, StageStatus};
 use git::{Amend, Commit, Signoff, ToggleStaged, repository::RepoPath};
 use git::{
     ExpandCommitEditor, GitHostingProviderRegistry, GitRemote, RestoreTrackedFiles, StageAll,
-    StashAll, StashApply, StashPop, ToggleCommitEditor, ToggleFillCommitEditor,
+    StashAll, StashApply, StashPop, StashTracked, ToggleCommitEditor, ToggleFillCommitEditor,
     TrashUntrackedFiles, UnstageAll, ViewFile, parse_git_remote_url,
 };
 use gpui::{
@@ -163,15 +163,37 @@ struct GitPanelViewOptionsMenuState {
     tree_view: bool,
 }
 
+/// Which subset of the working tree a stash request covers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StashKind {
+    All,
+    Tracked,
+}
+
+impl StashKind {
+    fn headline(self, cx: &App) -> String {
+        match self {
+            StashKind::All => tr(cx, "git_ui.git_panel.stash_all", "Stash All"),
+            StashKind::Tracked => tr(cx, "git_ui.git_panel.stash_tracked", "Stash Tracked"),
+        }
+    }
+}
+
 /// Prompts for an optional stash name. Confirming with an empty editor stashes
 /// without `--message`, letting git generate its usual "WIP on ..." description.
 struct StashMessageModal {
     editor: Entity<Editor>,
     panel: WeakEntity<GitPanel>,
+    kind: StashKind,
 }
 
 impl StashMessageModal {
-    fn new(panel: WeakEntity<GitPanel>, window: &mut Window, cx: &mut Context<Self>) -> Self {
+    fn new(
+        panel: WeakEntity<GitPanel>,
+        kind: StashKind,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
             let placeholder = tr(
@@ -182,7 +204,11 @@ impl StashMessageModal {
             editor.set_placeholder_text(&placeholder, window, cx);
             editor
         });
-        Self { editor, panel }
+        Self {
+            editor,
+            panel,
+            kind,
+        }
     }
 
     fn cancel(&mut self, _: &menu::Cancel, _window: &mut Window, cx: &mut Context<Self>) {
@@ -192,8 +218,9 @@ impl StashMessageModal {
     fn confirm(&mut self, _: &menu::Confirm, _window: &mut Window, cx: &mut Context<Self>) {
         let message = self.editor.read(cx).text(cx).trim().to_owned();
         let message = (!message.is_empty()).then_some(message);
+        let kind = self.kind;
         self.panel
-            .update(cx, |panel, cx| panel.perform_stash(message, cx))
+            .update(cx, |panel, cx| panel.perform_stash(kind, message, cx))
             .log_err();
         cx.emit(DismissEvent);
     }
@@ -223,10 +250,7 @@ impl Render for StashMessageModal {
                     .w_full()
                     .gap_1p5()
                     .child(Icon::new(IconName::GitBranch).size(IconSize::XSmall))
-                    .child(
-                        Headline::new(tr(cx, "git_ui.git_panel.stash_all", "Stash All"))
-                            .size(HeadlineSize::XSmall),
-                    ),
+                    .child(Headline::new(self.kind.headline(cx)).size(HeadlineSize::XSmall)),
             )
             .child(div().px_3().pb_3().w_full().child(self.editor.clone()))
     }
@@ -358,6 +382,7 @@ fn git_panel_context_menu(
     has_unstaged_changes: bool,
     has_new_changes: bool,
     has_stash_items: bool,
+    group_by_status: bool,
     include_copy_paths: bool,
     focus_handle: FocusHandle,
     window: &mut Window,
@@ -366,6 +391,7 @@ fn git_panel_context_menu(
     let stage_all = tr(cx, "git_ui.project_diff.stage_all", "Stage All");
     let unstage_all = tr(cx, "git_ui.project_diff.unstage_all", "Unstage All");
     let stash_all = tr(cx, "git_ui.git_panel.stash_all", "Stash All");
+    let stash_tracked = tr(cx, "git_ui.git_panel.stash_tracked", "Stash Tracked");
     let stash_pop = tr(cx, "git_ui.git_panel.stash_pop", "Stash Pop");
     let view_stash = tr(cx, "git_ui.stash_picker.view_stash", "View Stash");
     let copy_path = tr(cx, "git_ui.git_panel.copy_path", "Copy Path");
@@ -404,6 +430,15 @@ fn git_panel_context_menu(
                 stash_all.clone(),
                 StashAll.boxed_clone(),
             )
+            // Offer the stash variant that matches how the list is currently grouped,
+            // so the menu mirrors the sections the user can actually see.
+            .when(group_by_status, |context_menu| {
+                context_menu.action_disabled_when(
+                    !has_tracked_changes,
+                    stash_tracked.clone(),
+                    StashTracked.boxed_clone(),
+                )
+            })
             .action_disabled_when(!has_stash_items, stash_pop.clone(), StashPop.boxed_clone())
             .action(
                 view_stash.clone(),
@@ -564,6 +599,29 @@ type GitHeaderEntry = ChangesListSectionHeader;
 type GitTreeStatusEntry = ChangesListTreeStatusRow<GitStatusEntry>;
 type GitTreeDirEntry = ChangesListDirectoryRow;
 type TreeViewState = ChangesListTreeViewState<GitStatusEntry>;
+
+/// A file to discard and whether its staged changes survive.
+#[derive(Debug, Clone)]
+struct DiscardTarget {
+    entry: GitStatusEntry,
+    /// Restore the working tree from the index instead of `HEAD`, keeping the
+    /// staged half of a partially staged file.
+    keep_staged: bool,
+}
+
+impl DiscardTarget {
+    fn new(entry: GitStatusEntry, keep_staged: bool) -> Self {
+        Self { entry, keep_staged }
+    }
+}
+
+/// Discarding only unstaged changes leaves the index alone, so such an op says
+/// nothing about whether the file is staged.
+fn last_op_keeps_staged_changes(ops: &pending_op::PendingOps) -> bool {
+    ops.ops
+        .last()
+        .is_some_and(|op| op.git_status == pending_op::GitStatus::RevertedUnstaged)
+}
 
 impl GitListEntry {
     fn status_entry(&self) -> Option<&GitStatusEntry> {
@@ -1825,7 +1883,8 @@ impl GitPanel {
                     }
 
                     this.update_in(cx, |this, window, cx| {
-                        this.revert_entry(&entry, window, cx);
+                        let keep_staged = entry.status.staging().has_unstaged();
+                        this.revert_entry(&entry, keep_staged, window, cx);
                     })?;
 
                     Ok(())
@@ -1913,6 +1972,7 @@ impl GitPanel {
     fn revert_entry(
         &mut self,
         entry: &GitStatusEntry,
+        keep_staged: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1923,12 +1983,15 @@ impl GitPanel {
                 .repo_path_to_project_path(&entry.repo_path, cx)?;
             let workspace = self.workspace.clone();
 
-            if entry.status.staging().has_staged() {
+            let keeps_staged = keep_staged && entry.status.staging().has_staged();
+            // Discarding only the unstaged half leaves the index untouched. A
+            // fully staged file is unstaged first so the checkout reaches HEAD.
+            if !keeps_staged && entry.status.staging().has_staged() {
                 self.change_file_stage(false, vec![entry.clone()], cx);
             }
             let filename = path.path.file_name()?.to_owned();
 
-            if entry.status.is_created() {
+            if entry.status.is_created() && !keeps_staged {
                 let trash = tr(cx, "git_ui.git_panel.trash", "Trash");
                 let cancel = tr(cx, "prompt.common.cancel", "Cancel");
                 let prompt = window.prompt(
@@ -1965,7 +2028,11 @@ impl GitPanel {
                     |e, _, _| Some(format!("{e}")),
                 );
             } else {
-                self.perform_checkout(vec![entry.clone()], window, cx);
+                self.perform_checkout(
+                    vec![DiscardTarget::new(entry.clone(), keeps_staged)],
+                    window,
+                    cx,
+                );
             }
             Some(())
         });
@@ -1973,7 +2040,7 @@ impl GitPanel {
 
     fn perform_checkout(
         &mut self,
-        entries: Vec<GitStatusEntry>,
+        targets: Vec<DiscardTarget>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -1985,12 +2052,12 @@ impl GitPanel {
         let task = cx.spawn_in(window, async move |this, cx| {
             let tasks: Vec<_> = workspace.update(cx, |workspace, cx| {
                 workspace.project().update(cx, |project, cx| {
-                    entries
+                    targets
                         .iter()
-                        .filter_map(|entry| {
+                        .filter_map(|target| {
                             let path = active_repository
                                 .read(cx)
-                                .repo_path_to_project_path(&entry.repo_path, cx)?;
+                                .repo_path_to_project_path(&target.entry.repo_path, cx)?;
                             Some(project.open_buffer(path, cx))
                         })
                         .collect()
@@ -1999,21 +2066,34 @@ impl GitPanel {
 
             let buffers = futures::future::join_all(tasks).await;
 
-            this.update_in(cx, |this, window, cx| {
-                let task = active_repository.update(cx, |repo, cx| {
-                    repo.checkout_files(
-                        "HEAD",
-                        entries
-                            .into_iter()
-                            .map(|entries| entries.repo_path)
-                            .collect(),
-                        cx,
-                    )
+            let (keep_staged, discard_all): (Vec<_>, Vec<_>) =
+                targets.into_iter().partition(|target| target.keep_staged);
+            let checkouts = this.update_in(cx, |this, window, cx| {
+                let checkouts = active_repository.update(cx, |repo, cx| {
+                    [(Some("HEAD"), discard_all), (None, keep_staged)]
+                        .into_iter()
+                        .filter(|(_, targets)| !targets.is_empty())
+                        .map(|(commit, targets)| {
+                            repo.checkout_files(
+                                commit,
+                                targets
+                                    .into_iter()
+                                    .map(|target| target.entry.repo_path)
+                                    .collect(),
+                                cx,
+                            )
+                        })
+                        .collect::<Vec<_>>()
                 });
                 this.update_visible_entries(window, cx);
-                task
-            })?
-            .await?;
+                checkouts
+            })?;
+            // Dropping a checkout task cancels it and leaves its pending op
+            // running, so wait for both before reporting the first error.
+            futures::future::join_all(checkouts)
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?;
 
             let tasks: Vec<_> = cx.update(|_, cx| {
                 buffers
@@ -2062,7 +2142,7 @@ impl GitPanel {
 
         match entries.len() {
             0 => return,
-            1 => return self.revert_entry(&entries[0], window, cx),
+            1 => return self.revert_entry(&entries[0], false, window, cx),
             _ => {}
         }
         let details = truncated_file_list(
@@ -2094,7 +2174,11 @@ impl GitPanel {
         cx.spawn_in(window, async move |this, cx| {
             if prompt.await == Ok(0) {
                 this.update_in(cx, |this, window, cx| {
-                    this.perform_checkout(entries, window, cx);
+                    let targets = entries
+                        .into_iter()
+                        .map(|entry| DiscardTarget::new(entry, false))
+                        .collect();
+                    this.perform_checkout(targets, window, cx);
                 })
                 .ok();
             }
@@ -2111,13 +2195,13 @@ impl GitPanel {
             .entries
             .iter()
             .filter_map(|entry| entry.status_entry())
-            .filter(|status_entry| status_entry.status.is_created())
+            .filter(|status_entry| status_entry.status.is_untracked())
             .cloned()
             .collect::<Vec<_>>();
 
         match to_delete.len() {
             0 => return,
-            1 => return self.revert_entry(&to_delete[0], window, cx),
+            1 => return self.revert_entry(&to_delete[0], false, window, cx),
             _ => {}
         }
 
@@ -2146,7 +2230,7 @@ impl GitPanel {
             &[trash.as_str(), cancel.as_str()],
             cx,
         );
-        cx.spawn_in(window, async move |this, cx| {
+        cx.spawn_in(window, async move |_this, cx| {
             match prompt.await? {
                 0 => {}
                 _ => return Ok(()),
@@ -2165,11 +2249,6 @@ impl GitPanel {
                     .collect::<Vec<_>>()
             })?;
             let total_count = tasks.len();
-            let to_unstage = to_delete
-                .into_iter()
-                .filter(|entry| !entry.status.staging().is_fully_unstaged())
-                .collect();
-            this.update(cx, |this, cx| this.change_file_stage(false, to_unstage, cx))?;
 
             let results = futures::future::join_all(tasks).await;
             let errors: Vec<anyhow::Error> = results.into_iter().filter_map(|r| r.err()).collect();
@@ -2239,6 +2318,12 @@ impl GitPanel {
                 // need to fallback to the actual state in the repo.
                 if ops.last_op_errored() {
                     return None;
+                }
+
+                // A working-tree-only restore keeps the staged half, so the file
+                // is fully staged until the next status scan confirms it.
+                if last_op_keeps_staged_changes(&ops) {
+                    return Some(StageStatus::Staged);
                 }
 
                 if ops.staging() || ops.staged() {
@@ -2505,24 +2590,37 @@ impl GitPanel {
     }
 
     pub fn stash_all(&mut self, _: &StashAll, window: &mut Window, cx: &mut Context<Self>) {
+        self.prompt_for_stash_message(StashKind::All, window, cx);
+    }
+
+    pub fn stash_tracked(&mut self, _: &StashTracked, window: &mut Window, cx: &mut Context<Self>) {
+        self.prompt_for_stash_message(StashKind::Tracked, window, cx);
+    }
+
+    fn prompt_for_stash_message(
+        &mut self,
+        kind: StashKind,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.active_repository.is_none() {
             return;
         }
         // `git::StashAll` is also registered on the workspace, which dispatches it while
         // `Workspace` is leased, so opening the modal inline would re-enter that update.
-        cx.defer_in(window, |this, window, cx| {
+        cx.defer_in(window, move |this, window, cx| {
             let panel = cx.entity().downgrade();
             this.workspace
                 .update(cx, |workspace, cx| {
                     workspace.toggle_modal(window, cx, |window, cx| {
-                        StashMessageModal::new(panel, window, cx)
+                        StashMessageModal::new(panel, kind, window, cx)
                     });
                 })
                 .ok();
         });
     }
 
-    fn perform_stash(&mut self, message: Option<String>, cx: &mut Context<Self>) {
+    fn perform_stash(&mut self, kind: StashKind, message: Option<String>, cx: &mut Context<Self>) {
         let Some(active_repository) = self.active_repository.clone() else {
             return;
         };
@@ -2530,7 +2628,10 @@ impl GitPanel {
         cx.spawn({
             async move |this, cx| {
                 let stash_task = active_repository
-                    .update(cx, |repo, cx| repo.stash_all(message, cx))
+                    .update(cx, |repo, cx| match kind {
+                        StashKind::All => repo.stash_all(message, cx),
+                        StashKind::Tracked => repo.stash_tracked(message, cx),
+                    })
                     .await;
                 this.update(cx, |this, cx| {
                     stash_task
@@ -3869,7 +3970,7 @@ impl GitPanel {
         self.max_width_item_index = None;
         let sort_by_path = GitPanelSettings::get_global(cx).sort_by_path;
         let is_tree_view = matches!(self.view_mode, GitPanelViewMode::Tree(_));
-        let group_by_status = is_tree_view || !sort_by_path;
+        let group_by_status = self.group_by_status(cx);
 
         if let Some(active_repo) = self.active_repository.as_ref()
             && self.git_access.is_none()
@@ -3923,14 +4024,27 @@ impl GitPanel {
             let is_new = entry.status.is_created();
             let staging = entry.status.staging();
 
-            if let Some(pending) = repo.pending_ops_for_path(&entry.repo_path)
-                && pending
-                    .ops
-                    .iter()
-                    .any(|op| op.git_status == pending_op::GitStatus::Reverted && op.finished())
-            {
+            let pending_ops = repo.pending_ops_for_path(&entry.repo_path);
+            let finished_revert = |git_status| {
+                pending_ops.as_ref().is_some_and(|pending| {
+                    pending
+                        .ops
+                        .iter()
+                        .any(|op| op.git_status == git_status && op.finished())
+                })
+            };
+            // Hide discarded changes until the next status scan confirms them. A
+            // working-tree-only restore keeps the staged half, so the row stays
+            // and reports as fully staged.
+            let unstaged_reverted = finished_revert(pending_op::GitStatus::RevertedUnstaged);
+            if finished_revert(pending_op::GitStatus::Reverted) {
                 continue;
             }
+            let staging = if unstaged_reverted && staging.has_staged() {
+                StageStatus::Staged
+            } else {
+                staging
+            };
 
             let entry = GitStatusEntry {
                 repo_path: entry.repo_path.clone(),
@@ -4193,6 +4307,12 @@ impl GitPanel {
 
     fn has_tracked_changes(&self) -> bool {
         self.tracked_count > 0
+    }
+
+    /// Whether the changes list is grouped into Conflict/Tracked/New sections.
+    fn group_by_status(&self, cx: &App) -> bool {
+        matches!(self.view_mode, GitPanelViewMode::Tree(_))
+            || !GitPanelSettings::get_global(cx).sort_by_path
     }
 
     fn has_staged_tracked_changes(&self) -> bool {
@@ -4710,7 +4830,7 @@ impl GitPanel {
     fn render_git_changes_actions_menu(
         &self,
         id: impl Into<ElementId>,
-        _cx: &mut Context<Self>,
+        cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let has_tracked_changes = self.has_tracked_changes();
         let has_staged_tracked_changes = self.has_staged_tracked_changes();
@@ -4718,6 +4838,7 @@ impl GitPanel {
         let has_unstaged_changes = self.has_unstaged_changes();
         let has_new_changes = self.new_count > 0;
         let has_stash_items = !self.stash_entries.entries.is_empty();
+        let group_by_status = self.group_by_status(cx);
         let focus_handle = self.focus_handle.clone();
 
         PopoverMenu::new(id.into())
@@ -4739,6 +4860,7 @@ impl GitPanel {
                     has_unstaged_changes,
                     has_new_changes,
                     has_stash_items,
+                    group_by_status,
                     false,
                     focus_handle.clone(),
                     window,
@@ -6575,6 +6697,7 @@ impl GitPanel {
         let has_unstaged_changes = self.has_unstaged_changes();
         let has_new_changes = self.new_count > 0;
         let has_stash_items = !self.stash_entries.entries.is_empty();
+        let group_by_status = self.group_by_status(cx);
 
         let context_menu = git_panel_context_menu(
             has_tracked_changes,
@@ -6583,6 +6706,7 @@ impl GitPanel {
             has_unstaged_changes,
             has_new_changes,
             has_stash_items,
+            group_by_status,
             include_copy_paths,
             self.focus_handle.clone(),
             window,

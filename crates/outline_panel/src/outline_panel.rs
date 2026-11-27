@@ -7900,7 +7900,7 @@ search: | Field          | Meaning              «  »|"
                     fake_language_server
                         .set_request_handler::<lsp::request::DocumentSymbolRequest, _, _>(
                             move |_, _| async move {
-                                #[allow(deprecated)]
+                                #[expect(deprecated, reason = "the LSP type is deprecated upstream but is still what the protocol carries")]
                                 Ok(Some(lsp::DocumentSymbolResponse::Nested(vec![
                                     lsp::DocumentSymbol {
                                         name: "Foo".to_string(),

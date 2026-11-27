@@ -26,12 +26,27 @@ impl Window {
             window_decorations,
             #[cfg_attr(
                 not(any(target_os = "linux", target_os = "freebsd")),
-                allow(unused_variables)
+                allow(
+                    unused_variables,
+                    reason = "the parameter is only read on the platforms this cfg selects"
+                )
             )]
             icon,
-            #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
+            #[cfg_attr(
+                not(target_os = "macos"),
+                allow(
+                    unused_variables,
+                    reason = "only the macOS implementation reads this parameter"
+                )
+            )]
             tabbing_identifier,
-            #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
+            #[cfg_attr(
+                not(target_os = "macos"),
+                allow(
+                    unused_variables,
+                    reason = "only the macOS implementation reads this parameter"
+                )
+            )]
             use_display_p3,
         } = options;
 
@@ -1796,7 +1811,10 @@ impl Window {
 
         #[cfg_attr(
             not(any(feature = "inspector", debug_assertions)),
-            allow(unused_variables)
+            allow(
+                unused_variables,
+                reason = "the parameter is only read when the inspector is built in"
+            )
         )]
         let inspector_width: Pixels = rems(30.0).to_pixels(self.rem_size());
         let root_size = {

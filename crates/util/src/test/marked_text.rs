@@ -256,7 +256,10 @@ impl From<(char, char)> for TextRangeMarker {
 mod tests {
     use super::{generate_marked_text, marked_text_ranges};
 
-    #[allow(clippy::reversed_empty_ranges)]
+    #[expect(
+        clippy::reversed_empty_ranges,
+        reason = "the reversed range is the point: it encodes an empty selection"
+    )]
     #[test]
     fn test_marked_text() {
         let (text, ranges) = marked_text_ranges("one «ˇtwo» «threeˇ» «ˇfour» fiveˇ six", true);

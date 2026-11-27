@@ -15,7 +15,10 @@ use std::{
     slice,
 };
 
-#[allow(non_camel_case_types, unused)]
+#[expect(
+    non_camel_case_types,
+    reason = "the alias name spells out the generic it specialises"
+)]
 #[expect(missing_docs)]
 pub type PathVertex_ScaledPixels = PathVertex<ScaledPixels>;
 
@@ -181,7 +184,7 @@ impl Scene {
             any(target_os = "linux", target_os = "freebsd"),
             not(any(feature = "x11", feature = "wayland"))
         ),
-        allow(dead_code)
+        allow(dead_code, reason = "no caller on the targets this cfg excludes")
     )]
     pub fn batches(&self) -> impl Iterator<Item = PrimitiveBatch> + '_ {
         BatchIterator {
@@ -251,7 +254,7 @@ fn sort_in_place<T: Copy>(
         any(target_os = "linux", target_os = "freebsd"),
         not(any(feature = "x11", feature = "wayland"))
     ),
-    allow(dead_code)
+    allow(dead_code, reason = "no caller on the targets this cfg excludes")
 )]
 pub(crate) enum PrimitiveKind {
     Shadow,
@@ -318,7 +321,7 @@ impl Primitive {
         any(target_os = "linux", target_os = "freebsd"),
         not(any(feature = "x11", feature = "wayland"))
     ),
-    allow(dead_code)
+    allow(dead_code, reason = "no caller on the targets this cfg excludes")
 )]
 struct BatchIterator<'a> {
     shadows_start: usize,
@@ -540,7 +543,7 @@ impl Iterator for BatchIterator<'_> {
         any(target_os = "linux", target_os = "freebsd"),
         not(any(feature = "x11", feature = "wayland"))
     ),
-    allow(dead_code)
+    allow(dead_code, reason = "no caller on the targets this cfg excludes")
 )]
 #[allow(missing_docs)]
 pub enum PrimitiveBatch {
@@ -552,7 +555,10 @@ pub enum PrimitiveBatch {
         texture_id: AtlasTextureId,
         range: Range<usize>,
     },
-    #[cfg_attr(target_os = "macos", allow(dead_code))]
+    #[cfg_attr(
+        target_os = "macos",
+        allow(dead_code, reason = "only the macOS renderer produces this variant")
+    )]
     SubpixelSprites {
         texture_id: AtlasTextureId,
         range: Range<usize>,

@@ -38,22 +38,37 @@ pub trait DapCommand: LocalDapCommand {
     type ProtoRequest: 'static + Send;
     type ProtoResponse: 'static + Send;
 
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the trait method is only called by some of the command implementations"
+    )]
     fn client_id_from_proto(request: &Self::ProtoRequest) -> SessionId;
 
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the trait method is only called by some of the command implementations"
+    )]
     fn from_proto(request: &Self::ProtoRequest) -> Self;
 
-    #[allow(unused)]
+    #[allow(
+        unused,
+        reason = "the trait method is only called by some of the command implementations"
+    )]
     fn to_proto(&self, debug_client_id: SessionId, upstream_project_id: u64) -> Self::ProtoRequest;
 
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "the trait method is only called by some of the command implementations"
+    )]
     fn response_to_proto(
         debug_client_id: SessionId,
         message: Self::Response,
     ) -> Self::ProtoResponse;
 
-    #[allow(unused)]
+    #[allow(
+        unused,
+        reason = "the trait method is only called by some of the command implementations"
+    )]
     fn response_from_proto(&self, message: Self::ProtoResponse) -> Result<Self::Response>;
 }
 

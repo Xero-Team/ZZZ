@@ -160,7 +160,10 @@ pub struct GitStore {
     repositories: HashMap<RepositoryId, Entity<Repository>>,
     worktree_ids: HashMap<RepositoryId, HashSet<WorktreeId>>,
     active_repo_id: Option<RepositoryId>,
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the nested type is the field's real shape; an alias would hide it"
+    )]
     loading_diffs:
         HashMap<(BufferId, DiffKind), Shared<Task<Result<Entity<BufferDiff>, Arc<anyhow::Error>>>>>,
     diffs: HashMap<BufferId, Entity<BufferGitState>>,
@@ -3552,9 +3555,11 @@ impl GitStore {
             .map(|path| repo_path_from_proto(Some(path)))
             .collect::<Result<Vec<_>>>()?;
 
+        let commit = Some(envelope.payload.commit.as_str()).filter(|commit| !commit.is_empty());
+
         repository_handle
             .update(&mut cx, |repository_handle, cx| {
-                repository_handle.checkout_files(&envelope.payload.commit, paths, cx)
+                repository_handle.checkout_files(commit, paths, cx)
             })
             .await?;
         Ok(proto::Ack {})
@@ -5541,64 +5546,75 @@ impl Repository {
         })
     }
 
+    /// Restores `paths` in the working tree.
+    ///
+    /// With `Some(commit)`, the index and working tree are reset to that commit,
+    /// discarding staged and unstaged changes. With `None`, only the working tree
+    /// is restored from the index, so staged changes are kept.
     pub fn checkout_files(
         &mut self,
-        commit: &str,
+        commit: Option<&str>,
         paths: Vec<RepoPath>,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
-        let commit = commit.to_owned();
+        let commit = commit.map(str::to_string);
         let id = self.id;
+        let (git_status, description) = match &commit {
+            Some(commit) => (
+                pending_op::GitStatus::Reverted,
+                format!("git checkout {commit}"),
+            ),
+            None => (
+                pending_op::GitStatus::RevertedUnstaged,
+                "git checkout".to_string(),
+            ),
+        };
 
-        self.spawn_job_with_tracking(
-            paths.clone(),
-            pending_op::GitStatus::Reverted,
-            cx,
-            async move |this, cx| {
-                this.update(cx, |this, _cx| {
-                    this.send_job(
-                        "checkout_files",
-                        Some(format!("git checkout {}", commit).into()),
-                        move |git_repo, _| async move {
-                            match git_repo {
-                                RepositoryState::Local(LocalRepositoryState {
-                                    backend,
-                                    environment,
-                                    ..
-                                }) => {
-                                    backend
-                                        .checkout_files(commit, paths, environment.clone())
-                                        .await
-                                }
-                                RepositoryState::Remote(RemoteRepositoryState {
-                                    project_id,
-                                    client,
-                                }) => {
-                                    let paths_v2 = paths
-                                        .iter()
-                                        .map(|path| {
-                                            repo_path_to_proto(path)
-                                                .context("cannot encode exact checkout path")
-                                        })
-                                        .collect::<Result<Vec<_>>>()?;
-                                    client
-                                        .request(proto::GitCheckoutFiles {
-                                            project_id: project_id.0,
-                                            repository_id: id.to_proto(),
-                                            commit,
-                                            paths_v2,
-                                        })
-                                        .await?;
-
-                                    Ok(())
-                                }
+        self.spawn_job_with_tracking(paths.clone(), git_status, cx, async move |this, cx| {
+            this.update(cx, |this, _cx| {
+                this.send_job(
+                    "checkout_files",
+                    Some(description.into()),
+                    move |git_repo, _| async move {
+                        match git_repo {
+                            RepositoryState::Local(LocalRepositoryState {
+                                backend,
+                                environment,
+                                ..
+                            }) => {
+                                backend
+                                    .checkout_files(commit, paths, environment.clone())
+                                    .await
                             }
-                        },
-                    )
-                })?
-                .await?
-            },
-        )
+                            RepositoryState::Remote(RemoteRepositoryState {
+                                project_id,
+                                client,
+                            }) => {
+                                let commit = commit.unwrap_or_default();
+                                let paths_v2 = paths
+                                    .iter()
+                                    .map(|path| {
+                                        repo_path_to_proto(path)
+                                            .context("cannot encode exact checkout path")
+                                    })
+                                    .collect::<Result<Vec<_>>>()?;
+                                client
+                                    .request(proto::GitCheckoutFiles {
+                                        project_id: project_id.0,
+                                        repository_id: id.to_proto(),
+                                        commit,
+                                        paths_v2,
+                                    })
+                                    .await?;
+
+                                Ok(())
+                            }
+                        }
+                    },
+                )
+            })?
+            .await?
+        })
     }
 
     pub fn reset(
@@ -6654,6 +6670,27 @@ impl Repository {
     ) -> Task<anyhow::Result<()>> {
         let to_stash = self.cached_status().map(|entry| entry.repo_path).collect();
 
+        self.stash_entries(to_stash, message, cx)
+    }
+
+    pub fn stash_tracked(
+        &mut self,
+        message: Option<String>,
+        cx: &mut Context<Self>,
+    ) -> Task<anyhow::Result<()>> {
+        // `is_created` rather than `is_untracked`, so that staging a new file does not
+        // move it out of the untracked set: `git add` makes it `Tracked { Added }`, but
+        // the panel still lists it under "Untracked" and the user expects it left alone.
+        let to_stash: Vec<RepoPath> = self
+            .cached_status()
+            .filter(|entry| !entry.status.is_created())
+            .map(|entry| entry.repo_path)
+            .collect();
+
+        // An empty pathspec would make `git stash push` stash everything.
+        if to_stash.is_empty() {
+            return Task::ready(Ok(()));
+        }
         self.stash_entries(to_stash, message, cx)
     }
 

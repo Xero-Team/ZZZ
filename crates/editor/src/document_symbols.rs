@@ -422,7 +422,10 @@ mod tests {
         selection_range: lsp::Range,
         children: Vec<lsp::DocumentSymbol>,
     ) -> lsp::DocumentSymbol {
-        #[allow(deprecated)]
+        #[expect(
+            deprecated,
+            reason = "the LSP type is deprecated upstream but is still what the protocol carries"
+        )]
         lsp::DocumentSymbol {
             name: name.to_string(),
             detail: None,
@@ -900,7 +903,7 @@ mod tests {
         let mut symbol_request = cx
             .set_request_handler::<lsp::request::DocumentSymbolRequest, _, _>(
                 move |_, _, _| async move {
-                    #[allow(deprecated)]
+                    #[expect(deprecated, reason = "the LSP type is deprecated upstream but is still what the protocol carries")]
                     Ok(Some(lsp::DocumentSymbolResponse::Flat(vec![
                         lsp::SymbolInformation {
                             name: "main".to_string(),

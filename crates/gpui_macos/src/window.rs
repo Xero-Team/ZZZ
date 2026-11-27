@@ -68,33 +68,69 @@ static mut PANEL_CLASS: *const AnyClass = ptr::null();
 static mut VIEW_CLASS: *const AnyClass = ptr::null();
 static mut BLURRED_VIEW_CLASS: *const AnyClass = ptr::null();
 
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "mirrors the Objective-C constant name"
+)]
 const NSWindowStyleMaskNonactivatingPanel: NSWindowStyleMask =
     NSWindowStyleMask::from_bits_retain(1 << 7);
 // WindowLevel const value ref: https://docs.rs/core-graphics2/0.4.1/src/core_graphics2/window_level.rs.html
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "mirrors the Objective-C constant name"
+)]
 const NSNormalWindowLevel: NSInteger = 0;
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "mirrors the Objective-C constant name"
+)]
 const NSFloatingWindowLevel: NSInteger = 3;
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "mirrors the Objective-C constant name"
+)]
 const NSPopUpWindowLevel: NSInteger = 101;
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "mirrors the Objective-C constant name"
+)]
 const NSTrackingMouseEnteredAndExited: NSUInteger = 0x01;
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "mirrors the Objective-C constant name"
+)]
 const NSTrackingMouseMoved: NSUInteger = 0x02;
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "mirrors the Objective-C constant name"
+)]
 const NSTrackingActiveAlways: NSUInteger = 0x80;
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "mirrors the Objective-C constant name"
+)]
 const NSTrackingInVisibleRect: NSUInteger = 0x200;
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "mirrors the Objective-C constant name"
+)]
 const NSWindowAnimationBehaviorUtilityWindow: NSInteger = 4;
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "mirrors the Objective-C constant name"
+)]
 const NSViewLayerContentsRedrawDuringViewResize: NSInteger = 2;
 // https://developer.apple.com/documentation/appkit/nsdragoperation
 type NSDragOperation = NSUInteger;
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "mirrors the Objective-C constant name"
+)]
 const NSDragOperationNone: NSDragOperation = 0;
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "mirrors the Objective-C constant name"
+)]
 const NSDragOperationCopy: NSDragOperation = 1;
 #[derive(PartialEq)]
 pub enum UserTabbingPreference {

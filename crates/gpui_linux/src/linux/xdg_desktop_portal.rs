@@ -11,9 +11,15 @@ use gpui::{BackgroundExecutor, WindowAppearance};
 
 pub enum Event {
     WindowAppearance(WindowAppearance),
-    #[cfg_attr(feature = "x11", allow(dead_code))]
+    #[cfg_attr(
+        feature = "x11",
+        allow(dead_code, reason = "only the X11 backend reads this variant")
+    )]
     CursorTheme(String),
-    #[cfg_attr(feature = "x11", allow(dead_code))]
+    #[cfg_attr(
+        feature = "x11",
+        allow(dead_code, reason = "only the X11 backend reads this variant")
+    )]
     CursorSize(u32),
     ButtonLayout(String),
 }

@@ -198,6 +198,11 @@ pub fn init(cx: &mut App) {
                 panel.stash_all(action, window, cx)
             });
         });
+        workspace.register_action(|workspace, action: &git::StashTracked, window, cx| {
+            with_git_panel(workspace, cx, |panel, cx| {
+                panel.stash_tracked(action, window, cx)
+            });
+        });
         workspace.register_action(|workspace, action: &git::StashPop, window, cx| {
             with_git_panel(workspace, cx, |panel, cx| {
                 panel.stash_pop(action, window, cx)

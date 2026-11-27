@@ -2306,7 +2306,7 @@ impl Interactivity {
 
                                         #[cfg_attr(
                                             not(any(feature = "inspector", debug_assertions)),
-                                            allow(unused_variables)
+                                            allow(unused_variables, reason = "the parameter is only read when the inspector is built in")
                                         )]
                                         if let Some(hitbox) = hitbox {
                                             #[cfg(any(feature = "inspector", debug_assertions))]

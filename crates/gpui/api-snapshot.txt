@@ -977,6 +977,7 @@ Image::format method & self -> ImageFormat
 Image::from_bytes method format : ImageFormat , bytes : Vec < u8 > -> Self
 Image::get_render_image method self : Arc < Self > , window : & mut Window , cx : & mut App , -> Option < Arc < RenderImage > >
 Image::id method & self -> u64
+Image::is_asset_cached method self : & Arc < Self > , cx : & App -> bool
 Image::remove_asset method self : Arc < Self > , cx : & mut App
 Image::to_image_data method & self , svg_renderer : SvgRenderer -> Result < Arc < RenderImage > >
 Image::use_render_image method self : Arc < Self > , window : & mut Window , cx : & mut App , -> Option < Arc < RenderImage > >
@@ -997,6 +998,7 @@ ImageFormat::from_mime_type method mime_type : & str -> Option < Self >
 ImageFormat::mime_type method const self -> & 'static str
 ImageId struct 0
 ImageSource enum Resource,Render,Image,Custom
+ImageSource::is_asset_cached method & self , cx : & App -> bool
 ImageSource::remove_asset method & self , cx : & mut App
 ImageStyle struct 
 Img struct 
@@ -1478,6 +1480,7 @@ Platform::write_to_find_pasteboard trait-method & self , item : ClipboardItem
 Platform::write_to_primary trait-method & self , item : ClipboardItem
 PlatformAtlas trait 
 PlatformAtlas::begin_frame trait-method & self -> AtlasFrame
+PlatformAtlas::contains trait-method & self , _key : & AtlasKey -> bool
 PlatformAtlas::current_epoch trait-method & self -> AtlasEpoch
 PlatformAtlas::finish_frame trait-method & self , frame : AtlasFrame , usage : & AtlasUsage -> AtlasEpoch
 PlatformAtlas::get_or_insert_with trait-method <'a>  & self , key : AtlasKey , build : & mut dyn FnMut () -> Result < Option < (Size < DevicePixels > , Cow < 'a , [u8] >) > > , -> Result < Option < AtlasTile > >
@@ -2448,6 +2451,7 @@ Window::gpu_specs method & self -> Option < GpuSpecs >
 Window::handle_input method & mut self , focus_handle : & FocusHandle , input_handler : impl InputHandler , cx : & App ,
 Window::handler_for method <E : 'static , Callback : Fn (& mut E , & mut Window , & mut Context < E >) + 'static>  & self , entity : & Entity < E > , f : Callback , -> impl Fn (& mut Window , & mut App) + 'static
 Window::has_active_prompt method & self -> bool
+Window::has_image_atlas_entry method & self , data : & RenderImage -> bool
 Window::has_pending_keystrokes method & self -> bool
 Window::highest_precedence_binding_for_action method & self , action : & dyn Action -> Option < KeyBinding >
 Window::highest_precedence_binding_for_action_in method & self , action : & dyn Action , focus_handle : & FocusHandle , -> Option < KeyBinding >

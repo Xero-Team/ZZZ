@@ -3060,7 +3060,7 @@ mod tests {
         fake_language_server.set_request_handler::<lsp::WorkspaceSymbolRequest, _, _>(
             move |_, _| async move {
                 Ok(Some(lsp::WorkspaceSymbolResponse::Flat(vec![
-                    #[allow(deprecated)]
+                    #[expect(deprecated, reason = "the LSP type is deprecated upstream but is still what the protocol carries")]
                     lsp::SymbolInformation {
                         name: "MySymbol".into(),
                         location: lsp::Location {

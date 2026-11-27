@@ -4,7 +4,10 @@ pub enum RowRenderMechanism {
     #[default]
     VariableList,
     /// Default behaviour for now while resizable columns are being stabilized.
-    #[allow(dead_code)] // Exposed in dev-tools and kept for fallback rendering mode
+    #[allow(
+        dead_code,
+        reason = "Exposed in dev-tools and kept for fallback rendering mode"
+    )]
     UniformList,
 }
 

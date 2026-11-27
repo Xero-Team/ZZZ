@@ -54,7 +54,7 @@ pub(crate) trait LinuxClient {
     fn with_common<R>(&self, f: impl FnOnce(&mut LinuxCommon) -> R) -> R;
     fn keyboard_layout(&self) -> Box<dyn PlatformKeyboardLayout>;
     fn displays(&self) -> Vec<Rc<dyn PlatformDisplay>>;
-    #[allow(unused)]
+    #[allow(unused, reason = "not every platform backend implements this method")]
     fn display(&self, id: DisplayId) -> Option<Rc<dyn PlatformDisplay>>;
     fn primary_display(&self) -> Option<Rc<dyn PlatformDisplay>>;
 

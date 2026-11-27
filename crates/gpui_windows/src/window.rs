@@ -1160,7 +1160,10 @@ impl WindowsDragDropHandler {
     }
 }
 
-#[allow(non_snake_case)]
+#[allow(
+    non_snake_case,
+    reason = "the method name is fixed by the COM interface vtable"
+)]
 impl IDropTarget_Impl for WindowsDragDropHandler_Impl {
     fn DragEnter(
         &self,

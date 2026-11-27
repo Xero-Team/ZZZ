@@ -2113,7 +2113,10 @@ pub(crate) fn icon_for_remote_connection(options: Option<&RemoteConnectionOption
             #[cfg(any(test, feature = "test-support"))]
             RemoteConnectionOptions::Mock(_) => IconName::Server,
             #[cfg(not(any(test, feature = "test-support")))]
-            #[allow(unreachable_patterns)]
+            #[allow(
+                unreachable_patterns,
+                reason = "the arm only exists when test-support is off"
+            )]
             _ => IconName::Server,
         },
     }

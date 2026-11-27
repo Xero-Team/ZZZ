@@ -669,7 +669,10 @@ async fn read_package_json(
     Ok(None)
 }
 
-#[allow(clippy::empty_enums)] // uninhabited marker; each LSP request needs a distinct type
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker; each LSP request needs a distinct type"
+)]
 enum Format {}
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -706,7 +709,10 @@ impl lsp::request::Request for Format {
     const METHOD: &'static str = "prettier/format";
 }
 
-#[allow(clippy::empty_enums)] // uninhabited marker; each LSP request needs a distinct type
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker; each LSP request needs a distinct type"
+)]
 enum ClearCache {}
 
 impl lsp::request::Request for ClearCache {

@@ -34,28 +34,28 @@ fixed default.
 
 ## Decisions
 
-| Upstream | Class | Local commit | Disposition                                                     |
-| -------- | ----- | ------------ | --------------------------------------------------------------- |
-| 83f3a8e3 | C     | --           | ChatGPT Subscription Responses transport; `HttpSend` absent.    |
-| 78712609 | C     | 3762f194     | Absorbed by `3762f194`; `91a2911a68` deleted the crate.         |
-| 4bdf188c | C     | --           | Stash tracked/staged options; git_panel and git.proto conflict. |
-| 2893b86b | B     | ee6b0e7e     | macOS simple fullscreen covering the notch.                     |
-| 1274a5dc | B     | c4632655     | VS Code npm task `path` property.                               |
-| cf08569e | B     | 94954ebf     | `file_scan_exclusions` `"..."` splice.                          |
-| fd5cd939 | B     | ea21365b     | Markdown loose-list task markers.                               |
-| fdad9186 | C     | --           | `git_ui_core` askpass files are absent.                         |
-| 05473ed8 | C     | --           | `csv_preview` rename; local crate already diverged.             |
-| dbc90d18 | C     | --           | Depends on rejected `05473ed8` crate rename.                    |
-| a7d74150 | C     | --           | Settings UI Default/Custom needs absent `PixelSetting`.         |
-| 03c9c4e7 | C     | --           | `ParsedSvg` / `render_parsed` APIs are absent.                  |
-| 87324045 | C     | --           | Lockfile-only `async-tar` fork for Cursor ACP download.         |
-| 3624a5bf | C     | --           | Depends on rejected `6dee3fc7` diagnostic proto.                |
-| 35f63e40 | B     | 3d25aeb9     | Markdown code-block `buffer_line_height`.                       |
-| 2040e0de | C     | --           | `spawn_dedicated` / scheduler rewrite plus lockfile churn.      |
-| 00c0e96e | C     | --           | `LoadedFile` Rope rewrite conflicts on local worktree decode.   |
-| aad75630 | A     | 54530410     | Cherry-picked with `-x -s`.                                     |
-| 3f660a0a | B     | 0a76c1e8     | Drop deprecated `std::usize` / `std::u32` / `std::u64` imports. |
-| 4c724479 | A     | a7ee1a31     | Cherry-picked with `-x -s` after `aad75630`.                    |
+| Upstream | Class | Local commit | Disposition                                                                                                                               |
+| -------- | ----- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 83f3a8e3 | C     | --           | ChatGPT Subscription Responses transport; `HttpSend` absent.                                                                              |
+| 78712609 | C     | 3762f194     | Absorbed by `3762f194`; `91a2911a68` deleted the crate.                                                                                   |
+| 4bdf188c | B     | 442846f3be   | Stash tracked/staged options; git_panel and git.proto conflict. Absorbed later as `442846f3be`; see `upstream-sync-2026-11-26-medium.md`. |
+| 2893b86b | B     | ee6b0e7e     | macOS simple fullscreen covering the notch.                                                                                               |
+| 1274a5dc | B     | c4632655     | VS Code npm task `path` property.                                                                                                         |
+| cf08569e | B     | 94954ebf     | `file_scan_exclusions` `"..."` splice.                                                                                                    |
+| fd5cd939 | B     | ea21365b     | Markdown loose-list task markers.                                                                                                         |
+| fdad9186 | C     | --           | `git_ui_core` askpass files are absent.                                                                                                   |
+| 05473ed8 | C     | --           | `csv_preview` rename; local crate already diverged.                                                                                       |
+| dbc90d18 | C     | --           | Depends on rejected `05473ed8` crate rename.                                                                                              |
+| a7d74150 | C     | --           | Settings UI Default/Custom needs absent `PixelSetting`.                                                                                   |
+| 03c9c4e7 | C     | --           | `ParsedSvg` / `render_parsed` APIs are absent.                                                                                            |
+| 87324045 | C     | --           | Lockfile-only `async-tar` fork for Cursor ACP download.                                                                                   |
+| 3624a5bf | C     | --           | Depends on rejected `6dee3fc7` diagnostic proto.                                                                                          |
+| 35f63e40 | B     | 3d25aeb9     | Markdown code-block `buffer_line_height`.                                                                                                 |
+| 2040e0de | C     | --           | `spawn_dedicated` / scheduler rewrite plus lockfile churn.                                                                                |
+| 00c0e96e | C     | --           | `LoadedFile` Rope rewrite conflicts on local worktree decode.                                                                             |
+| aad75630 | A     | 54530410     | Cherry-picked with `-x -s`.                                                                                                               |
+| 3f660a0a | B     | 0a76c1e8     | Drop deprecated `std::usize` / `std::u32` / `std::u64` imports.                                                                           |
+| 4c724479 | A     | a7ee1a31     | Cherry-picked with `-x -s` after `aad75630`.                                                                                              |
 
 ## Applied Work
 
@@ -921,28 +921,28 @@ queried live head.
 
 ### Decisions
 
-| Upstream | Class | Local commit | Disposition                                                               |
-| -------- | ----- | ------------ | ------------------------------------------------------------------------- |
-| 74490dac | A     | d79498fc     | Cherry-picked with `-x -s`.                                               |
-| 4278ff36 | A     | dafa7ae5     | Cherry-picked with `-x -s`.                                               |
-| 1d7e5f1d | A     | 7030858d     | Cherry-picked with `-x -s`.                                               |
-| 76478024 | C     | --           | Needs the absent local provider error-category API.                       |
-| b415b5d4 | C     | --           | GitHub maintainer-edit workflow automation only.                          |
-| 5f1f7e63 | C     | --           | Web IME architecture conflicts with ZZZ's input path.                     |
-| 1f7eae7f | C     | --           | Benchmark/test-support and upstream skill scaffolding only.               |
-| 45cd77bb | A     | 6a724283     | Cherry-picked with `-x -s`.                                               |
-| fecc3273 | C     | --           | Depends on benchmark headless-renderer infrastructure.                    |
-| 4ccbcabf | A     | 06029275     | Cherry-picked with `-x -s`.                                               |
-| 1475887f | C     | --           | Broad project-search-on-type rewrite is not isolatable locally.           |
-| 839ab7a9 | C     | --           | Shallow-diff UI/protocol rewrite needs absent git APIs and askpass UI.    |
-| 279da638 | C     | --           | Broad persistence shutdown rewrite conflicts with local lifecycle APIs.   |
-| c595091b | C     | --           | Dependency, lockfile, and crate-graph churn without independent behavior. |
-| 34241d5f | B     | 6ee8fa5e1b   | Flattened settings sections deserialize by path.                          |
-| ea701d40 | C     | --           | Agent persistence worker targets deleted/diverged native-agent paths.     |
-| 4a9a863c | C     | --           | Auto-indentation patch requires deleted `editor/src/input.rs`.            |
-| ac099b4a | B     | 8ad9315d1e   | Version follow to v1.19.0; local version bump retained.                   |
-| 7ecab315 | C     | --           | Depends on the rejected project-search rewrite from `1475887f`.           |
-| 5ed5bf95 | C     | --           | Stream-mapping rewrite spans deleted and conflicting provider APIs.       |
+| Upstream | Class | Local commit | Disposition                                                                                                                               |
+| -------- | ----- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 74490dac | A     | d79498fc     | Cherry-picked with `-x -s`.                                                                                                               |
+| 4278ff36 | A     | dafa7ae5     | Cherry-picked with `-x -s`.                                                                                                               |
+| 1d7e5f1d | A     | 7030858d     | Cherry-picked with `-x -s`.                                                                                                               |
+| 76478024 | C     | --           | Needs the absent local provider error-category API.                                                                                       |
+| b415b5d4 | C     | --           | GitHub maintainer-edit workflow automation only.                                                                                          |
+| 5f1f7e63 | C     | --           | Web IME architecture conflicts with ZZZ's input path.                                                                                     |
+| 1f7eae7f | C     | --           | Benchmark/test-support and upstream skill scaffolding only.                                                                               |
+| 45cd77bb | A     | 6a724283     | Cherry-picked with `-x -s`.                                                                                                               |
+| fecc3273 | C     | --           | Depends on benchmark headless-renderer infrastructure.                                                                                    |
+| 4ccbcabf | A     | 06029275     | Cherry-picked with `-x -s`.                                                                                                               |
+| 1475887f | C     | --           | Broad project-search-on-type rewrite is not isolatable locally.                                                                           |
+| 839ab7a9 | C     | --           | Shallow-diff UI/protocol rewrite needs absent git APIs and askpass UI.                                                                    |
+| 279da638 | C     | --           | Broad persistence shutdown rewrite conflicts with local lifecycle APIs.                                                                   |
+| c595091b | C     | --           | Dependency, lockfile, and crate-graph churn without independent behavior.                                                                 |
+| 34241d5f | B     | 6ee8fa5e1b   | Flattened settings sections deserialize by path.                                                                                          |
+| ea701d40 | C     | --           | Agent persistence worker targets deleted/diverged native-agent paths.                                                                     |
+| 4a9a863c | B     | 621d602afc   | Auto-indentation patch requires deleted `editor/src/input.rs`. Absorbed later as `621d602afc`; see `upstream-sync-2026-11-26-medium.md`.  |
+| ac099b4a | B     | 8ad9315d1e   | Version follow to v1.19.0; local version bump retained.                                                                                   |
+| 7ecab315 | B     | 9482d09402   | Depends on the rejected project-search rewrite from `1475887f`. Absorbed later as `9482d09402`; see `upstream-sync-2026-11-26-medium.md`. |
+| 5ed5bf95 | C     | --           | Stream-mapping rewrite spans deleted and conflicting provider APIs.                                                                       |
 
 ### Applied work
 

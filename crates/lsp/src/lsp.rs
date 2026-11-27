@@ -141,7 +141,10 @@ pub struct LanguageServer {
     pending_respond_tasks: PendingRespondTasks,
     io_handlers: Arc<Mutex<HashMap<i32, IoHandler>>>,
     executor: BackgroundExecutor,
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the nested type is the field's real shape; an alias would hide it"
+    )]
     io_tasks: Mutex<Option<(Task<Option<()>>, Task<Option<()>>)>>,
     output_done_rx: Mutex<Option<barrier::Receiver>>,
     server: Arc<Mutex<Option<Child>>>,
@@ -817,7 +820,10 @@ impl LanguageServer {
             },
         );
 
-        #[allow(deprecated)]
+        #[expect(
+            deprecated,
+            reason = "the LSP type is deprecated upstream but is still what the protocol carries"
+        )]
         InitializeParams {
             process_id: Some(std::process::id()),
             root_path: Some(self.root_uri.to_file_path().map_or_else(
@@ -2411,7 +2417,10 @@ mod tests {
             &mut cx.to_async(),
         );
 
-        #[allow(clippy::empty_enums)] // uninhabited marker; each test needs a distinct type
+        #[expect(
+            clippy::empty_enums,
+            reason = "uninhabited marker; each test needs a distinct type"
+        )]
         enum DiagnosticRefreshWithRawParams {}
 
         impl request::Request for DiagnosticRefreshWithRawParams {
@@ -2457,7 +2466,10 @@ mod tests {
             &mut cx.to_async(),
         );
 
-        #[allow(clippy::empty_enums)] // uninhabited marker; each test needs a distinct type
+        #[expect(
+            clippy::empty_enums,
+            reason = "uninhabited marker; each test needs a distinct type"
+        )]
         enum ShutdownWithRawResult {}
 
         impl request::Request for ShutdownWithRawResult {
@@ -2566,9 +2578,15 @@ mod tests {
 
         let params = cx.update(|cx| server.default_initialize_params(false, false, cx));
 
-        #[allow(deprecated)]
+        #[expect(
+            deprecated,
+            reason = "the LSP type is deprecated upstream but is still what the protocol carries"
+        )]
         let root_uri = params.root_uri.expect("root_uri should be set");
-        #[allow(deprecated)]
+        #[expect(
+            deprecated,
+            reason = "the LSP type is deprecated upstream but is still what the protocol carries"
+        )]
         let root_path = params.root_path.expect("root_path should be set");
 
         let expected_path = root_uri

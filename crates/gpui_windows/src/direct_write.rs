@@ -1800,7 +1800,10 @@ impl Iterator for ClusterAnalyzer<'_> {
     }
 }
 
-#[allow(non_snake_case)]
+#[allow(
+    non_snake_case,
+    reason = "the method name is fixed by the COM interface vtable"
+)]
 impl IDWritePixelSnapping_Impl for TextRenderer_Impl {
     fn IsPixelSnappingDisabled(
         &self,
@@ -1835,7 +1838,10 @@ impl IDWritePixelSnapping_Impl for TextRenderer_Impl {
     }
 }
 
-#[allow(non_snake_case)]
+#[allow(
+    non_snake_case,
+    reason = "the method name is fixed by the COM interface vtable"
+)]
 impl IDWriteTextRenderer_Impl for TextRenderer_Impl {
     fn DrawGlyphRun(
         &self,

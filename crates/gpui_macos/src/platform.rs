@@ -54,7 +54,10 @@ use util::{
     command::{new_command, new_std_command},
 };
 
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "mirrors the Objective-C constant name"
+)]
 const NSUTF8StringEncoding: NSUInteger = 4;
 
 const MAC_PLATFORM_IVAR: &CStr = c"platform";

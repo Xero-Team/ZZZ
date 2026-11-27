@@ -293,7 +293,10 @@ pub(crate) struct IosWindowState {
 }
 
 impl IosWindow {
-    #[allow(deprecated)] // Window construction can precede scene connection.
+    #[allow(
+        deprecated,
+        reason = "the Objective-C API is deprecated upstream but is still the only one for this target"
+    )]
     pub fn new(
         _handle: AnyWindowHandle,
         _params: WindowParams,

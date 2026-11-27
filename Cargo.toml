@@ -111,6 +111,7 @@ members = [
     "crates/markdown",
     "crates/markdown_preview",
     "crates/media",
+    "crates/memory_report",
     "crates/menu",
     "crates/mermaid_render",
     "crates/migrator",
@@ -381,6 +382,7 @@ markdown = { path = "crates/markdown" }
 markdown_preview = { path = "crates/markdown_preview" }
 svg_preview = { path = "crates/svg_preview" }
 media = { path = "crates/media" }
+memory_report = { path = "crates/memory_report" }
 menu = { path = "crates/menu" }
 mermaid_render = { path = "crates/mermaid_render" }
 migrator = { path = "crates/migrator" }

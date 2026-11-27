@@ -401,7 +401,10 @@ mod tests {
     #[gpui::test]
     #[should_panic]
     async fn test_bad_migration_panics() {
-        #[allow(clippy::empty_enums)] // uninhabited marker; each test needs a distinct type
+        #[expect(
+            clippy::empty_enums,
+            reason = "uninhabited marker; each test needs a distinct type"
+        )]
         enum BadDB {}
 
         impl Domain for BadDB {
@@ -425,7 +428,10 @@ mod tests {
     async fn test_db_corruption(cx: &mut gpui::TestAppContext) {
         cx.executor().allow_parking();
 
-        #[allow(clippy::empty_enums)] // uninhabited marker; each test needs a distinct type
+        #[expect(
+            clippy::empty_enums,
+            reason = "uninhabited marker; each test needs a distinct type"
+        )]
         enum CorruptedDB {}
 
         impl Domain for CorruptedDB {
@@ -433,7 +439,10 @@ mod tests {
             const MIGRATIONS: &[&str] = &[sql!(CREATE TABLE test(value);)];
         }
 
-        #[allow(clippy::empty_enums)] // uninhabited marker; each test needs a distinct type
+        #[expect(
+            clippy::empty_enums,
+            reason = "uninhabited marker; each test needs a distinct type"
+        )]
         enum GoodDB {}
 
         impl Domain for GoodDB {
@@ -464,7 +473,10 @@ mod tests {
     async fn test_simultaneous_db_corruption(cx: &mut gpui::TestAppContext) {
         cx.executor().allow_parking();
 
-        #[allow(clippy::empty_enums)] // uninhabited marker; each test needs a distinct type
+        #[expect(
+            clippy::empty_enums,
+            reason = "uninhabited marker; each test needs a distinct type"
+        )]
         enum CorruptedDB {}
 
         impl Domain for CorruptedDB {
@@ -473,7 +485,10 @@ mod tests {
             const MIGRATIONS: &[&str] = &[sql!(CREATE TABLE test(value);)];
         }
 
-        #[allow(clippy::empty_enums)] // uninhabited marker; each test needs a distinct type
+        #[expect(
+            clippy::empty_enums,
+            reason = "uninhabited marker; each test needs a distinct type"
+        )]
         enum GoodDB {}
 
         impl Domain for GoodDB {

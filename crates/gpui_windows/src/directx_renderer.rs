@@ -1945,11 +1945,17 @@ mod nvidia {
     const NVAPI_SHORT_STRING_MAX: usize = 64;
 
     // https://github.com/NVIDIA/nvapi/blob/7cb76fce2f52de818b3da497af646af1ec16ce27/nvapi_lite_common.h#L235
-    #[allow(non_camel_case_types)]
+    #[allow(
+        non_camel_case_types,
+        reason = "the type name comes from the vendor SDK header"
+    )]
     type NvAPI_ShortString = [c_char; NVAPI_SHORT_STRING_MAX];
 
     // https://github.com/NVIDIA/nvapi/blob/7cb76fce2f52de818b3da497af646af1ec16ce27/nvapi_lite_common.h#L447
-    #[allow(non_camel_case_types)]
+    #[allow(
+        non_camel_case_types,
+        reason = "the type name comes from the vendor SDK header"
+    )]
     type NvAPI_SYS_GetDriverAndBranchVersion_t = unsafe extern "C" fn(
         driver_version: *mut c_uint,
         build_branch_string: *mut NvAPI_ShortString,
@@ -2027,7 +2033,10 @@ mod amd {
     }
 
     // https://github.com/GPUOpen-LibrariesAndSDKs/AGS_SDK/blob/5d8812d703d0335741b6f7ffc37838eeb8b967f7/ags_lib/inc/amd_ags.h#L429
-    #[allow(non_camel_case_types)]
+    #[allow(
+        non_camel_case_types,
+        reason = "the type name comes from the vendor SDK header"
+    )]
     type agsInitialize_t = unsafe extern "C" fn(
         version: c_int,
         config: *const c_void,
@@ -2036,7 +2045,10 @@ mod amd {
     ) -> c_int;
 
     // https://github.com/GPUOpen-LibrariesAndSDKs/AGS_SDK/blob/5d8812d703d0335741b6f7ffc37838eeb8b967f7/ags_lib/inc/amd_ags.h#L436
-    #[allow(non_camel_case_types)]
+    #[allow(
+        non_camel_case_types,
+        reason = "the type name comes from the vendor SDK header"
+    )]
     type agsDeInitialize_t = unsafe extern "C" fn(context: *mut AGSContext) -> c_int;
 
     pub(super) fn get_driver_version() -> Result<String> {

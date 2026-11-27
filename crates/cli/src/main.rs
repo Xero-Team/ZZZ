@@ -655,12 +655,15 @@ fn main() {
 /// through this CLI; `cargo run` gets the same default from
 /// `.cargo/config.toml`.
 fn set_default_mimalloc_options() {
-    const ALLOW_THP: &str = "MIMALLOC_ALLOW_THP";
-    let explicitly_set =
-        env::vars_os().any(|(key, _)| key.to_string_lossy().eq_ignore_ascii_case(ALLOW_THP));
-    if !explicitly_set {
-        // SAFETY: this runs at the start of `run()`, before any thread is spawned.
-        unsafe { env::set_var(ALLOW_THP, "0") };
+    const DEFAULTS: [(&str, &str); 1] = [("MIMALLOC_ALLOW_THP", "0")];
+
+    for (option, value) in DEFAULTS {
+        let explicitly_set =
+            env::vars_os().any(|(key, _)| key.to_string_lossy().eq_ignore_ascii_case(option));
+        if !explicitly_set {
+            // SAFETY: this runs at the start of `run()`, before any thread is spawned.
+            unsafe { env::set_var(option, value) };
+        }
     }
 }
 

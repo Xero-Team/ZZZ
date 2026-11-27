@@ -82,7 +82,13 @@ impl List {
     }
 
     /// Adds `Role::List` semantics when every semantic child is a list item.
-    #[cfg_attr(not(feature = "accessibility"), allow(unused_variables))]
+    #[cfg_attr(
+        not(feature = "accessibility"),
+        allow(
+            unused_variables,
+            reason = "the parameter is only read when the accessibility feature is on"
+        )
+    )]
     pub fn with_accessibility(self, accessibility: ListAccessibility) -> Self {
         #[cfg(feature = "accessibility")]
         {

@@ -137,28 +137,28 @@ fixed at twenty commits; later commits remain queued.
 
 ### Decisions
 
-| Upstream   | Class | Local commit | Disposition                                                                                                                |
-| ---------- | ----- | ------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| d544470d1d | C     | --           | Workspace-wide dependency and lockfile rewrite includes absent commercial, collaboration, and native-agent surfaces.       |
-| cd5bdc41c4 | C     | --           | Moves terminal tabs into the deliberately absent native Agent Panel.                                                       |
-| dff535449c | C     | --           | Preparatory ACP v2 source plumbing has no negotiated v2 ACP caller and crosses native-agent persistence and adapter paths. |
-| 3f81fdc4da | A     | 842f57104d   | Clean absorption correcting the displayed `format_on_save` default.                                                        |
-| b92c029538 | B     | 59994758ed   | Made Markdown preview panes cloneable while preserving ZZZ workspace-relative image resolution.                            |
-| a6169ca969 | B     | 3423e05f10   | Separated remote stdin, stdout, and log forwarding in ZZZ's divergent server loop.                                         |
-| 204362325c | C     | --           | Upstream release, Sentry, bundling, and `zed` package tooling are not a retained local pipeline.                           |
-| eec3376016 | C     | --           | The capability check needs `Anchor::buffer_id`, absent from ZZZ's consolidated editor implementation.                      |
-| e7c8cbeed6 | B     | 954e611e5e   | Added the documented `suggest_extensions` opt-out to ZZZ's divergent suggestion module.                                    |
-| 0c70487f83 | B     | 06055224af   | Removed the legacy PHP language-ID override while retaining ZZZ's current adapter APIs.                                    |
-| 8eb2fd211f | C     | --           | `tabular_data_preview` is absent locally, so there is no current caller for the comparator.                                |
-| 8fda6e4653 | C     | --           | Requires the rejected v2 content-source definitions from `dff535449c`.                                                     |
-| cac9d17a6c | C     | --           | The upstream commit-context-menu component has no local caller; importing it would add an unused public menu path.         |
-| 6810cde896 | B     | bcc45e78cd   | Ported value-kind syntax coloring through ZZZ's localized debugger variable rows.                                          |
-| 285d975043 | B     | f9aad5ee6d   | Retained independent migration and theme-cache startup work; the deleted upstream `crates/zed` path remains omitted.       |
-| 7c4f6ddad1 | A     | 26e205db8b   | Clean absorption fixing JetBrains `Shift-Enter` precedence in buffer search.                                               |
-| 93a9c1a0bc | C     | --           | Nix WebRTC update is collaboration infrastructure, which ZZZ does not ship.                                                |
-| 2240542744 | C     | --           | Single-file matching depends on upstream's divergent `File` and language-registry path architecture.                       |
-| a1b71072e5 | C     | --           | Lockfile-only cleanup depends on the omitted upstream `crates/zed` Nix dependency change.                                  |
-| aecb6364b3 | B     | 6d6d503124   | Captured inlay-hint filtering snapshots after local response conversion in ZZZ's VFS-aware dispatcher.                     |
+| Upstream   | Class | Local commit | Disposition                                                                                                                                                                    |
+| ---------- | ----- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| d544470d1d | C     | --           | Workspace-wide dependency and lockfile rewrite includes absent commercial, collaboration, and native-agent surfaces.                                                           |
+| cd5bdc41c4 | C     | --           | Moves terminal tabs into the deliberately absent native Agent Panel.                                                                                                           |
+| dff535449c | C     | --           | Preparatory ACP v2 source plumbing has no negotiated v2 ACP caller and crosses native-agent persistence and adapter paths.                                                     |
+| 3f81fdc4da | A     | 842f57104d   | Clean absorption correcting the displayed `format_on_save` default.                                                                                                            |
+| b92c029538 | B     | 59994758ed   | Made Markdown preview panes cloneable while preserving ZZZ workspace-relative image resolution.                                                                                |
+| a6169ca969 | B     | 3423e05f10   | Separated remote stdin, stdout, and log forwarding in ZZZ's divergent server loop.                                                                                             |
+| 204362325c | C     | --           | Upstream release, Sentry, bundling, and `zed` package tooling are not a retained local pipeline.                                                                               |
+| eec3376016 | C     | --           | The capability check needs `Anchor::buffer_id`, absent from ZZZ's consolidated editor implementation.                                                                          |
+| e7c8cbeed6 | B     | 954e611e5e   | Added the documented `suggest_extensions` opt-out to ZZZ's divergent suggestion module.                                                                                        |
+| 0c70487f83 | B     | 06055224af   | Removed the legacy PHP language-ID override while retaining ZZZ's current adapter APIs.                                                                                        |
+| 8eb2fd211f | C     | --           | `tabular_data_preview` is absent locally, so there is no current caller for the comparator.                                                                                    |
+| 8fda6e4653 | C     | --           | Requires the rejected v2 content-source definitions from `dff535449c`.                                                                                                         |
+| cac9d17a6c | C     | --           | The upstream commit-context-menu component has no local caller; importing it would add an unused public menu path.                                                             |
+| 6810cde896 | B     | bcc45e78cd   | Ported value-kind syntax coloring through ZZZ's localized debugger variable rows.                                                                                              |
+| 285d975043 | B     | f9aad5ee6d   | Retained independent migration and theme-cache startup work; the deleted upstream `crates/zed` path remains omitted.                                                           |
+| 7c4f6ddad1 | A     | 26e205db8b   | Clean absorption fixing JetBrains `Shift-Enter` precedence in buffer search.                                                                                                   |
+| 93a9c1a0bc | C     | --           | Nix WebRTC update is collaboration infrastructure, which ZZZ does not ship.                                                                                                    |
+| 2240542744 | B     | 879ee0fd61   | Single-file matching depends on upstream's divergent `File` and language-registry path architecture. Absorbed later as `879ee0fd61`; see `upstream-sync-2026-11-26-medium.md`. |
+| a1b71072e5 | C     | --           | Lockfile-only cleanup depends on the omitted upstream `crates/zed` Nix dependency change.                                                                                      |
+| aecb6364b3 | B     | 6d6d503124   | Captured inlay-hint filtering snapshots after local response conversion in ZZZ's VFS-aware dispatcher.                                                                         |
 
 Totals: two `A`, seven `B`, eleven `C`.
 

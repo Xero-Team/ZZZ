@@ -488,7 +488,10 @@ pub fn execute_run(
             app.background_executor().spawn(task).detach();
         },
         // We are running outside gpui.
-        #[allow(clippy::disallowed_methods)]
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "the server runs without gpui, so the smol timer is the only clock available"
+        )]
         |duration| FutureExt::map(Timer::after(duration), |_| ()),
     );
     let log_rx = init_logging_server(&log_file)?;
@@ -775,7 +778,10 @@ pub(crate) fn execute_proxy(
             smol::spawn(task).detach();
         },
         // We are running outside gpui.
-        #[allow(clippy::disallowed_methods)]
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "the server runs without gpui, so the smol timer is the only clock available"
+        )]
         |duration| FutureExt::map(Timer::after(duration), |_| ()),
     );
 

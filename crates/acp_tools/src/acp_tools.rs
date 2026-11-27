@@ -701,7 +701,10 @@ impl MessageType {
     }
 }
 
-#[allow(clippy::empty_enums)] // uninhabited marker; the event type must stay distinct
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker; the event type must stay distinct"
+)]
 enum AcpToolsEvent {}
 
 impl EventEmitter<AcpToolsEvent> for AcpTools {}

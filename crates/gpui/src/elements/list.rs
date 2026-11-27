@@ -67,7 +67,10 @@ struct StateInner {
     alignment: ListAlignment,
     overdraw: Pixels,
     reset: bool,
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the nested type is the field's real shape; an alias would hide it"
+    )]
     scroll_handler: Option<Box<dyn FnMut(&ListScrollEvent, &mut Window, &mut App)>>,
     scrollbar_drag_start_height: Option<Pixels>,
     measuring_behavior: ListMeasuringBehavior,

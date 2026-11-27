@@ -619,7 +619,10 @@ mod tests {
     }
 
     fn symbol(name: &str, path: impl AsRef<Path>) -> lsp::SymbolInformation {
-        #[allow(deprecated)]
+        #[expect(
+            deprecated,
+            reason = "the LSP type is deprecated upstream but is still what the protocol carries"
+        )]
         lsp::SymbolInformation {
             name: name.to_string(),
             kind: lsp::SymbolKind::FUNCTION,

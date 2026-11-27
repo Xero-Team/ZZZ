@@ -194,6 +194,7 @@
   - [Windows](./development/windows.md)
   - [FreeBSD](./development/freebsd.md)
   - [Using Debuggers](./development/debuggers.md)
+  - [Diagnosing Memory Growth](./development/memory.md)
   - [Debugging Crashes](./development/debugging-crashes.md)
   - [Performance](./performance.md)
   - [Build and Optimization Pipeline](./development/build-pipeline.md)

@@ -676,7 +676,10 @@ mod tests {
         // Probe with the exact fds returned by `create_pipe` (no dup), since
         // duping with `F_DUPFD` would lose CLOEXEC and `F_DUPFD_CLOEXEC` would
         // unconditionally set it, either of which would defeat the test.
-        #[allow(clippy::disallowed_methods)]
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "the darwin wrapper runs /bin/sh directly because it needs the process group it creates"
+        )]
         let output = std::process::Command::new("/bin/sh")
             .arg("-c")
             .arg(format!(
@@ -1102,7 +1105,10 @@ mod tests {
     fn test_child_sigpipe_disposition_matches_std() {
         const SCRIPT: &str = "kill -s PIPE $$; echo survived";
 
-        #[allow(clippy::disallowed_methods)]
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "the darwin wrapper runs /bin/sh directly because it needs the process group it creates"
+        )]
         let std_output = std::process::Command::new("/bin/sh")
             .args(["-c", SCRIPT])
             .output()
