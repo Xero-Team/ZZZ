@@ -26,7 +26,6 @@ i18n.workspace = true
 language.workspace= true
 markdown.workspace = true
 project.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 settings.workspace = true
 theme_settings.workspace = true

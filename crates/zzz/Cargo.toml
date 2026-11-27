@@ -86,7 +86,6 @@ client.workspace = true
 collections.workspace = true
 command_palette.workspace = true
 jiff.workspace = true
-ui_component_registry.workspace = true
 component_preview.workspace = true
 crashes.workspace = true
 csv_preview.workspace = true
@@ -160,7 +159,6 @@ mobile_dev.workspace = true
 miniprofiler_ui.workspace = true
 mimalloc = { version = "0.1", optional = true }
 node_runtime.workspace = true
-notifications.workspace = true
 onboarding.workspace = true
 outline.workspace = true
 outline_panel.workspace = true
@@ -169,7 +167,6 @@ paths.workspace = true
 pdf_viewer.workspace = true
 picker.workspace = true
 pr_ui.workspace = true
-profiling.workspace = true
 project.workspace = true
 project_panel.workspace = true
 project_symbols.workspace = true
@@ -198,7 +195,6 @@ snippets_ui.workspace = true
 svg_preview.workspace = true
 sysinfo.workspace = true
 tab_switcher.workspace = true
-task.workspace = true
 tasks_ui.workspace = true
 telegram_ui.workspace = true
 terminal_mode.workspace = true
@@ -206,7 +202,6 @@ terminal_view.workspace = true
 theme.workspace = true
 theme_settings.workspace = true
 theme_selector.workspace = true
-time.workspace = true
 title_bar.workspace = true
 ztracing.workspace = true
 tracing.workspace = true
@@ -241,7 +236,6 @@ gpui = { workspace = true, features = [
 ] }
 gpui_platform = { workspace = true, features = ["accessibility"] }
 ui = { workspace = true, features = ["accessibility"] }
-ui_input = { workspace = true, features = ["accessibility"] }
 
 [build-dependencies]
 sha2.workspace = true
@@ -258,7 +252,6 @@ gpui = { workspace = true, features = [
 ] }
 gpui_platform = { workspace = true, features = ["accessibility"] }
 ui = { workspace = true, features = ["accessibility"] }
-ui_input = { workspace = true, features = ["accessibility"] }
 ashpd.workspace = true
 image.workspace = true
 
@@ -267,7 +260,6 @@ editor = { workspace = true, features = ["accessibility"] }
 gpui = { workspace = true, features = ["accessibility"] }
 gpui_platform = { workspace = true, features = ["accessibility"] }
 ui = { workspace = true, features = ["accessibility"] }
-ui_input = { workspace = true, features = ["accessibility"] }
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.build-dependencies]
 image.workspace = true

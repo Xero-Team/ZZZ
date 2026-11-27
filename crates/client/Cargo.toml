@@ -41,7 +41,6 @@ settings.workspace = true
 smol.workspace = true
 text.workspace = true
 thiserror.workspace = true
-time.workspace = true
 tokio-socks.workspace = true
 tokio.workspace = true
 url.workspace = true

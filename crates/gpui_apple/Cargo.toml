@@ -33,7 +33,6 @@ core-foundation.workspace = true
 core-foundation-sys.workspace = true
 core-graphics = { workspace = true, optional = true }
 core-text = { version = "22", optional = true }
-core-video.workspace = true
 dispatch2 = { workspace = true, features = ["block2"] }
 # Vendored from https://github.com/servo/font-kit @ ab6bb2eb87e8ebcd7aa3a88442d8a079bce66200
 font-kit = { path = "../../vendor/font-kit", optional = true }

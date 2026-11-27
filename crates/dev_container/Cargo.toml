@@ -22,7 +22,6 @@ futures.workspace = true
 i18n.workspace = true
 log.workspace = true
 menu.workspace = true
-paths.workspace = true
 regex.workspace = true
 picker.workspace = true
 project.workspace = true

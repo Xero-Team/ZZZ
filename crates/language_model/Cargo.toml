@@ -26,7 +26,6 @@ gpui_util.workspace = true
 image.workspace = true
 language_model_core.workspace = true
 log.workspace = true
-serde.workspace = true
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }

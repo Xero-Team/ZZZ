@@ -19,7 +19,6 @@ test-support = []
 anyhow.workspace = true
 base64.workspace = true
 chacha20poly1305.workspace = true
-glass_pumpkin = "=2.0.0"
 grammers-client.workspace = true
 grammers-session.workspace = true
 grammers-tl-types.workspace = true

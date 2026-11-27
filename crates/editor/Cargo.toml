@@ -63,7 +63,6 @@ linkify.workspace = true
 log.workspace = true
 lsp.workspace = true
 markdown.workspace = true
-memory_report.workspace = true
 menu.workspace = true
 multi_buffer.workspace = true
 ordered-float.workspace = true
@@ -85,7 +84,6 @@ snippet.workspace = true
 sum_tree.workspace = true
 task.workspace = true
 text.workspace = true
-time.workspace = true
 theme.workspace = true
 theme_settings.workspace = true
 tree-sitter-c = { workspace = true, optional = true }
@@ -95,7 +93,6 @@ tree-sitter-typescript = { workspace = true, optional = true }
 tree-sitter-xml = { workspace = true, optional = true }
 tree-sitter-python = { workspace = true, optional = true }
 ztracing.workspace = true
-tracing.workspace = true
 unicode-segmentation.workspace = true
 unicode-script.workspace = true
 unindent = { workspace = true, optional = true }
@@ -151,6 +148,7 @@ util = { workspace = true, features = ["test-support"] }
 workspace = { workspace = true, features = ["test-support"] }
 
 zlog.workspace = true
+memory_report.workspace = true
 
 
 [[bench]]

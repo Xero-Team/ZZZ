@@ -97,7 +97,6 @@ objc2-foundation = { workspace = true, features = [
 ] }
 objc2-quartz-core.workspace = true
 objc2-screen-capture-kit = { workspace = true, optional = true }
-objc2-uniform-type-identifiers.workspace = true
 parking_lot.workspace = true
 raw-window-handle.workspace = true
 semver.workspace = true

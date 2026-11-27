@@ -109,7 +109,6 @@ zzz_credentials_provider.workspace = true
 zeroize.workspace = true
 zlog.workspace = true
 ztracing.workspace = true
-tracing.workspace = true
 
 [dev-dependencies]
 async_zip.workspace = true

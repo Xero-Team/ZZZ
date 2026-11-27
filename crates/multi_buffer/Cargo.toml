@@ -43,7 +43,6 @@ text.workspace = true
 theme.workspace = true
 tree-sitter.workspace = true
 ztracing.workspace = true
-tracing.workspace = true
 util.workspace = true
 unicode-segmentation.workspace = true
 

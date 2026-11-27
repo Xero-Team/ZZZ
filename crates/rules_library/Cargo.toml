@@ -26,7 +26,6 @@ platform_title_bar.workspace = true
 prompt_store.workspace = true
 release_channel.workspace = true
 rope.workspace = true
-serde.workspace = true
 settings.workspace = true
 theme_settings.workspace = true
 ui.workspace = true

@@ -38,9 +38,6 @@ wgpu.workspace = true
 # Vendored from https://github.com/servo/font-kit @ ab6bb2eb87e8ebcd7aa3a88442d8a079bce66200
 font-kit = { path = "../../vendor/font-kit", optional = true }
 
-[target.'cfg(not(target_family = "wasm"))'.dependencies]
-pollster.workspace = true
-
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
 resvg = { version = "0.50.0", default-features = false }
 skrifa.workspace = true
@@ -55,16 +52,8 @@ vello_cpu = { version = "0.4.0", default-features = false, features = [
 serde_json.workspace = true
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-wasm-bindgen.workspace = true
-wasm-bindgen-futures.workspace = true
 web-sys = { version = "0.3", features = ["HtmlCanvasElement"] }
-js-sys.workspace = true
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dev-dependencies]
-wayland-backend = { version = "0.3.17", features = [
-    "client_system",
-    "dlopen",
-    "rwh_06",
-] }
 wayland-client = "0.31.15"
 wayland-protocols = { version = "0.32.13", features = ["client"] }

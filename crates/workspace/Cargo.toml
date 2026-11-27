@@ -73,9 +73,6 @@ vfs.workspace = true
 uuid.workspace = true
 zzz_actions.workspace = true
 
-[target.'cfg(target_os = "windows")'.dependencies]
-windows.workspace = true
-
 [dev-dependencies]
 client = { workspace = true, features = ["test-support"] }
 db = { workspace = true, features = ["test-support"] }

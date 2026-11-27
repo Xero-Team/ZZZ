@@ -18,7 +18,6 @@ heapless.workspace = true
 rayon.workspace = true
 log.workspace = true
 ztracing.workspace = true
-tracing.workspace = true
 proptest = { workspace = true, optional = true }
 
 [dev-dependencies]

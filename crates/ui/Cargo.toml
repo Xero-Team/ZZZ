@@ -19,9 +19,9 @@ documented.workspace = true
 gpui.workspace = true
 gpui_macros.workspace = true
 i18n.workspace = true
+log.workspace = true
 icons.workspace = true
 itertools.workspace = true
-log.workspace = true
 menu.workspace = true
 release_channel.workspace = true
 schemars.workspace = true
@@ -33,9 +33,6 @@ theme_settings.workspace = true
 ui_macros.workspace = true
 web-time.workspace = true
 gpui_util.workspace = true
-
-[target.'cfg(windows)'.dependencies]
-windows.workspace = true
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
