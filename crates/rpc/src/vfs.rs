@@ -2348,7 +2348,10 @@ impl RemoteProviderProxy {
         )
     }
 
-    #[expect(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the parameters are the call's real signature"
+    )]
     fn from_mount_response(
         project_id: u64,
         protocol_version: u32,

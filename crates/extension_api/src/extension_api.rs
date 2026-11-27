@@ -382,8 +382,10 @@ fn extension() -> ExtensionRef {
         "invariant: the extension is not re-entered while a host call is running"
     );
 
-    #[expect(static_mut_refs)]
-    // SAFETY: `register_extension` runs before any host call and never replaces
+    #[expect(
+        static_mut_refs,
+        reason = "the static is written once at startup before any reader runs"
+    )]
     // the extension afterwards.
     let extension = unsafe {
         EXTENSION

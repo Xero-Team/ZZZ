@@ -1553,7 +1553,7 @@ pub type PlatformInputHandler = TextInputClient;
         any(target_os = "linux", target_os = "freebsd"),
         not(any(feature = "x11", feature = "wayland"))
     ),
-    allow(dead_code)
+    allow(dead_code, reason = "no caller on the targets this cfg excludes")
 )]
 impl TextInputClient {
     pub fn new(cx: AsyncWindowContext, handler: Box<dyn InputHandler>) -> Self {
@@ -1587,7 +1587,13 @@ impl TextInputClient {
             .flatten()
     }
 
-    #[cfg_attr(target_os = "windows", allow(dead_code))]
+    #[cfg_attr(
+        target_os = "windows",
+        allow(
+            dead_code,
+            reason = "only the Windows implementation of this trait has callers"
+        )
+    )]
     pub fn marked_text_range(&mut self) -> Option<Range<usize>> {
         self.cx
             .update(|window, cx| self.handler.marked_text_range(window, cx))
@@ -1597,7 +1603,7 @@ impl TextInputClient {
 
     #[cfg_attr(
         any(target_os = "linux", target_os = "freebsd", target_os = "windows"),
-        allow(dead_code)
+        allow(dead_code, reason = "no caller on the targets this cfg excludes")
     )]
     pub fn text_for_range(
         &mut self,
@@ -1641,7 +1647,13 @@ impl TextInputClient {
             .ok();
     }
 
-    #[cfg_attr(target_os = "windows", allow(dead_code))]
+    #[cfg_attr(
+        target_os = "windows",
+        allow(
+            dead_code,
+            reason = "only the Windows implementation of this trait has callers"
+        )
+    )]
     pub fn unmark_text(&mut self) {
         self.cx
             .update(|window, cx| self.handler.unmark_text(window, cx))
@@ -2158,56 +2170,83 @@ pub struct WindowOptions {
         any(target_os = "linux", target_os = "freebsd"),
         not(any(feature = "x11", feature = "wayland"))
     ),
-    allow(dead_code)
+    allow(dead_code, reason = "no caller on the targets this cfg excludes")
 )]
 #[allow(missing_docs)]
 pub struct WindowParams {
     pub bounds: Bounds<Pixels>,
 
     /// The titlebar configuration of the window
-    #[cfg_attr(feature = "wayland", allow(dead_code))]
+    #[cfg_attr(
+        feature = "wayland",
+        allow(dead_code, reason = "only the Wayland backend reads this field")
+    )]
     pub titlebar: Option<TitlebarOptions>,
 
     /// The kind of window to create
-    #[cfg_attr(any(target_os = "linux", target_os = "freebsd"), allow(dead_code))]
+    #[cfg_attr(
+        any(target_os = "linux", target_os = "freebsd"),
+        allow(dead_code, reason = "only the Linux text backend calls this")
+    )]
     pub kind: WindowKind,
 
     /// Whether the window should be movable by the user
-    #[cfg_attr(any(target_os = "linux", target_os = "freebsd"), allow(dead_code))]
+    #[cfg_attr(
+        any(target_os = "linux", target_os = "freebsd"),
+        allow(dead_code, reason = "only the Linux backend reads this field")
+    )]
     pub is_movable: bool,
 
     /// Whether the application owns dragging of the (custom) titlebar (macOS only)
     #[cfg_attr(
         any(target_os = "linux", target_os = "freebsd", target_os = "windows"),
-        allow(dead_code)
+        allow(dead_code, reason = "no caller on the targets this cfg excludes")
     )]
     pub app_owns_titlebar_drag: bool,
 
     /// Whether the window should be resizable by the user
-    #[cfg_attr(any(target_os = "linux", target_os = "freebsd"), allow(dead_code))]
+    #[cfg_attr(
+        any(target_os = "linux", target_os = "freebsd"),
+        allow(dead_code, reason = "only the Linux backend reads this field")
+    )]
     pub is_resizable: bool,
 
     /// Whether the window should be minimized by the user
-    #[cfg_attr(any(target_os = "linux", target_os = "freebsd"), allow(dead_code))]
+    #[cfg_attr(
+        any(target_os = "linux", target_os = "freebsd"),
+        allow(dead_code, reason = "only the Linux backend reads this field")
+    )]
     pub is_minimizable: bool,
 
     #[cfg_attr(
         any(target_os = "linux", target_os = "freebsd", target_os = "windows"),
-        allow(dead_code)
+        allow(dead_code, reason = "no caller on the targets this cfg excludes")
     )]
     pub focus: bool,
 
-    #[cfg_attr(any(target_os = "linux", target_os = "freebsd"), allow(dead_code))]
+    #[cfg_attr(
+        any(target_os = "linux", target_os = "freebsd"),
+        allow(dead_code, reason = "only the Linux backend reads this field")
+    )]
     pub show: bool,
 
     /// An image to set as the window icon (x11 only)
-    #[cfg_attr(feature = "wayland", allow(dead_code))]
+    #[cfg_attr(
+        feature = "wayland",
+        allow(dead_code, reason = "only the Wayland backend reads this field")
+    )]
     pub icon: Option<Arc<image::RgbaImage>>,
 
-    #[cfg_attr(feature = "wayland", allow(dead_code))]
+    #[cfg_attr(
+        feature = "wayland",
+        allow(dead_code, reason = "only the Wayland backend reads this field")
+    )]
     pub display_id: Option<DisplayId>,
 
-    #[cfg_attr(feature = "wayland", allow(dead_code))]
+    #[cfg_attr(
+        feature = "wayland",
+        allow(dead_code, reason = "only the Wayland backend reads this field")
+    )]
     pub app_id: Option<String>,
 
     pub window_min_size: Option<Size<Pixels>>,
@@ -2680,7 +2719,10 @@ impl ClipboardItem {
     }
 
     /// If this item is one ClipboardEntry::String, returns its metadata.
-    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+    #[cfg_attr(
+        not(target_os = "windows"),
+        allow(dead_code, reason = "only the Windows implementation reads this")
+    )]
     pub fn metadata(&self) -> Option<&String> {
         match self.entries().first() {
             Some(ClipboardEntry::String(clipboard_string)) if self.entries.len() == 1 => {
@@ -3055,7 +3097,10 @@ impl ClipboardString {
             .and_then(|m| serde_json::from_str(m).ok())
     }
 
-    #[cfg_attr(any(target_os = "linux", target_os = "freebsd"), allow(dead_code))]
+    #[cfg_attr(
+        any(target_os = "linux", target_os = "freebsd"),
+        allow(dead_code, reason = "only the Linux text backend calls this")
+    )]
     /// Compute a hash of the given text for clipboard change detection.
     pub fn text_hash(text: &str) -> u64 {
         let mut hasher = SeaHasher::new();

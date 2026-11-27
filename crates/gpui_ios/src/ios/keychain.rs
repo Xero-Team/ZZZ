@@ -197,7 +197,10 @@ fn read_status(status: i32) -> Result<bool, KeychainError> {
     }
 }
 
-#[allow(dead_code)] // Kept with the shared Security.framework helper set; only the read/write/delete entry points are used.
+#[allow(
+    dead_code,
+    reason = "Kept with the shared Security.framework helper set; only the read/write/delete entry points are used."
+)]
 fn create_status(status: i32) -> Result<bool, KeychainError> {
     if status == errSecDuplicateItem {
         Ok(false)

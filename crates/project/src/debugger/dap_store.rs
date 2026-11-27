@@ -132,7 +132,10 @@ impl DapStore {
         client.add_entity_message_handler(Self::handle_log_to_debug_console);
     }
 
-    #[expect(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the parameters are the call's real signature"
+    )]
     pub fn new_local(
         http_client: Arc<dyn HttpClient>,
         node_runtime: NodeRuntime,

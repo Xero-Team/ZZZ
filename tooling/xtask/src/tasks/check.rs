@@ -27,7 +27,9 @@ mod ci_wiring;
 mod clippy_copies;
 mod gpui_api;
 mod keymaps;
+mod lint_suppressions;
 mod lints_inheritance;
+mod literals;
 mod locale_catalog;
 mod locale_fallbacks;
 mod locale_placeholders;
@@ -50,10 +52,10 @@ pub struct CheckArgs {
 enum CheckCommand {
     /// Every gate CI runs: markers, keymaps, scroll handlers, licenses,
     /// module layout, MSRV consistency, release metadata, lint inheritance,
-    /// crate-level clippy configuration copies, locale catalog structure, keys,
-    /// i18n call sites and catalog values, DCO, philosophy, ledger, workflows,
-    /// CI gate wiring, the `gpui` public API snapshot, documentation
-    /// formatting, and shell scripts.
+    /// lint suppressions, crate-level clippy configuration copies, locale
+    /// catalog structure, keys, i18n call sites and catalog values, DCO,
+    /// philosophy, ledger, workflows, CI gate wiring, the `gpui` public API
+    /// snapshot, documentation formatting, and shell scripts.
     All,
     /// Reject leftover markers for unfinished work.
     Todos,
@@ -70,6 +72,8 @@ enum CheckCommand {
     Msrv,
     /// Require the manifest, lockfile, and changelog to agree on one version.
     Release,
+    /// Require every lint suppression to carry a reason.
+    LintSuppressions,
     /// Require every ignored test to carry a reason.
     TestMarkers,
     /// Require every workspace member to opt into `[workspace.lints]`.
@@ -147,6 +151,7 @@ pub fn run_check(args: CheckArgs) -> Result<()> {
         CheckCommand::ModuleLayout => module_layout::check(),
         CheckCommand::Msrv => msrv::check(),
         CheckCommand::Release => release::check(),
+        CheckCommand::LintSuppressions => lint_suppressions::check(),
         CheckCommand::TestMarkers => test_markers::check(),
         CheckCommand::LintsInheritance => lints_inheritance::check(),
         CheckCommand::ClippyCopies => clippy_copies::check(),
@@ -181,6 +186,7 @@ const GATES: &[(&str, fn() -> Result<()>)] = &[
     ("release metadata", release::check),
     ("test markers", test_markers::check),
     ("lint inheritance", lints_inheritance::check),
+    ("lint suppressions", lint_suppressions::check),
     ("clippy configuration copies", clippy_copies::check),
     ("locale catalog structure", locale_catalog::check),
     ("locale catalog keys", check_locale_keys),
@@ -451,7 +457,7 @@ fn run_script(command: &[&str], description: &str) -> Result<()> {
 mod tests {
     /// Deleting a line from `GATES` silently disables a gate for both local
     /// runs and CI, so the list length is pinned; adding a gate bumps it.
-    const GATE_COUNT: usize = 22;
+    const GATE_COUNT: usize = 23;
 
     #[test]
     fn gate_list_keeps_every_gate() {

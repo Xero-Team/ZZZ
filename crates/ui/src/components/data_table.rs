@@ -48,7 +48,13 @@ impl TableAccessibility {
     /// `headers` must provide one accessible name for each table column. The cell-label resolver
     /// must provide a meaningful name for every rendered row and column pair; table cells are
     /// [`AnyElement`] values, so their visual content is not inspected automatically.
-    #[cfg_attr(not(feature = "accessibility"), allow(unused_variables))]
+    #[cfg_attr(
+        not(feature = "accessibility"),
+        allow(
+            unused_variables,
+            reason = "the parameter is only read when the accessibility feature is on"
+        )
+    )]
     pub fn new(
         id: impl Into<ElementId>,
         label: impl Into<SharedString>,

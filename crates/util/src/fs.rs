@@ -61,8 +61,10 @@ pub async fn make_file_executable(path: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(not(unix))]
-#[allow(clippy::unused_async)]
-/// Set the permissions for the given path so that the file becomes executable.
+#[expect(
+    clippy::unused_async,
+    reason = "the async signature is what the platform implementation matches"
+)]
 /// This is a noop for non-unix platforms.
 pub async fn make_file_executable(_path: &Path) -> std::io::Result<()> {
     Ok(())

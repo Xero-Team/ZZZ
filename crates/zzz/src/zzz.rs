@@ -407,7 +407,13 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
     init_global_config_error_notifications(cx);
 
     cx.observe_new(
-        |#[cfg_attr(not(feature = "track-project-leak"), allow(unused_variables))]
+        |#[cfg_attr(
+            not(feature = "track-project-leak"),
+            allow(
+                unused_variables,
+                reason = "the parameter is only read when track-project-leak is on"
+            )
+        )]
          multi_workspace: &mut MultiWorkspace,
          window,
          cx| {
@@ -605,7 +611,10 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
 }
 
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-#[allow(unused)]
+#[allow(
+    unused,
+    reason = "the Linux and FreeBSD builds call this; other targets compile it away"
+)]
 fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
     if let Err(e) = fs::fs_watcher::global(|_| {}) {
         let message = tr(
@@ -642,7 +651,10 @@ fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
 }
 
 #[cfg(target_os = "windows")]
-#[allow(unused)]
+#[allow(
+    unused,
+    reason = "the Linux and FreeBSD builds call this; other targets compile it away"
+)]
 fn initialize_file_watcher(window: &mut Window, cx: &mut Context<Workspace>) {
     if let Err(e) = fs::fs_watcher::global(|_| {}) {
         let message = tr(
@@ -7023,7 +7035,10 @@ mod tests {
         );
     }
 
-    #[allow(clippy::await_holding_lock)]
+    #[expect(
+        clippy::await_holding_lock,
+        reason = "the test serializes its scenarios through the lock"
+    )]
     #[gpui::test]
     #[cfg_attr(miri, ignore)]
     async fn test_multi_workspace_session_restore(cx: &mut TestAppContext) {
@@ -7259,7 +7274,10 @@ mod tests {
             .unwrap();
     }
 
-    #[allow(clippy::await_holding_lock)]
+    #[expect(
+        clippy::await_holding_lock,
+        reason = "the test serializes its scenarios through the lock"
+    )]
     #[gpui::test]
     #[cfg_attr(miri, ignore)]
     async fn test_restored_project_groups_survive_workspace_key_change(cx: &mut TestAppContext) {
@@ -7419,7 +7437,10 @@ mod tests {
             .unwrap();
     }
 
-    #[allow(clippy::await_holding_lock)]
+    #[expect(
+        clippy::await_holding_lock,
+        reason = "the test serializes its scenarios through the lock"
+    )]
     #[gpui::test]
     #[cfg_attr(miri, ignore)]
     async fn test_quit_preserves_focused_workspace_for_restore(cx: &mut TestAppContext) {

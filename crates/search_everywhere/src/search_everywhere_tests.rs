@@ -184,7 +184,10 @@ async fn start_symbol_server(
 }
 
 fn symbol(name: &str, kind: lsp::SymbolKind) -> lsp::SymbolInformation {
-    #[allow(deprecated)]
+    #[allow(
+        deprecated,
+        reason = "the LSP type is deprecated upstream but is still what the protocol carries"
+    )]
     lsp::SymbolInformation {
         name: name.to_string(),
         kind,

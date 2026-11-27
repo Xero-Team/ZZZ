@@ -568,7 +568,7 @@ mod tests {
             let mut test_path_like = init_test($cx, $trees, $worktrees).await;
             #[doc ="test!(<hovered maybe_path>, <expected tooltip>, <terminal cwd> "]
             #[doc ="\\[, found by \\])"]
-            #[allow(unused_macros)]
+            #[allow(unused_macros, reason = "the macro is only expanded by the tests that follow")]
             macro_rules! test {
                 ($maybe_path:literal, $tooltip:literal, $cwd:tt) => {
                     test_path_like!(
@@ -591,7 +591,7 @@ mod tests {
             }
             #[doc ="test_local!(<hovered maybe_path>, <expected tooltip>, <terminal cwd> "]
             #[doc ="\\[, found by \\])"]
-            #[allow(unused_macros)]
+            #[allow(unused_macros, reason = "the macro is only expanded by the tests that follow")]
             macro_rules! test_local {
                 ($maybe_path:literal, $tooltip:literal, $cwd:tt) => {
                     test_path_like!(
@@ -616,7 +616,7 @@ mod tests {
             }
             #[doc ="test_remote!(<hovered maybe_path>, <expected tooltip>, <terminal cwd> "]
             #[doc ="\\[, found by \\])"]
-            #[allow(unused_macros)]
+            #[allow(unused_macros, reason = "the macro is only expanded by the tests that follow")]
             macro_rules! test_remote {
                 ($maybe_path:literal, $tooltip:literal, $cwd:tt) => {
                     test_path_like!(

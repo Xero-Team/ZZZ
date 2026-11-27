@@ -3760,7 +3760,10 @@ impl Workspace {
         })
     }
 
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the nested type is the field's real shape; an alias would hide it"
+    )]
     pub fn open_paths(
         &mut self,
         mut abs_paths: Vec<PathBuf>,
@@ -9412,7 +9415,6 @@ pub fn open_workspace_by_id(
     })
 }
 
-#[allow(clippy::type_complexity)]
 pub fn open_paths(
     abs_paths: &[PathBuf],
     app_state: Arc<AppState>,

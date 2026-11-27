@@ -295,20 +295,41 @@ pub type RenderDiffHunkControlsFn = Arc<
 >;
 
 // Uninhabited marker types; each must stay distinct, so `!` cannot substitute.
-#[allow(clippy::empty_enums)]
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker type; each instantiation needs a distinct type"
+)]
 pub enum ActiveDebugLine {}
-#[allow(clippy::empty_enums)]
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker type; each instantiation needs a distinct type"
+)]
 pub enum DebugStackFrameLine {}
 
-#[allow(clippy::empty_enums)]
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker type; each instantiation needs a distinct type"
+)]
 pub enum ConflictsOuter {}
-#[allow(clippy::empty_enums)]
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker type; each instantiation needs a distinct type"
+)]
 pub enum ConflictsOurs {}
-#[allow(clippy::empty_enums)]
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker type; each instantiation needs a distinct type"
+)]
 pub enum ConflictsTheirs {}
-#[allow(clippy::empty_enums)]
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker type; each instantiation needs a distinct type"
+)]
 pub enum ConflictsOursMarker {}
-#[allow(clippy::empty_enums)]
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker type; each instantiation needs a distinct type"
+)]
 pub enum ConflictsTheirsMarker {}
 
 pub struct HunkAddedColor;

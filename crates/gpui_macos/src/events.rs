@@ -369,7 +369,10 @@ fn parse_keystroke(native_event: &NSEvent) -> Keystroke {
         && first_char
             .is_none_or(|ch| !(NSUpArrowFunctionKey..=NSModeSwitchFunctionKey).contains(&ch));
 
-    #[allow(non_upper_case_globals)]
+    #[allow(
+        non_upper_case_globals,
+        reason = "mirrors the Objective-C constant name"
+    )]
     let key = match first_char {
         Some(SPACE_KEY) => {
             key_char = Some(" ".to_string());
@@ -526,9 +529,15 @@ fn chars_for_modified_key(code: CGKeyCode, modifiers: u32) -> String {
     // shifted >> 8 for UCKeyTranslate
     const CG_SPACE_KEY: u16 = 49;
     // https://github.com/phracker/MacOSX-SDKs/blob/master/MacOSX10.6.sdk/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/CarbonCore.framework/Versions/A/Headers/UnicodeUtilities.h#L278
-    #[allow(non_upper_case_globals)]
+    #[allow(
+        non_upper_case_globals,
+        reason = "mirrors the Objective-C constant name"
+    )]
     const kUCKeyActionDown: u16 = 0;
-    #[allow(non_upper_case_globals)]
+    #[allow(
+        non_upper_case_globals,
+        reason = "mirrors the Objective-C constant name"
+    )]
     const kUCKeyTranslateNoDeadKeysMask: u32 = 0;
 
     let keyboard_type = unsafe { LMGetKbdType() as u32 };

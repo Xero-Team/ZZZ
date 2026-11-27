@@ -86,10 +86,24 @@ impl Element for Surface {
         &mut self,
         _global_id: Option<&GlobalElementId>,
         _inspector_id: Option<&InspectorElementId>,
-        #[cfg_attr(not(target_os = "macos"), allow(unused_variables))] bounds: Bounds<Pixels>,
+        #[cfg_attr(
+            not(target_os = "macos"),
+            allow(
+                unused_variables,
+                reason = "the parameter is only read by the macOS implementation"
+            )
+        )]
+        bounds: Bounds<Pixels>,
         _: &mut Self::RequestLayoutState,
         _: &mut Self::PrepaintState,
-        #[cfg_attr(not(target_os = "macos"), allow(unused_variables))] window: &mut Window,
+        #[cfg_attr(
+            not(target_os = "macos"),
+            allow(
+                unused_variables,
+                reason = "the parameter is only read by the macOS implementation"
+            )
+        )]
+        window: &mut Window,
         _: &mut App,
     ) {
         match &self.source {
@@ -100,7 +114,10 @@ impl Element for Surface {
                 // TODO: Add support for corner_radii
                 window.paint_surface(new_bounds, surface.clone());
             }
-            #[allow(unreachable_patterns)]
+            #[allow(
+                unreachable_patterns,
+                reason = "the arm is only unreachable in some feature configurations"
+            )]
             _ => {}
         }
     }

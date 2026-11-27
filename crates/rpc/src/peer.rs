@@ -69,7 +69,10 @@ pub struct ConnectionState {
     #[serde(skip)]
     outgoing_tx: mpsc::UnboundedSender<Message>,
     next_message_id: Arc<AtomicU32>,
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the nested type is the field's real shape; an alias would hide it"
+    )]
     #[serde(skip)]
     response_channels: Arc<
         Mutex<
@@ -81,7 +84,10 @@ pub struct ConnectionState {
             >,
         >,
     >,
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the nested type is the field's real shape; an alias would hide it"
+    )]
     #[serde(skip)]
     stream_response_channels: Arc<
         Mutex<

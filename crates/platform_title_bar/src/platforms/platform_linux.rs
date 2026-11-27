@@ -105,7 +105,10 @@ impl WindowControlType {
     }
 }
 
-#[allow(unused)]
+#[allow(
+    unused,
+    reason = "the Linux title bar renders no custom controls yet, so only part of this builder is read"
+)]
 pub struct WindowControlStyle {
     background_hover: Hsla,
     icon: Hsla,
@@ -123,21 +126,30 @@ impl WindowControlStyle {
         }
     }
 
-    #[allow(unused)]
+    #[allow(
+        unused,
+        reason = "the Linux title bar renders no custom controls yet, so only part of this builder is read"
+    )]
     /// Sets the background color of the control when hovered.
     pub fn background_hover(mut self, color: impl Into<Hsla>) -> Self {
         self.background_hover = color.into();
         self
     }
 
-    #[allow(unused)]
+    #[allow(
+        unused,
+        reason = "the Linux title bar renders no custom controls yet, so only part of this builder is read"
+    )]
     /// Sets the color of the icon.
     pub fn icon(mut self, color: impl Into<Hsla>) -> Self {
         self.icon = color.into();
         self
     }
 
-    #[allow(unused)]
+    #[allow(
+        unused,
+        reason = "the Linux title bar renders no custom controls yet, so only part of this builder is read"
+    )]
     /// Sets the color of the icon when hovered.
     pub fn icon_hover(mut self, color: impl Into<Hsla>) -> Self {
         self.icon_hover = color.into();
@@ -181,7 +193,10 @@ impl WindowControl {
         }
     }
 
-    #[allow(unused)]
+    #[allow(
+        unused,
+        reason = "the Linux title bar renders no custom controls yet, so only part of this builder is read"
+    )]
     pub fn custom_style(
         id: impl Into<ElementId>,
         icon: WindowControlType,

@@ -209,12 +209,18 @@ pub struct Client {
     state: RwLock<ClientState>,
     handler_set: Mutex<ProtoMessageHandlerSet>,
 
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the nested type is the field's real shape; an alias would hide it"
+    )]
     #[cfg(any(test, feature = "test-support"))]
     authenticate:
         RwLock<Option<Box<dyn 'static + Send + Sync + Fn(&AsyncApp) -> Task<Result<Credentials>>>>>,
 
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the nested type is the field's real shape; an alias would hide it"
+    )]
     #[cfg(any(test, feature = "test-support"))]
     establish_connection: RwLock<
         Option<
@@ -1384,7 +1390,10 @@ pub const ZZZ_URL_SCHEME: &str = "zzz";
 
 /// A parsed ZZZ link that can be handled internally by the application.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(clippy::empty_enums)] // uninhabited marker; the fork handles no internal link targets
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker; the fork handles no internal link targets"
+)]
 pub enum ZZZLink {}
 
 /// Parses the given link into a ZZZ link.

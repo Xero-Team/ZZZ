@@ -355,7 +355,10 @@ impl ExtensionConnection {
         // database_core has no GPUI executor; this timer only enforces the
         // subprocess protocol deadline, so the workspace-wide GPUI timer
         // replacement does not apply here.
-        #[allow(clippy::disallowed_methods)]
+        #[expect(
+            clippy::disallowed_methods,
+            reason = "the driver runs outside the GPUI executor, where its timer is unavailable"
+        )]
         let timer = async_io::Timer::after(timeout);
         futures::pin_mut!(wait, timer);
         let outcome = match futures::future::select(wait, timer).await {

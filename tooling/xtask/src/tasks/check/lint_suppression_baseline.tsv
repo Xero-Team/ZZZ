@@ -1,0 +1,36 @@
+# Lint suppressions that predate the rule in `.rules` requiring a reason.
+#
+# These are the attributes whose justification is not recoverable from the code:
+# a `#[allow(missing_docs)]` on an item with no doc comment says nothing about
+# why the documentation was skipped, and eight `dead_code`/`unused` attributes
+# name code whose only caller is not in this tree. Rather than invent a reason,
+# the gate accepts these until someone who knows the item documents it or
+# deletes the suppression.
+#
+# The count column is what keeps the file shrinking. `cargo xtask check
+# lint-suppressions` fails when a row's count no longer matches the tree, in
+# either direction: removing a suppression forces the row down, and adding one
+# forces a reason instead of a silent bump.
+#
+# path	lint	count
+crates/acp_thread/src/acp_thread.rs	unused	1
+crates/context_server/src/client.rs	dead_code	1
+crates/gpui/src/assets.rs	missing_docs	1
+crates/gpui/src/atlas.rs	missing_docs	6
+crates/gpui/src/elements/uniform_list.rs	missing_docs	2
+crates/gpui/src/gpui.rs	missing_docs	1
+crates/gpui/src/platform.rs	dead_code	2
+crates/gpui/src/platform.rs	missing_docs	17
+crates/gpui/src/platform/keystroke.rs	missing_docs	1
+crates/gpui/src/platform/scap_screen_capture.rs	dead_code	1
+crates/gpui/src/scene.rs	missing_docs	20
+crates/gpui/src/svg_renderer.rs	missing_docs	1
+crates/gpui/src/text_system.rs	missing_docs	1
+crates/gpui/src/text_system/line_layout.rs	missing_docs	1
+crates/gpui/src/window/content_mask.rs	missing_docs	1
+crates/gpui_linux/src/linux/x11/clipboard.rs	unused	1
+crates/gpui_windows/src/direct_write.rs	dead_code	1
+crates/language/src/language_registry.rs	unused	1
+crates/refineable/derive_refineable/src/derive_refineable.rs	missing_docs	1
+crates/theme_settings/src/settings.rs	missing_docs	1
+crates/ui/src/components/navigable.rs	missing_docs	2

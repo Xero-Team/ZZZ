@@ -115,7 +115,10 @@ impl ParentElement for Tab {
 }
 
 impl RenderOnce for Tab {
-    #[allow(refining_impl_trait)]
+    #[expect(
+        refining_impl_trait,
+        reason = "the impl narrows the trait's return type on purpose"
+    )]
     fn render(self, _: &mut Window, cx: &mut App) -> Stateful<Div> {
         let (text_color, tab_bg, _tab_hover_bg, _tab_active_bg) = if self.selected {
             (

@@ -168,7 +168,10 @@ impl TabMap {
         let mut fold_edits = fold_edits.into_iter();
         let mut first_edit = fold_edits.next().expect("iterator should yield an item");
         // This code relies on reusing allocations from the Vec<_> - at the time of writing .flatten() prevents them.
-        #[allow(clippy::filter_map_identity)]
+        #[expect(
+            clippy::filter_map_identity,
+            reason = "the step is kept so this pipeline matches the sibling maps"
+        )]
         let mut v: Vec<_> = fold_edits
             .scan(&mut first_edit, |state, edit| {
                 if state.old.end >= edit.old.start {

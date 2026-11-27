@@ -129,7 +129,10 @@ pub async fn move_between_sessions(
     .await
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the parameters are the call's real signature"
+)]
 async fn transfer_between_sessions(
     manager: &VfsManager,
     source_worktree: &gpui::Entity<Worktree>,

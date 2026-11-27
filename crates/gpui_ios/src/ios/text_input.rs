@@ -889,7 +889,10 @@ pub(super) mod tests {
         view.reconcile_text_input(sel!(reconcileTextInput));
         assert!(!view.canBecomeFirstResponder());
 
-        #[allow(deprecated)] // The standalone protocol harness has no UIApplication scene.
+        #[allow(
+            deprecated,
+            reason = "the Objective-C API is deprecated upstream but is still the only one for this target"
+        )]
         let window = UIWindow::initWithFrame(
             UIWindow::alloc(main_thread),
             CGRect::new(CGPoint::ZERO, CGSize::new(320., 480.)),

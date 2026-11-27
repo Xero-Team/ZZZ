@@ -1797,7 +1797,7 @@ impl ProjectPanel {
     /// Handles "Collapse All" from the context menu when a root directory is selected.
     /// With a single visible worktree, keeps the root expanded (matching CollapseAllEntries behavior).
     /// With multiple visible worktrees, collapses the root and all its children.
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg_attr(not(test), allow(dead_code, reason = "only the tests call this"))]
     fn collapse_all_for_root(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some((worktree, entry)) = self.selected_entry(cx) else {
             return;

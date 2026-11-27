@@ -197,7 +197,10 @@ struct OutlineViewDelegate {
     matches: Vec<StringMatch>,
 }
 
-#[allow(clippy::empty_enums)] // uninhabited marker; each highlight needs a distinct type
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker; each highlight needs a distinct type"
+)]
 enum OutlineRowHighlights {}
 
 impl OutlineViewDelegate {
@@ -999,7 +1002,10 @@ mod tests {
                     ..lsp::ServerCapabilities::default()
                 },
                 initializer: Some(Box::new(|fake_language_server| {
-                    #[allow(deprecated)]
+                    #[expect(
+                        deprecated,
+                        reason = "the test double stands in for a deprecated LSP type"
+                    )]
                     fake_language_server
                         .set_request_handler::<lsp::request::DocumentSymbolRequest, _, _>(
                             move |_, _| async move {

@@ -34,7 +34,10 @@ impl IosDisplay {
     }
 
     /// Get the main screen.
-    #[allow(deprecated)] // Platform display queries can precede scene creation.
+    #[allow(
+        deprecated,
+        reason = "the Objective-C API is deprecated upstream but is still the only one for this target"
+    )]
     pub fn main() -> Self {
         let screen =
             UIScreen::mainScreen(main_thread_marker().expect("UIKit requires the main thread"));
@@ -42,7 +45,10 @@ impl IosDisplay {
     }
 
     /// Get all connected screens.
-    #[allow(deprecated)] // Preserve external screens even before they have a GPUI scene.
+    #[allow(
+        deprecated,
+        reason = "the Objective-C API is deprecated upstream but is still the only one for this target"
+    )] // Preserve external screens even before they have a GPUI scene.
     pub fn all() -> impl Iterator<Item = Self> {
         let screens =
             UIScreen::screens(main_thread_marker().expect("UIKit requires the main thread"));

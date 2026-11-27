@@ -36,8 +36,10 @@ use objc2_ui_kit::{
     UIApplication, UIPasteboard, UIScreenModeDidChangeNotification, UITraitEnvironment,
     UIUserInterfaceStyle, UIViewController,
 };
-#[allow(deprecated)]
-// Match UIScreen enumeration, including displays without a connected scene.
+#[allow(
+    deprecated,
+    reason = "the Objective-C API is deprecated upstream but is still the only one for this target"
+)]
 use objc2_ui_kit::{UIScreenDidConnectNotification, UIScreenDidDisconnectNotification};
 use std::{
     cell::RefCell,
@@ -91,7 +93,10 @@ impl IosPlatform {
         });
         // UIKit may deliver these synchronously. Defer entering GPUI until the
         // current native callback has unwound, as with thermal notifications.
-        #[allow(deprecated)] // Screen enumeration is independent of our single connected scene.
+        #[allow(
+            deprecated,
+            reason = "Screen enumeration is independent of our single connected scene."
+        )]
         unsafe {
             for name in [
                 UIScreenDidConnectNotification,
@@ -124,7 +129,10 @@ impl IosPlatform {
                 .or_else(|| windows.firstObject())
         } else {
             // Legacy hosts can create a GPUI window without supplying a scene.
-            #[allow(deprecated)]
+            #[allow(
+                deprecated,
+                reason = "the Objective-C API is deprecated upstream but is still the only one for this target"
+            )]
             UIApplication::sharedApplication(
                 main_thread_marker().expect("UIKit requires the main thread"),
             )

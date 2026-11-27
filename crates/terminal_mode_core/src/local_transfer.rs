@@ -76,7 +76,10 @@ fn transfer_options(progress: Option<VfsTransferProgressCallback>) -> VfsTransfe
 
 /// Copies a remote entry from `worktree` into `destination_directory` on the
 /// local filesystem, preserving the entry's file name.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the parameters are the call's real signature"
+)]
 pub async fn download_from_session(
     manager: &VfsManager,
     fs: Arc<dyn Fs>,
@@ -105,7 +108,10 @@ pub async fn download_from_session(
 
 /// Copies one or more local files into `target_relative_directory` on the
 /// remote `worktree`.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the parameters are the call's real signature"
+)]
 pub async fn upload_to_session(
     manager: &VfsManager,
     fs: Arc<dyn Fs>,

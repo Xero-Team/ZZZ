@@ -1506,7 +1506,10 @@ fn consolidate_wrap_edits(edits: Vec<WrapEdit>) -> Vec<WrapEdit> {
 
     if let Some(mut first_edit) = wrap_edits.next() {
         // This code relies on reusing allocations from the Vec<_> - at the time of writing .flatten() prevents them.
-        #[allow(clippy::filter_map_identity)]
+        #[expect(
+            clippy::filter_map_identity,
+            reason = "the step is kept so this pipeline matches the sibling maps"
+        )]
         let mut v: Vec<_> = wrap_edits
             .scan(&mut first_edit, |prev_edit, edit| {
                 if prev_edit.old.end >= edit.old.start {

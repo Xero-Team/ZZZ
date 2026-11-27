@@ -604,7 +604,10 @@ impl ImageSource {
 }
 
 #[derive(Clone)]
-#[allow(clippy::empty_enums)] // Distinct marker type: `!` would collide with the other Asset markers.
+#[expect(
+    clippy::empty_enums,
+    reason = "Distinct marker type: `!` would collide with the other Asset markers."
+)]
 enum ImageDecoder {}
 
 impl Asset for ImageDecoder {
@@ -622,7 +625,10 @@ impl Asset for ImageDecoder {
 
 /// An image loader for the GPUI asset system
 #[derive(Clone)]
-#[allow(clippy::empty_enums)] // Distinct marker type: `!` would collide with the other Asset markers.
+#[expect(
+    clippy::empty_enums,
+    reason = "Distinct marker type: `!` would collide with the other Asset markers."
+)]
 pub enum ImageAssetLoader {}
 
 impl Asset for ImageAssetLoader {

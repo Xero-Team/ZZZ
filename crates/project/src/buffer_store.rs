@@ -32,7 +32,10 @@ use worktree::{File, PathChange, ProjectEntryId, Worktree, WorktreeId, WorktreeS
 /// A set of open buffers.
 pub struct BufferStore {
     state: BufferStoreState,
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the nested type is the field's real shape; an alias would hide it"
+    )]
     loading_buffers: HashMap<ProjectPath, Shared<Task<Result<Entity<Buffer>, Arc<anyhow::Error>>>>>,
     worktree_store: Entity<WorktreeStore>,
     opened_buffers: HashMap<BufferId, OpenBuffer>,

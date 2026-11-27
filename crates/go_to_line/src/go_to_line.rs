@@ -50,7 +50,10 @@ impl Focusable for GoToLine {
 }
 impl EventEmitter<DismissEvent> for GoToLine {}
 
-#[allow(clippy::empty_enums)] // uninhabited marker; each highlight needs a distinct type
+#[expect(
+    clippy::empty_enums,
+    reason = "uninhabited marker; each highlight needs a distinct type"
+)]
 enum GoToLineRowHighlights {}
 
 impl GoToLine {

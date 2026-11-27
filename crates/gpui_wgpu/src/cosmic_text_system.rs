@@ -328,7 +328,10 @@ impl CosmicTextSystemState {
             // `face_index` only feeds the FreeType color-glyph path below.
             #[cfg_attr(
                 not(any(target_os = "linux", target_os = "freebsd")),
-                allow(unused_variables)
+                allow(
+                    unused_variables,
+                    reason = "the parameter is only read on the platforms this cfg selects"
+                )
             )]
             let (style, weight, face_index) = {
                 let face = self

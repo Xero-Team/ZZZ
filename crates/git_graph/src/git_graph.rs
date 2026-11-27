@@ -675,9 +675,15 @@ impl LaneState {
 
         match state {
             LaneState::Active {
-                #[cfg_attr(not(test), allow(unused_variables))]
+                #[cfg_attr(
+                    not(test),
+                    allow(unused_variables, reason = "only the test build reads this parameter")
+                )]
                 parent,
-                #[cfg_attr(not(test), allow(unused_variables))]
+                #[cfg_attr(
+                    not(test),
+                    allow(unused_variables, reason = "only the test build reads this parameter")
+                )]
                 child,
                 color,
                 starting_row,

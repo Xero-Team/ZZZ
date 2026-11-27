@@ -1116,7 +1116,10 @@ fn consolidate_inlay_edits(mut edits: Vec<InlayEdit>) -> Vec<InlayEdit> {
 
     if let Some(mut first_edit) = inlay_edits.next() {
         // This code relies on reusing allocations from the Vec<_> - at the time of writing .flatten() prevents them.
-        #[allow(clippy::filter_map_identity)]
+        #[expect(
+            clippy::filter_map_identity,
+            reason = "the step is kept so this pipeline matches the sibling maps"
+        )]
         let mut v: Vec<_> = inlay_edits
             .scan(&mut first_edit, |prev_edit, edit| {
                 if prev_edit.old.end >= edit.old.start {
@@ -1151,7 +1154,10 @@ fn consolidate_fold_edits(mut edits: Vec<FoldEdit>) -> Vec<FoldEdit> {
 
     if let Some(mut first_edit) = fold_edits.next() {
         // This code relies on reusing allocations from the Vec<_> - at the time of writing .flatten() prevents them.
-        #[allow(clippy::filter_map_identity)]
+        #[expect(
+            clippy::filter_map_identity,
+            reason = "the step is kept so this pipeline matches the sibling maps"
+        )]
         let mut v: Vec<_> = fold_edits
             .scan(&mut first_edit, |prev_edit, edit| {
                 if prev_edit.old.end >= edit.old.start {

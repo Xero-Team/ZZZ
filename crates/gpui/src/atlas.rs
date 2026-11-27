@@ -1271,7 +1271,7 @@ pub struct AtlasTextureId {
         any(target_os = "linux", target_os = "freebsd"),
         not(any(feature = "x11", feature = "wayland"))
     ),
-    allow(dead_code)
+    allow(dead_code, reason = "no caller on the targets this cfg excludes")
 )]
 #[expect(missing_docs)]
 pub enum AtlasTextureKind {

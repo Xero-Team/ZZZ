@@ -57,7 +57,10 @@ use {
 
 use crate::open_type::apply_features_and_fallbacks;
 
-#[allow(non_upper_case_globals)]
+#[allow(
+    non_upper_case_globals,
+    reason = "mirrors the Objective-C constant name"
+)]
 const kCGImageAlphaOnly: u32 = 7;
 
 /// Apple text system using CoreText for font shaping.

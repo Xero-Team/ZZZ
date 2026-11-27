@@ -3619,7 +3619,10 @@ impl LocalLspStore {
         Ok(transaction)
     }
 
-    #[allow(clippy::type_complexity)]
+    #[expect(
+        clippy::type_complexity,
+        reason = "the nested type is the field's real shape; an alias would hide it"
+    )]
     pub fn edits_from_lsp(
         &mut self,
         buffer: &Entity<Buffer>,
@@ -16031,7 +16034,10 @@ async fn populate_labels_for_symbols(
     lsp_adapter: Option<Arc<CachedLspAdapter>>,
     output: &mut Vec<Symbol>,
 ) {
-    #[allow(clippy::mutable_key_type)]
+    #[expect(
+        clippy::mutable_key_type,
+        reason = "the Eq and Hash impls do not read the interior-mutable field"
+    )]
     let mut symbols_by_language = HashMap::<Option<Arc<Language>>, Vec<CoreSymbol>>::default();
 
     let mut unknown_paths = BTreeSet::<Arc<str>>::new();

@@ -749,9 +749,15 @@ impl WaylandClient {
         let qh = event_queue.handle();
 
         let mut seat: Option<wl_seat::WlSeat> = None;
-        #[allow(clippy::mutable_key_type)]
+        #[expect(
+            clippy::mutable_key_type,
+            reason = "the Eq and Hash impls do not read the interior-mutable field"
+        )]
         let mut in_progress_outputs = HashMap::default();
-        #[allow(clippy::mutable_key_type)]
+        #[expect(
+            clippy::mutable_key_type,
+            reason = "the Eq and Hash impls do not read the interior-mutable field"
+        )]
         let mut wl_outputs: HashMap<ObjectId, wl_output::WlOutput> = HashMap::default();
         globals.contents().with_list(|list| {
             for global in list {
@@ -1445,7 +1451,10 @@ impl Dispatch<wl_surface::WlSurface, ()> for WaylandClientStatePtr {
         let Some(window) = get_window(&mut state, &surface.id()) else {
             return;
         };
-        #[allow(clippy::mutable_key_type)]
+        #[expect(
+            clippy::mutable_key_type,
+            reason = "the Eq and Hash impls do not read the interior-mutable field"
+        )]
         let outputs = state.outputs.clone();
         drop(state);
 

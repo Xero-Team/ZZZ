@@ -1258,7 +1258,10 @@ impl FossilBinary {
     // hardening flags (`-c core.fsmonitor=false` and friends) that Fossil would
     // reject. `FossilBinary` is the equivalent wrapper for this backend: it owns
     // the binary path, the working directory and the command lock.
-    #[allow(clippy::disallowed_methods)]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "fossil has no async client, so its commands go through std::process::Command"
+    )]
     async fn run_raw_with_env<S>(
         &self,
         args: &[S],

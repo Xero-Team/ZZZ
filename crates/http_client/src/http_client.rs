@@ -1,3 +1,5 @@
+#![deny(clippy::undocumented_unsafe_blocks)]
+
 mod async_body;
 #[cfg(not(target_family = "wasm"))]
 pub mod github;

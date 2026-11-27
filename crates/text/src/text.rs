@@ -1,3 +1,5 @@
+#![deny(clippy::undocumented_unsafe_blocks)]
+
 mod anchor;
 pub mod locator;
 #[cfg(any(test, feature = "test-support"))]

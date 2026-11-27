@@ -187,7 +187,10 @@ where
 
     /// Determines if start and end tags can be omitted.
     /// Whitespace rules are ignored if `collapse_whitespace` is enabled.
-    #[allow(clippy::too_many_lines)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the function is one state machine; splitting it obscures the states"
+    )]
     fn omit_tags(
         &self,
         ctx: &Option<Context>,
@@ -623,7 +626,10 @@ fn is_block_element(node: &Node) -> bool {
     }
 }
 
-#[allow(clippy::missing_const_for_fn)]
+#[expect(
+    clippy::missing_const_for_fn,
+    reason = "the function cannot be const until the standard library stabilises the call"
+)]
 fn is_ascii_whitespace(c: char) -> bool {
     c.is_ascii_whitespace()
 }

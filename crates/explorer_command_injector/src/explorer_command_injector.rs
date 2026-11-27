@@ -40,7 +40,10 @@ extern "system" fn DllMain(
 #[implement(IExplorerCommand)]
 struct ExplorerCommandInjector;
 
-#[allow(non_snake_case)]
+#[expect(
+    non_snake_case,
+    reason = "the method name is fixed by the COM interface vtable"
+)]
 impl IExplorerCommand_Impl for ExplorerCommandInjector_Impl {
     fn GetTitle(&self, _: Ref<IShellItemArray>) -> Result<windows_core::PWSTR> {
         let command_description =

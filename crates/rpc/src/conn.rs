@@ -46,7 +46,10 @@ impl Connection {
             killed,
         );
 
-        #[allow(clippy::type_complexity)]
+        #[expect(
+            clippy::type_complexity,
+            reason = "the nested type is the field's real shape; an alias would hide it"
+        )]
         fn channel(
             killed: Arc<AtomicBool>,
             executor: gpui::BackgroundExecutor,

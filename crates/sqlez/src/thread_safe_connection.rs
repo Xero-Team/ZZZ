@@ -330,7 +330,10 @@ mod test {
     fn many_initialize_and_migrate_queries_at_once() {
         let mut handles = vec![];
 
-        #[allow(clippy::empty_enums)] // uninhabited marker; each test needs a distinct type
+        #[expect(
+            clippy::empty_enums,
+            reason = "uninhabited marker; each test needs a distinct type"
+        )]
         enum TestDomain {}
         impl Domain for TestDomain {
             const NAME: &str = "test";

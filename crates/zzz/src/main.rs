@@ -83,7 +83,7 @@ fn files_not_created_on_launch(errors: HashMap<io::ErrorKind, Vec<&Path>>) {
     let error_details = errors
         .into_iter()
         .filter_map(|(kind, paths)| {
-            #[allow(unused_mut)] // for non-unix platforms
+            #[allow(unused_mut, reason = "the binding is only mutated on non-unix platforms")]
             let mut error_kind_details = match paths.len() {
                 0 => return None,
                 1 => format!(

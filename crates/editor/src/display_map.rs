@@ -2460,7 +2460,7 @@ impl DisplaySnapshot {
     }
 
     #[cfg(any(test, feature = "test-support"))]
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "only the inlay tests call this")]
     pub(crate) fn inlay_highlights(
         &self,
         key: HighlightKey,
